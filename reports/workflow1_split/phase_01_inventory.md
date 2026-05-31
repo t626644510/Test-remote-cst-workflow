@@ -1,4 +1,4 @@
-﻿# Phase 01 鈥?Workflow 1 Dependency Inventory
+﻿# Phase 01  - Workflow 1 Dependency Inventory
 
 ## Summary
 
@@ -62,7 +62,7 @@ run_workflow_1.py::main()
   |
   +-- build_workflow_1(cfg, checkpoint_callback=...)  # factory.py
   |     |
-  |     +-- _build_parameters(cfg["parameters"])      # GeometryParameter 脳 13
+  |     +-- _build_parameters(cfg["parameters"])      # GeometryParameter x 13
   |     |     +-- GeometryParameter                   # parameters/geometry.py
   |     |     +-- ParameterSet                         # parameters/base.py
   |     |
@@ -268,15 +268,15 @@ These are cross-cutting concerns that all workflows depend on. They stay in `src
 
 ### Shared-module pollution risks
 
-1. **`objectives/registry.py`** 鈥?Global dicts. WF1 factory imports ALL objective modules via `# noqa: F401` side-effect imports. Splitting WF1 to a separate package would require either (a) a selective import that only registers WF1 objectives, or (b) keeping the registries in a shared core package.
+1. **`objectives/registry.py`**  - Global dicts. WF1 factory imports ALL objective modules via `# noqa: F401` side-effect imports. Splitting WF1 to a separate package would require either (a) a selective import that only registers WF1 objectives, or (b) keeping the registries in a shared core package.
 
-2. **`factory.py`** 鈥?The main "God object" factory. `build_workflow_1()`, `build_workflow_2()`, and `build_workflow_3()` all live in the same file. Any change to the shared builder helpers (`_build_parameters`, `_build_objectives`, `_build_sao`) affects all three workflows. The `_evaluate_single_pass()` closure is embedded inside `build_workflow_1()` and cannot be tested independently.
+2. **`factory.py`**  - The main "God object" factory. `build_workflow_1()`, `build_workflow_2()`, and `build_workflow_3()` all live in the same file. Any change to the shared builder helpers (`_build_parameters`, `_build_objectives`, `_build_sao`) affects all three workflows. The `_evaluate_single_pass()` closure is embedded inside `build_workflow_1()` and cannot be tested independently.
 
-3. **`checkpoint.py`** 鈥?`EvalRecord` has polymorphic fields (`phases_done`, `f2f_params_hash`) that are specific to WF2 partial-phase tracking. The `get_warm_xy()` and `mark_phase_done()` methods serve both WF1 (simple pending/completed/failed) and WF2 (multi-phase atomize). Any schema change to `EvalRecord` affects both workflows.
+3. **`checkpoint.py`**  - `EvalRecord` has polymorphic fields (`phases_done`, `f2f_params_hash`) that are specific to WF2 partial-phase tracking. The `get_warm_xy()` and `mark_phase_done()` methods serve both WF1 (simple pending/completed/failed) and WF2 (multi-phase atomize). Any schema change to `EvalRecord` affects both workflows.
 
-4. **`core/retry.py`** 鈥?`EvaluationRetryHandler.execute()` has timeout logic and connection-factory branching that is shared across WF1 and WF3. The `force_reset()` method with `tier2`/`tier3` post-eval recovery is used by WF1 (tier2) and WF3 (tier3).
+4. **`core/retry.py`**  - `EvaluationRetryHandler.execute()` has timeout logic and connection-factory branching that is shared across WF1 and WF3. The `force_reset()` method with `tier2`/`tier3` post-eval recovery is used by WF1 (tier2) and WF3 (tier3).
 
-5. **`physics/formulas.py`** 鈥?Used directly by WF1's `_evaluate_single_pass()` AND by WF3's `RecoveryWorkflowEvaluator._calibration_solve()`. Also used by objective classes via `physics/cavity.py`. Any API change propagates to all three workflows.
+5. **`physics/formulas.py`**  - Used directly by WF1's `_evaluate_single_pass()` AND by WF3's `RecoveryWorkflowEvaluator._calibration_solve()`. Also used by objective classes via `physics/cavity.py`. Any API change propagates to all three workflows.
 
 ### Files that must NOT be moved or deleted
 
@@ -330,4 +330,4 @@ Based on this inventory, the recommended first extraction steps are:
 
 5. **Clean up factory.py** by removing unused imports (`wakefield`, `antenna`, `saea`, `logging`, `adaptive_bounds`) from the `build_workflow_1()` code path. These would remain only in the `build_workflow_2()` and `build_workflow_3()` paths.
 
-The guiding principle: **never duplicate shared core types**. `core/`, `parameters/`, and `optimization/` (except WF2-specific algorithms) should remain shared. The extraction boundary is at the application-logic layer 鈥?evaluator closures, objective registrations, and config schemas.
+The guiding principle: **never duplicate shared core types**. `core/`, `parameters/`, and `optimization/` (except WF2-specific algorithms) should remain shared. The extraction boundary is at the application-logic layer  - evaluator closures, objective registrations, and config schemas.

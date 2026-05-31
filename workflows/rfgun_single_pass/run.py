@@ -4,6 +4,7 @@ Usage from project root::
 
     .venv\\Scripts\\python -m workflows.rfgun_single_pass.run
     .venv\\Scripts\\python -m workflows.rfgun_single_pass.run --seed 43
+    .venv\\Scripts\\python run_workflow_1.py --config workflows/rfgun_single_pass/config.yaml
 
 Watchdog::
 
@@ -35,7 +36,8 @@ _SRC_DIR: str = str(_PROJECT_ROOT / "src")
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "default.yaml")
+# Default config is the WF1-specific file co-located with this runner.
+DEFAULT_CONFIG_PATH: Path = Path(__file__).resolve().with_name("config.yaml")
 
 # ---- cst_optimization imports (require SRC_DIR on sys.path) ---------------
 from cst_optimization.checkpoint import CheckpointManager
@@ -80,11 +82,18 @@ def main() -> None:
 
     CLI overrides
     -------------
+    --config     Path to Workflow 1 YAML config (default: ``config.yaml``
+                 next to this runner).
     --seed       Override optimizer seed from config.
     --n-iter     Override ``n_iterations`` from config.
     --n-initial  Override ``n_initial_samples`` from config.
     """
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
+    parser.add_argument(
+        "--config", type=str, default=str(DEFAULT_CONFIG_PATH),
+        help="Path to Workflow 1 YAML config "
+             f"(default: {DEFAULT_CONFIG_PATH})",
+    )
     parser.add_argument(
         "--seed", type=int, default=None,
         help="Override optimizer seed from config",
@@ -99,10 +108,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = yaml.safe_load(open(CONFIG_PATH, "r", encoding="utf-8"))
+    config_path: Path = Path(args.config).expanduser().resolve()
+    _logger.info("Workflow 1 starting  config=%s", config_path)
+    cfg = yaml.safe_load(open(config_path, "r", encoding="utf-8"))
     log_dir = _setup_logging(cfg.get("logging", {}))
-    _logger.info("Workflow 1 starting")
-    _logger.info("Config: %s", CONFIG_PATH)
     _logger.info("Python: %s", sys.executable)
 
     # Apply CLI overrides

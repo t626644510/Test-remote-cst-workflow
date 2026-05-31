@@ -7,22 +7,34 @@ Optimisation (SAO) for the X-band RF gun cavity.  Workflow 1 evaluates
 a single CST project with a one-pass solve (fixed `f_data`), wrapped in
 a three-tier retry handler with post-evaluation graceful reset.
 
-## Current status (Phase 3 -- runner migrated)
+## Current status (Phase 4 -- config split)
 
 - The **actual runner** lives at ``run.py`` inside this package.
-- The root ``run_workflow_1.py`` is a thin compatibility shim that
-  delegates to ``workflows.rfgun_single_pass.run.main``.
-- CLI behaviour, config path, logging, checkpoint, and optimizer are
-  identical to the pre-migration state.
-- Phase 4 will split the config schema; Phase 5 will extract the
-  evaluator.
+- The root ``run_workflow_1.py`` is a thin compatibility shim.
+- The **default config** is ``config.yaml`` in this directory.
+- A ``--config`` CLI flag lets you override the config path.
+- CLI behaviour, logging, checkpoint, and optimizer are identical.
+
+## Config
+
+The default config file is ``workflows/rfgun_single_pass/config.yaml``
+(extracted from the shared ``config/default.yaml`` in Phase 4).
+
+To use a different config:
+
+```powershell
+python run_workflow_1.py --config path/to/config.yaml
+```
+
+The original ``config/default.yaml`` is **not deleted** -- it continues to
+serve Workflow 2, Workflow 3, and any legacy entry points.
 
 ## Constraints respected in all phases
 
 | Constraint | Status |
 |---|---|
-| Modify `config/default.yaml` | Not before Phase 4 |
-| Modify `src/cst_optimization/` | Default is *not* to modify; if a generic API must be extracted, a report entry is written first for review, never changed in the current phase |
+| Modify `config/default.yaml` | Never (only WF1 ``config.yaml`` is modified) |
+| Modify `src/cst_optimization/` | Default is not to modify; if a generic API must be extracted, a report entry is written first for review, never changed in the current phase |
 | Modify Workflow 2 / 3 code | Never |
 | Move `examples/` | Never |
 | Change runtime behaviour | Not before Phase 7 (final validation) |
@@ -32,8 +44,8 @@ a three-tier retry handler with post-evaluation graceful reset.
 ```powershell
 python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
 python run_workflow_1.py --help
-python -c "from workflows.rfgun_single_pass.run import main; print(main.__name__)"
+python run_workflow_1.py --config workflows/rfgun_single_pass/config.yaml --help
+python -c "from workflows.rfgun_single_pass.run import DEFAULT_CONFIG_PATH; print(DEFAULT_CONFIG_PATH)"
 ```
 
-All files must compile without errors.  The ``--help`` flag must print
-the expected argument list.  The import test must print ``main``.
+All must pass without errors.

@@ -17,6 +17,7 @@ This branch is created from the shared codebase after Phase 1
 | Path | When |
 |---|---|
 | `workflows/rfgun_single_pass/` | Phase 2 onward |
+| `workflows/rfgun_single_pass/config.yaml` | Phase 4 onward |
 | `reports/workflow1_split/` | Phase 1 onward |
 | `run_workflow_1.py` | Phase 3 onward (runner migration only) |
 | `tests/workflows/` | Phase 6 onward (unit / integration tests) |

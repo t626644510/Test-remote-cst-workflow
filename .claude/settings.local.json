@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -c \"compile\\(open\\('examples/workflow_test.py', encoding='utf-8'\\).read\\(\\), 'workflow_test.py', 'exec'\\); print\\('Syntax OK'\\)\")",
+      "Bash(set PYTHONPATH=src)",
+      "Bash(.venv/Scripts/python examples/multi_objective_optimization.py)",
+      "Bash(.venv/Scripts/python -c \"compile\\(open\\('examples/export_field_data.py', encoding='utf-8'\\).read\\(\\), 'export_field_data.py', 'exec'\\); print\\('Syntax OK'\\)\")",
+      "Bash(PYTHONPATH=src .venv/Scripts/python -c ' *)",
+      "Bash(.venv/Scripts/python -m pip install openpyxl --quiet)",
+      "Bash(.venv/Scripts/python -c \"import openpyxl; print\\('openpyxl', openpyxl.__version__\\)\")",
+      "Bash(PYTHONPATH=\"src\" .venv/Scripts/python examples/multi_objective_optimization.py)",
+      "Bash(.venv/Scripts/python -c \"compile\\(open\\('examples/workflow_test.py', encoding='utf-8'\\).read\\(\\), 'wft.py', 'exec'\\); print\\('workflow_test Syntax OK'\\)\")",
+      "Bash(.venv/Scripts/python -c \"compile\\(open\\('examples/discover_project.py', encoding='utf-8'\\).read\\(\\),'d','exec'\\);compile\\(open\\('examples/tolerance_analysis.py', encoding='utf-8'\\).read\\(\\),'t','exec'\\);print\\('Both scripts Syntax OK'\\)\")"
+    ]
+  }
+}

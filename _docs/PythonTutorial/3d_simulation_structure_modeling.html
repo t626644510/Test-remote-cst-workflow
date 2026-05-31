@@ -1,0 +1,486 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Shape Modeling &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Simulation Setup" href="3d_simulation_simulation_setup.html" />
+    <link rel="prev" title="Customize Python functionality" href="custom_python.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_simulation_setup.html" title="Simulation Setup"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="custom_python.html" title="Customize Python functionality"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Shape Modeling</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="shape-modeling">
+<h1>Shape Modeling<a class="headerlink" href="#shape-modeling" title="Permalink to this heading">¶</a></h1>
+<p>For Shape modeling, Visual Basic (VBA) code is used in combination with the python API.
+For more information on VBA, take a look at the
+<a href="../vba/vba_macro_language_overview.htm">Visual Basic documentation</a></p>
+<p>Please run the following preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+</pre></div>
+</div>
+<section id="create-a-new-shape">
+<h2>Create a new Shape<a class="headerlink" href="#create-a-new-shape" title="Permalink to this heading">¶</a></h2>
+<p>This becomes a brick:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># define a String holding the VBA code for creating a Brick</span>
+<span class="n">vba_code</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">With Brick</span>
+<span class="s2">     .Reset</span>
+<span class="s2">     .Name &quot;solid1&quot;</span>
+<span class="s2">     .Component &quot;component1&quot;</span>
+<span class="s2">     .Material &quot;PEC&quot;</span>
+<span class="s2">     .Xrange &quot;0&quot;, &quot;3&quot;</span>
+<span class="s2">     .Yrange &quot;0&quot;, &quot;4&quot;</span>
+<span class="s2">     .Zrange &quot;0&quot;, &quot;5&quot;</span>
+<span class="s2">     .Create</span>
+<span class="s2">End With</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="c1"># add the VBA code to the History List</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;create brick&quot;</span><span class="p">,</span> <span class="n">vba_code</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>To execute a VBA code, it needs to be added to the history using <code class="docutils literal notranslate"><span class="pre">prj.model3d.add_to_history(&quot;Step_name&quot;,</span> <span class="pre">vba_code)</span></code>.
+As shown below, this creates a new Brick and a history block in the modeler.</p>
+<p><img alt="New Brick and History List Entry" src="images/NewBrick_and_history_list_entry.png" /></p>
+<p>If the defined component does not exist, it will be created automatically.</p>
+</section>
+<section id="automation-of-the-shape-creation">
+<h2>Automation of the Shape creation<a class="headerlink" href="#automation-of-the-shape-creation" title="Permalink to this heading">¶</a></h2>
+<p>Using the code from above combined with a simple loop and formatted strings, we can create multiple Bricks.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+    <span class="n">vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    With Brick</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;solid_</span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Component &quot;component_solid&quot;</span>
+<span class="s2">         .Material &quot;PEC&quot;</span>
+<span class="s2">         .Xrange &quot;</span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Yrange &quot;0&quot;, &quot;4&quot;</span>
+<span class="s2">         .Zrange &quot;0&quot;, &quot;5&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;brick at </span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">vba</span><span class="p">)</span>
+
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;multiple_shapes.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>It is important that the Name of each shape is unique.
+Trying to create a shape with an already existing name will result in a RuntimeError.
+<strong>Also note that the header of each history block (here <code class="docutils literal notranslate"><span class="pre">brick</span> <span class="pre">at</span> <span class="pre">{x}</span></code>) needs to be unique.</strong></p>
+<p>Running the code creates five Brick shapes, as seen below.</p>
+<p><img alt="Simple Loop Result" src="images/simple_loop_result.png" /></p>
+</section>
+<section id="setting-the-units">
+<h2>Setting the Units<a class="headerlink" href="#setting-the-units" title="Permalink to this heading">¶</a></h2>
+<p>So far, the Python scripts added geometries with coordinates and dimensions assuming the default length unit,
+without actually checking which unit is set.
+When creating a new empty project, the first history block should set the units for the project,
+which all further constructions will use.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># define a String holding the VBA code for setting the units</span>
+<span class="n">unit_vba</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">With Units</span>
+<span class="s2">     .SetUnit (&quot;Length&quot;, &quot;m&quot;)</span>
+<span class="s2">     .SetUnit (&quot;Frequency&quot;,&quot;Hz&quot;)</span>
+<span class="s2">     .SetUnit (&quot;Time&quot;, &quot;ms&quot;)</span>
+<span class="s2">     .SetUnit (&quot;Temperature&quot;, &quot;K&quot;)</span>
+<span class="s2">End With</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="c1"># add the VBA code to the History List</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;set units&quot;</span><span class="p">,</span> <span class="n">unit_vba</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>Setting the units of your project follows the same pattern as creating a Shape.
+For this, you need to create a String containing the corresponding VBA code for setting the units and add that code to
+the History List.
+This process is shown in the example code above.</p>
+<p>The following table shows the different dimensions and their supported units.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dimension</p></th>
+<th class="head"><p>supported units</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Length</p></td>
+<td><p>nm, um, mm, cm, m, mil, in, ft</p></td>
+</tr>
+<tr class="row-odd"><td><p>Time</p></td>
+<td><p>fs, ps, ns, us, ms, s</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Hz, kHz, MHz, GHz, THz, PHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>Temperature</p></td>
+<td><p>degC, K, degF</p></td>
+</tr>
+</tbody>
+</table>
+<p>For more information on the Units Object and the different Methods for Units, take a look at the
+<a href="../mergedProjects/VBA_DES/special_vbacommands/unitsobject.htm">Units page of the VBA documentation</a>.</p>
+</section>
+<section id="creating-a-new-material">
+<h2>Creating a new Material<a class="headerlink" href="#creating-a-new-material" title="Permalink to this heading">¶</a></h2>
+<p>Usually data is not defined directly in the Python script, but rather read or imported from other sources.
+Here we assume that material data have been read from a certain json file, leading to the following, equivalent
+python statement:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># material data of some arbitrary kind:</span>
+<span class="n">materials</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;FR-4&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Normal&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;permittivity&quot;</span><span class="p">:</span> <span class="mf">4.2</span><span class="p">,</span>
+        <span class="s2">&quot;permeability&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;Sigma&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;TanD&quot;</span><span class="p">:</span> <span class="mf">0.02</span><span class="p">,</span>
+        <span class="s2">&quot;tan_delta_freq&quot;</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="s2">&quot;density_g_mm3&quot;</span><span class="p">:</span> <span class="mf">1.85</span><span class="p">,</span>
+        <span class="s2">&quot;ThermalConductivity&quot;</span><span class="p">:</span> <span class="mf">0.3</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;G-10&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Normal&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;permittivity&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span>
+        <span class="s2">&quot;permeability&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;Sigma&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;TanD&quot;</span><span class="p">:</span> <span class="mf">0.03</span><span class="p">,</span>
+        <span class="s2">&quot;density_g_mm3&quot;</span><span class="p">:</span> <span class="mf">1.8</span><span class="p">,</span>
+        <span class="s2">&quot;ThermalConductivity&quot;</span><span class="p">:</span> <span class="mf">0.29</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;Copper&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Lossy metal&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;permittivity&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;permeability&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="s2">&quot;Sigma&quot;</span><span class="p">:</span> <span class="mf">5.96e+7</span><span class="p">,</span>
+        <span class="s2">&quot;TanD&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;density_g_mm3&quot;</span><span class="p">:</span> <span class="mf">8.9</span><span class="p">,</span>
+        <span class="s2">&quot;ThermalConductivity&quot;</span><span class="p">:</span> <span class="mf">400.0</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># iterate through materials</span>
+<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">material</span> <span class="ow">in</span> <span class="n">materials</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="c1"># VBA for creating a new Material</span>
+    <span class="n">material_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    With Material</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Folder &quot;ImportedMaterials&quot;</span>
+<span class="s2">         .Type &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Rho &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;density_g_mm3&#39;</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">1000</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .ThermalConductivity &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;ThermalConductivity&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Epsilon &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;permittivity&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Mu &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;permeability&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Sigma &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;Sigma&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="s2">&quot;TanD&quot;</span> <span class="ow">in</span> <span class="n">material</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="c1"># only add &quot;TanD&quot; if the value is not 0</span>
+        <span class="k">if</span> <span class="n">material</span><span class="p">[</span><span class="s2">&quot;TanD&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">material_vba</span> <span class="o">+=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">            .TanDGiven &quot;False&quot;</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">material_vba</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;     .TanD &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;TanD&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .TanDGiven &quot;True&quot;</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+
+    <span class="c1"># add TanDFreq only if the key is given</span>
+    <span class="k">if</span> <span class="s2">&quot;tan_delta_freq&quot;</span> <span class="ow">in</span> <span class="n">material</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+        <span class="n">material_vba</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot; .TanDFreq &quot;</span><span class="si">{</span><span class="n">material</span><span class="p">[</span><span class="s1">&#39;tan_delta_freq&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">        &quot;&quot;&quot;</span>
+
+    <span class="n">material_vba</span> <span class="o">+=</span> <span class="s2">&quot;&quot;&quot;.Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># add the VBA code_examples to the History List</span>
+    <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;import </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">material_vba</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>Please have a look at the newly created materials in the navigation tree.</p>
+<p>You will have to adapt the retrieval of the properties according to your storage format of the materials.
+Also make sure your values correspond to the units for the specific property in CST Studio.</p>
+<blockquote>
+<div><p>The Units for the material properties are fixed and do not change when setting the project units.</p>
+</div></blockquote>
+<p>All possible material properties and their corresponding VBA-names are listed in the
+<a href="../mergedProjects/VBA_3D/special_vbalayer/special_vbalayerolayer_object.htm">VBA documentation in the Material Objects section</a>.
+As the unit for the density is <em>kg/m³</em> in CST Studio Suite, the value has to be converted as its given value
+is in <em>g/cm³</em>.
+This can either be done by hand (in this case, multiplying it by 1000) or using the cst.units package.
+An example for the second approach can be seen in the code below.
+This way, the material units can also be read from some material file and be converted automatically.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cst.units</span><span class="w"> </span><span class="kn">import</span> <span class="n">kg</span><span class="p">,</span> <span class="n">g</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">cm</span>
+
+<span class="n">density</span> <span class="o">=</span> <span class="mf">1.85</span> <span class="o">*</span> <span class="p">(</span><span class="n">g</span><span class="o">/</span><span class="n">cm</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">density</span> <span class="o">=</span> <span class="n">density</span><span class="o">.</span><span class="n">convert_to</span><span class="p">(</span><span class="n">kg</span><span class="o">/</span><span class="n">m</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">density_val</span> <span class="o">=</span> <span class="n">density</span><span class="o">.</span><span class="n">value</span>
+</pre></div>
+</div>
+</section>
+<section id="working-with-created-items">
+<h2>Working with created Items<a class="headerlink" href="#working-with-created-items" title="Permalink to this heading">¶</a></h2>
+<p>To work with the created objects, the <code class="docutils literal notranslate"><span class="pre">prj.model3d.get_tree_items()</span></code> method can be used to get an overview
+of the current contents of our project. This returns a flat list of all tree paths. Among other things, we can find
+our shapes here. We create an example project for testing:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_random_sphere_like_geometry</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">solidname</span><span class="p">):</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">random</span><span class="w"> </span><span class="kn">import</span> <span class="n">random</span>
+    <span class="n">rad</span> <span class="o">=</span> <span class="n">random</span><span class="p">()</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    With Sphere </span>
+<span class="s2">     .Reset </span>
+<span class="s2">     .Name &quot;</span><span class="si">{</span><span class="n">solidname</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .Component &quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .Material &quot;PEC&quot; </span>
+<span class="s2">     .Axis &quot;z&quot; </span>
+<span class="s2">     .CenterRadius &quot;</span><span class="si">{</span><span class="n">rad</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .TopRadius &quot;</span><span class="si">{</span><span class="mf">0.2</span><span class="o">*</span><span class="n">rad</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .BottomRadius &quot;</span><span class="si">{</span><span class="mf">0.3</span><span class="o">*</span><span class="n">rad</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .Center &quot;</span><span class="si">{</span><span class="mi">100</span><span class="o">*</span><span class="n">random</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="mi">100</span><span class="o">*</span><span class="n">random</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="mi">100</span><span class="o">*</span><span class="n">random</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot; </span>
+<span class="s2">     .Segments &quot;0&quot; </span>
+<span class="s2">     .Create </span>
+<span class="s2">    End With</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+
+<span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;Electric&quot;</span><span class="p">,</span> <span class="s2">&quot;nonElectric&quot;</span><span class="p">,</span> <span class="s2">&quot;undefined&quot;</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">5</span><span class="p">):</span>
+        <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;creating geom </span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">create_random_sphere_like_geometry</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">/subcomp&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">comp</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<p>For example, the shape selected in the Navigation Tree below would be returned in the list of all tree
+paths as <code class="docutils literal notranslate"><span class="pre">'Components\nonElectric\subcomp\nonElectric_0'</span></code></p>
+<p><img alt="Nav Tree example" src="images/nav_tree_delete_example.png" /></p>
+<p>For the following examples we will define two functions <code class="docutils literal notranslate"><span class="pre">get_shapes_including(name,</span> <span class="pre">prj)</span></code>
+and <code class="docutils literal notranslate"><span class="pre">get_components_including(name,</span> <span class="pre">prj)</span></code>. We will use these to keep the following example codes as simple as possible.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_shapes_including</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generator function to iterate over all 3D Shapes, whose name includes `name`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">get_tree_items</span><span class="p">():</span>
+        <span class="c1"># split the path</span>
+        <span class="n">split_item</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Only get items from &quot;Components&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;Components&quot;</span> <span class="ow">in</span> <span class="n">split_item</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+
+            <span class="c1"># Only get items including the given name</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">split_item</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+
+                <span class="c1"># get components the item is assigned to</span>
+                <span class="n">components</span> <span class="o">=</span> <span class="n">split_item</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+                <span class="c1"># get the shape name</span>
+                <span class="n">shape</span> <span class="o">=</span> <span class="n">split_item</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+                <span class="c1"># join components &amp; path to get the path to the shape</span>
+                <span class="n">component_path</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+
+                <span class="n">shape_path</span> <span class="o">=</span> <span class="s2">&quot;:&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">component_path</span><span class="p">,</span> <span class="n">shape</span><span class="p">])</span>
+
+                <span class="c1"># check if found item is a shape</span>
+                <span class="k">if</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">Solid</span><span class="o">.</span><span class="n">DoesExist</span><span class="p">(</span><span class="n">shape_path</span><span class="p">):</span>
+                    <span class="k">yield</span> <span class="n">shape_path</span>
+                    
+<span class="c1"># test:</span>
+<span class="nb">print</span><span class="p">(</span> <span class="nb">list</span><span class="p">(</span> <span class="n">get_shapes_including</span><span class="p">(</span><span class="s2">&quot;nonE&quot;</span><span class="p">,</span> <span class="n">prj</span><span class="p">)</span> <span class="p">))</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_components_including</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create iterator to iterate over all 3D Components, whose name includes `name`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">get_tree_items</span><span class="p">():</span>
+        <span class="c1"># split the path</span>
+        <span class="n">split_item</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># make sure we are only deleting shapes or components</span>
+        <span class="k">if</span> <span class="s2">&quot;Components&quot;</span> <span class="o">==</span> <span class="n">split_item</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+
+            <span class="c1"># search for our components (item-names are in last item of split_item)</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">split_item</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+
+                <span class="c1"># get components</span>
+                <span class="n">components</span> <span class="o">=</span> <span class="n">split_item</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+
+                <span class="c1"># join components to the component path and append</span>
+                <span class="n">component_path</span> <span class="o">=</span> <span class="s2">&quot;/&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">components</span><span class="p">)</span>
+
+                <span class="c1"># check if found item is a Component</span>
+                <span class="k">if</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">Component</span><span class="o">.</span><span class="n">DoesExist</span><span class="p">(</span><span class="n">component_path</span><span class="p">):</span>
+                    <span class="k">yield</span> <span class="n">component_path</span>
+                    
+<span class="c1"># test:</span>
+<span class="nb">print</span><span class="p">(</span> <span class="nb">list</span><span class="p">(</span> <span class="n">get_components_including</span><span class="p">(</span><span class="s2">&quot;nonE&quot;</span><span class="p">,</span> <span class="n">prj</span><span class="p">)</span> <span class="p">))</span>
+</pre></div>
+</div>
+<p>These functions will yield all items in the <em>Components</em> branch of our Navigation Tree that include the given <em>name</em> in
+their name.
+Using <code class="docutils literal notranslate"><span class="pre">prj.model3d.Solid.DoesExist()</span></code> we ensure that the item found is a shape.
+The same way <code class="docutils literal notranslate"><span class="pre">prj.model3d.Component.DoesExist()</span></code> is used in <code class="docutils literal notranslate"><span class="pre">get_components_including</span></code>
+to ensure that the item found is a component.
+The formatting of shapes is different to the formatting of components.
+The items from <code class="docutils literal notranslate"><span class="pre">get_shapes_including</span></code> will yield strings that are formatted like this, for
+example: “component1/sub_component1:solid1”</p>
+<p>The items from <code class="docutils literal notranslate"><span class="pre">get_components_including</span></code> will yield strings that are formatted like this, for
+example: “component1/sub_component1”</p>
+<section id="deleting-shapes">
+<h3>Deleting Shapes<a class="headerlink" href="#deleting-shapes" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># reuse `prj` from above</span>
+
+<span class="n">to_be_removed</span> <span class="o">=</span> <span class="s2">&quot;undefined_&quot;</span>
+
+<span class="k">for</span> <span class="n">shape_path</span> <span class="ow">in</span> <span class="n">get_shapes_including</span><span class="p">(</span><span class="n">to_be_removed</span><span class="p">,</span> <span class="n">prj</span><span class="p">):</span>
+
+    <span class="c1"># define the VBA code_examples &amp; add to the history list</span>
+    <span class="n">delete_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Solid.Delete &quot;</span><span class="si">{</span><span class="n">shape_path</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+
+    <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;delete shape: </span><span class="si">{</span><span class="n">shape_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">delete_vba</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>The Code shown above gets the shape paths of all Navigation Tree items using the function defined before.
+It then deletes all shapes that include the string “undefined_”.
+This code will only delete shapes, as the VBA code for deleting shapes is different to the code for deleting components.
+The component “undefined_test” includes the given string.
+As explained earlier, its path won’t be returned because we checked,
+if a shape with this name exists using the <code class="docutils literal notranslate"><span class="pre">Solid.DoesExist()</span></code> method.</p>
+<p>After running the code, the Navigation Tree below shows the results.
+All shapes that included the “undefined_” string, seen at the beginning
+of <a class="reference internal" href="#working-with-created-items"><span class="xref myst">Working with created Items</span></a>, are removed.</p>
+<p><img alt="Navigation Tree after deleting Shapes" src="images/nav_tree_deleted_shapes.png" /></p>
+</section>
+<section id="deleting-components">
+<h3>Deleting components<a class="headerlink" href="#deleting-components" title="Permalink to this heading">¶</a></h3>
+<p>We continue with the same <code class="docutils literal notranslate"><span class="pre">prj</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">to_be_removed</span> <span class="o">=</span> <span class="s2">&quot;nonElectric&quot;</span>
+
+<span class="k">with</span> <span class="n">de</span><span class="o">.</span><span class="n">quiet_mode_enabled</span><span class="p">():</span>
+
+    <span class="k">for</span> <span class="n">component_path</span> <span class="ow">in</span> <span class="n">get_components_including</span><span class="p">(</span><span class="n">to_be_removed</span><span class="p">,</span> <span class="n">prj</span><span class="p">):</span>
+        <span class="c1"># define the VBA code_examples &amp; add to the history list</span>
+        <span class="n">delete_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Component.Delete &quot;</span><span class="si">{</span><span class="n">component_path</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+
+        <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;delete component: </span><span class="si">{</span><span class="n">component_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">delete_vba</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>To delete components including a specific string, we can use the previously defined function <code class="docutils literal notranslate"><span class="pre">get_components_including</span></code>
+to get the component paths that include “nonElectric”. Running this code will delete all components (and their content) that
+have “nonElectric” in their name.
+The resulting Navigation Tree can be seen below.</p>
+<p><img alt="Navigation Tree after deleting Components" src="images/nav_tree_deleted_components.png" /></p>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Shape Modeling</a><ul>
+<li><a class="reference internal" href="#create-a-new-shape">Create a new Shape</a></li>
+<li><a class="reference internal" href="#automation-of-the-shape-creation">Automation of the Shape creation</a></li>
+<li><a class="reference internal" href="#setting-the-units">Setting the Units</a></li>
+<li><a class="reference internal" href="#creating-a-new-material">Creating a new Material</a></li>
+<li><a class="reference internal" href="#working-with-created-items">Working with created Items</a><ul>
+<li><a class="reference internal" href="#deleting-shapes">Deleting Shapes</a></li>
+<li><a class="reference internal" href="#deleting-components">Deleting components</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_simulation_setup.html" title="Simulation Setup"
+             >next</a></li>
+        <li class="right" >
+          <a href="custom_python.html" title="Customize Python functionality"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Shape Modeling</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

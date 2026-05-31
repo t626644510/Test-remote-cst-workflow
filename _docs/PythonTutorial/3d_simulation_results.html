@@ -1,0 +1,349 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>3D Simulation Results &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Creating &amp; Connecting Components" href="circuit_simulation_creating_connecting_blocks.html" />
+    <link rel="prev" title="Simulation Setup" href="3d_simulation_simulation_setup.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_creating_connecting_blocks.html" title="Creating &amp; Connecting Components"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_simulation_setup.html" title="Simulation Setup"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3D Simulation Results</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="d-simulation-results">
+<h1>3D Simulation Results<a class="headerlink" href="#d-simulation-results" title="Permalink to this heading">¶</a></h1>
+<p>After successfully running the solver on our model, the next step is to read and then use the results from the solver.</p>
+<p>There are two ways to read the results.
+One is to extract the results from a project in a running instance of CST Studio Suite.
+The second way is to retrieve the results from the project files.
+Both ways require the TreePaths of the results.</p>
+<section id="preparations">
+<h2>Preparations<a class="headerlink" href="#preparations" title="Permalink to this heading">¶</a></h2>
+<p>Please open the CST project “simulation_done.cst” from the previous session, then run the following code.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">active_project</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Looking at results inside: &quot;</span><span class="p">,</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>We create a helper function to retrieve the tree paths from the CST MWS project.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_1d_s_param_paths</span><span class="p">(</span><span class="n">mod</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;interface.Project.Model3D&quot;</span><span class="p">,</span> <span class="s2">&quot;results.ResultModule&quot;</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Gets all 1D S-Parameter results from prj and yields them.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">tree_items</span> <span class="o">=</span> <span class="n">mod</span><span class="o">.</span><span class="n">get_tree_items</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">tree_item</span> <span class="ow">in</span> <span class="n">tree_items</span><span class="p">:</span>
+        <span class="n">tree_item_comp</span> <span class="o">=</span> <span class="n">tree_item</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># S-Parameter results have at least 3 &quot;TreePathComponents&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tree_item_comp</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tree_item_comp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;1D Results&quot;</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">tree_item_comp</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;S-Parameters&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">tree_item</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;S-parameters&quot;</span><span class="p">):</span>
+                    <span class="k">yield</span> <span class="n">tree_item</span>
+
+<span class="c1"># test function:</span>
+<span class="nb">print</span><span class="p">(</span> <span class="nb">list</span><span class="p">(</span> <span class="n">get_1d_s_param_paths</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="p">)</span> <span class="p">)</span> <span class="p">)</span>
+</pre></div>
+</div>
+<p>Similar to the <code class="docutils literal notranslate"><span class="pre">get_shapes_including</span></code> function,
+we defined in
+<a href="3d_simulation_structure_modeling.html#working-with-created-items">Structure Modeling/Working with created Items</a>
+, <code class="docutils literal notranslate"><span class="pre">get_1d_s_param_paths</span></code> yields all 1D S-Parameter results of our project.
+This will work for both ways of retrieving the results.
+The shown code can easily be changed to get other types of results, by changing the if-conditions.</p>
+</section>
+<section id="getting-results-from-a-running-cst-studio-suite-instance">
+<h2>Getting Results from a running CST Studio Suite instance<a class="headerlink" href="#getting-results-from-a-running-cst-studio-suite-instance" title="Permalink to this heading">¶</a></h2>
+<p>In this section,
+we will be looking at how to get the results from a running instance of CST Studio Suite and working with these results.</p>
+<p>Using the function defined in <a class="reference internal" href="#getting-the-treepaths"><span class="xref myst">Getting the TreePaths</span></a> to get the TreePaths we need,
+we can continue by getting the result IDs of the TreeItems and then the results.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using `prj` as before</span>
+
+<span class="k">for</span> <span class="n">item_path</span> <span class="ow">in</span> <span class="n">get_1d_s_param_paths</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="p">):</span>
+    <span class="n">result_id</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">ResultTree</span><span class="o">.</span><span class="n">GetResultIDsFromTreeItem</span><span class="p">(</span><span class="n">item_path</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">ResultTree</span><span class="o">.</span><span class="n">GetResultFromTreeItem</span><span class="p">(</span><span class="n">item_path</span><span class="p">,</span> <span class="n">result_id</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="n">result_id</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">))</span>
+
+    <span class="c1"># Work with the provided Results here</span>
+</pre></div>
+</div>
+<p>The resultID of a result is retrieved,
+using <code class="docutils literal notranslate"><span class="pre">prj.model3d.ResultTree.GetResultIDsFromTreeItem()</span></code> and passing the corresponding TreePath.
+With the TreePath and the resultID the Result can be retrieved, using <code class="docutils literal notranslate"><span class="pre">prj.model3d.ResultTree.GetResultFromTreeItem()</span></code>.
+In this case, this will return a Result1D Object, which contains the data of the results.</p>
+<section id="working-with-the-results">
+<h3>Working with the Results<a class="headerlink" href="#working-with-the-results" title="Permalink to this heading">¶</a></h3>
+<p>Now that we have the results as a Result1D object, we can start working with the results.
+This section shows example codes of what you can do with the results.</p>
+<p>We need some convenience functions. First, extracting 1D results into numpy arrays, is done like</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">result1d_to_numpy</span><span class="p">(</span><span class="n">res</span><span class="p">:</span> <span class="s2">&quot;interface.Project.Result1D&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    converts Result1D object to numpy arrays of x(float) and of y(complex) values</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">))</span>
+
+    <span class="n">y_complex</span> <span class="o">=</span> <span class="p">[</span><span class="nb">complex</span><span class="p">(</span><span class="n">yre</span><span class="p">,</span> <span class="n">yim</span><span class="p">)</span> <span class="k">for</span> <span class="n">yre</span><span class="p">,</span> <span class="n">yim</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;yre&quot;</span><span class="p">),</span> <span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;yim&quot;</span><span class="p">))]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">y_complex</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span>
+</pre></div>
+</div>
+<p>This function gets the x-values, the imaginary y-values and the real y-values from the Result1D object.
+The imaginary (<code class="docutils literal notranslate"><span class="pre">yim</span></code>) and real (<code class="docutils literal notranslate"><span class="pre">yre</span></code>) values for y are combined in the numpy array <code class="docutils literal notranslate"><span class="pre">y</span></code>.
+The function then returns these values in a numpy array.</p>
+<p>Using the following helper functions <code class="docutils literal notranslate"><span class="pre">get_complex_max()</span></code> and <code class="docutils literal notranslate"><span class="pre">get_complex_min()</span></code>,
+we can get the maximum and minimum of the y array and the x-value, where y reaches this value.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_complex_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    returns the x- and y-values where y reaches its maximum value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">r_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="n">r_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r_index</span><span class="p">]</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_complex_min</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    returns the x- and y-values where y reaches its minimum value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">r_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="n">r_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r_index</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>We can also calculate the dB values from the complex values.
+The helper function <code class="docutils literal notranslate"><span class="pre">deci_bell_of()</span></code> does this for a complex value or for arrays of complex values.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">deci_bell_of</span><span class="p">(</span><span class="n">y</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">complex</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    returns the dB-value(s) of y</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>Putting everything together, we get the following script:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+
+<span class="k">for</span> <span class="n">item_path</span> <span class="ow">in</span> <span class="n">get_1d_s_param_paths</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="p">):</span>
+    <span class="n">result_id</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">ResultTree</span><span class="o">.</span><span class="n">GetResultIDsFromTreeItem</span><span class="p">(</span><span class="n">item_path</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">ResultTree</span><span class="o">.</span><span class="n">GetResultFromTreeItem</span><span class="p">(</span><span class="n">item_path</span><span class="p">,</span> <span class="n">result_id</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="c1"># Work with the provided Results here</span>
+
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">result1d_to_numpy</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="n">x_max</span><span class="p">,</span> <span class="n">y_max</span> <span class="o">=</span> <span class="n">get_complex_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+    <span class="n">x_min</span><span class="p">,</span> <span class="n">y_min</span> <span class="o">=</span> <span class="n">get_complex_min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+    <span class="n">y_db</span> <span class="o">=</span> <span class="n">deci_bell_of</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+    <span class="n">y_db_max</span> <span class="o">=</span> <span class="n">deci_bell_of</span><span class="p">(</span><span class="n">y_max</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">y_db_max</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y_db</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_max</span><span class="p">,</span> <span class="n">y_db_max</span><span class="p">,</span> <span class="s2">&quot;ro&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">pause</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<!-- 
+- Hier vielleicht cst.units verwenden?
+    - dB nicht in units... )
+-->
+</section>
+</section>
+<section id="get-results-from-files">
+<h2>Get Results from files<a class="headerlink" href="#get-results-from-files" title="Permalink to this heading">¶</a></h2>
+<p>To access the results without a running instance of CST Studio Suite, the <code class="docutils literal notranslate"><span class="pre">cst.results</span></code> module can be used.
+It allows reading one-dimensional result curves and data points of CST project files, as well as 2D data which is saved in the form of colormaps.</p>
+<section id="getting-the-results">
+<h3>Getting the Results<a class="headerlink" href="#getting-the-results" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">prj</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">get_current_project</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Looking at results inside: &quot;</span><span class="p">,</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">())</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.results</span>
+<span class="n">res_acc</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">ProjectFile</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">(),</span> <span class="n">allow_interactive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">res_3d</span> <span class="o">=</span> <span class="n">res_acc</span><span class="o">.</span><span class="n">get_3d</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">item_path</span> <span class="ow">in</span> <span class="n">get_1d_s_param_paths</span><span class="p">(</span><span class="n">res_3d</span><span class="p">):</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">res_3d</span><span class="o">.</span><span class="n">get_result_item</span><span class="p">(</span><span class="n">item_path</span><span class="p">)</span>
+
+    <span class="c1"># Work with the provided Results here</span>
+</pre></div>
+</div>
+<p>Instead of opening a CST Project, we need to define a ProjectFile to access its data.
+After defining the ProjectFile we can create a ResultModule instance using <code class="docutils literal notranslate"><span class="pre">get_3d()</span></code> on our ProjectFile.
+Using this, the <code class="docutils literal notranslate"><span class="pre">get_1d_s_param_res()</span></code> can be called to get the TreePaths of our results.
+With the TreePaths we can simply call <code class="docutils literal notranslate"><span class="pre">res_acc.get_result_item(item_path)</span></code> which will return a ResultItem,
+that contains the data of the results.</p>
+</section>
+<section id="id1">
+<h3>Working with the results<a class="headerlink" href="#id1" title="Permalink to this heading">¶</a></h3>
+<p>Now that we have the results as a ResultItem object, we can start working with the results.
+This section shows example codes of what you can do with the results.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+
+<span class="k">for</span> <span class="n">item_path</span> <span class="ow">in</span> <span class="n">get_1d_s_param_paths</span><span class="p">(</span><span class="n">res_3d</span><span class="p">):</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">res_3d</span><span class="o">.</span><span class="n">get_result_item</span><span class="p">(</span><span class="n">item_path</span><span class="p">)</span>
+
+    <span class="c1"># Work with the provided Results here</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">get_xdata</span><span class="p">())</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">get_ydata</span><span class="p">())</span>
+
+    <span class="n">x_max</span><span class="p">,</span> <span class="n">y_max</span> <span class="o">=</span> <span class="n">get_complex_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+    <span class="n">x_min</span><span class="p">,</span> <span class="n">y_min</span> <span class="o">=</span> <span class="n">get_complex_min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+    <span class="n">y_db</span> <span class="o">=</span> <span class="n">deci_bell_of</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
+    <span class="n">y_db_max</span> <span class="o">=</span> <span class="n">deci_bell_of</span><span class="p">(</span><span class="n">y_max</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">y_db_max</span><span class="p">)</span>
+
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y_db</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x_max</span><span class="p">,</span> <span class="n">y_db_max</span><span class="p">,</span> <span class="s2">&quot;ro&quot;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">block</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">pause</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<p>We can use <code class="docutils literal notranslate"><span class="pre">.get_xdata()</span></code> and <code class="docutils literal notranslate"><span class="pre">.get_ydata()</span></code> on the result item, each returning a list.
+In this case <code class="docutils literal notranslate"><span class="pre">.get_xdata()</span></code> will return a list of frequencies
+and <code class="docutils literal notranslate"><span class="pre">.get_ydata()</span></code> will return a list of complex parameter values.
+Using <code class="docutils literal notranslate"><span class="pre">np.array()</span></code> we convert these lists to numpy arrays so that it is easier to work with them later on.</p>
+<p>Now that we have numpy arrays of the results,
+we can use the same helper functions as in <a class="reference internal" href="#working-with-the-results"><span class="xref myst">Working with the results</span></a>.</p>
+</section>
+</section>
+<section id="import-data-as-result">
+<h2>Import Data as Result<a class="headerlink" href="#import-data-as-result" title="Permalink to this heading">¶</a></h2>
+<p>Instead of exporting data, it is also possible to import data.
+Running the following snippet, a new MWS will be created and some special functions
+from the scipy library will be imported into the 1D Results folder.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># === create the data to be plotted:===</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scipy</span>
+<span class="n">plots</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="c1"># Bessel functions:</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">jv</span>
+<span class="n">xs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">201</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">order</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+    <span class="n">ys</span> <span class="o">=</span> <span class="n">jv</span><span class="p">(</span><span class="n">order</span><span class="p">,</span><span class="n">xs</span><span class="p">)</span>
+    <span class="n">plots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="s2">&quot;Bessel functions&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;J_</span><span class="si">{</span><span class="n">order</span><span class="si">}</span><span class="s2">(x)&quot;</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span><span class="p">)</span> <span class="p">)</span>
+
+<span class="c1"># Airy functions:</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">scipy.special</span><span class="w"> </span><span class="kn">import</span> <span class="n">airy</span>
+<span class="n">xs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">15</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">201</span><span class="p">)</span>
+<span class="n">ai</span><span class="p">,</span> <span class="n">aip</span><span class="p">,</span> <span class="n">bi</span><span class="p">,</span> <span class="n">bip</span> <span class="o">=</span> <span class="n">airy</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span>
+<span class="n">plots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="s1">&#39;Airy functions&#39;</span><span class="p">,</span> <span class="s1">&#39;Ai(x)&#39;</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ai</span><span class="p">)</span> <span class="p">)</span>
+<span class="n">plots</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="p">(</span><span class="s1">&#39;Airy functions&#39;</span><span class="p">,</span> <span class="s1">&#39;Bi(x)&#39;</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">bi</span><span class="p">)</span> <span class="p">)</span>
+
+<span class="c1"># === plot in a new CST project: ===</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># import curves into CST Result tree:</span>
+<span class="k">for</span> <span class="n">folder</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="ow">in</span> <span class="n">plots</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="s2">&quot;xs and ys must be the same length&quot;</span>
+    <span class="n">new_result</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">Result1D</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+    <span class="n">new_result</span><span class="o">.</span><span class="n">Initialize</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">xs</span><span class="p">))</span>
+    <span class="n">new_result</span><span class="o">.</span><span class="n">SetArray</span><span class="p">(</span><span class="n">xs</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)</span>
+    <span class="n">new_result</span><span class="o">.</span><span class="n">SetArray</span><span class="p">(</span><span class="n">ys</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s2">&quot;y&quot;</span><span class="p">)</span>
+    <span class="n">new_result</span><span class="o">.</span><span class="n">Save</span><span class="p">(</span> <span class="n">name</span><span class="p">)</span>
+    <span class="n">new_result</span><span class="o">.</span><span class="n">AddToTree</span><span class="p">(</span><span class="sa">rf</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">folder</span><span class="si">}</span><span class="s2">\</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The code for importing the curves into CST is self-explanatory.
+Note that <code class="docutils literal notranslate"><span class="pre">SetArray</span></code> works based on python lists, not numpy arrays.
+After running <code class="docutils literal notranslate"><span class="pre">.AddToTree()</span></code> with the desired path, the result can be found
+under that path.</p>
+<p><img alt="New Result in Tree" src="images/new_result_in_tree.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">3D Simulation Results</a><ul>
+<li><a class="reference internal" href="#preparations">Preparations</a></li>
+<li><a class="reference internal" href="#getting-results-from-a-running-cst-studio-suite-instance">Getting Results from a running CST Studio Suite instance</a><ul>
+<li><a class="reference internal" href="#working-with-the-results">Working with the Results</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#get-results-from-files">Get Results from files</a><ul>
+<li><a class="reference internal" href="#getting-the-results">Getting the Results</a></li>
+<li><a class="reference internal" href="#id1">Working with the results</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#import-data-as-result">Import Data as Result</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_creating_connecting_blocks.html" title="Creating &amp; Connecting Components"
+             >next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_simulation_setup.html" title="Simulation Setup"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3D Simulation Results</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,240 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Getting Started &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Customize Python functionality" href="custom_python.html" />
+    <link rel="prev" title="CST Studio Suite Python Tutorial" href="index.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="custom_python.html" title="Customize Python functionality"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="index.html" title="CST Studio Suite Python Tutorial"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Getting Started</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading">¶</a></h1>
+<p>Within this tutorial, we will be using the Python interpreter that comes bundled with the CST installation.
+Various packages like numpy and scipy are pre-installed.
+You can open an Python shell (using IPython) by starting:</p>
+<ul class="simple">
+<li><p>Windows: “&lt;CST_STUDIO_SUITE_FOLDER&gt;\AMD64\python\ipython”</p></li>
+<li><p>Linux: “&lt;CST_STUDIO_SUITE_FOLDER&gt;/LinuxAMD64/python/ipython”</p></li>
+</ul>
+<p>where <code class="docutils literal notranslate"><span class="pre">&lt;CST_STUDIO_SUITE_FOLDER&gt;</span></code> should be replaced with the path to the CST Studio Suite installation on your system.</p>
+<p>Now, the code snippets shown in this tutorial can be copied and executed in that python shell.
+On Windows, mouse right-click pastes clipboard content into the shell, whereas
+on Linux, “right-click-&gt;Paste” should do the job.
+Alternatively, the IPython <code class="docutils literal notranslate"><span class="pre">%paste</span></code> magic command pastes the clipboard content.</p>
+<section id="testing-your-environment">
+<h2>Testing your environment<a class="headerlink" href="#testing-your-environment" title="Permalink to this heading">¶</a></h2>
+<p>Now, please try to run the following code:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="vm">__file__</span><span class="p">)</span>  <span class="c1"># should print &#39;&lt;PATH_TO_CST_AMD64&gt;\python_cst_libraries\cst\__init__.py&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="creating-a-project">
+<h2>Creating a Project<a class="headerlink" href="#creating-a-project" title="Permalink to this heading">¶</a></h2>
+<p>We start by opening CST and creating a project.</p>
+<p>Here, and in all subsequent chapters, some preparation code needs to be executed first:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, the following code cells can be run independently. For creating a new CST Microwave Studio project, run</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># connect to a running DesignEnvironment or start a new one</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="c1"># start a new mws project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># save the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;new_project.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As shown in the example code above, to create a Project you need to first import the <code class="docutils literal notranslate"><span class="pre">cst.interface</span></code> package and then
+create and start a DesignEnvironment using <code class="docutils literal notranslate"><span class="pre">cst.interface.DesignEnvironment.connect_to_any_or_new()</span></code>.
+Using <code class="docutils literal notranslate"><span class="pre">cst.interface.DesignEnvironment.new()</span></code>, it is also possible to start a new DesignEnvironment and not give the
+option to connect to an existing DesignEnvironment.
+Both variants return an instance of DesignEnvironment.
+A pop-up window will let you know that Quiet/Scripting mode is active.</p>
+<p><img alt="Quiet Scripting mode pop-up" src="images/quiet_scripting_mode_pop_up.png" /></p>
+<p>This means that any input directly into the Environment window will be ignored. To switch to
+interactive mode, use the button in the pop-up window.</p>
+<p>Now that an environment is running, a project can be created. Depending on what type of project you need, use one of the
+commands from the table below on the previously created DesignEnvironment.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Command</p></th>
+<th class="head"><p>Project Type</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">new_cs()</span></code></p></td>
+<td><p>CST Cable Studio project</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">new_ds()</span></code></p></td>
+<td><p>CST Design Studio project</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">new_ems()</span></code></p></td>
+<td><p>CST EM Studio project</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">new_fd3d()</span></code></p></td>
+<td><p>Filter Designer 3D project</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">new_mps()</span></code></p></td>
+<td><p>CST Mphysics Studio project</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">new_mws()</span></code></p></td>
+<td><p>CST Microwave Studio project</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">new_pcbs()</span></code></p></td>
+<td><p>CST PCB Studio project</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">new_ps()</span></code></p></td>
+<td><p>CST Particle Studio project</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="save-project">
+<h2>Save Project<a class="headerlink" href="#save-project" title="Permalink to this heading">¶</a></h2>
+<p>To save the project after working on it, you need to run <code class="docutils literal notranslate"><span class="pre">save()</span></code> on your project instance. This will save your project
+to the path it was saved before or open a “Save As” window, if it has not been saved before. You can also specify the
+path directly as a string when calling the method.</p>
+<p><code class="docutils literal notranslate"><span class="pre">prj.save(&quot;&lt;Path_to_desired_Folder&gt;\project_name.cst&quot;)</span></code></p>
+<p>If the desired path already exists, and you want to overwrite this file, you need to set <code class="docutils literal notranslate"><span class="pre">allow_overwrite</span></code> to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">prj.save(&quot;&lt;Path_to_desired_Folder&gt;\project_name.cst&quot;,</span> <span class="pre">allow_overwrite=True)</span></code></p>
+</section>
+<section id="load-an-existing-project">
+<h2>Load an existing Project<a class="headerlink" href="#load-an-existing-project" title="Permalink to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># connect to a running DesignEnvironment or start a new one</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="c1"># open the project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">open_project</span><span class="p">(</span><span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;new_project.cst&quot;</span><span class="p">)</span>
+
+<span class="c1"># work with your project</span>
+<span class="o">...</span>
+
+<span class="c1"># save the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<p>As shown in the example code above, an existing Project can be loaded by using <code class="docutils literal notranslate"><span class="pre">open_project(&quot;&lt;file_path&gt;&quot;)</span></code> on the
+DesignEnvironment instance.</p>
+</section>
+<section id="run-scripts-from-cst-studio-suite">
+<h2>Run Scripts from CST Studio Suite<a class="headerlink" href="#run-scripts-from-cst-studio-suite" title="Permalink to this heading">¶</a></h2>
+<p>CST Studio Suite offers the option to run created scripts on the current DesignEnvironment.
+For this, the desired python script has to be saved in one of the “CST library directories”
+in the subdirectory “/Python/scripts/”.
+The CST library directories can be found in “File: Manage libraries”.
+Either you can create a new Library path or use one of the already created directories.
+Here, we will use the newly created “E:/work/code_examples” path which is highlighted in the image below.</p>
+<p><img alt="Library Paths" src="images/library_paths.png" /></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.interface</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_project</span>
+
+<span class="n">prj</span> <span class="o">=</span> <span class="n">get_current_project</span><span class="p">()</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">design_environment</span>
+
+<span class="k">with</span> <span class="n">de</span><span class="o">.</span><span class="n">quiet_mode_enabled</span><span class="p">():</span>
+    <span class="c1"># Enable Quiet/Scripting mode, while script is running</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">())</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The created script, which is seen above, determines the currently active project and prints its filename.
+While the filename is being printed the <em>quiet_mode</em> is enabled using <code class="docutils literal notranslate"><span class="pre">quiet_mode_enabled()</span></code> on the DesignEnvironment
+variable.
+The script has to be located in “/Python/scripts/” under the previously added directory to be recognised by the CST
+Studio Suite.
+For the path added above, this would be “E:\work\code_examples\Python\scripts”.
+New scripts only appear in the menu after updating the Python menu. To do so, press “Update Menu” under “Home: Macros -&gt; Python”.
+Now we can see the new “example python script” in the Python menu as seen below.</p>
+<p><img alt="Updated Python Menu" src="images/updated_python_menu.png" /></p>
+<p>Running it will start a console window that shows us the filename of the current
+Project.</p>
+<blockquote>
+<div><p>The scripts will be executed using the integrated python interpreter!</p>
+</div></blockquote>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Getting Started</a><ul>
+<li><a class="reference internal" href="#testing-your-environment">Testing your environment</a></li>
+<li><a class="reference internal" href="#creating-a-project">Creating a Project</a></li>
+<li><a class="reference internal" href="#save-project">Save Project</a></li>
+<li><a class="reference internal" href="#load-an-existing-project">Load an existing Project</a></li>
+<li><a class="reference internal" href="#run-scripts-from-cst-studio-suite">Run Scripts from CST Studio Suite</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="custom_python.html" title="Customize Python functionality"
+             >next</a></li>
+        <li class="right" >
+          <a href="index.html" title="CST Studio Suite Python Tutorial"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Getting Started</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

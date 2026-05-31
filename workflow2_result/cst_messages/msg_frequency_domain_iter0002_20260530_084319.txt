@@ -1,0 +1,11 @@
+CST Messages — frequency_domain — iteration 2
+Captured: 2026-05-30T08:43:19.915447
+========================================================================
+
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.

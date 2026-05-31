@@ -1,0 +1,80 @@
+CST Messages — wakefield — iteration 1
+Captured: 2026-05-30T07:42:56.076292
+========================================================================
+
+--- Capture 1 ---
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Starting adaptive port meshing.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 1:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 2:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 2 successfully completed. Delta (Line Imp.): 0.25%', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 3 successfully completed. Delta (Line Imp.): 0.26%', 'type': 'INFO'}
+{'text': 'Mode calculation for port 3:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 2 successfully completed. Delta (Line Imp.): 0.29%', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 3 successfully completed. Delta (Line Imp.): 0.29%', 'type': 'INFO'}
+{'text': 'Mode calculation for port 4:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 5:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for port 5.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 6:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for port 6.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Adaptive port meshing finished.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Matrix computation (PBA)\n    [Perfect Boundary Approximation (PBA), version: legacy]\n    [Matrixcalc GPU acceleration: off (not supported)]', 'type': 'INFO'}
+{'text': '328 mesh cells are represented in staircase mode and have been filled with PEC.\n1376 mesh faces are represented in staircase mode and have been filled with PEC.\n45 mesh edges are represented in staircase mode and have been filled with PEC.\n More...', 'type': 'WARNING'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for port 5, 6.', 'type': 'INFO'}
+{'text': 'Iteration Step:    Residual:', 'type': 'INFO'}
+{'text': '1        6.059851e-01', 'type': 'INFO'}
+{'text': '10        1.751489e-03', 'type': 'INFO'}
+{'text': '20        2.209829e-07', 'type': 'INFO'}
+{'text': '30        2.805784e-11', 'type': 'INFO'}
+{'text': 'Final (35)    3.942363e-13', 'type': 'INFO'}
+{'text': 'Iteration Step:    Residual:', 'type': 'INFO'}
+{'text': '1        6.059851e-01', 'type': 'INFO'}
+{'text': '10        1.751489e-03', 'type': 'INFO'}
+{'text': '20        2.209829e-07', 'type': 'INFO'}
+{'text': '30        2.805784e-11', 'type': 'INFO'}
+{'text': 'Final (35)    3.942363e-13', 'type': 'INFO'}
+{'text': 'Iteration Step:    Residual:', 'type': 'INFO'}
+{'text': '1        6.059851e-01', 'type': 'INFO'}
+{'text': '10        1.751489e-03', 'type': 'INFO'}
+{'text': '20        2.209829e-07', 'type': 'INFO'}
+{'text': '30        2.805783e-11', 'type': 'INFO'}
+{'text': 'Final (35)    3.962182e-13', 'type': 'INFO'}
+{'text': 'Iteration Step:    Residual:', 'type': 'INFO'}
+{'text': '1        6.059851e-01', 'type': 'INFO'}
+{'text': '10        1.751489e-03', 'type': 'INFO'}
+{'text': '20        2.209829e-07', 'type': 'INFO'}
+{'text': '30        2.805783e-11', 'type': 'INFO'}
+{'text': 'Final (35)    3.962182e-13', 'type': 'INFO'}
+{'text': 'Transmission line injection scheme activated for beam "ParticleBeam1".', 'type': 'INFO'}
+{'text': 'Solver Settings:\nParticle beam excitation \n[Frequency domain results unnormalized]\nExcitation duration: 2.43007038e+000 ns \nMaximum number of time steps: 235925 \nTime step width:\n     without subcycles: 1.428960034e-003 ns\n     used: 1.428960034e-003 ns\nNumber of threads used: 4', 'type': 'INFO'}
+{'text': 'Generating charge distribution spectrum plot. More...', 'type': 'INFO'}
+{'text': 'Maximum number of pulse widths simulated, solver stopped.', 'type': 'INFO'}
+{'text': 'Successfully finished Secondary Quantity Evaluation.', 'type': 'INFO'}
+{'text': 'Successfully finished Secondary Quantity Evaluation.', 'type': 'INFO'}
+{'text': 'Creating parametric 1D results for Run ID 1', 'type': 'INFO'}
+{'text': '1 warning occurred.', 'type': 'WARNING'}
+

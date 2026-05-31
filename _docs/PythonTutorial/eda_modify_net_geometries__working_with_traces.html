@@ -1,0 +1,229 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Working with Traces &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Working with Shapes" href="eda_modify_net_geometries__working_with_shapes.html" />
+    <link rel="prev" title="3D Simulation: Ports &amp; Lumped Elements" href="eda_3d_simulation__ports_and_lumped_elements.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__working_with_shapes.html" title="Working with Shapes"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_3d_simulation__ports_and_lumped_elements.html" title="3D Simulation: Ports &amp; Lumped Elements"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Working with Traces</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="working-with-traces">
+<h1>Working with Traces<a class="headerlink" href="#working-with-traces" title="Permalink to this heading">¶</a></h1>
+<p>The physical data model of a PCB describes the stackup, materials and geometries.
+Traces are defined as geometries (GeoItem) of a PCB.
+<a href="../Python/source/cst.eda.html#physical-data-model">Here</a>
+the Physical data model is described in more detail.</p>
+<p>The trace geometries on the PCB are represented as “TraceGI”.
+This class is a subclass of the “GeoItem” class.</p>
+<p>First things first:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<section id="get-the-traces">
+<h2>Get the Traces<a class="headerlink" href="#get-the-traces" title="Permalink to this heading">¶</a></h2>
+<p>To get the traces, we will use the pcb_api module.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Layer of trace to be changed</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Net of trace to be changed</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;D_IRQ&quot;</span><span class="p">)</span>
+
+<span class="c1"># get all traces from this Layer in this specific net</span>
+<span class="n">trace_items</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">geo_items</span><span class="p">(</span><span class="n">traces</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># Check trace_items</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">trace_items</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In this example, we want to get the traces that are on the “SIGNAL_1” layer and belong to the “D_IRQ” net.
+We create an instance of our example PCB, using the method shown in the previous tutorials.
+Using the instance, we can extract the layer and a net using their names.
+Calling <code class="docutils literal notranslate"><span class="pre">layer.geo_items(traces=True,</span> <span class="pre">net=net)</span></code> gives us all traces on that layer, that belong to the defined net.
+We also could call <code class="docutils literal notranslate"><span class="pre">net.geo_items(traces=True,</span> <span class="pre">layer=layer)</span></code>.
+This would give the same result.</p>
+<p>To check the result, we can print the returned list of “pcb_api.TraceGI”.</p>
+</section>
+<section id="change-width-of-trace">
+<h2>Change width of Trace<a class="headerlink" href="#change-width-of-trace" title="Permalink to this heading">¶</a></h2>
+<p>Using the same approach to get the traces as above,
+we can continue and modify the properties of the traces before importing them to our CST-Project.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Layer of trace to be changed</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Net of trace to be changed</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;D_IRQ&quot;</span><span class="p">)</span>
+
+<span class="c1"># get all traces from this Layer in this specific net</span>
+<span class="n">trace_items</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">geo_items</span><span class="p">(</span><span class="n">traces</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># Check trace_items</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">trace_items</span><span class="p">)</span>
+
+<span class="c1"># change trace width:</span>
+<span class="k">for</span> <span class="n">trace</span> <span class="ow">in</span> <span class="n">trace_items</span><span class="p">:</span>
+    <span class="n">trace</span><span class="o">.</span><span class="n">width</span> <span class="o">=</span> <span class="mf">7.5</span> <span class="o">*</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mil</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+<span class="c1"># PCBStudio now has a copy of &quot;pcb&quot;. Further changes to &quot;pcb&quot; do not propagate.</span>
+
+</pre></div>
+</div>
+<p>In this case, we change the width of the trace that was returned.</p>
+<p>First, we need to extract the trace we want from the list that was returned.
+Now we can change the properties of the trace.
+To show the difference in size, we will change the trace’s width from 5 mil to 7.5 mil.</p>
+<p>The image below shows the resulting trace highlighted in a PCB Studio project.</p>
+<p><img alt="eda_traces_changed_width.png" src="images/eda_traces_changed_width.png" /></p>
+<p>Before changing the width, its width was the same as the trace below.
+The difference can now be seen in the image.</p>
+</section>
+<section id="replace-traces">
+<h2>Replace Traces.<a class="headerlink" href="#replace-traces" title="Permalink to this heading">¶</a></h2>
+<p>For this example, we want to replace the traces shown in the image below.</p>
+<p><img alt="eda_traces_to_be_changed.png" src="images/eda_traces_to_be_changed.png" /></p>
+<p>The code below shows the procedure of this example.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Layer of trace to be changed</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;PWR_PLANE2_N_CTRL&quot;</span><span class="p">)</span>
+
+<span class="c1"># Net of trace to be changed</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;ULP_W1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get all Traces from this Layer in this specific net</span>
+<span class="n">trace_items</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">geo_items</span><span class="p">(</span><span class="n">traces</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># Delete all existing Traces on this layer in this net</span>
+<span class="k">for</span> <span class="n">trace</span> <span class="ow">in</span> <span class="n">trace_items</span><span class="p">:</span>
+    <span class="n">trace</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+
+<span class="c1"># Create SegmentString between the three padstacks</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">geometry2d</span>
+<span class="n">line</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">SegmentString</span><span class="o">.</span><span class="n">create_polyline</span><span class="p">([(</span><span class="mi">1650</span><span class="p">,</span> <span class="mi">2715</span><span class="p">),</span> <span class="p">(</span><span class="mi">1650</span><span class="p">,</span> <span class="mi">2885</span><span class="p">),</span> <span class="p">(</span><span class="mf">1778.61</span><span class="p">,</span> <span class="mf">2974.34</span><span class="p">)])</span>
+
+<span class="c1"># Create trace on layer in net</span>
+<span class="n">layer</span><span class="o">.</span><span class="n">create_trace</span><span class="p">(</span><span class="n">line</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+<span class="c1"># PCBStudio now has a copy of &quot;pcb&quot;. Further changes to &quot;pcb&quot; do not propagate.</span>
+
+</pre></div>
+</div>
+<p>After importing the PCB as usual, we define the layer and net we will be working on.
+As we want to change the traces to a different path,
+and we know the positions of the padstacks that we want to connect, we simply delete the existing traces.
+This is done by iterating through and deleting all traces, returned from <code class="docutils literal notranslate"><span class="pre">layer.geo_items(traces=True,</span> <span class="pre">net=net)</span></code>.</p>
+<p>Now that the existing traces are gone,
+we can create a <code class="docutils literal notranslate"><span class="pre">SegmentString</span></code> that connects the padstacks the way we want them to.
+The three padstacks we are looking at are at the positions (1650, 2715), (1650, 2885) and (1778.61, 2974.34).</p>
+<p>To create segment strings, we can use the <code class="docutils literal notranslate"><span class="pre">cst.eda.geometry2d</span></code> package.
+To define the first section of our segment string we call <code class="docutils literal notranslate"><span class="pre">geometry2d.SegmentString.create_polyline()</span></code>
+and pass the positions of the three padstacks.
+This returns a segment string of two segments.
+We could use the method <code class="docutils literal notranslate"><span class="pre">append_line()</span></code> on the returned segment string, to add further lines.</p>
+<p>Passing the resulting segment string to <code class="docutils literal notranslate"><span class="pre">layer.create_trace()</span></code> we can create the new trace.
+We also have to pass the width of the trace and what net it should be added to.</p>
+<p>The resulting trace is shown in the image below.</p>
+<p><img alt="eda_traces_changed_result.png" src="images/eda_traces_changed_result.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Working with Traces</a><ul>
+<li><a class="reference internal" href="#get-the-traces">Get the Traces</a></li>
+<li><a class="reference internal" href="#change-width-of-trace">Change width of Trace</a></li>
+<li><a class="reference internal" href="#replace-traces">Replace Traces.</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__working_with_shapes.html" title="Working with Shapes"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_3d_simulation__ports_and_lumped_elements.html" title="3D Simulation: Ports &amp; Lumped Elements"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Working with Traces</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

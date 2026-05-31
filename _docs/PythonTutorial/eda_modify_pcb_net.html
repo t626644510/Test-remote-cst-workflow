@@ -1,0 +1,129 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Modify PCB nets &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Modify PCB Stackup" href="eda_modify_pcb_stackup.html" />
+    <link rel="prev" title="Getting Started" href="eda_getting_started.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_pcb_stackup.html" title="Modify PCB Stackup"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_getting_started.html" title="Getting Started"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Modify PCB nets</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="modify-pcb-nets">
+<h1>Modify PCB nets<a class="headerlink" href="#modify-pcb-nets" title="Permalink to this heading">¶</a></h1>
+<p>There are different attributes of a PCB that can be modified.
+These modifications are done on the instance of the PCB object.
+This means that the changes will <em>not</em> automatically appear in a project
+if the PCB was imported before the changes were made.</p>
+<p>Please prepare:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># import the pcb to the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+<span class="c1"># Regular expression to match &quot;1V&quot;, &quot;3V&quot;, &quot;3V3&quot;, ...</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="n">pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\d+V&quot;</span><span class="p">)</span>
+
+<span class="c1"># Iterate through all nets of the pcb and find matches in their names</span>
+<span class="k">for</span> <span class="n">net</span> <span class="ow">in</span> <span class="n">pcb</span><span class="o">.</span><span class="n">nets</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
+        <span class="n">net</span><span class="o">.</span><span class="n">net_type</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">NetType</span><span class="o">.</span><span class="n">Power</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj2</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="c1"># import the pcb to the project</span>
+<span class="n">prj2</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>In the code above, we initiate a PCB instance as described before and load it into a project.
+Then we modify the net type of all nets, that start with pattern “number + ‘V’” to “NetType.Power”.
+This is done by iterating through <code class="docutils literal notranslate"><span class="pre">pcb.nets</span></code> and using regular expressions.
+After the modification, we create a new project and load the PCB into it.
+The image below shows the nets of both projects after running the code shown above.</p>
+<p>On the left side we can see a few nets of the first project and on the right a few nets of the second project.</p>
+<p><img alt="pcb_compare_net_modification.png" src="images/pcb_compare_net_modification.png" /></p>
+<p>As the PCB was imported to the first project before the PCB was modified,
+the modifications are not present in this project.
+We can see that all the nets that fit the pattern have the net type “power” in the right image.</p>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_pcb_stackup.html" title="Modify PCB Stackup"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_getting_started.html" title="Getting Started"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Modify PCB nets</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+CST Messages — frequency_domain — iteration 2
+Captured: 2026-05-30T03:59:11.687823
+========================================================================
+
+--- Capture 1 ---
+{'text': 'The length ratio between the shortest and the longest model edges is 1:102398. Short model edges can be highlighted via Mesh:Mesh Control->Check Mesh->Check Model Edge Length.... (It may be advantageous to model the metallizations as infinitely thin sheets.) More...', 'type': 'INFO'}
+{'text': 'For some elements the curvature had to be reduced to maintain the quality of the mesh. More...', 'type': 'INFO'}
+{'text': 'Meshing successful', 'type': 'INFO'}
+{'text': 'The mesh adaptation has been deactivated. It is strongly recommended to enable the mesh adaptation for the tetrahedral mesh unless the problem is very large.', 'type': 'WARNING'}
+{'text': 'An iterative solver will be used first.', 'type': 'INFO'}
+{'text': 'Sample 1 (500.8 MHz)', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for ports 1, 2, 3, 4, 5, 6.', 'type': 'INFO'}
+{'text': 'For some elements the curvature had to be reduced to maintain the quality of the mesh. More...', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 2 (498.8 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 3 (499.8 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 4 (500.3 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 5 (499.778 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 6 (499.838 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'Sample 7 (499.34 MHz)', 'type': 'INFO'}
+{'text': 'Excitation: port 1, mode 1', 'type': 'INFO'}
+{'text': 'All broadband sweep convergence criteria have been satisfied after calculating 7 frequency samples.', 'type': 'INFO'}
+{'text': 'Running post-processing.', 'type': 'INFO'}
+{'text': 'Post-processing finished.', 'type': 'INFO'}
+{'text': 'Creating parametric 1D results for Run ID 1', 'type': 'INFO'}
+{'text': '1 warning occurred.', 'type': 'WARNING'}
+

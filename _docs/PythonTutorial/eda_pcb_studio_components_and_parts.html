@@ -1,0 +1,200 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Components and Parts in PCB Studio &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="EDA import settings" href="eda_import_settings.html" />
+    <link rel="prev" title="Modify PCB Stackup" href="eda_modify_pcb_stackup.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_import_settings.html" title="EDA import settings"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_modify_pcb_stackup.html" title="Modify PCB Stackup"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Components and Parts in PCB Studio</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="components-and-parts-in-pcb-studio">
+<h1>Components and Parts in PCB Studio<a class="headerlink" href="#components-and-parts-in-pcb-studio" title="Permalink to this heading">¶</a></h1>
+<section id="mount-unmount-components">
+<h2>Mount/unmount components<a class="headerlink" href="#mount-unmount-components" title="Permalink to this heading">¶</a></h2>
+<p>Using the <code class="docutils literal notranslate"><span class="pre">set_mounted_components</span></code> we can modify which components
+are mounted on the PCB.</p>
+<p>Preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<p>Now setting mount state:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="c1"># import the PCB to the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+<span class="c1"># Get a dictionary of the mounting status of all components</span>
+<span class="n">mounted_components</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">get_mounted_components</span><span class="p">()</span>
+
+<span class="c1"># Show mounted components</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">mounted_components</span><span class="p">)</span>
+
+<span class="c1"># List of components to unmount</span>
+<span class="n">unmounted_components</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;L3&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L4&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L5&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L6&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L7&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L9&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L10&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="s2">&quot;L11&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1"># Modify the mounting status according to the list</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_mounted_components</span><span class="p">(</span><span class="n">unmounted_components</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>The code above will get the mounting status of all components using <code class="docutils literal notranslate"><span class="pre">get_mounted_components</span></code> and print them.
+The method will return a dictionary containing the component names (refdes) as keys
+and a bool value indicating if the component is mounted (True) or not (False).</p>
+<p>To mount or unmount components, a dictionary of the same layout is needed.
+Components that are not listed in the dictionary will not be modified.
+In the code, we created a dictionary that list the components to unmount (False).
+Using <code class="docutils literal notranslate"><span class="pre">set_mounted_components</span></code> we update the PCB with this dictionary.
+The image below shows the navigation tree afterwards.</p>
+<p><img alt="eda_unmounted_components.png" src="images/eda_unmounted_components.png" /></p>
+<p>The components that are listed in the dictionary in the code are now marked as unmounted (Yellow ‘X’ symbol).</p>
+</section>
+<section id="part-library">
+<h2>Part Library<a class="headerlink" href="#part-library" title="Permalink to this heading">¶</a></h2>
+<!-- Import hier nur mit prj.pcbs.import_layout(pcb_file,"odb++")!!! sonst ist die part library nicht da...-->
+<p>Using ‘prj.pcbs.import_layout’ to import a PCB from a file also imports its part library.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1"># Get the part library</span>
+<span class="n">part_library</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">get_part_library</span><span class="p">()</span>
+
+<span class="c1"># Modify a part of the Part library</span>
+<span class="n">part_library</span><span class="o">.</span><span class="n">add_RLC</span><span class="p">(</span><span class="s2">&quot;11&quot;</span><span class="p">,</span> <span class="s2">&quot;R&quot;</span><span class="p">,</span> <span class="n">R</span><span class="o">=</span><span class="mf">11.0</span><span class="p">,</span> <span class="n">C</span><span class="o">=</span><span class="mf">1.0e-12</span><span class="p">,</span> <span class="n">L</span><span class="o">=</span><span class="mf">1.0e-9</span><span class="p">)</span>
+
+<span class="c1"># Set the modified part library</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_part_library</span><span class="p">(</span><span class="n">part_library</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Using <code class="docutils literal notranslate"><span class="pre">get_part_library</span></code> returns the current part library.
+On this instance we can use <code class="docutils literal notranslate"><span class="pre">add_RLC</span></code> to add a new part.</p>
+<p>In the code shown above, we added a new resistor with the name “11”.
+The type of the part is set by a String “R” for a resistor, “L” for a coil and “C” for a capacitor.</p>
+<p>The part library has to be set for the new parts to be accessible in the project.
+This is done using <code class="docutils literal notranslate"><span class="pre">pcbs.set_part_library</span></code> on our project.
+The image below shows the new part.</p>
+<p><img alt="eda_new_part_in_partlib.png" src="images/eda_new_part_in_partlib.png" /></p>
+</section>
+<section id="component-translation-table-bom">
+<h2>Component Translation Table / BOM<a class="headerlink" href="#component-translation-table-bom" title="Permalink to this heading">¶</a></h2>
+<p>Now that we have a new part in the part library, we can use it.
+The assignments between the part library and components are made in the “Component Translation Table” or “BOM”.
+After creating a new part in the part library as explained in the <a class="reference internal" href="#part-library"><span class="xref myst">previous chapter</span></a>,
+we want to assign a component to this part.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1"># Create a Dictionary to set the Part for R6 to the created one</span>
+<span class="n">bom</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;R6&quot;</span><span class="p">:</span> <span class="s2">&quot;11&quot;</span><span class="p">}</span>
+
+<span class="c1"># Set the modified bom</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_bom</span><span class="p">(</span><span class="n">bom</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>In the code above we create a dictionary “bom”.
+Using <code class="docutils literal notranslate"><span class="pre">pcbs.set_bom</span></code> we can set the created “bom” in our project.
+The dictionary should be structured in such a way
+that the component names are given as keys and the part names as values.
+We set the value of the ‘R6’ component to the created part ‘11’.</p>
+<p>The image below shows a section of the “Component Translation Table”
+and we can see that the newly created part is referenced by “R6”.</p>
+<p><img alt="eda_modified_bom.png" src="images/eda_modified_bom.png" /></p>
+<p>The highlighted row shows the component “R6” and its assigned part “11”.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Components and Parts in PCB Studio</a><ul>
+<li><a class="reference internal" href="#mount-unmount-components">Mount/unmount components</a></li>
+<li><a class="reference internal" href="#part-library">Part Library</a></li>
+<li><a class="reference internal" href="#component-translation-table-bom">Component Translation Table / BOM</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_import_settings.html" title="EDA import settings"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_modify_pcb_stackup.html" title="Modify PCB Stackup"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Components and Parts in PCB Studio</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

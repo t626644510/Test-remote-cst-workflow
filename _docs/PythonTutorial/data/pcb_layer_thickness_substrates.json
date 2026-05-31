@@ -1,0 +1,11 @@
+{
+  "SUBSTRATE-1":  {"Thickness": 0.2,"Unit": "mm"},
+  "SUBSTRATE-2":  {"Thickness": 0.125,"Unit": "mm"},
+  "SUBSTRATE-3":  {"Thickness": 0.125,"Unit": "mm"},
+  "SUBSTRATE-4":  {"Thickness": 0.2,"Unit": "mm"},
+  "SUBSTRATE-5":  {"Thickness": 0.2,"Unit": "mm"},
+  "SUBSTRATE-6":  {"Thickness": 0.2,"Unit": "mm"},
+  "SUBSTRATE-7":  {"Thickness": 0.125,"Unit": "mm"},
+  "SUBSTRATE-8":  {"Thickness": 0.125,"Unit": "mm"},
+  "SUBSTRATE-9":  {"Thickness": 0.2,"Unit": "mm"}
+}

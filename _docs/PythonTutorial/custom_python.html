@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Customize Python functionality &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Shape Modeling" href="3d_simulation_structure_modeling.html" />
+    <link rel="prev" title="Getting Started" href="3d_simulation_getting_started.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_structure_modeling.html" title="Shape Modeling"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_getting_started.html" title="Getting Started"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Customize Python functionality</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="customize-python-functionality">
+<h1>Customize Python functionality<a class="headerlink" href="#customize-python-functionality" title="Permalink to this heading">¶</a></h1>
+<p>CST Allows full customization of the python menu and what is being executed. This is done in the form of a Generic Command. We will start with a very basic example and a more advanced example setting up a custom python venv with some functionality associated with it.</p>
+<p>The section <a class="reference internal" href="#generic-commands"><span class="xref myst">Generic Commands</span></a> can be used as a reference for creating Commands.</p>
+<section id="minimalistic-example">
+<h2>Minimalistic example<a class="headerlink" href="#minimalistic-example" title="Permalink to this heading">¶</a></h2>
+<p>Let’s consider a simple example to get started with a <code class="docutils literal notranslate"><span class="pre">Command</span></code>. Create a file named <code class="docutils literal notranslate"><span class="pre">my_favorite_editor.json</span></code> in one of your configured library path (or add a new one) according to the scheme below.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>&lt;library-path&gt;
+└── Commands
+    └── my_favorite_editor.json
+</pre></div>
+</div>
+<p>Edit the file and add:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Favorite Python Editor&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// The name which will appear in the menu</span>
+<span class="w">    </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;notepad&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// assumes notepad(.exe) can be found by the operating system, replace this with an editor of your liking.</span>
+<span class="w">    </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;show&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="c1">// As this is a gui-application we suppress the console from popping up</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>If you now run the <em>Macros/Python -&gt; Update Menu</em>, a new entry should appear named <code class="docutils literal notranslate"><span class="pre">My</span> <span class="pre">Favorite</span> <span class="pre">Editor</span></code>. Clicking on it should launch <code class="docutils literal notranslate"><span class="pre">notepad.exe</span></code> as expected.</p>
+</section>
+<section id="customization-of-macros-python-run-script">
+<h2>Customization of <em>Macros/Python -&gt; Run Script</em><a class="headerlink" href="#customization-of-macros-python-run-script" title="Permalink to this heading">¶</a></h2>
+<p>Any python file – not starting with and underscore – placed under <em>Python/scripts</em> in any of the library paths, will automatically be listed in the <em>Macros/Python -&gt; Run Script</em> sub-menu. By convention the sub menu entries are identical to the file names, with underscores <code class="docutils literal notranslate"><span class="pre">_</span></code> replaced by spaces.</p>
+<p>By default the Console will be shown during the execution of the python scripts and auto-close if no error occurred. This is done because – in general – these scripts are not expected to have a gui, but should simply perform one task and close again. In some cases you may want to override the default.</p>
+<p>To enable that, there are two options:</p>
+<ol class="arabic simple">
+<li><p>Put a json file named <code class="docutils literal notranslate"><span class="pre">python_script_runner.json</span></code> in the same directory as the script. Any settings in this file will override the defaults to all files in this folder.</p></li>
+<li><p>Put a json file named exactly like the python file (e.g. <code class="docutils literal notranslate"><span class="pre">my_script.py</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">my_script.json</span></code>) next to the script. Any setting in this file will override the defaults for that script.</p></li>
+</ol>
+<p>Example layout:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;library-path&gt;
+└── Python
+    └── scripts
+        └── python_script_runner.json   // applies to all scripts in this folder
+        └── some_script.py
+        └── my_script.py
+        └── my_script.json              // applies to my_script.json
+    ...
+</pre></div>
+</div>
+<p>In this case the content of the two files could look like:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="c1">// python_script_runner.json</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;success_exit_delay&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="w">  </span><span class="c1">// for keeping the console open long enough to read from it.</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>and</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="c1">// my_script.json</span>
+<span class="p">{</span><span class="w">   </span>
+<span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Great Script&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// overrides the name default naming `my script` -&gt; `My Great Script`</span>
+<span class="w">    </span><span class="nt">&quot;restrict_to&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;caller&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;schematic&quot;</span><span class="w"> </span><span class="c1">// only shows the menu item if the menu is opened from a schematic view.</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;show&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="working-with-a-custom-python-interpreter-environment">
+<h2>Working with a custom python interpreter/environment<a class="headerlink" href="#working-with-a-custom-python-interpreter-environment" title="Permalink to this heading">¶</a></h2>
+<p>CST ships with a fully functional python interpreter (version 3.12) located at <code class="docutils literal notranslate"><span class="pre">${CST_INSTALL_PATH}/Python</span></code> which comes with many packages pre-installed. However, you may wish to create custom venvs in cases where other packages are needed or different versions of the ones we ship. In such cases you can create your own environment and run your python code with it. Consider the following example <code class="docutils literal notranslate"><span class="pre">my_company.json</span></code> and custom python script <code class="docutils literal notranslate"><span class="pre">calculate_something.py</span></code> stored as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;MyCompanyPy Folder&gt;
+└── Commands
+    └── my_company.json
+    └── calculate_something.py
+</pre></div>
+</div>
+<p>The json file contains:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Company&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// This is the top level-menu item</span>
+<span class="w">    </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;base_python_interpreter&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;win32&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${CST_INSTALL_PATH}{/}Python{/}python.exe&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;linux&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${CST_INSTALL_PATH}/Python/bin/python&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;venv_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${CST_APPDATA_PATH}{/}my_company_venv&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// Destination for the venv</span>
+<span class="w">        </span><span class="nt">&quot;scripts&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;linux&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_path}/bin&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;win32&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_path}{/}Scripts&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;venv_interpeter&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${scripts}{/}python&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// the interpreter in the venv</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;subcommands&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;Create venv&quot;</span>
+<span class="w">            </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                </span><span class="s2">&quot;${base_python_interpreter}&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-m&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;${venv_path}&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--clear&quot;</span><span class="p">,</span><span class="w">                          </span><span class="c1">// creates the venv</span>
+<span class="w">                </span><span class="s2">&quot;&amp;&amp;&quot;</span><span class="p">,</span><span class="w">                                                                                   </span><span class="c1">// and</span>
+<span class="w">                </span><span class="s2">&quot;${scripts}{/}pip&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;install&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;numpy&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;scipy&quot;</span><span class="w">                                         </span><span class="c1">// installs the desired packages</span>
+<span class="w">                </span><span class="s2">&quot;&amp;&amp;&quot;</span><span class="p">,</span><span class="w">                                                                                   </span><span class="c1">// and</span>
+<span class="w">                </span><span class="s2">&quot;${scripts}{/}pip&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;install&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-e&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;${CST_INSTALL_PATH_AMD64}{/}python_cst_libraries&quot;</span><span class="w"> </span><span class="c1">// installs python cst libraries</span>
+<span class="w">            </span><span class="p">]</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Run calculate_something&quot;</span><span class="p">,</span><span class="w">  </span>
+<span class="w">            </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_interpreter}&quot;</span><span class="p">,</span><span class="w">                           </span><span class="c1">// Runs the venv interpreter</span>
+<span class="w">            </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;${CST_COMMAND_DIR}{/}calculate_something.py&quot;</span><span class="p">]</span><span class="w">     </span><span class="c1">// on the script</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>And the script <code class="docutils literal notranslate"><span class="pre">calculate_something.py</span></code> could contain something like:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">scipy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.interface</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_current_project</span>
+
+<span class="n">prj</span> <span class="o">=</span> <span class="n">get_current_project</span><span class="p">()</span> <span class="c1"># This uses the --cst-pid and --prj options to retrieve a handle to the current project.</span>
+
+<span class="o">...</span>
+<span class="c1"># Code that does something with cst, numpy and scipy</span>
+<span class="o">...</span>
+
+</pre></div>
+</div>
+<p>This should create a new menu entry in the <em>Macros/Python</em> menu as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>My Company
+    └── Create venv
+    └── Run calculate_something
+</pre></div>
+</div>
+<p>Now by first creating the venv via <em>Create venv</em>, the second command can be triggered via the menu.</p>
+<p>If desired any other available python interpreter can be specified for creating venvs, this may even be required if you are using python code that is not compatible with the version of python provided. In that case just replace the value for <code class="docutils literal notranslate"><span class="pre">base_python_interpreter</span></code> with an interpreter of your choice.</p>
+</section>
+<section id="making-your-python-functionality-available-to-others">
+<h2>Making your python functionality available to others<a class="headerlink" href="#making-your-python-functionality-available-to-others" title="Permalink to this heading">¶</a></h2>
+<p>In case want to share your python functionality with other people within your company, you can do so in many ways. The best solution in your situation will depend on a number of variables like:</p>
+<ul class="simple">
+<li><p>How many people will need the python code, and how often do they need to update</p></li>
+<li><p>The size of the python project, a few single files or full fledged python packages</p></li>
+<li><p>How often is the python code updated and how easy should it be for your users to receive updates</p></li>
+<li><p>The restrictions put on you by your IT-department for sharing and hosting items</p></li>
+</ul>
+<p>There is no one-size fits all solution, but with the total freedom given in the <code class="docutils literal notranslate"><span class="pre">Commands</span></code>, this should allow you to come up with a working solution in your situation. Nevertheless, we will discuss one of the easiest solutions in the next section.</p>
+<section id="basic-example-for-sharing-python-code">
+<h3>Basic example for sharing python code<a class="headerlink" href="#basic-example-for-sharing-python-code" title="Permalink to this heading">¶</a></h3>
+<p>Probably the simplest case would be to have a shared folder on your corporate network. This folder can contain both the <code class="docutils literal notranslate"><span class="pre">Commands</span></code> and the associated python code. This layout is available as a template and can be found under <code class="docutils literal notranslate"><span class="pre">${CST_INSTALL_PATH}/Online</span> <span class="pre">Help/PythonTutorial/data/CustomPythonTemplates/BasicExample</span></code>, please copy and adjust it to your needs.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;MyCompanyPy Folder&gt;
+└── Commands
+    └── my_company.json
+    └── requirements.txt  &lt;- contains the required packages for your project
+| src
+    └── my_company
+        └── hello_world.py
+        └── example_script.py
+        └── example_app.py
+</pre></div>
+</div>
+<p>You can copy the template and adjust it to your liking, and then make it available to your users. If you decide to share this code directly via a network share, then be aware that that possibly slows down performance and can suffer from outages if used directly. In that case you may want to ask your users to copy the code to their local machine and use it from there.</p>
+<p>All users only need to add <code class="docutils literal notranslate"><span class="pre">&lt;MyCompanyPy</span> <span class="pre">Folder&gt;</span></code> to the CST Studio Suite Library paths and that should make all menu items available.</p>
+</section>
+</section>
+<section id="generic-commands">
+<h2>Generic Commands<a class="headerlink" href="#generic-commands" title="Permalink to this heading">¶</a></h2>
+<section id="json-files-and-folder-structure">
+<h3>Json-files and Folder structure<a class="headerlink" href="#json-files-and-folder-structure" title="Permalink to this heading">¶</a></h3>
+<p>A <code class="docutils literal notranslate"><span class="pre">Command</span></code> is essentially a json file which contains the instructions to start the desired application and putting it inside a folder named <code class="docutils literal notranslate"><span class="pre">Commands</span></code> (or subfolder thereof) inside one of the library paths registered in CST Studio Suite. The menu structure will follow the subfolder names first and then any internal hierarchies in the json definitions.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>&lt;library-path&gt;
+└── Commands
+    └── my_first_command.json
+    └── my_second_command.json
+    SubFolder1
+        └── my_nested_command.json
+    SubFolder2
+        └── my_nested_command.json
+        ...
+    ...
+</pre></div>
+</div>
+</section>
+<section id="fields">
+<h3>Fields<a class="headerlink" href="#fields" title="Permalink to this heading">¶</a></h3>
+<p>There are various fields that can be set in the json file to control how the command is executed.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;name&quot;</span></code>: The name used for the command, which will appear in the menu.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;program&quot;</span></code>: Two options:
+1 If a single string is given, then this should be:</p>
+<ul>
+<li><p>An absolute path to an executable</p></li>
+<li><p>A string which the system can resolve to an executable according to the rules offered by the operating system. (e.g. relative to $PATH or current working directory).
+2 If a list of strings is given, e.g. <code class="docutils literal notranslate"><span class="pre">[&quot;cmd1&quot;,</span> <span class="pre">&quot;arg11&quot;,</span> <span class="pre">&quot;arg12&quot;,</span> <span class="pre">&quot;&amp;&amp;&quot;,</span> <span class="pre">&quot;cmd2&quot;,</span> <span class="pre">&quot;arg21&quot;,</span> <span class="pre">...,</span> <span class="pre">&quot;||&quot;,</span> <span class="pre">&quot;cmdN&quot;]</span></code> the whole list is transformed into a single command line. Please refer to your operating system manual for more information on concatenating multiple commands with operators like <code class="docutils literal notranslate"><span class="pre">&quot;|&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;||&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&amp;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;&amp;&amp;&quot;</span></code>. String arguments that contain spaces will be automatically surrounded with double quotes.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;args&quot;</span></code>: A list of strings with the arguments to the <code class="docutils literal notranslate"><span class="pre">&quot;program&quot;</span></code>. String arguments that contain spaces will be automatically surrounded with double quotes.</p>
+<ul>
+<li><p>Note: Only use this field in conjunction with option 1 (a single string) for <code class="docutils literal notranslate"><span class="pre">&quot;program&quot;</span></code></p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;cwd&quot;</span></code>: The working directory in which the command should be run.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;report_command_line&quot;</span></code>: (bool) controls whether or not the actual command line is printed into the active message window. (default: true)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;console&quot;</span></code>: This should be an object with the following possible keys:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;show&quot;</span></code>: (bool) determines whether or not a console should be shown. If this evaluates to false, all other keys become meaningless (default: true).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;pause_on_error&quot;</span></code>: (bool) will keep the the console open in case an error occurred in the command execution (default: true).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;success_exit_delay&quot;</span></code>: (int) will keep the the console for given number of seconds. Use this to provide ample time for the user to read output messages (default: 0).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;keep_open&quot;</span></code>: (bool) will keep the the console open, and gives control to the console (default: false).</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;restrict_to&quot;</span></code>: This offers the ability to hide/show the command from the menu depending on the context</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;platform&quot;</span></code>: Single string, which should be either <code class="docutils literal notranslate"><span class="pre">&quot;win32&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;linux&quot;</span></code> to restrict to Windows or Linux systems respectively.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;project_type&quot;</span></code>: Single string or list of strings, will only pop-up if the project-type matches (one of) the given values.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;caller&quot;</span></code>: Single string or list of strings, will only pop-up if the project-type matches (one of) the given values.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;subcommands&quot;</span></code>: A list of objects following this scheme for a <code class="docutils literal notranslate"><span class="pre">Command</span></code>. This will create sub-menu entries allowing you to structure your commands.</p></li>
+</ul>
+</section>
+<section id="hierarchy">
+<h3>Hierarchy<a class="headerlink" href="#hierarchy" title="Permalink to this heading">¶</a></h3>
+<p>When defining commands hierarchically, fields are principally inherited from the parent Commands. This can be used to conveniently pass on and override settings in lower level commands. Note that the parent command itself is no longer executable as soon as there are <code class="docutils literal notranslate"><span class="pre">&quot;subcommands&quot;</span></code>. These serve only to create the menu structure and pass on settings to the lower-level commands.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello Universe&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;python&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;console&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;success_exit_delay&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;subcommands&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">//  &quot;program&quot;: is inherited</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello Python World&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;hello world!&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello CMD World&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;echo&quot;</span><span class="p">,</span><span class="w"> </span><span class="c1">// override python</span>
+<span class="w">            </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;goodbye world!&quot;</span><span class="p">]</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="interpolation-of-variables">
+<h3>Interpolation of variables<a class="headerlink" href="#interpolation-of-variables" title="Permalink to this heading">¶</a></h3>
+<p>In many cases you will need to know the active project path, an environment variable or some other variable to pass to your command line. To accomplish that the strings containing <code class="docutils literal notranslate"><span class="pre">${variableName}</span></code> in the json file will be interpolated before execution.</p>
+<section id="predefined-variables">
+<h4>Predefined variables<a class="headerlink" href="#predefined-variables" title="Permalink to this heading">¶</a></h4>
+<p>The following list of predefined variables may be used in your <em>Command</em>.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_CALLING_APP}&quot;</span></code>: The application starting the Command (e.g. model3d/schematic/pcbs)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_STUDIO_PID}&quot;</span></code>: The PID of the CST Studio Suite DesignEnvironment launching the command</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_INSTALL_PATH}&quot;</span></code>: The installation path of CST STudio Suite</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_INSTALL_PATH_AMD64}&quot;</span></code>: The platform dependent subdirectory of <code class="docutils literal notranslate"><span class="pre">&quot;${CST_INSTALL_PATH}&quot;</span></code> containing most of the binaries (Windows: <code class="docutils literal notranslate"><span class="pre">AMD64</span></code>, Linux: <code class="docutils literal notranslate"><span class="pre">LinuxAMD64</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_APPDATA_PATH}&quot;</span></code>: The folder in the users’ home directory containing data related to CST Studio Suite. Windows: <code class="docutils literal notranslate"><span class="pre">%LOCALAPPDATA%\CST</span> <span class="pre">AG\20XY</span></code> Linux: <code class="docutils literal notranslate"><span class="pre">$HOME/.local/CST</span> <span class="pre">AG/20XY</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_VERSION}&quot;</span></code>: The major version of CST Studio Suite, e.g. 2025</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_DEFAULT_LOCAL_LIBRARY_PATH}&quot;</span></code>: The first entry in the library paths</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_COMMAND_DIR}&quot;</span></code>: The directory in which the command json file lies</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${CST_ACTIVE_PROJECT}&quot;</span></code>: The project from which the command was triggered</p></li>
+</ul>
+<p>There are four special path related variables, which make it possible to define paths in a platform agnostic manner:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;{/}&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;{\}&quot;</span></code>: This is replaced by <code class="docutils literal notranslate"><span class="pre">/</span></code> on Linux platforms and <code class="docutils literal notranslate"><span class="pre">\</span></code> on Windows platforms.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;{:}&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;{;}&quot;</span></code>: This is replaced by <code class="docutils literal notranslate"><span class="pre">:</span></code> on Linux platforms and <code class="docutils literal notranslate"><span class="pre">;</span></code> on Windows platforms.</p></li>
+</ul>
+<p>Note that these variables are <strong>not</strong> prefixed with a <code class="docutils literal notranslate"><span class="pre">$</span></code>-sign.</p>
+</section>
+<section id="environment-variables">
+<h4>Environment variables<a class="headerlink" href="#environment-variables" title="Permalink to this heading">¶</a></h4>
+<p>Any environment variable may be used as a variable in the interpolation. The interpolation scheme to enable this is</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;${env:ENV_VAR_NAME}&quot;</span></code></p></li>
+</ul>
+<p>where <code class="docutils literal notranslate"><span class="pre">ENV_VAR_NAME</span></code> should be replaced by the desired environment variable.</p>
+</section>
+<section id="local-command-variables">
+<h4>Local Command variables<a class="headerlink" href="#local-command-variables" title="Permalink to this heading">¶</a></h4>
+<p>Further flexibility can be achieved by specifying local variables in the json file. This is done in an object named <code class="docutils literal notranslate"><span class="pre">parameters</span></code>, which contains key-value pairs that can be used for interpolation later. A value can be either a string, or an object. If an object is used, the key is used to differentiate the value for the available platforms (<code class="docutils literal notranslate"><span class="pre">win32</span></code> and <code class="docutils literal notranslate"><span class="pre">linux</span></code>.). Consider the following example:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="c1">//...</span>
+<span class="w">    </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;venv_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${env:MY_VENVS_ROOT}{/}my_venv&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;scripts&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;linux&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_path}/bin&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;win32&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_path}/Scripts&quot;</span>
+<span class="w">        </span><span class="p">},</span>
+<span class="w">        </span><span class="nt">&quot;venv_python_interpreter&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${scripts}{/}python&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="c1">//...</span>
+<span class="w">    </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${venv_python_interpreter}&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-c&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;print(&#39;Hello World&#39;)&quot;</span><span class="p">],</span>
+<span class="w">    </span><span class="c1">//...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The above snippet defines the variable <code class="docutils literal notranslate"><span class="pre">${scripts}</span></code>, which gets interpolated depending on the platform as:</p>
+<ul class="simple">
+<li><p>Windows: “${env:MY_VENVS_ROOT}/my_venv/Scripts”</p></li>
+<li><p>Linux: “${env:MY_VENVS_ROOT}/my_venv/bin”</p></li>
+</ul>
+<p>This in turn is used to define a platform agnostic path to the python interpreter inside the venv <code class="docutils literal notranslate"><span class="pre">${venv_python_interpreter}</span></code>.</p>
+<p>This functionality greatly improves portability between platforms, while maintaining a concise specification.</p>
+</section>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Customize Python functionality</a><ul>
+<li><a class="reference internal" href="#minimalistic-example">Minimalistic example</a></li>
+<li><a class="reference internal" href="#customization-of-macros-python-run-script">Customization of <em>Macros/Python -&gt; Run Script</em></a></li>
+<li><a class="reference internal" href="#working-with-a-custom-python-interpreter-environment">Working with a custom python interpreter/environment</a></li>
+<li><a class="reference internal" href="#making-your-python-functionality-available-to-others">Making your python functionality available to others</a><ul>
+<li><a class="reference internal" href="#basic-example-for-sharing-python-code">Basic example for sharing python code</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#generic-commands">Generic Commands</a><ul>
+<li><a class="reference internal" href="#json-files-and-folder-structure">Json-files and Folder structure</a></li>
+<li><a class="reference internal" href="#fields">Fields</a></li>
+<li><a class="reference internal" href="#hierarchy">Hierarchy</a></li>
+<li><a class="reference internal" href="#interpolation-of-variables">Interpolation of variables</a><ul>
+<li><a class="reference internal" href="#predefined-variables">Predefined variables</a></li>
+<li><a class="reference internal" href="#environment-variables">Environment variables</a></li>
+<li><a class="reference internal" href="#local-command-variables">Local Command variables</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_structure_modeling.html" title="Shape Modeling"
+             >next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_getting_started.html" title="Getting Started"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Customize Python functionality</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

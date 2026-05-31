@@ -1,0 +1,257 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Task Definition &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Simulation Task Results" href="circuit_simulation_results.html" />
+    <link rel="prev" title="Project Parameters" href="circuit_simulation_project_parameters.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_results.html" title="Simulation Task Results"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_project_parameters.html" title="Project Parameters"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Task Definition</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="task-definition">
+<h1>Task Definition<a class="headerlink" href="#task-definition" title="Permalink to this heading">¶</a></h1>
+<p>CST Design Studio provides several simulation tasks.
+Those tasks can be customized, added and removed from the project and enabled or disabled.</p>
+<blockquote>
+<div><p>Not every task is compatible with every model as the presence of some special components may be required.
+E.g., an S-parameter simulation does not work without external ports.</p>
+</div></blockquote>
+<section id="simulation-tasks">
+<h2>Simulation Tasks<a class="headerlink" href="#simulation-tasks" title="Permalink to this heading">¶</a></h2>
+<p>Here we will create a Simulation Task.
+Specifically, we intend to calculate the S-Parameters for the lumped filter design, that was created in the
+<a href="circuit_simulation_project_parameters.html">Project Parameters</a> guide.</p>
+<p>First, please open the lumped filter example and run these preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">active_project</span><span class="p">()</span>
+<span class="k">assert</span> <span class="s1">&#39;lumped_filter&#39;</span> <span class="ow">in</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<p>For the creation of a task we created the helper function <code class="docutils literal notranslate"><span class="pre">create_simulation_task</span></code> which is seen below.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_simulation_task</span><span class="p">(</span>
+    <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="n">task_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">properties</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a simulation task of the given type and with the given name and properties&quot;&quot;&quot;</span>
+    <span class="n">task</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">SimulationTask</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">Type</span><span class="p">(</span><span class="n">task_type</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">properties</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">property_name</span><span class="p">,</span> <span class="nb">property</span> <span class="ow">in</span> <span class="n">properties</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">task</span><span class="o">.</span><span class="n">SetProperty</span><span class="p">(</span><span class="n">property_name</span><span class="p">,</span> <span class="nb">property</span><span class="p">)</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">Create</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The function needs the current project, the type of task and a name for the task.
+Optionally, it is possible to pass properties for the task in a key-value-dictionary.
+The possible parameters depend on the type of the task.
+A table of all parameters can be found
+<a href="../mergedProjects/VBA_DES/special_vbacommands/simulationtaskobject.htm">here</a>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># `prj` should be the lumped-filter</span>
+
+<span class="c1"># Save Project as a new one</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;lumped_filter_s_parameter.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Change project units</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Units</span><span class="o">.</span><span class="n">SetUnit</span><span class="p">(</span><span class="s2">&quot;Frequency&quot;</span><span class="p">,</span> <span class="s2">&quot;MHz&quot;</span><span class="p">)</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Units</span><span class="o">.</span><span class="n">SetUnit</span><span class="p">(</span><span class="s2">&quot;Time&quot;</span><span class="p">,</span> <span class="s2">&quot;us&quot;</span><span class="p">)</span>
+
+<span class="c1"># create a Task</span>
+<span class="n">create_simulation_task</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="s2">&quot;s-parameters&quot;</span><span class="p">,</span> <span class="s2">&quot;Task1&quot;</span><span class="p">,</span> <span class="n">properties</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;fmin&quot;</span><span class="p">:</span> <span class="s2">&quot;400&quot;</span><span class="p">,</span> <span class="s2">&quot;fmax&quot;</span><span class="p">:</span> <span class="s2">&quot;1000&quot;</span><span class="p">})</span>
+
+<span class="c1"># Run Task</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">UpdateResults</span><span class="p">()</span>
+
+<span class="c1"># Save Project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Using this function, we can now create the task fitting to our schematic.
+Our circuit should operate in the MHz / μs range.
+So we change the project units to the wanted units using <code class="docutils literal notranslate"><span class="pre">SetUnits</span></code>.
+We set the Minimum and Maximum frequencies for the task as properties.
+The resulting Task Parameter list is shown below.</p>
+<p><img alt="task1_parameter_list.png" src="images/task1_parameter_list.png" /></p>
+<p>To start this task we call <code class="docutils literal notranslate"><span class="pre">prj.schematic.UpdateResults</span></code>.
+This updates all created tasks in the project.
+It is also possible to only update a specific task by calling <code class="docutils literal notranslate"><span class="pre">Update</span></code> on the SimulationTask-Object.</p>
+</section>
+<section id="parameter-sweep">
+<h2>Parameter Sweep<a class="headerlink" href="#parameter-sweep" title="Permalink to this heading">¶</a></h2>
+<p>Using Parameter Sweeps, we can see how the results change when these parameters are modified.
+The following code shows how a parameter sweep can be set up and started.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">move_task_in_tree</span><span class="p">(</span>
+    <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">parent_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">child_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">next_task_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Moves the Task with the child_name. Parent_name defines the new parents name and if &quot;next_task name&quot; is given,</span>
+<span class="sd">    the task is moved above the task with next_task_name&quot;&quot;&quot;</span>
+    <span class="n">task</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">SimulationTask</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">child_name</span><span class="p">)</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">MoveInTree</span><span class="p">(</span><span class="n">parent_name</span><span class="p">,</span> <span class="n">next_task_name</span> <span class="k">if</span> <span class="n">next_task_name</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_parameter_sweep</span><span class="p">(</span>
+    <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="n">sweep_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">sequence_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parameter</span><span class="p">:</span> <span class="nb">dict</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;creates a parameter sweep of the simulation task with sweep_name&quot;&quot;&quot;</span>
+    <span class="c1"># sweep = project.schematic.ParameterSweep</span>
+    <span class="c1"># sweep.SetSimulationType(sweep_name)</span>
+    <span class="c1"># sweep.AddSequence(sequence_name)</span>
+    <span class="c1"># for key, value in parameter.items():</span>
+    <span class="c1">#    sweep.AddParameter_Samples(sequence_name, key, value[&quot;from&quot;], value[&quot;to&quot;], value[&quot;steps&quot;],</span>
+    <span class="c1">#                               value[&quot;logarithmic_sweep&quot;])</span>
+    <span class="c1"># AddParameter_Samples nicht freigegeben, also execute_vba_code</span>
+
+    <span class="n">sweep_code</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;Sub Main</span>
+<span class="s2">    With DSParameterSweep</span>
+<span class="s2">        .SetSimulationType (&quot;</span><span class="si">{</span><span class="n">sweep_name</span><span class="si">}</span><span class="s2">&quot;)</span>
+<span class="s2">        .AddSequence (&quot;</span><span class="si">{</span><span class="n">sequence_name</span><span class="si">}</span><span class="s2">&quot;)&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">parameter_name</span><span class="p">,</span> <span class="n">parameter_value</span> <span class="ow">in</span> <span class="n">parameter</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">sweep_code</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        .AddParameter_Samples (&quot;</span><span class="si">{</span><span class="n">sequence_name</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">parameter_name</span><span class="si">}</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">parameter_value</span><span class="p">[</span><span class="s2">&quot;from&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">, </span><span class="se">\</span>
+<span class="si">{</span><span class="n">parameter_value</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">parameter_value</span><span class="p">[</span><span class="s2">&quot;samples&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">parameter_value</span><span class="p">[</span><span class="s2">&quot;logarithmic_sweep&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;&quot;&quot;</span>
+    <span class="n">sweep_code</span> <span class="o">+=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        .Start</span>
+<span class="s2">    End With</span>
+<span class="s2">    End Sub</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">execute_vba_code</span><span class="p">(</span><span class="n">sweep_code</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1"># Save project as a new one</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;lumped_filter_parameter_sweep.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Change project units</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Units</span><span class="o">.</span><span class="n">SetUnit</span><span class="p">(</span><span class="s2">&quot;Frequency&quot;</span><span class="p">,</span> <span class="s2">&quot;MHz&quot;</span><span class="p">)</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Units</span><span class="o">.</span><span class="n">SetUnit</span><span class="p">(</span><span class="s2">&quot;Time&quot;</span><span class="p">,</span> <span class="s2">&quot;us&quot;</span><span class="p">)</span>
+
+<span class="c1"># create a Task</span>
+<span class="n">create_simulation_task</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="s2">&quot;s-parameters&quot;</span><span class="p">,</span> <span class="s2">&quot;SPara1&quot;</span><span class="p">,</span> <span class="n">properties</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;fmin&quot;</span><span class="p">:</span> <span class="s2">&quot;400&quot;</span><span class="p">,</span> <span class="s2">&quot;fmax&quot;</span><span class="p">:</span> <span class="s2">&quot;1000&quot;</span><span class="p">})</span>
+
+<span class="c1"># create parameter sweep Task</span>
+<span class="n">create_simulation_task</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="s2">&quot;parameter sweep&quot;</span><span class="p">,</span> <span class="s2">&quot;Sweep1&quot;</span><span class="p">)</span>
+
+<span class="c1"># assign Task1 to Parameter Sweep</span>
+<span class="n">move_task_in_tree</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">parent_name</span><span class="o">=</span><span class="s2">&quot;Sweep1&quot;</span><span class="p">,</span> <span class="n">child_name</span><span class="o">=</span><span class="s2">&quot;SPara1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Define parameters to be checked</span>
+<span class="n">parameter_to_sweep</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;C2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;from&quot;</span><span class="p">:</span> <span class="mi">33</span><span class="p">,</span> <span class="s2">&quot;to&quot;</span><span class="p">:</span> <span class="mi">37</span><span class="p">,</span> <span class="s2">&quot;samples&quot;</span><span class="p">:</span> <span class="mi">5</span><span class="p">,</span> <span class="s2">&quot;logarithmic_sweep&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+<span class="p">}</span>
+
+<span class="c1"># Create Parameter Sweep</span>
+<span class="n">create_parameter_sweep</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="s2">&quot;Sweep1&quot;</span><span class="p">,</span> <span class="s2">&quot;SPara1&quot;</span><span class="p">,</span> <span class="n">parameter_to_sweep</span><span class="p">)</span>
+
+<span class="c1"># Save project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<p>We create the same Task as in <a class="reference internal" href="#simulation-tasks"><span class="xref myst">Simulation Tasks</span></a>.
+Next, we need to create a simulation task of the type “parameter sweep”.
+Like all other Simulation control tasks, a parameter sweep task cannot be executed on its own.
+It needs to be associated with another simulation task.
+In our case, we want the parameter sweep to execute an S-Parameter task for each parameter combination.
+For this, we use the created function <code class="docutils literal notranslate"><span class="pre">move_task_in_tree</span></code>.
+This function moves the task with the given “child_name” to the task with the given “parent_name”.
+If “next_task_name” is passed as well, the task is inserted before the task with this name.
+Otherwise, it appended at the end of the child list.</p>
+<p>The Navigation tree should look something like this.</p>
+<p><img alt="nav_tree_parameter_sweep.png" src="images/nav_tree_parameter_sweep.png" /></p>
+<p>The function <code class="docutils literal notranslate"><span class="pre">create_parameter_sweep</span></code> creates a parameter sweep and executes it.
+The passed “sweep_name” represents the name of the parameter sweep Simulation Task, created before.
+“sequence_name” represents the name of the simulation task.
+The parameters that should be swept are passed as a dictionary.
+This includes the parameter name that should be modified, the start and end value, the number of samples
+that should be checked between the start and end value, and a boolean value that determines the type of the sweep.
+“Logarithmic sweep” if this value is true, or “Linear sweep” if this value is false.</p>
+<p>After the parameter sweep has finished, the navigation tree adds the results to the S-parameter task.
+<img alt="nav_tree_parameter_sweep_results.png" src="images/nav_tree_parameter_sweep_results.png" /></p>
+<p>The <a href="circuit_simulation_results.html">next guide</a> will show how to work with the results.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Task Definition</a><ul>
+<li><a class="reference internal" href="#simulation-tasks">Simulation Tasks</a></li>
+<li><a class="reference internal" href="#parameter-sweep">Parameter Sweep</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_results.html" title="Simulation Task Results"
+             >next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_project_parameters.html" title="Project Parameters"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Task Definition</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

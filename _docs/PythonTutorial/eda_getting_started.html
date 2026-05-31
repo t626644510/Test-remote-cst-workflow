@@ -1,0 +1,190 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Getting Started &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Modify PCB nets" href="eda_modify_pcb_net.html" />
+    <link rel="prev" title="Simulation Task Results" href="circuit_simulation_results.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_pcb_net.html" title="Modify PCB nets"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_results.html" title="Simulation Task Results"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Getting Started</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this heading">¶</a></h1>
+<p>To work with PCBs, the “cst.eda” python package is provided.
+This package provides an interface to the layout of a Printed Circuit Board or a Package.
+For now, we will be using the “pcb_api” module.
+The Online Help article for the
+<a href="../Python/source/cst.eda.html#module-cst.eda">cst.eda package</a>
+shows more details on the package.</p>
+<section id="import-pcb">
+<h2>Import PCB<a class="headerlink" href="#import-pcb" title="Permalink to this heading">¶</a></h2>
+<p>Using the cst.eda package, PCBs can be imported for 3D simulation or to PCBStudio.
+Both options need an instance of “cst.eda.pcb_api.PCB” and both options create a <em>copy</em> of the PCB.
+This means any changes done to the PCB after importing will <em>not</em> affect the imported model.</p>
+<p>The pcb_api.PCB instance is created using the <code class="docutils literal notranslate"><span class="pre">convert_from()</span></code> method with the path to our ECAD file.
+For the following code examples, we will be using an example PCB: “cst_phone”.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="import-to-3d-project">
+<h3>Import to 3D project<a class="headerlink" href="#import-to-3d-project" title="Permalink to this heading">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># path to the ECAD file</span>
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s2">&quot;cst_phone.tgz&quot;</span>
+
+<span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Here you can modify your PCB. For more information, take a look at the following guides.</span>
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj_3d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="c1"># copy the PCB into the project and generate the 3D model</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj_3d</span><span class="p">)</span>
+<span class="c1"># the project now contains a copy of &quot;pcb&quot;. Further changes to &quot;pcb&quot; do not propagate.</span>
+
+</pre></div>
+</div>
+<p>It is possible to import the PCB to 3D to a CST Microwave, EM or Mphysics Studio project.
+For this we use the <code class="docutils literal notranslate"><span class="pre">import_to()</span></code> method with the 3D project on the PCB instance.
+This creates a 3D model of our example file.
+It can be seen in the image below.</p>
+<p><img alt="pcb_import_to_3d.png" src="images/pcb_import_to_3d.png" /></p>
+<p>To get some info of the PCB we can use the <code class="docutils literal notranslate"><span class="pre">pcb</span></code> instance and its attributes.
+Below is the function <code class="docutils literal notranslate"><span class="pre">print_pcb_info()</span></code> that prints the number of components, layers and nets of the passed PCB.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">print_pcb_info</span><span class="p">(</span><span class="n">pcb</span><span class="p">:</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Prints general information for the passed PCB&quot;&quot;&quot;</span>
+    <span class="n">components</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">components</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PCB has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">components</span><span class="p">)</span><span class="si">}</span><span class="s2"> components&quot;</span><span class="p">)</span>
+
+    <span class="n">layers</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">stackup</span><span class="o">.</span><span class="n">layers</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PCB has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">layers</span><span class="p">)</span><span class="si">}</span><span class="s2"> layers&quot;</span><span class="p">)</span>
+
+    <span class="n">nets</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">nets</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PCB has </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">nets</span><span class="p">)</span><span class="si">}</span><span class="s2"> nets&quot;</span><span class="p">)</span>
+    
+<span class="c1"># test</span>
+<span class="n">print_pcb_info</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>  
+</pre></div>
+</div>
+<p>Passing the imported pcb to this function results in the following output.</p>
+<div class="highlight-commandline notranslate"><div class="highlight"><pre><span></span>PCB has 154 components
+PCB has 21 layers
+PCB has 154 nets
+</pre></div>
+</div>
+</section>
+<section id="import-to-pcb-studio">
+<h3>Import to PCB Studio<a class="headerlink" href="#import-to-pcb-studio" title="Permalink to this heading">¶</a></h3>
+<!-- TODO mit dieser art von Import fehlt die Part Library...
+mit "prj.pcbs.import_layout(pcb_file,"odb++")" geht es, aber hiermit sollte es irgendwann auch gehen-->
+<p>It is also possible to import the same <code class="docutils literal notranslate"><span class="pre">pcb</span></code> object into a PCB Studio.
+This is done by using the <code class="docutils literal notranslate"><span class="pre">set_pcb()</span></code> method with the PCB object on the PCB Studio project.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># reuse `pcb`</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+<span class="c1"># PCBStudio now has a copy of &quot;pcb&quot;. Further changes to &quot;pcb&quot; do not propagate.</span>
+</pre></div>
+</div>
+<p>This replaces the previous (empty) PCB in the PCBStudio project with a copy of our example file.</p>
+<p><img alt="pcb_import_to_2d.png" src="images/pcb_import_to_2d.png" /></p>
+<p>Again we can use the created function <code class="docutils literal notranslate"><span class="pre">print_pcb_info()</span></code>.
+This results in the same output as before, since the PCB itself is the same.</p>
+<div class="highlight-commandline notranslate"><div class="highlight"><pre><span></span>PCB has 154 components
+PCB has 21 layers
+PCB has 154 nets
+</pre></div>
+</div>
+<p>In the following guides, we will show you how to modify different properties of the PCB.</p>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Getting Started</a><ul>
+<li><a class="reference internal" href="#import-pcb">Import PCB</a><ul>
+<li><a class="reference internal" href="#import-to-3d-project">Import to 3D project</a></li>
+<li><a class="reference internal" href="#import-to-pcb-studio">Import to PCB Studio</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_pcb_net.html" title="Modify PCB nets"
+             >next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_results.html" title="Simulation Task Results"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Getting Started</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

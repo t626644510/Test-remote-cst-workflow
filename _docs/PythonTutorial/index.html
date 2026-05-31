@@ -1,0 +1,202 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>CST Studio Suite Python Tutorial &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Getting Started" href="3d_simulation_getting_started.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_getting_started.html" title="Getting Started"
+             accesskey="N">next</a></li>
+        <li class="nav-item nav-item-0"><a href="#">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">CST Studio Suite Python Tutorial</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="cst-studio-suite-python-tutorial">
+<h1>CST Studio Suite Python Tutorial<a class="headerlink" href="#cst-studio-suite-python-tutorial" title="Permalink to this heading">¶</a></h1>
+<p>This tutorial shows how to control CST Studio Suite via Python, and provides
+examples along the way.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="3d_simulation_getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_getting_started.html#testing-your-environment">Testing your environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_getting_started.html#creating-a-project">Creating a Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_getting_started.html#save-project">Save Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_getting_started.html#load-an-existing-project">Load an existing Project</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_getting_started.html#run-scripts-from-cst-studio-suite">Run Scripts from CST Studio Suite</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="custom_python.html">Customize Python functionality</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="custom_python.html#minimalistic-example">Minimalistic example</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_python.html#customization-of-macros-python-run-script">Customization of <em>Macros/Python -&gt; Run Script</em></a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_python.html#working-with-a-custom-python-interpreter-environment">Working with a custom python interpreter/environment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_python.html#making-your-python-functionality-available-to-others">Making your python functionality available to others</a></li>
+<li class="toctree-l2"><a class="reference internal" href="custom_python.html#generic-commands">Generic Commands</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">3D Simulation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="3d_simulation_structure_modeling.html">Shape Modeling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_structure_modeling.html#create-a-new-shape">Create a new Shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_structure_modeling.html#automation-of-the-shape-creation">Automation of the Shape creation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_structure_modeling.html#setting-the-units">Setting the Units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_structure_modeling.html#creating-a-new-material">Creating a new Material</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_structure_modeling.html#working-with-created-items">Working with created Items</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="3d_simulation_simulation_setup.html">Simulation Setup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_simulation_setup.html#example-pcb-geometry">Example PCB geometry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_simulation_setup.html#creating-discrete-ports">Creating Discrete Ports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_simulation_setup.html#creating-discrete-face-ports">Creating Discrete Face Ports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_simulation_setup.html#solver-setup">Solver Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_simulation_setup.html#run-solver">Run solver</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="3d_simulation_results.html">3D Simulation Results</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_results.html#preparations">Preparations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_results.html#getting-results-from-a-running-cst-studio-suite-instance">Getting Results from a running CST Studio Suite instance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_results.html#get-results-from-files">Get Results from files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3d_simulation_results.html#import-data-as-result">Import Data as Result</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Circuits &amp; Systems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="circuit_simulation_creating_connecting_blocks.html">Creating &amp; Connecting Components</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_creating_connecting_blocks.html#blocks">Blocks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_creating_connecting_blocks.html#external-port">External Port</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_creating_connecting_blocks.html#nets">Nets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_creating_connecting_blocks.html#circuit-probe">Circuit Probe</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="circuit_simulation_project_parameters.html">Project Parameters</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_project_parameters.html#model-setup">Model setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_project_parameters.html#project-units">Project Units</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_project_parameters.html#creating-project-parameters">Creating Project Parameters</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="circuit_simulation_task_definition.html">Task Definition</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_task_definition.html#simulation-tasks">Simulation Tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_task_definition.html#parameter-sweep">Parameter Sweep</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="circuit_simulation_results.html">Simulation Task Results</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_results.html#reading-results-from-a-running-cst-studio-suite-instance">Reading Results from a running CST Studio Suite instance</a></li>
+<li class="toctree-l2"><a class="reference internal" href="circuit_simulation_results.html#reading-results-from-files">Reading Results from files</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">PCBs &amp; Packages</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="eda_getting_started.html">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_getting_started.html#import-pcb">Import PCB</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_pcb_net.html">Modify PCB nets</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_pcb_stackup.html">Modify PCB Stackup</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_pcb_stackup.html#changing-layer-thickness">Changing layer thickness</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_pcb_stackup.html#changing-the-materials">Changing the Materials</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_pcb_studio_components_and_parts.html">Components and Parts in PCB Studio</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_pcb_studio_components_and_parts.html#mount-unmount-components">Mount/unmount components</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_pcb_studio_components_and_parts.html#part-library">Part Library</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_pcb_studio_components_and_parts.html#component-translation-table-bom">Component Translation Table / BOM</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_import_settings.html">EDA import settings</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_import_settings.html#accessing-the-dialog">Accessing the dialog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_import_settings.html#script-configuration">Script configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_import_settings.html#example">Example</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_settings_for_3d_simulation.html">Settings for 3D simulation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_settings_for_3d_simulation.html#generate-code-from-import-dialog">Generate code from Import dialog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_settings_for_3d_simulation.html#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_settings_for_3d_simulation.html#updating-the-pcb-import">Updating the PCB Import</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_settings_for_3d_simulation.html#net-selection">Net Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_settings_for_3d_simulation.html#port-definition">Port definition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_settings_for_3d_simulation.html#special-settings">Special Settings</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_3d_simulation__ports_and_lumped_elements.html">3D Simulation: Ports &amp; Lumped Elements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_net_geometries__working_with_traces.html">Working with Traces</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_traces.html#get-the-traces">Get the Traces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_traces.html#change-width-of-trace">Change width of Trace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_traces.html#replace-traces">Replace Traces.</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_net_geometries__working_with_shapes.html">Working with Shapes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_shapes.html#modify-a-shape">Modify a Shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_shapes.html#create-a-shape">Create a Shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__working_with_shapes.html#advanced-geometry-operations">Advanced Geometry Operations</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_net_geometries__components_and_padstacks.html">Components and Padstacks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__components_and_padstacks.html#creating-a-component-on-the-top-layer">Creating a Component on the Top Layer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="eda_modify_net_geometries__components_and_padstacks.html#creating-a-component-on-the-bottom-layer">Creating a Component on the Bottom Layer</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="eda_modify_net_geometries__user_layer_extrusion.html">User Layer extrusion</a></li>
+</ul>
+</div>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_getting_started.html" title="Getting Started"
+             >next</a></li>
+        <li class="nav-item nav-item-0"><a href="#">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">CST Studio Suite Python Tutorial</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

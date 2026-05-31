@@ -1,0 +1,259 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Components and Padstacks &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="User Layer extrusion" href="eda_modify_net_geometries__user_layer_extrusion.html" />
+    <link rel="prev" title="Working with Shapes" href="eda_modify_net_geometries__working_with_shapes.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__user_layer_extrusion.html" title="User Layer extrusion"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_modify_net_geometries__working_with_shapes.html" title="Working with Shapes"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Components and Padstacks</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="components-and-padstacks">
+<h1>Components and Padstacks<a class="headerlink" href="#components-and-padstacks" title="Permalink to this heading">¶</a></h1>
+<p>When creating components and their padstacks, transformations are used to place them at their intended Position.
+Affine Transformations can be used to transform any geometry object,
+and can be used to create local working coordinate systems.
+Transformations are composed of:</p>
+<ul class="simple">
+<li><p>translation</p></li>
+<li><p>rotation</p></li>
+<li><p>reflection</p></li>
+<li><p>scaling</p></li>
+</ul>
+<p>To demonstrate the transformations, two examples are shown below.
+The first example shows the process of adding a component on the top of a PCB.
+The second one is similar and shows the process of adding a component on the bottom of the PCB.</p>
+<p>To initiate the PCB as usual, we created a helper function that will be used in the following examples.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">geometry2d</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">init_example_pcb</span><span class="p">():</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+    <span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+    <span class="c1"># path to the ECAD file</span>
+    <span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s2">&quot;cst_phone.tgz&quot;</span>
+
+    <span class="c1"># Create an instance of a PCB</span>
+    <span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pcb</span>
+</pre></div>
+</div>
+<section id="creating-a-component-on-the-top-layer">
+<h2>Creating a Component on the Top Layer<a class="headerlink" href="#creating-a-component-on-the-top-layer" title="Permalink to this heading">¶</a></h2>
+<p>In this example, we will create a new component on the top of the PCB and add corresponding padstacks to the top layer.</p>
+<p>The following code shows the process.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize the example pcb</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">init_example_pcb</span><span class="p">()</span>
+
+<span class="c1"># BEGIN</span>
+
+<span class="c1"># Specify layer and nets</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">)</span>
+<span class="n">net_gnd</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;GND&quot;</span><span class="p">)</span>
+<span class="n">net_c53</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;NETC53_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Create a rectangular outline for the component</span>
+<span class="n">outline_shape</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="o">.</span><span class="n">create_rectangle</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span> <span class="mi">14</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">))</span>
+
+<span class="c1"># Create a new component</span>
+<span class="n">component</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">create_component</span><span class="p">(</span><span class="s2">&quot;C78&quot;</span><span class="p">)</span>
+<span class="n">component</span><span class="o">.</span><span class="n">set_outlines</span><span class="p">([</span><span class="n">outline_shape</span><span class="p">])</span>
+
+<span class="c1"># Create rectangular pad shape</span>
+<span class="n">pad_geometry</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="o">.</span><span class="n">create_rectangle</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">6</span><span class="p">))</span>
+
+<span class="c1"># Create padstacks for the defined Nets</span>
+<span class="n">gnd_padstack</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">create_padstack</span><span class="p">(</span><span class="n">net_gnd</span><span class="p">)</span>
+<span class="n">gnd_padstack</span><span class="o">.</span><span class="n">set_pad_geometry</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">PadType</span><span class="o">.</span><span class="n">REGULAR</span><span class="p">,</span> <span class="p">[</span><span class="n">pad_geometry</span><span class="p">],</span> <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="n">layer</span><span class="p">])</span>
+<span class="n">c53_padstack</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">create_padstack</span><span class="p">(</span><span class="n">net_c53</span><span class="p">)</span>
+<span class="n">c53_padstack</span><span class="o">.</span><span class="n">set_pad_geometry</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">PadType</span><span class="o">.</span><span class="n">REGULAR</span><span class="p">,</span> <span class="p">[</span><span class="n">pad_geometry</span><span class="p">],</span> <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="n">layer</span><span class="p">])</span>
+
+<span class="c1"># Set transformations for padstacks and transform them</span>
+<span class="n">transformation_gnd</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">13</span><span class="p">)</span>
+<span class="n">gnd_padstack</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transformation_gnd</span><span class="p">)</span>
+
+<span class="n">transformation_c53</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">13</span><span class="p">)</span>
+<span class="n">c53_padstack</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transformation_c53</span><span class="p">)</span>
+
+<span class="c1"># Define component pins</span>
+<span class="n">component</span><span class="o">.</span><span class="n">create_pin</span><span class="p">(</span><span class="s2">&quot;C78-1&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">14</span><span class="p">))</span>
+<span class="n">component</span><span class="o">.</span><span class="n">create_pin</span><span class="p">(</span><span class="s2">&quot;C78-2&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">))</span>
+
+<span class="c1"># Transform component to intended position</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">505</span><span class="p">,</span> <span class="mi">568</span><span class="p">)</span>
+<span class="n">component</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transform</span><span class="p">)</span>
+
+<span class="c1"># Set mount layer of component</span>
+<span class="n">component</span><span class="o">.</span><span class="n">set_mount_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After initializing the pcb, we initialize the layer that the padstacks will be on as “layer”.
+We also initialize the two nets “net_gnd” and “net_c53”.
+The padstacks of the component that we will create will each belong to one of these nets.</p>
+<p>Using <code class="docutils literal notranslate"><span class="pre">geometry2d.Shape.create_rectangle((6,</span> <span class="pre">14),</span> <span class="pre">(-6,</span> <span class="pre">-14))</span></code>,
+we create a rectangular shape and save it as “outline_shape”.
+This shape can now be used to create our new component.
+We call it “C78” and set its outline to the created “outline_shape”.</p>
+<p>The padstacks also need a geometry as outline.
+Both padstacks will have the same outline so we only need to create one geometry.
+Using the nets that the padstacks should belong to, we crate the two padstacks “gnd_padstack” and “c53_padstack”.
+The method <code class="docutils literal notranslate"><span class="pre">set_pad_geometry()</span></code> needs the type of the padstack as “pcb_api.PadType”, and a list of geometries.
+More information to the “pcb_api.PadType” can be found
+<a href="../Python/source/cst.eda.html#cst_eda_interface.pcb_api.PadType">here</a>.
+As we only need one geometry, we pass the created geometry in a list.
+The parameter “transformed” is left at its default value, False.
+This way the positions of the padstacks are defined relative to the position of the component.</p>
+<p>When creating the geometries, we passed the corner points so that the rectangle is created around the point (0,0).
+To move the padstacks to the proper position, we use a
+<a href="../Python/source/cst.eda.html#cst_eda_interface.geometry2d.Transformation">transformation</a>.
+Transformations are defined and then applied.
+Here we move the padstacks 13 and -13 along the Y-Axes using a translation.</p>
+<p>The component is still missing its pins.
+These are created using <code class="docutils literal notranslate"><span class="pre">component.create_pin()</span></code>.
+The name and position of the pin is needed in this method.</p>
+<p>Finally, the component is translated to the intended position on the PCB,
+and the “mount_layer” of the component is defined.</p>
+<p>Now the Component is imported to a PCB-Studio project.</p>
+<p>The created component “C78” and its pins and padstacks can be seen below.</p>
+<p><img alt="eda_components_and_padstacks_new_comp.png" src="images/eda_components_and_padstacks_new_comp.png" /></p>
+</section>
+<section id="creating-a-component-on-the-bottom-layer">
+<h2>Creating a Component on the Bottom Layer<a class="headerlink" href="#creating-a-component-on-the-bottom-layer" title="Permalink to this heading">¶</a></h2>
+<p>The code below shows the process of creating a component on the bottom layer of the PCB.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize the example pcb</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">init_example_pcb</span><span class="p">()</span>
+
+<span class="c1"># Specify layer and nets</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_2&quot;</span><span class="p">)</span>
+<span class="n">net_gnd</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;GND&quot;</span><span class="p">)</span>
+<span class="n">net_c53</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;W_RF1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Creat a rectangular outline for the component</span>
+<span class="n">outline_shape</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="o">.</span><span class="n">create_rectangle</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span> <span class="mi">14</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">))</span>
+
+<span class="c1"># Create a new component</span>
+<span class="n">component</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">create_component</span><span class="p">(</span><span class="s2">&quot;C79&quot;</span><span class="p">)</span>
+<span class="n">component</span><span class="o">.</span><span class="n">set_outlines</span><span class="p">([</span><span class="n">outline_shape</span><span class="p">])</span>
+
+<span class="c1"># Create rectangular outline for padstacks</span>
+<span class="n">pad_geometry</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="o">.</span><span class="n">create_rectangle</span><span class="p">((</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="o">-</span><span class="mi">6</span><span class="p">,</span> <span class="o">-</span><span class="mi">6</span><span class="p">))</span>
+
+<span class="c1"># Create padstacks for the defined nets with the pad_geometry</span>
+<span class="n">gnd_padstack</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">create_padstack</span><span class="p">(</span><span class="n">net_gnd</span><span class="p">)</span>
+<span class="n">gnd_padstack</span><span class="o">.</span><span class="n">set_pad_geometry</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">PadType</span><span class="o">.</span><span class="n">REGULAR</span><span class="p">,</span> <span class="p">[</span><span class="n">pad_geometry</span><span class="p">],</span> <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="n">layer</span><span class="p">])</span>
+<span class="n">c53_padstack</span> <span class="o">=</span> <span class="n">component</span><span class="o">.</span><span class="n">create_padstack</span><span class="p">(</span><span class="n">net_c53</span><span class="p">)</span>
+<span class="n">c53_padstack</span><span class="o">.</span><span class="n">set_pad_geometry</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">PadType</span><span class="o">.</span><span class="n">REGULAR</span><span class="p">,</span> <span class="p">[</span><span class="n">pad_geometry</span><span class="p">],</span> <span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="n">layer</span><span class="p">])</span>
+
+<span class="c1"># Create transformations for padstacks and transform them</span>
+<span class="n">transformation_gnd</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">13</span><span class="p">)</span>
+<span class="n">gnd_padstack</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transformation_gnd</span><span class="p">)</span>
+
+<span class="n">transformation_c53</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">13</span><span class="p">)</span>
+<span class="n">c53_padstack</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">transformation_c53</span><span class="p">)</span>
+
+
+<span class="c1"># Define component pins</span>
+<span class="n">component</span><span class="o">.</span><span class="n">create_pin</span><span class="p">(</span><span class="s2">&quot;C79-1&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">14</span><span class="p">))</span>
+<span class="n">component</span><span class="o">.</span><span class="n">create_pin</span><span class="p">(</span><span class="s2">&quot;C79-2&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">14</span><span class="p">))</span>
+
+<span class="c1"># Transform the component</span>
+<span class="n">translate</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">translation</span><span class="p">(</span><span class="mi">2253</span><span class="p">,</span> <span class="mi">2745</span><span class="p">)</span>
+<span class="n">rotate</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">rotation</span><span class="p">(</span><span class="n">angle_deg</span><span class="o">=</span><span class="mi">90</span><span class="p">)</span>
+<span class="n">reflect</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">reflection</span><span class="p">(</span><span class="n">flip_x</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">component</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">translate</span> <span class="o">@</span> <span class="n">rotate</span> <span class="o">@</span> <span class="n">reflect</span><span class="p">,</span> <span class="n">reset_mount_layer</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Import to a PCB-Studio</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>This Process is similar to the process of creating a component on the top layer.
+The difference lies in the transformations at the end.
+Due to the position we want to create the component in, we need to create a translation and a rotation.
+We also create a reflection to flip the component along the horizontal axis.
+Using <code class="docutils literal notranslate"><span class="pre">component.transform()</span></code> we can use the created translation, rotation and reflection.
+The different transformations are concatenated using the “&#64;” symbol.
+We also set the “reset_mount_layer” parameter to True.
+This puts the component on the bottom layer of the PCB as we flipped the component.</p>
+<p>The image below shows the bottom “SIGNAL_2” layer with the bottom components.
+Here we can see the component “C79” with its padstacks and pins.</p>
+<p><img alt="eda_components_and_padstacks_new_flipped_comp.png" src="images/eda_components_and_padstacks_new_flipped_comp.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Components and Padstacks</a><ul>
+<li><a class="reference internal" href="#creating-a-component-on-the-top-layer">Creating a Component on the Top Layer</a></li>
+<li><a class="reference internal" href="#creating-a-component-on-the-bottom-layer">Creating a Component on the Bottom Layer</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__user_layer_extrusion.html" title="User Layer extrusion"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_modify_net_geometries__working_with_shapes.html" title="Working with Shapes"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Components and Padstacks</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

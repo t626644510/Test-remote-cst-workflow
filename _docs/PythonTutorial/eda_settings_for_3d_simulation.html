@@ -1,0 +1,353 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Settings for 3D simulation &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="3D Simulation: Ports &amp; Lumped Elements" href="eda_3d_simulation__ports_and_lumped_elements.html" />
+    <link rel="prev" title="EDA import settings" href="eda_import_settings.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_3d_simulation__ports_and_lumped_elements.html" title="3D Simulation: Ports &amp; Lumped Elements"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_import_settings.html" title="EDA import settings"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Settings for 3D simulation</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="settings-for-3d-simulation">
+<h1>Settings for 3D simulation<a class="headerlink" href="#settings-for-3d-simulation" title="Permalink to this heading">¶</a></h1>
+<!-- Todo fix link to PCB.simulation_settings -->
+<p>When creating a 3D model for a PCB or package,
+<a href="../Python/source/cst.eda.html#cst_eda_interface.pcb_api.PCB.simulation_settings">PCB.simulation_settings</a>
+control the 3D model generation, and allow adding excitations and monitors.</p>
+<p>Using the methods and properties of the “SimulationSettings” class, it is possible to modify the settings.
+The details on what properties can be modified can be found in the section of the
+<a href="../Python/source/cst.eda.html#cst_eda_interface.pcb_api.SimulationSettings">SimulationSettings</a>
+in the Online Help.</p>
+<section id="generate-code-from-import-dialog">
+<h2>Generate code from Import dialog<a class="headerlink" href="#generate-code-from-import-dialog" title="Permalink to this heading">¶</a></h2>
+<p>It is possible to use the “CST EDA Import” dialog, to create the settings needed and retrieve them as Python code.</p>
+<p>The import dialog is opened when importing a PCB to 3D,
+and can be reopened afterward via the context menu of the navigation tree.
+More information about the import dialogue can be found
+<a href="../mergedProjects/3D/common_tools/common_tools_pcb_import_dialog.htm">here</a>.</p>
+<p>The 3D simulation settings can be edited in the import dialog.
+The <a class="reference internal" href="#examples"><span class="xref myst">following section</span></a> will show some examples.
+Once your settings are done, select “Simulation &gt; Create ‘user_script’…” as shown below.</p>
+<p><img alt="pcb_export_to_cst_mws_2.png" src="images/pcb_export_to_cst_mws_2.png" /></p>
+<p>Now choose a location and name for the script.
+The script will be opened afterwards.
+To use the settings you created, copy the generated code to your script and adjust it as needed.</p>
+<blockquote>
+<div><p>If no location is set, the generated files are located in a temporary folder.
+You should save them in a secure place or copy the generated code to another file.</p>
+</div></blockquote>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h2>
+<p>In the following, we show a few examples of what is possible with the procedure shown above.</p>
+<p>Before applying any of the changes, we need to create an instance of a PCB.
+This is done as usual by calling <code class="docutils literal notranslate"><span class="pre">pcb_api.PCB.convert_from()</span></code> and passing the path to our ECAD design file.
+After this, we can insert the code for handling settings for our 3D simulation.</p>
+<p>Preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<section id="area-selection">
+<h3>Area Selection<a class="headerlink" href="#area-selection" title="Permalink to this heading">¶</a></h3>
+<p>We can limit the area of the PCB that is imported to the 3D project.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># SimulationSettings.selection_areas</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">delete_all_selection_areas</span><span class="p">(</span><span class="n">disable_area_restrictions</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">sel_area</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">select_polygonal_area</span><span class="p">(</span>
+    <span class="p">[</span>
+        <span class="p">(</span><span class="o">-</span><span class="mi">300</span><span class="p">,</span> <span class="mi">2160</span><span class="p">),</span>
+        <span class="p">(</span><span class="o">-</span><span class="mi">300</span><span class="p">,</span> <span class="mi">1100</span><span class="p">),</span>
+        <span class="p">(</span><span class="mi">1440</span><span class="p">,</span> <span class="mi">1100</span><span class="p">),</span>
+        <span class="p">(</span><span class="mi">1440</span><span class="p">,</span> <span class="mi">2160</span><span class="p">),</span>
+    <span class="p">],</span>
+    <span class="n">enable_area_restrictions</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">unit</span><span class="o">=</span><span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mil</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">sel_area</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;BOTTOM_SOLDER&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GND_1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GND_2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GND_2_1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GND_3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PWR_PLANE1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PWR_PLANE2_N_CTRL&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SIGNAL_2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SIGNAL_HS_1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SIGNAL_HS_2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-4&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-5&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-6&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-7&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-8&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SUBSTRATE-9&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TOP_SOLDER&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">restrict_to_selected_area</span> <span class="o">=</span> <span class="kc">True</span>
+
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="c1"># import the pcb to the project, using the default ldb_name=&#39;pcb.ldb&#39;</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As seen in the code above we can select an area
+by passing <code class="docutils literal notranslate"><span class="pre">pcb.simulation_settings.select_polygonal_area</span></code> a list of coordinates.
+We also set the selected layers of this area.
+In our case, these are all layers of the PCB.
+Before importing the PCB to a 3D project,
+we need to enable <code class="docutils literal notranslate"><span class="pre">pcb.simulation_settings.restrict_to_selected_area</span></code> by setting it to True.
+Now we can import the PCB to a project as usual.</p>
+<p>In the image below, we can see the selected area of the PCB imported to a 3D project.</p>
+<p><img alt="pcb_export_area_selection.png" src="images/pcb_export_area_selection.png" /></p>
+</section>
+</section>
+</section>
+<section id="updating-the-pcb-import">
+<h1>Updating the PCB Import<a class="headerlink" href="#updating-the-pcb-import" title="Permalink to this heading">¶</a></h1>
+<p>For the existing project, changing the import settings and updating the project is fairly easy.</p>
+<p>Here we unmount all components, meaning that no lumped-element models will appear anymore:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="n">pcb</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+    <span class="n">comp</span><span class="o">.</span><span class="n">is_mounted</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="n">pcb</span><span class="o">.</span><span class="n">update_in</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>  <span class="c1"># using the default ldb_name=&#39;pcb.ldb&#39;.</span>
+</pre></div>
+</div>
+<p>Please observe that the lumped-element models are gone.</p>
+<p>What is happening under the hood is the following:</p>
+<ul class="simple">
+<li><p>the PCB is saved in <code class="docutils literal notranslate"><span class="pre">&lt;project</span> <span class="pre">folder&gt;/Model/3D/&lt;ldb_name&gt;</span></code></p></li>
+<li><p>the EDA import dialog is called (default: non-GUI), re-running the 3D creation</p></li>
+<li><p>the project history is updated, i.e. re-run</p></li>
+</ul>
+<p>Bringing the lumped elements back is of course as easy:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">comp</span> <span class="ow">in</span> <span class="n">pcb</span><span class="o">.</span><span class="n">components</span><span class="p">:</span>
+    <span class="n">comp</span><span class="o">.</span><span class="n">is_mounted</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="n">pcb</span><span class="o">.</span><span class="n">update_in</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>  <span class="c1"># using the default ldb_name=&#39;pcb.ldb&#39;.</span>
+</pre></div>
+</div>
+<p>The above call needs to be modified by adding <code class="docutils literal notranslate"><span class="pre">ldb_name='mypcbname.ldb</span></code> if the ldb file in the <code class="docutils literal notranslate"><span class="pre">&lt;project</span> <span class="pre">folder&gt;/Model/3D</span></code> has a different name.
+Of course, more than one PCB import into one 3D project can be handled.</p>
+<section id="net-selection">
+<h2>Net Selection<a class="headerlink" href="#net-selection" title="Permalink to this heading">¶</a></h2>
+<p>Limiting the nets of the PCB is also fairly easy to implement.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Net selection</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">restrict_to_selected_nets</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">selected_nets</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;1V2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1V2_&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1V5&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1V5_&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;1V5_F&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_AF&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_P&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_PF1&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_PF2&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_PF3&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_P_&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;3V3_VRF&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="c1"># import the pcb to the project</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As seen above, we also need to set the <code class="docutils literal notranslate"><span class="pre">simulation_settings.restrict_to_selected_nets</span></code> property of our pcb to True.
+Then we can specify the nets we want to use
+by setting the property <code class="docutils literal notranslate"><span class="pre">simulation_settings.selected_nets</span></code> to a list of strings corresponding to the nets.</p>
+<p>The resulting PCB can be seen in the image below.</p>
+<p><img alt="pcb_export_net_selection.png" src="images/pcb_export_net_selection.png" /></p>
+</section>
+<section id="port-definition">
+<h2>Port definition<a class="headerlink" href="#port-definition" title="Permalink to this heading">¶</a></h2>
+<p>Discrete ports can be defined by referencing component pins.
+The following code shows multiple examples of discrete ports.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># SimulationSettings.discrete_ports</span>
+
+<span class="c1"># Create differential port between two pins</span>
+<span class="n">pin</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;C2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+<span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pin</span><span class="p">)</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">impedance</span> <span class="o">=</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">Ohm</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="s2">&quot;C2_1_2&quot;</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_pins</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;2&quot;</span><span class="p">]</span>
+
+<span class="c1"># Create PEC-sheet ports at two pins with ground reference</span>
+<span class="n">pin</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;U8&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;C3&quot;</span><span class="p">)</span>
+<span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pin</span><span class="p">)</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_nets</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;GND&quot;</span><span class="p">]</span>
+
+<span class="n">pin</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;U8&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;D3&quot;</span><span class="p">)</span>
+<span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pin</span><span class="p">)</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_nets</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;GND&quot;</span><span class="p">]</span>
+
+<span class="c1"># Create single-ended ports at two pins to ground plane</span>
+<span class="n">pin</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;C6&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+<span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pin</span><span class="p">)</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_nets</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;GND&quot;</span><span class="p">]</span>
+
+<span class="n">pin</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;C6&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;2&quot;</span><span class="p">)</span>
+<span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pin</span><span class="p">)</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_nets</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;GND&quot;</span><span class="p">]</span>
+<span class="c1">#</span>
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="c1"># import the pcb to the project</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The first port is defined using the two pins of a component.
+Here “C2” and its pins “1” and “2” are used.</p>
+<p>The result for this port is seen below.
+The port is created, where the component “C2” would have been.</p>
+<p><img alt="pcb_export_port_definition_1.png" src="images/pcb_export_port_definition_1.png" /></p>
+<p>The second and third ports are defined using a pin of a component and a reference net.
+The second port is between the pin “C3” of the “U8” component and the “GND” net.
+The third port is between the pin “D3” of the “U8” component and the “GND” net.</p>
+<p>The resulting ports are shown below. The PEC sheet is shown in a transparent grey color.</p>
+<p><img alt="pcb_export_port_definition_2_3.png" src="images/pcb_export_port_definition_2_3.png" /></p>
+<p>The last two ports are defined between the pins of the component “C6” and the “GND” net.
+The “GND” reference is located on the ground plane layer below.
+This can be seen in the image below.</p>
+<p><img alt="pcb_export_port_definition_4_5.png" src="images/pcb_export_port_definition_4_5.png" /></p>
+</section>
+<section id="special-settings">
+<h2>Special Settings<a class="headerlink" href="#special-settings" title="Permalink to this heading">¶</a></h2>
+<p>By default, the components on the PCB are elevated by 0.2mm.
+The following code changes this setting.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Special Settings: Port elevation</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">port_elevation_absolute</span> <span class="o">=</span> <span class="mi">5</span> <span class="o">*</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mm</span>
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="c1"># import the pcb to the project</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>To change the elevation of our components on the PCB,
+we need to change the <code class="docutils literal notranslate"><span class="pre">simulation_settings.port_elevation_absolute</span></code> property of the PCB.
+In the code above, we set it to 5mm.
+It is recommended to specify the unit as well as the PCBs length_unit is used as default unit.</p>
+<p>The elevated components are shown in the image below.</p>
+<p><img alt="pcb_export_port_elevation.png" src="images/pcb_export_port_elevation.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Settings for 3D simulation</a><ul>
+<li><a class="reference internal" href="#generate-code-from-import-dialog">Generate code from Import dialog</a></li>
+<li><a class="reference internal" href="#examples">Examples</a><ul>
+<li><a class="reference internal" href="#area-selection">Area Selection</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#updating-the-pcb-import">Updating the PCB Import</a><ul>
+<li><a class="reference internal" href="#net-selection">Net Selection</a></li>
+<li><a class="reference internal" href="#port-definition">Port definition</a></li>
+<li><a class="reference internal" href="#special-settings">Special Settings</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_3d_simulation__ports_and_lumped_elements.html" title="3D Simulation: Ports &amp; Lumped Elements"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_import_settings.html" title="EDA import settings"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Settings for 3D simulation</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

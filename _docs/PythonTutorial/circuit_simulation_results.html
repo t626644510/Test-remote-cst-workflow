@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Simulation Task Results &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Getting Started" href="eda_getting_started.html" />
+    <link rel="prev" title="Task Definition" href="circuit_simulation_task_definition.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_getting_started.html" title="Getting Started"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_task_definition.html" title="Task Definition"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Simulation Task Results</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="simulation-task-results">
+<h1>Simulation Task Results<a class="headerlink" href="#simulation-task-results" title="Permalink to this heading">¶</a></h1>
+<p>As mentioned in the <a href="3d_simulation_results.html">Results Guide</a> of the 3D simulations,
+there are two ways to read the results.
+One is to extract the results from a running instance of CST Studio Suite.
+The other is to retrieve the results from the project files.</p>
+<p>Please open the lumped-filter project from the previous section, and run these preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.results</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">active_project</span><span class="p">()</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Accessing results from project &quot;</span><span class="p">,</span> <span class="n">prj</span><span class="p">)</span>
+<span class="k">assert</span> <span class="s1">&#39;lumped_filter_parameter_sweep&#39;</span> <span class="ow">in</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">()</span>
+
+</pre></div>
+</div>
+<p>Some functions from previous sessions will be used here, so please run</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">result1d_to_numpy</span><span class="p">(</span><span class="n">res</span><span class="p">:</span> <span class="s2">&quot;interface.Project.Result1D&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    converts Result1D object to numpy arrays of x(float) and of y(complex) values</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">))</span>
+
+    <span class="n">y_complex</span> <span class="o">=</span> <span class="p">[</span><span class="nb">complex</span><span class="p">(</span><span class="n">yre</span><span class="p">,</span> <span class="n">yim</span><span class="p">)</span> <span class="k">for</span> <span class="n">yre</span><span class="p">,</span> <span class="n">yim</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;yre&quot;</span><span class="p">),</span> <span class="n">res</span><span class="o">.</span><span class="n">GetArray</span><span class="p">(</span><span class="s2">&quot;yim&quot;</span><span class="p">))]</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">y_complex</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_complex_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    returns the x and y values where y reaches its maximum value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">r_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="n">r_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r_index</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_complex_min</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">complex</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    returns the x and y values where y reaches its minimum value</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">r_index</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">[</span><span class="n">r_index</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">r_index</span><span class="p">]</span>
+
+</pre></div>
+</div>
+<section id="reading-results-from-a-running-cst-studio-suite-instance">
+<h2>Reading Results from a running CST Studio Suite instance<a class="headerlink" href="#reading-results-from-a-running-cst-studio-suite-instance" title="Permalink to this heading">¶</a></h2>
+<p>To read the results from our project, we need the resultIDs.
+For this, we created the function <code class="docutils literal notranslate"><span class="pre">get_result_id_names</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_result_id_names</span><span class="p">(</span><span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="n">task_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Tuple</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Gets all resultID names of the given task&quot;&quot;&quot;</span>
+    <span class="n">child_names_ids</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">res_tree</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">ResultTree</span>
+    <span class="n">child</span> <span class="o">=</span> <span class="n">res_tree</span><span class="o">.</span><span class="n">GetFirstChildName</span><span class="p">(</span><span class="sa">rf</span><span class="s2">&quot;Tasks\</span><span class="si">{</span><span class="n">task_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">child</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+        <span class="n">child_names_ids</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">child</span><span class="p">,</span> <span class="n">res_tree</span><span class="o">.</span><span class="n">GetResultIDsFromTreeItem</span><span class="p">(</span><span class="n">child</span><span class="p">)))</span>
+        <span class="n">child</span> <span class="o">=</span> <span class="n">res_tree</span><span class="o">.</span><span class="n">GetNextItemName</span><span class="p">(</span><span class="n">child</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">child_names_ids</span>
+</pre></div>
+</div>
+<p>The function yields tuples of a tree_item and result_names of the tree_item.
+It only checks inside the given “task_path”.
+This is done, using the <code class="docutils literal notranslate"><span class="pre">GetFirstChildName</span></code> and <code class="docutils literal notranslate"><span class="pre">GetNextItemName</span></code> methods of the <code class="docutils literal notranslate"><span class="pre">schematic.ResultTree</span></code> Object.
+The <code class="docutils literal notranslate"><span class="pre">GetFirstChildName</span></code> method, returns the first child tree item of the given navigation tree path.
+<code class="docutils literal notranslate"><span class="pre">GetNectItemName</span></code> then returns the next tree item in the same level as the given tree item.</p>
+<p>When calling the function for the tasks in the navigation tree shown below,
+the “task_path” should be “Sweep1\SPara1\S-Parameters”.
+In this case, we want to look at the S-Parameters.</p>
+<p><img alt="nav_tree_task_path_s_para.png" src="images/nav_tree_task_path_s_para.png" /></p>
+<p>The “result_names” returned from the <code class="docutils literal notranslate"><span class="pre">get_result_id_names</span></code> may include multiple names.
+This occurs if the chosen task has multiple results.
+For example, the parameter sweep has a result for each parameter combination.</p>
+<p>The following code iterates through each result and gets the minimum and maximum values of the results.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_parameter_combination</span><span class="p">(</span><span class="n">prj</span><span class="p">:</span> <span class="s2">&quot;cst.interface.Project&quot;</span><span class="p">,</span> <span class="n">result_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the parameter combination associated with the result with the given result_id&quot;&quot;&quot;</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+    <span class="n">run_id_pattern</span> <span class="o">=</span> <span class="sa">r</span><span class="s2">&quot;.*:.*:(\d+)&quot;</span>
+    <span class="n">id_string</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">run_id_pattern</span><span class="p">,</span> <span class="n">result_id</span><span class="p">)</span>
+    <span class="n">run_id_int</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">id_string</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="n">project_name</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">()</span>
+    <span class="n">result_project</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">ProjectFile</span><span class="p">(</span><span class="n">project_name</span><span class="p">,</span> <span class="n">allow_interactive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">res_mod</span> <span class="o">=</span> <span class="n">result_project</span><span class="o">.</span><span class="n">get_schematic</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">res_mod</span><span class="o">.</span><span class="n">get_parameter_combination</span><span class="p">(</span><span class="n">run_id_int</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1">#</span>
+<span class="k">for</span> <span class="n">tree_item</span><span class="p">,</span> <span class="n">result_names</span> <span class="ow">in</span> <span class="n">get_result_id_names</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="sa">r</span><span class="s2">&quot;Sweep1\SPara1\S-Parameters&quot;</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">result_name</span> <span class="ow">in</span> <span class="n">result_names</span><span class="p">:</span>
+        <span class="c1"># get the parameter combination for this result</span>
+        <span class="n">parameter_combi</span> <span class="o">=</span> <span class="n">get_parameter_combination</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">result_name</span><span class="p">)</span>
+
+        <span class="c1"># get result object</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">ResultTree</span><span class="o">.</span><span class="n">GetResultFromTreeItem</span><span class="p">(</span><span class="n">tree_item</span><span class="p">,</span> <span class="n">result_name</span><span class="p">)</span>
+
+        <span class="c1"># Work with the results</span>
+        <span class="n">np_results</span> <span class="o">=</span> <span class="n">result1d_to_numpy</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+        <span class="n">max_val</span> <span class="o">=</span> <span class="n">get_complex_max</span><span class="p">(</span><span class="n">np_results</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np_results</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">min_val</span> <span class="o">=</span> <span class="n">get_complex_min</span><span class="p">(</span><span class="n">np_results</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">np_results</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">tree_item</span><span class="p">,</span> <span class="n">result_name</span><span class="p">,</span> <span class="s2">&quot;Max: &quot;</span><span class="p">,</span> <span class="n">max_val</span><span class="p">,</span> <span class="s2">&quot;Min: &quot;</span><span class="p">,</span> <span class="n">min_val</span><span class="p">,</span> <span class="s2">&quot;Parameters&quot;</span><span class="p">,</span> <span class="n">parameter_combi</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>Here we use helper functions that were created in the
+<a href="3d_simulation_results.html">Results Guide</a> of the 3D simulations.</p>
+<p>These functions create numpy arrays from our results (<code class="docutils literal notranslate"><span class="pre">result1d_to_numpy</span></code>)
+and return the min/max value of a given result array(<code class="docutils literal notranslate"><span class="pre">get_complex_max</span></code>/<code class="docutils literal notranslate"><span class="pre">get_complex_min</span></code>).</p>
+<p>Using <code class="docutils literal notranslate"><span class="pre">get_parameter_combination</span></code> we retrieve the parameter combination for this result.</p>
+<p>This is done by getting the “run_id” of the result and then passing it to <code class="docutils literal notranslate"><span class="pre">GetParameterCombination</span></code>.
+The parameter combination includes all parameters, and not just the parameters that are changed during the parameter sweep.</p>
+</section>
+<section id="reading-results-from-files">
+<h2>Reading Results from files<a class="headerlink" href="#reading-results-from-files" title="Permalink to this heading">¶</a></h2>
+<p>To read the results without a running instance of CST Studio Suite we use the “cst.results” package.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1"># define the project if it&#39;s opened in an Instance of CST Studio Suite</span>
+<span class="n">res_acc</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">ProjectFile</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">(),</span> <span class="n">allow_interactive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># get ResultModule from the project</span>
+<span class="n">res_schem</span> <span class="o">=</span> <span class="n">res_acc</span><span class="o">.</span><span class="n">get_schematic</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">tree_item</span> <span class="ow">in</span> <span class="n">res_schem</span><span class="o">.</span><span class="n">get_tree_items</span><span class="p">():</span>
+    <span class="c1"># only check S-Parameters</span>
+    <span class="k">if</span> <span class="s2">&quot;S-Parameters&quot;</span> <span class="ow">in</span> <span class="n">tree_item</span><span class="p">:</span>
+        <span class="n">run_ids</span> <span class="o">=</span> <span class="n">res_schem</span><span class="o">.</span><span class="n">get_run_ids</span><span class="p">(</span><span class="n">tree_item</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">run_id</span> <span class="ow">in</span> <span class="n">run_ids</span><span class="p">:</span>
+            <span class="n">result_item</span> <span class="o">=</span> <span class="n">res_schem</span><span class="o">.</span><span class="n">get_result_item</span><span class="p">(</span><span class="n">tree_item</span><span class="p">,</span> <span class="n">run_id</span><span class="p">)</span>
+
+            <span class="c1"># Get Result Data as tuple (x, (yre,yim))</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">result_item</span><span class="o">.</span><span class="n">get_data</span><span class="p">()</span>
+
+            <span class="c1"># Get the results in separate lists</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result_item</span><span class="o">.</span><span class="n">get_xdata</span><span class="p">())</span>
+            <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result_item</span><span class="o">.</span><span class="n">get_ydata</span><span class="p">())</span>
+
+            <span class="n">parameter_combi</span> <span class="o">=</span> <span class="n">res_schem</span><span class="o">.</span><span class="n">get_parameter_combination</span><span class="p">(</span><span class="n">run_id</span><span class="p">)</span>
+
+            <span class="c1"># Work with the results</span>
+            <span class="n">max_val</span> <span class="o">=</span> <span class="n">get_complex_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+            <span class="n">min_val</span> <span class="o">=</span> <span class="n">get_complex_min</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+
+            <span class="nb">print</span><span class="p">(</span>
+                <span class="n">tree_item</span><span class="p">,</span>
+                <span class="s2">&quot;; Run_ID: &quot;</span><span class="p">,</span>
+                <span class="n">run_id</span><span class="p">,</span>
+                <span class="s2">&quot;Max: &quot;</span><span class="p">,</span>
+                <span class="n">max_val</span><span class="p">,</span>
+                <span class="s2">&quot;Min: &quot;</span><span class="p">,</span>
+                <span class="n">min_val</span><span class="p">,</span>
+                <span class="s2">&quot;Parameters&quot;</span><span class="p">,</span>
+                <span class="n">parameter_combi</span><span class="p">,</span>
+            <span class="p">)</span>
+
+</pre></div>
+</div>
+<p>This is done by defining the path to the project file that we want to read results from.
+With the path we can create an instance of <code class="docutils literal notranslate"><span class="pre">cst.results.ProjectFile</span></code>.
+Using this instance, we can create an instance of <code class="docutils literal notranslate"><span class="pre">cst.results.ResultModule</span></code> of our project.
+The <code class="docutils literal notranslate"><span class="pre">ResultModule</span></code> allows us to use methods like <code class="docutils literal notranslate"><span class="pre">get_tree_items()</span></code>
+to retrieve the items in the Task branch of the navigation Tree.
+Another method we can use is <code class="docutils literal notranslate"><span class="pre">get_run_ids</span></code> to get the different “run_ids”
+of the specific tree item we pass to the method.
+Using a specific “run_id” we can retrieve the result item (<code class="docutils literal notranslate"><span class="pre">get_result_item</span></code>) and its parameter combination
+(<code class="docutils literal notranslate"><span class="pre">get_parameter_combination</span></code>).
+The result item lets us retrieve the values of the result.
+For this we can use <code class="docutils literal notranslate"><span class="pre">get_data</span></code> to get the results as a list of tuples in the shape (x, (yre,yim)).
+We can also use <code class="docutils literal notranslate"><span class="pre">get_xdata</span></code> and <code class="docutils literal notranslate"><span class="pre">get_ydata</span></code> to get the values in separate lists.</p>
+<p>Now as mentioned before, we can use the functions created in the
+<a href="3d_simulation_results.html">Results Guide</a> of the 3D simulations to work with these results.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Simulation Task Results</a><ul>
+<li><a class="reference internal" href="#reading-results-from-a-running-cst-studio-suite-instance">Reading Results from a running CST Studio Suite instance</a></li>
+<li><a class="reference internal" href="#reading-results-from-files">Reading Results from files</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_getting_started.html" title="Getting Started"
+             >next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_task_definition.html" title="Task Definition"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Simulation Task Results</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

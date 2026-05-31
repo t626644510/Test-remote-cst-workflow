@@ -1,0 +1,147 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>User Layer extrusion &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Components and Padstacks" href="eda_modify_net_geometries__components_and_padstacks.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__components_and_padstacks.html" title="Components and Padstacks"
+             accesskey="P">previous</a></li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">User Layer extrusion</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="user-layer-extrusion">
+<h1>User Layer extrusion<a class="headerlink" href="#user-layer-extrusion" title="Permalink to this heading">¶</a></h1>
+<p>To show how to create user layers and work with them, we will be creating solder balls for one component on our PCB.
+User layers can store shape and trace geometries.
+They are not part of any stackup, but can be extruded with <code class="docutils literal notranslate"><span class="pre">Layer.extrude()</span></code>.</p>
+<p>First, we copy the preparations from last chapter:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">geometry2d</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">init_example_pcb</span><span class="p">():</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+    <span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+    <span class="c1"># path to the ECAD file</span>
+    <span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s2">&quot;cst_phone.tgz&quot;</span>
+
+    <span class="c1"># Create an instance of a PCB</span>
+    <span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pcb</span>
+</pre></div>
+</div>
+<p>The code below shows the process of creating the solder balls for the component “U1” on our example PCB.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Initialize the example pcb</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">init_example_pcb</span><span class="p">()</span>
+
+<span class="c1"># Define preliminaries</span>
+<span class="n">component</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="s2">&quot;U1&quot;</span><span class="p">)</span>
+<span class="n">material</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">material</span><span class="p">(</span><span class="s2">&quot;Copper&quot;</span><span class="p">)</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;NONE&quot;</span><span class="p">)</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Create user layer</span>
+<span class="n">user_layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">create_user_layer</span><span class="p">(</span><span class="s2">&quot;solderballs&quot;</span><span class="p">,</span> <span class="n">material</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After initializing the PCB, we get the component “U1”.
+We also define a material, a net and a layer that will be used to create the solder balls later on.</p>
+<p>We create a new user layer, by using <code class="docutils literal notranslate"><span class="pre">pcb.create_user_layer()</span></code>.
+We call it “solderballs” and assign the created material to it.</p>
+<p>Using the created function <code class="docutils literal notranslate"><span class="pre">get_padstack_shapes_of_component</span></code>, we retrieve the padstacks’ shapes of “U1”.
+The function is shown below.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_padstack_shapes_of_component</span><span class="p">(</span><span class="n">comp</span><span class="p">:</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">Component</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Returns the shapes of all padstacks of the passed component&quot;&quot;&quot;</span>
+    <span class="n">shapes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">padstacks</span> <span class="o">=</span> <span class="n">comp</span><span class="o">.</span><span class="n">padstacks</span>
+    <span class="k">for</span> <span class="n">padstack</span> <span class="ow">in</span> <span class="n">padstacks</span><span class="p">:</span>
+        <span class="n">ps_layer</span> <span class="o">=</span> <span class="n">padstack</span><span class="o">.</span><span class="n">get_pad_layers</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">PadType</span><span class="o">.</span><span class="n">REGULAR</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ps_layer</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">shape</span> <span class="ow">in</span> <span class="n">padstack</span><span class="o">.</span><span class="n">get_pad_geometry</span><span class="p">(</span><span class="n">ps_layer</span><span class="p">[</span><span class="mi">0</span><span class="p">])[</span><span class="mi">1</span><span class="p">]:</span>
+                <span class="n">shapes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">shapes</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Get padstack shapes from the component in layer</span>
+<span class="n">shapes</span> <span class="o">=</span> <span class="n">get_padstack_shapes_of_component</span><span class="p">(</span><span class="n">component</span><span class="p">)</span>
+
+<span class="c1"># Create shapes on the user layer</span>
+<span class="k">for</span> <span class="n">shape</span> <span class="ow">in</span> <span class="n">shapes</span><span class="p">:</span>
+    <span class="n">user_layer</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># Extrude the layer</span>
+<span class="n">user_layer</span><span class="o">.</span><span class="n">extrude</span><span class="p">(</span><span class="n">layer1</span><span class="o">=</span><span class="n">layer</span><span class="p">,</span> <span class="n">relative1</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">relative2</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">offset2</span><span class="o">=</span><span class="mf">1.2</span><span class="p">)</span>
+
+<span class="c1"># Import PCB to MWS</span>
+<span class="n">prj_3d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj_3d</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We iterate through the returned shapes and add these to our new user layer with <code class="docutils literal notranslate"><span class="pre">user_layer.create_shape</span></code>.</p>
+<p>When all shapes are added, we can extrude the user layer.
+Here we give the function four parameters to define the height of the extrusion.
+The documentation of the
+<a href="../Python/source/cst.eda.html#cst_eda_interface.pcb_api.Layer.extrude">extrude</a>
+function shows some examples on how to use these parameters.</p>
+<p>Finally, we import the pcb to a MWS project.
+The image below shows the resulting solder balls in magenta.</p>
+<p><img alt="eda_user_layer_extrusion_solder_balls.png" src="images/eda_user_layer_extrusion_solder_balls.png" /></p>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__components_and_padstacks.html" title="Components and Padstacks"
+             >previous</a></li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">User Layer extrusion</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

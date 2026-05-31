@@ -1,0 +1,283 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Modify PCB Stackup &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Components and Parts in PCB Studio" href="eda_pcb_studio_components_and_parts.html" />
+    <link rel="prev" title="Modify PCB nets" href="eda_modify_pcb_net.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_pcb_studio_components_and_parts.html" title="Components and Parts in PCB Studio"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_modify_pcb_net.html" title="Modify PCB nets"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Modify PCB Stackup</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="modify-pcb-stackup">
+<h1>Modify PCB Stackup<a class="headerlink" href="#modify-pcb-stackup" title="Permalink to this heading">¶</a></h1>
+<p>A lot of different modifications can be done to the PCB.
+In addition to
+<a href="eda_modify_pcb_net.html">modifying the nets</a>
+we can also make changes to the layers of our PCB.</p>
+<section id="changing-layer-thickness">
+<h2>Changing layer thickness<a class="headerlink" href="#changing-layer-thickness" title="Permalink to this heading">¶</a></h2>
+<p>Preparations are again in order:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<section id="project-length-unit-vs-pcb-length-unit">
+<h3>Project length-unit vs. PCB length-unit<a class="headerlink" href="#project-length-unit-vs-pcb-length-unit" title="Permalink to this heading">¶</a></h3>
+<p>As the PCB-instance is independent of the project-instance,
+the “cst.eda.pcb_api.PCB.length_unit” is not necessarily equal to the length-unit of the project.</p>
+<p>Using <code class="docutils literal notranslate"><span class="pre">length_unit</span></code> on a PCB instance, returns its set unit for lengths as a “pcb.LengthUnit” object.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># get a layer from the PCB</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;GND_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Set layer thickness to 10 um</span>
+<span class="n">layer</span><span class="o">.</span><span class="n">thickness</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">*</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">um</span>
+
+<span class="c1"># Print layer thickness</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">thickness</span> <span class="o">*</span> <span class="n">pcb</span><span class="o">.</span><span class="n">length_unit</span><span class="o">.</span><span class="n">unit</span><span class="p">)</span>
+
+<span class="c1"># Convert the PCB to use micrometers</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">set_length_unit</span><span class="p">(</span><span class="n">pcb_api</span><span class="o">.</span><span class="n">LengthUnit</span><span class="o">.</span><span class="n">micrometer</span><span class="p">)</span>
+
+<span class="c1"># Print layer thickness</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">thickness</span> <span class="o">*</span> <span class="n">pcb</span><span class="o">.</span><span class="n">length_unit</span><span class="o">.</span><span class="n">unit</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>In the code above, we set the thickness of the “GND_1” layer to 10 micrometer.
+Then we print the thickness value with the length unit of the PCB.
+Here we use <code class="docutils literal notranslate"><span class="pre">pcb.length_unit.unit</span></code> to get the current length_unit from the PCB and then convert it to a “Unit.unit”.
+After this we change the length unit of the PCB to <code class="docutils literal notranslate"><span class="pre">pcb_api.LengthUnit.micrometer</span></code> and call the same print command.
+This will produce the following output:</p>
+<div class="highlight-commandline notranslate"><div class="highlight"><pre><span></span>0.39370078740157477 mil
+10 um
+</pre></div>
+</div>
+<p>The value is set to the intended value but also converted to the PCB’s length-unit.
+This allows us to set the thickness of layers depending on our data we have,
+the pcb_api will take care of unit conversions.</p>
+</section>
+<section id="modify-thickness">
+<h3>Modify thickness<a class="headerlink" href="#modify-thickness" title="Permalink to this heading">¶</a></h3>
+<p>Now that we know the relation between the project units and the PCB units, we can continue on to the next example.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Import to a pcbs project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="c1"># Get layer Data from files</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s2">&quot;pcb_layer_thickness.json&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">json_file</span><span class="p">:</span>
+    <span class="n">layers_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">json_file</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s2">&quot;pcb_layer_thickness_substrates.json&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">json_file</span><span class="p">:</span>
+    <span class="n">substrate_layers_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">json_file</span><span class="p">)</span>
+
+<span class="c1"># Combine all layer_dicts</span>
+<span class="n">all_layers_dict</span> <span class="o">=</span> <span class="n">layers_dict</span> <span class="o">|</span> <span class="n">substrate_layers_dict</span>
+
+<span class="c1"># Strings for deserialisation of Units</span>
+<span class="n">unit_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mm&quot;</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mm</span><span class="p">,</span> <span class="s2">&quot;mil&quot;</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mil</span><span class="p">}</span>
+
+<span class="c1"># Iterate through all entries of layers_dict</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">layers_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">unit</span> <span class="o">=</span> <span class="n">unit_dict</span><span class="p">[</span><span class="n">values</span><span class="p">[</span><span class="s2">&quot;Unit&quot;</span><span class="p">]]</span>
+    <span class="n">layer</span><span class="o">.</span><span class="n">thickness</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="s2">&quot;Thickness&quot;</span><span class="p">]</span> <span class="o">*</span> <span class="n">unit</span>
+
+<span class="c1"># Import to a pcbs project</span>
+<span class="n">prj2</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+<span class="n">prj2</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>In the example above, we import stackup information from two JSON files.
+The items of the dictionary use the layer names as key.
+Each item has a unit value and a thickness value.</p>
+<p>The dictionaries are shown below. Note, that the input files use different length-units.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">layers_dict</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s2">&quot;TOP_SOLDER&quot;</span><span class="p">:</span>   <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.118</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SIGNAL_1&quot;</span><span class="p">:</span>     <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.137</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SIGNAL_2&quot;</span><span class="p">:</span>     <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.137</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SIGNAL_HS_1&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SIGNAL_HS_2&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;GND_1&quot;</span><span class="p">:</span>        <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;GND_2&quot;</span><span class="p">:</span>        <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;GND_2_1&quot;</span><span class="p">:</span>      <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;GND_3&quot;</span><span class="p">:</span>        <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;PWR_PLANE1&quot;</span><span class="p">:</span>   <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">1.35</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;PWR_PLANE2_N_CTRL&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">1.35</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;BOTTOM_SOLDER&quot;</span><span class="p">:</span>      <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.118</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mil&quot;</span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">substrate_layers_dict</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s2">&quot;SUBSTRATE-1&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-2&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.125</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-3&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.125</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-4&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-5&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-6&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-7&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.125</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-8&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.125</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">},</span>
+  <span class="s2">&quot;SUBSTRATE-9&quot;</span><span class="p">:</span>  <span class="p">{</span><span class="s2">&quot;Thickness&quot;</span><span class="p">:</span> <span class="mf">0.2</span><span class="p">,</span><span class="s2">&quot;Unit&quot;</span><span class="p">:</span> <span class="s2">&quot;mm&quot;</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We combine these two dictionaries into one, so that we can iterate through all layers.</p>
+<p>To convert the unit from string-type of our dictionary to a cst.units.Unit, we use the created “unit_dict”.
+It holds the unit strings and the corresponding “cst.units.Unit”.</p>
+<p>The code iterates through the items of the file and adjusts the thickness of the PCB layers.
+The layer is retrieved using <code class="docutils literal notranslate"><span class="pre">pcb.layer(name)</span></code>.
+The set thickness depends on the “Thickness” values and on the unit given in the “Unit” value of the items.</p>
+<p>Below we can see the layer stackup of the projects (<em>left</em>: before changes; <em>right</em>: after changes).
+All input values were converted to millimeter, the PCB’s length-unit.</p>
+<p><img alt="pcb_layer_modified_with_file.png" src="images/pcb_layer_modified_with_file.png" /></p>
+</section>
+</section>
+<section id="changing-the-materials">
+<h2>Changing the Materials<a class="headerlink" href="#changing-the-materials" title="Permalink to this heading">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Import to a EMS project to show differences</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_ems</span><span class="p">()</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+
+<span class="c1"># Create a material</span>
+<span class="n">material_fr4_lossy</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">load_material_from_library</span><span class="p">(</span><span class="s2">&quot;FR4 (lossy)&quot;</span><span class="p">,</span> <span class="s2">&quot;FR-4 (lossy)&quot;</span><span class="p">)</span>
+<span class="n">material_fr4_lossy</span><span class="o">.</span><span class="n">unlink_from_library</span><span class="p">()</span>
+
+<span class="c1"># Change property of material</span>
+<span class="n">material_fr4_lossy</span><span class="o">.</span><span class="n">rho</span> <span class="o">=</span> <span class="mf">1.9</span> <span class="o">*</span> <span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">g</span> <span class="o">/</span> <span class="n">cst</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">cm</span><span class="o">**</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="c1"># Show the changed value</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">material_fr4_lossy</span><span class="o">.</span><span class="n">rho</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># Iterate through all layers of the PCB</span>
+<span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">pcb</span><span class="o">.</span><span class="n">stackup</span><span class="o">.</span><span class="n">layers</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">layer</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;FR4&quot;</span><span class="p">:</span>
+        <span class="n">layer</span><span class="o">.</span><span class="n">material</span> <span class="o">=</span> <span class="n">material_fr4_lossy</span>
+
+<span class="c1"># Import to a EMS project</span>
+<span class="n">prj_3d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_ems</span><span class="p">()</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj_3d</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>In the code above we create an instance of pcb_api.PCB as usual.
+To show the differences later on, we import the unmodified PCB into a project.</p>
+<p>After this we create a new material using <code class="docutils literal notranslate"><span class="pre">load_material_from_library</span></code> with the name
+we want the material to have and the library name of this material.</p>
+<p>Before applying this material to some layers we want to change some of its properties.
+For this we first need to call its method <code class="docutils literal notranslate"><span class="pre">unlink_from_library()</span></code>.
+This decouples our instance of the material from the library material, and we can now change its properties.
+Here we can use the cst.units package again, to set the values of our properties.</p>
+<p>As the density of the library material is 0, we want to set this to a value.
+For this we choose 1.9 g/cm³.
+After applying this value, we print the property.
+This results in an output as seen below.</p>
+<div class="highlight-commandline notranslate"><div class="highlight"><pre><span></span>1900.000
+</pre></div>
+</div>
+<p>The value changed as it was converted to SI units (kg/m³) automatically when assigning it to the material.
+Now that the material fits our expectations, we can continue to apply the material to some of our layers.</p>
+<p>Using <code class="docutils literal notranslate"><span class="pre">pcb.stackup.layers</span></code> we can iterate through each layer of our PCB.
+Here we can check for the material name and change it to the newly created material,
+if the current material name is “FR4”.</p>
+<p><img alt="pcb_layers_material_FR4.png" src="images/pcb_layers_material_FR4.png" /></p>
+<p>The image above shows the substrate layers’ material of the PCB without changes,
+and the image below shows the substrate layers’ material of the PCB after the changes.
+The material “FR4” is replaced by the chosen “FR4 (lossy)” material.</p>
+<p><img alt="pcb_layers_material_FR4_lossy.png" src="images/pcb_layers_material_FR4_lossy.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Modify PCB Stackup</a><ul>
+<li><a class="reference internal" href="#changing-layer-thickness">Changing layer thickness</a><ul>
+<li><a class="reference internal" href="#project-length-unit-vs-pcb-length-unit">Project length-unit vs. PCB length-unit</a></li>
+<li><a class="reference internal" href="#modify-thickness">Modify thickness</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#changing-the-materials">Changing the Materials</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_pcb_studio_components_and_parts.html" title="Components and Parts in PCB Studio"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_modify_pcb_net.html" title="Modify PCB nets"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Modify PCB Stackup</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

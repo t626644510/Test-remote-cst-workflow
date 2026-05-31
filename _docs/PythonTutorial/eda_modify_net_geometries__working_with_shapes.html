@@ -1,0 +1,438 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Working with Shapes &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Components and Padstacks" href="eda_modify_net_geometries__components_and_padstacks.html" />
+    <link rel="prev" title="Working with Traces" href="eda_modify_net_geometries__working_with_traces.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__components_and_padstacks.html" title="Components and Padstacks"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_modify_net_geometries__working_with_traces.html" title="Working with Traces"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Working with Shapes</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="working-with-shapes">
+<h1>Working with Shapes<a class="headerlink" href="#working-with-shapes" title="Permalink to this heading">¶</a></h1>
+<p>The physical data model of a PCB describes the stackup, materials and geometries.
+Shapes are defined as geometries (GeoItem) of a PCB.
+<a href="../Python/source/cst.eda.html#physical-data-model">Here</a>
+the Physical data model is described in more detail.</p>
+<p>The shape geometries on the PCB are represented as “ShapeGI”.
+This class is a subclass of the “GeoItem” class.</p>
+<section id="modify-a-shape">
+<h2>Modify a Shape<a class="headerlink" href="#modify-a-shape" title="Permalink to this heading">¶</a></h2>
+<section id="modify-pcb-outline">
+<h3>Modify PCB outline<a class="headerlink" href="#modify-pcb-outline" title="Permalink to this heading">¶</a></h3>
+<p>In this example, we will add a slot hole to the outline of our PCB.</p>
+<p>Preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">geometry2d</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+</pre></div>
+</div>
+<p>Now we start modifying geometries:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Get the current outline of the PCB</span>
+<span class="n">outline</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">get_outline</span><span class="p">()</span>
+
+<span class="c1"># Create an empty SegmentString</span>
+<span class="n">new_hole</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">SegmentString</span><span class="p">()</span>
+
+<span class="c1"># Describe a slot hole by appending lines and arcs</span>
+<span class="n">new_hole</span><span class="o">.</span><span class="n">append_line</span><span class="p">((</span><span class="mi">1700</span><span class="p">,</span> <span class="mi">3550</span><span class="p">),</span> <span class="p">(</span><span class="mi">1950</span><span class="p">,</span> <span class="mi">3550</span><span class="p">))</span>
+<span class="n">new_hole</span><span class="o">.</span><span class="n">append_arc</span><span class="p">((</span><span class="mi">1950</span><span class="p">,</span> <span class="mi">3450</span><span class="p">),</span> <span class="n">radius</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">new_hole</span><span class="o">.</span><span class="n">append_line</span><span class="p">((</span><span class="mi">1700</span><span class="p">,</span> <span class="mi">3450</span><span class="p">))</span>
+<span class="n">new_hole</span><span class="o">.</span><span class="n">append_arc</span><span class="p">((</span><span class="mi">1700</span><span class="p">,</span> <span class="mi">3550</span><span class="p">),</span> <span class="n">radius</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">orientation</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># Insert the created hole into the outline</span>
+<span class="n">outline</span><span class="o">.</span><span class="n">holes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_hole</span><span class="p">)</span>
+
+<span class="c1"># Set the new outline as the outline of the PCB</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">set_outline</span><span class="p">(</span><span class="n">outline</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After creating the instance of the example PCB, we can get the PCBs outline using <code class="docutils literal notranslate"><span class="pre">pcb.get_outline()</span></code>.
+This returns a “geometry2d.Shape” object, which we call “outline”.
+Next, we create the “new_hole”.
+We start it as an empty “geometry2d.SegmentString” and append lines and arcs according to the shape we want to create.
+Once we appended the first segment, we only need to pass the end point of the next segment.
+The end point of the previous segment is used as start point if only one point is passed.
+When appending arcs,
+we choose the orientation “-1” as we want the arc to run clockwise from the first to the second point we passed.
+The overall orientation of the shape is not important to the API.
+This means we could also define the “new_hole” the opposite way, and it would generate the same result.</p>
+<blockquote>
+<div><p>Be sure to use the correct unit when defining the SegmentString.
+By default these values will have the same unit as the PCB.</p>
+</div></blockquote>
+<p>After defining the segment string we can add it as a hole to our shape “outline”.
+Here we simply call <code class="docutils literal notranslate"><span class="pre">outline.holes.append(new_hole)</span></code>.
+Before importing the PCB to a project, we first need to set the altered shape as the outline of the PCB.
+So we call <code class="docutils literal notranslate"><span class="pre">pcb.set_outline(outline)</span></code>.
+Now we can import the PCB.</p>
+<p>The images below show the original outline (left) and the altered outline (right) of the example PCB.</p>
+<p><img alt="pcb_phone_outline_combined.png" src="images/pcb_phone_outline_combined.png" /></p>
+</section>
+<section id="modify-the-shell-of-a-shapegi">
+<h3>Modify the shell of a ShapeGI<a class="headerlink" href="#modify-the-shell-of-a-shapegi" title="Permalink to this heading">¶</a></h3>
+<p>In this chapter, we will be modifying the shell of a ShapeGI.
+The original ShapeGI is highlighted in the image below.
+The goal is to extend the shape into the top right area of the PCB.</p>
+<p><img alt="pcb_phone_shape_gi_original.png" src="images/pcb_phone_shape_gi_original.png" /></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># use `pcb`</span>
+
+<span class="c1"># Specify Layer</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_HS_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Specify Net</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;GND&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>After creating the pcb_file as usual, we define the layer and net that we want to work on.
+In this case, the shape is on the “SIGNAL_HS_1” layer and belongs to the “GND” net.
+This combination of net and layer has multiple shapes that belong to it.
+We created a function that returns the pcb_api.ShapeGI that is the furthest right.
+The function is defined as <code class="docutils literal notranslate"><span class="pre">get_most_right_shape()</span></code> and can be seen below.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_most_right_shape</span><span class="p">(</span><span class="n">layer</span><span class="p">:</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">layer</span><span class="p">,</span> <span class="n">net</span><span class="p">:</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">net</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">ShapeGI</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find ShapeGI, that is the furthest right&quot;&quot;&quot;</span>
+    <span class="n">shape_right</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+        <span class="n">layer</span><span class="o">.</span><span class="n">geo_items</span><span class="p">(</span><span class="n">shapes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">),</span>
+        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">shape</span><span class="p">:</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">BoundingBox</span><span class="p">(</span><span class="n">shape</span><span class="o">.</span><span class="n">get_geometry</span><span class="p">()</span><span class="o">.</span><span class="n">shell</span><span class="p">)</span><span class="o">.</span><span class="n">center</span><span class="o">.</span><span class="n">x</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">shape_right</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+<span class="c1"># Get Shape, that is the furthest right</span>
+<span class="n">shape_gi</span> <span class="o">=</span> <span class="n">get_most_right_shape</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">net</span><span class="p">)</span>
+<span class="n">shape</span> <span class="o">=</span> <span class="n">shape_gi</span><span class="o">.</span><span class="n">get_geometry</span><span class="p">()</span>
+<span class="n">shell</span> <span class="o">=</span> <span class="n">shape</span><span class="o">.</span><span class="n">shell</span>
+
+<span class="c1"># Create segments, to be added</span>
+<span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Line</span><span class="p">((</span><span class="mi">2342</span><span class="p">,</span> <span class="mi">3004</span><span class="p">),</span> <span class="p">(</span><span class="mi">2342</span><span class="p">,</span> <span class="mi">3594</span><span class="p">)))</span>
+<span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Line</span><span class="p">((</span><span class="mi">2342</span><span class="p">,</span> <span class="mi">3594</span><span class="p">),</span> <span class="p">(</span><span class="mi">1594</span><span class="p">,</span> <span class="mi">3594</span><span class="p">)))</span>
+<span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Line</span><span class="p">((</span><span class="mi">1594</span><span class="p">,</span> <span class="mi">3594</span><span class="p">),</span> <span class="p">(</span><span class="mi">1594</span><span class="p">,</span> <span class="mi">3004</span><span class="p">)))</span>
+</pre></div>
+</div>
+<p>From the returned “ShapeGI” we can get the geometrical “Shape” by using the method <code class="docutils literal notranslate"><span class="pre">get_geometry()</span></code>.
+Now that we have defined the shape that we want to modify as “shape”, we can get its shell geometry.
+This we save as “shell”.</p>
+<p>Next, we create a list of Segments, we want to insert into the shell.
+For this, we first need to define what position in the “shell” we want to add the list of Segments.
+Here we want to replace the top-most segment with the largest Y position.
+So we create the function <code class="docutils literal notranslate"><span class="pre">get_index_of_top_segment()</span></code>,
+that finds the index of the top-most Segment in the given SegmentString.
+The function can be seen below.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_index_of_top_segment</span><span class="p">(</span><span class="n">shell</span><span class="p">:</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="o">.</span><span class="n">shell</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find the index of the segment that is the highest in the shell&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">key_pred</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">segment</span> <span class="o">=</span> <span class="n">val</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">segment</span><span class="o">.</span><span class="n">start</span><span class="o">.</span><span class="n">y</span> <span class="o">+</span> <span class="n">segment</span><span class="o">.</span><span class="n">end</span><span class="o">.</span><span class="n">y</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+
+    <span class="n">index</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">shell</span><span class="p">),</span> <span class="n">key</span><span class="o">=</span><span class="n">key_pred</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">index</span>
+</pre></div>
+</div>
+<p>Using that,</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+<span class="c1"># Set index</span>
+<span class="n">index</span> <span class="o">=</span> <span class="n">get_index_of_top_segment</span><span class="p">(</span><span class="n">shell</span><span class="p">)</span>
+
+<span class="c1"># Create a new SegmentString with the first few segments of the original shell</span>
+<span class="n">new_shell</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">SegmentString</span><span class="p">(</span><span class="n">shell</span><span class="p">[:</span><span class="n">index</span><span class="p">])</span>
+
+<span class="c1"># Add the new Segments</span>
+<span class="n">new_shell</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+
+<span class="c1"># Add the rest of the segments of the original shell</span>
+<span class="n">new_shell</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">shell</span><span class="p">[(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="p">:])</span>
+
+<span class="c1"># Set new shell as shell of shape</span>
+<span class="n">shape</span><span class="o">.</span><span class="n">shell</span> <span class="o">=</span> <span class="n">new_shell</span>
+
+<span class="c1"># Update the geometry of the right shapeGI to the new shape</span>
+<span class="n">shape_gi</span><span class="o">.</span><span class="n">set_geometry</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>Using the index, we can create a new SegmentString “new_shell”
+with the Segments of the original shell up to the segment at the position of the index.
+Then we extend “new_shell” using <code class="docutils literal notranslate"><span class="pre">new_shell.extend()</span></code> and passing the defined list of Segments.
+Finally, we can extend “new_shell” with the rest of the Segments of the original shell, to complete the shell.</p>
+<p>We now set “new_shell” as the shell of the original shape.
+The shape now has to be set as the geometry of the ShapeGI again.</p>
+<p>To check the results, we import the PCB to a project.
+In the image below, the modified ShapeGI is highlighted.</p>
+<p><img alt="pcb_phone_shape_gi_modified_shell.png" src="images/pcb_phone_shape_gi_modified_shell.png" /></p>
+</section>
+</section>
+<section id="create-a-shape">
+<h2>Create a Shape<a class="headerlink" href="#create-a-shape" title="Permalink to this heading">¶</a></h2>
+<p>For this example, instead of enlarging the existing shape like in
+<a class="reference internal" href="#modify-the-shell-of-a-shapegi"><span class="xref myst">“Modify the shell of a ShapeGI”</span></a>, we want to create a new shape that fills the area.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Specify Layer</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;SIGNAL_HS_1&quot;</span><span class="p">)</span>
+
+<span class="c1"># Specify Net</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;GND&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Again, we first define the PCB.
+Using the PCB, we define the layer and net we are working with.
+Here we also create a list of coordinates for the shape we want to create.
+To create a “geometry2d.Shape” from a list of coordinates, we added the function <code class="docutils literal notranslate"><span class="pre">create_shape_from_coord_list</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_shape_from_coord_list</span><span class="p">(</span><span class="n">coords</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">hole_list</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a Shape from a list of coordinates&quot;&quot;&quot;</span>
+    <span class="n">ext_curve</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Curve</span><span class="o">.</span><span class="n">create_polyline</span><span class="p">(</span><span class="n">coords</span><span class="p">)</span>
+    <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">hole_list</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">hole</span> <span class="ow">in</span> <span class="n">hole_list</span><span class="p">:</span>
+            <span class="n">holes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Curve</span><span class="o">.</span><span class="n">create_polyline</span><span class="p">(</span><span class="n">hole</span><span class="p">))</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="p">(</span><span class="n">ext_curve</span><span class="p">,</span> <span class="n">holes</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">shape</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+<span class="c1"># Define Shape coordinates as a list of coordinates</span>
+<span class="n">shape_coords</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">1594</span><span class="p">,</span> <span class="mi">3594</span><span class="p">),</span> <span class="p">(</span><span class="mi">1594</span><span class="p">,</span> <span class="mi">3004</span><span class="p">),</span> <span class="p">(</span><span class="mi">2342</span><span class="p">,</span> <span class="mi">3004</span><span class="p">),</span> <span class="p">(</span><span class="mi">2342</span><span class="p">,</span> <span class="mi">3594</span><span class="p">)]</span>
+
+<span class="c1"># Create a new ShapeGI from the coordinates</span>
+<span class="n">new_shape</span> <span class="o">=</span> <span class="n">create_shape_from_coord_list</span><span class="p">(</span><span class="n">shape_coords</span><span class="p">)</span>
+
+<span class="c1"># add new shape</span>
+<span class="n">layer</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span><span class="n">new_shape</span><span class="p">,</span> <span class="n">net</span><span class="p">)</span>
+<span class="c1"># net.create_shape(new_shape, layer)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>This function expects a list of coordinates for the shell and optionally a list of coordinate lists for holes.
+The function checks if the passed coordinates result in a closed shape,
+if not, the first coordinate is added to the end of the list.
+Then “ext_curve” is created using <code class="docutils literal notranslate"><span class="pre">geometry2d.Curve.create_polyline</span></code> and passing the coordinates.
+If the list of coordinates for the holes is not empty, for each hole,
+a polyline is also created and appended to the list “holes”.
+Now the “shape” is created using “ext_curve” for the shell and the created list of polylines for the holes.
+This is done using <code class="docutils literal notranslate"><span class="pre">geometry.Shape(ext_curve,</span> <span class="pre">holes)</span></code>.</p>
+<p>The created shape is returned from <code class="docutils literal notranslate"><span class="pre">create_shape_from_coord_list</span></code> and saved as “new_shape”.
+Using <code class="docutils literal notranslate"><span class="pre">layer.create_shape(new_shape,</span> <span class="pre">net)</span></code> we can create “new_shape”
+on the layer in the net that where both defined earlier.
+It also is possible to call <code class="docutils literal notranslate"><span class="pre">net.create_shape(new_shape,</span> <span class="pre">layer)</span></code> instead.
+The result is the same.</p>
+<p>The image below shows the newly created shape on the defined layer.</p>
+<p><img alt="eda_shapes_new_shape.png" src="images/eda_shapes_new_shape.png" /></p>
+</section>
+<section id="advanced-geometry-operations">
+<h2>Advanced Geometry Operations<a class="headerlink" href="#advanced-geometry-operations" title="Permalink to this heading">¶</a></h2>
+<p>This chapter will go over how to retrieve and work with the shapes of our PCB using a
+third-party Python geometry package.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Specify Layer</span>
+<span class="n">layer</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">layer</span><span class="p">(</span><span class="s2">&quot;PWR_PLANE2_N_CTRL&quot;</span><span class="p">)</span>
+
+<span class="c1"># Specify Net</span>
+<span class="n">net</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">net</span><span class="p">(</span><span class="s2">&quot;VSYS&quot;</span><span class="p">)</span>
+
+<span class="c1"># Get all Shapes from this Layer and Net</span>
+<span class="n">shape_items</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">geo_items</span><span class="p">(</span><span class="n">shapes</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">net</span><span class="o">=</span><span class="n">net</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The main idea of the procedure we will show here is to convert our ShapeGI to a commonly used format.
+Then change the geometry and convert it back to a ShapeGI.
+Here we use the
+<a href="https://shapely.readthedocs.io/en/stable/manual.html">Shapely library</a>
+as it uses similar definitions for shapes.</p>
+<p>As usually we first create an instance of our example PCB using <code class="docutils literal notranslate"><span class="pre">pcb_api.PCB.convert_from()</span></code>.
+Since shapes and traces are both GeoItems, the procedure of retrieving a shape is similar to the
+<a href="eda_modify_net_geometries__working_with_traces.html">procedure for traces</a>.</p>
+<p>We specify from what layer and net we want the shapes, using <code class="docutils literal notranslate"><span class="pre">pcb.layer()</span></code> and <code class="docutils literal notranslate"><span class="pre">pcb.net()</span></code>.
+Now we can get a list of all the shape items on the layer
+that are in the net using <code class="docutils literal notranslate"><span class="pre">layer.geo_items(shapes=True,</span> <span class="pre">net=net)</span></code>.</p>
+<p>To change the geometry of the shape, we will be using the Shapely library.
+To convert a shape to a
+<a href="https://shapely.readthedocs.io/en/stable/reference/shapely.Polygon.html#shapely.Polygon">”shapely.Polygon”</a>
+we created the function <code class="docutils literal notranslate"><span class="pre">create_shapely_polygon_from_shape()</span></code> shown below.
+We pass the shape and the “max_facet_length” that we want.
+The “max_facet_length” describes the maximum length of facets in arc approximations for the shape.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">shapely</span><span class="w"> </span><span class="kn">import</span> <span class="n">Polygon</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_shapely_polygon_from_shape</span><span class="p">(</span><span class="n">geometry</span><span class="p">:</span> <span class="s2">&quot;geometry2d.Shape&quot;</span><span class="p">,</span> <span class="n">max_facet_length</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Polygon</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a shapely polygon from Shape&quot;&quot;&quot;</span>
+    <span class="n">shell</span> <span class="o">=</span> <span class="n">geometry</span><span class="o">.</span><span class="n">shell</span><span class="o">.</span><span class="n">approximate_polyline</span><span class="p">(</span><span class="n">max_facet_length</span><span class="p">)</span>
+    <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">hole_geom</span> <span class="ow">in</span> <span class="n">geometry</span><span class="o">.</span><span class="n">holes</span><span class="p">:</span>
+        <span class="n">holes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hole_geom</span><span class="o">.</span><span class="n">approximate_polyline</span><span class="p">(</span><span class="n">max_facet_length</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">Polygon</span><span class="p">(</span><span class="n">shell</span><span class="p">,</span> <span class="n">holes</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The function extracts the shell and holes from our shape and creates a shapely.Polygon using these values.
+The polygon is then returned.
+Now we can modify this polygon using other methods from the Shapely library.
+In the main code,
+we erode the polygon, using the
+<a href="https://shapely.readthedocs.io/en/stable/reference/shapely.Polygon.html#shapely.Polygon.buffer">”buffer”</a>
+method and pass a negative value.
+This creates a smaller shape that has a larger clearance distance to the drills and other shapes in our PCB.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Convert the shape_item to a shapely.Polygon</span>
+<span class="n">shapely_polygon</span> <span class="o">=</span> <span class="n">create_shapely_polygon_from_shape</span><span class="p">(</span><span class="n">shape_items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_geometry</span><span class="p">(),</span> <span class="mi">100</span> <span class="o">*</span> <span class="n">pcb</span><span class="o">.</span><span class="n">tolerance</span><span class="p">)</span>
+
+<span class="c1"># Erode Polygon</span>
+<span class="n">eroded_polygon</span> <span class="o">=</span> <span class="n">shapely_polygon</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Then we want to convert it back into a ShapeGI to insert this shape into the PCB.
+For this, we created another function.
+<code class="docutils literal notranslate"><span class="pre">create_shape_from_shapely_polygon()</span></code> is shown below.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_shape_from_shapely_polygon</span><span class="p">(</span><span class="n">polygon</span><span class="p">:</span> <span class="n">Polygon</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a geometry2d.Shape from a shapely Polygon&quot;&quot;&quot;</span>
+    <span class="n">ext_curve</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Curve</span><span class="o">.</span><span class="n">create_polyline</span><span class="p">(</span><span class="n">polygon</span><span class="o">.</span><span class="n">exterior</span><span class="o">.</span><span class="n">coords</span><span class="p">)</span>
+    <span class="n">holes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">linearring</span> <span class="ow">in</span> <span class="n">polygon</span><span class="o">.</span><span class="n">interiors</span><span class="p">:</span>
+        <span class="n">holes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">geometry2d</span><span class="o">.</span><span class="n">Curve</span><span class="o">.</span><span class="n">create_polyline</span><span class="p">(</span><span class="n">linearring</span><span class="o">.</span><span class="n">coords</span><span class="p">))</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="n">geometry2d</span><span class="o">.</span><span class="n">Shape</span><span class="p">(</span><span class="n">ext_curve</span><span class="p">,</span> <span class="n">holes</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">shape</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Convert eroded shapely.Polygon to a ShapeGI</span>
+<span class="n">eroded_shape</span> <span class="o">=</span> <span class="n">create_shape_from_shapely_polygon</span><span class="p">(</span><span class="n">eroded_polygon</span><span class="p">)</span>
+
+<span class="c1"># Remove original shape</span>
+<span class="n">shape_items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">delete</span><span class="p">()</span>
+
+<span class="c1"># add eroded shape</span>
+<span class="n">layer</span><span class="o">.</span><span class="n">create_shape</span><span class="p">(</span><span class="n">eroded_shape</span><span class="p">,</span> <span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># create a new PCBS project</span>
+<span class="n">prj_2d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_pcbs</span><span class="p">()</span>
+
+<span class="c1"># copy the PCB into the project, replacing the previous (empty) design</span>
+<span class="n">prj_2d</span><span class="o">.</span><span class="n">pcbs</span><span class="o">.</span><span class="n">set_pcb</span><span class="p">(</span><span class="n">pcb</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here the properties of the shapely.Polygon are used to create a geometry2d.Shape.
+The created shape is then returned.</p>
+<p>Before we insert the shape to our PCB, we delete the original shape.</p>
+<p>Then we use the <code class="docutils literal notranslate"><span class="pre">layer.create_shape()</span></code> function and pass the shape and what net it should be added to.
+Alternatively we could use the <code class="docutils literal notranslate"><span class="pre">net.create_shape()</span></code> function and pass the layer instead.
+But this would not work if the erosion caused the original shape to split into two separate shapes.</p>
+<p>The original (left) and resulting (right) shape are shown in the image below.</p>
+<p><img alt="eda_shapes_compared_eroded.png" src="images/eda_shapes_compared_eroded.png" /></p>
+<p>We can see that the original shape was eroded.
+This can be seen well in the top right corner of the shape,
+where two cutouts for the drills were combined into one due to the modifications we made.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Working with Shapes</a><ul>
+<li><a class="reference internal" href="#modify-a-shape">Modify a Shape</a><ul>
+<li><a class="reference internal" href="#modify-pcb-outline">Modify PCB outline</a></li>
+<li><a class="reference internal" href="#modify-the-shell-of-a-shapegi">Modify the shell of a ShapeGI</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#create-a-shape">Create a Shape</a></li>
+<li><a class="reference internal" href="#advanced-geometry-operations">Advanced Geometry Operations</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__components_and_padstacks.html" title="Components and Padstacks"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_modify_net_geometries__working_with_traces.html" title="Working with Traces"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Working with Shapes</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

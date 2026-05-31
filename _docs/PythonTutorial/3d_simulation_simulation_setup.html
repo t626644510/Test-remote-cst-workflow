@@ -1,0 +1,463 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Simulation Setup &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="3D Simulation Results" href="3d_simulation_results.html" />
+    <link rel="prev" title="Shape Modeling" href="3d_simulation_structure_modeling.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_results.html" title="3D Simulation Results"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_structure_modeling.html" title="Shape Modeling"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Simulation Setup</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="simulation-setup">
+<h1>Simulation Setup<a class="headerlink" href="#simulation-setup" title="Permalink to this heading">¶</a></h1>
+<p>Before starting, please execute the preparations:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="example-pcb-geometry">
+<h2>Example PCB geometry<a class="headerlink" href="#example-pcb-geometry" title="Permalink to this heading">¶</a></h2>
+<p>In this section, we are going to quickly set up a simple pcb_geometry for later examples.
+It represents a simple printed circuit board (PCB) consisting of a ground plane, a substrate layer and a signal trace.
+Two new materials (Copper &amp; FR-4) are created and assigned to the corresponding shapes.
+As you can see below, a VBA code is created by lining up the needed VBA codes for each step.
+The resulting code is then added to the History List.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_pcb_geometry</span><span class="p">(</span><span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create VBA code snippet for building example pcb geometry,</span>
+<span class="sd">    add add to 3D project.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">vba_snippet</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    With Material</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;Copper (annealed)&quot;</span>
+<span class="s2">         .Folder &quot;&quot;</span>
+<span class="s2">         .FrqType &quot;static&quot;</span>
+<span class="s2">         .Type &quot;Normal&quot;</span>
+<span class="s2">         .SetMaterialUnit &quot;Hz&quot;, &quot;mm&quot;</span>
+<span class="s2">         .Epsilon &quot;1&quot;</span>
+<span class="s2">         .Mu &quot;1.0&quot;</span>
+<span class="s2">         .Kappa &quot;5.8e+007&quot;</span>
+<span class="s2">         .TanD &quot;0.0&quot;</span>
+<span class="s2">         .TanDFreq &quot;0.0&quot;</span>
+<span class="s2">         .TanDGiven &quot;False&quot;</span>
+<span class="s2">         .TanDModel &quot;ConstTanD&quot;</span>
+<span class="s2">         .KappaM &quot;0&quot;</span>
+<span class="s2">         .TanDM &quot;0.0&quot;</span>
+<span class="s2">         .TanDMFreq &quot;0.0&quot;</span>
+<span class="s2">         .TanDMGiven &quot;False&quot;</span>
+<span class="s2">         .TanDMModel &quot;ConstTanD&quot;</span>
+<span class="s2">         .DispModelEps &quot;None&quot;</span>
+<span class="s2">         .DispModelMu &quot;None&quot;</span>
+<span class="s2">         .DispersiveFittingSchemeEps &quot;Nth Order&quot;</span>
+<span class="s2">         .DispersiveFittingSchemeMu &quot;Nth Order&quot;</span>
+<span class="s2">         .UseGeneralDispersionEps &quot;False&quot;</span>
+<span class="s2">         .UseGeneralDispersionMu &quot;False&quot;</span>
+<span class="s2">         .FrqType &quot;all&quot;</span>
+<span class="s2">         .Type &quot;Lossy metal&quot;</span>
+<span class="s2">         .SetMaterialUnit &quot;GHz&quot;, &quot;mm&quot;</span>
+<span class="s2">         .Mu &quot;1.0&quot;</span>
+<span class="s2">         .Kappa &quot;5.8e+007&quot;</span>
+<span class="s2">         .Rho &quot;8930.0&quot;</span>
+<span class="s2">         .ThermalType &quot;Normal&quot;</span>
+<span class="s2">         .ThermalConductivity &quot;401.0&quot;</span>
+<span class="s2">         .SpecificHeat &quot;390&quot;, &quot;J/K/kg&quot;</span>
+<span class="s2">         .MetabolicRate &quot;0&quot;</span>
+<span class="s2">         .BloodFlow &quot;0&quot;</span>
+<span class="s2">         .VoxelConvection &quot;0&quot;</span>
+<span class="s2">         .MechanicsType &quot;Isotropic&quot;</span>
+<span class="s2">         .YoungsModulus &quot;120&quot;</span>
+<span class="s2">         .PoissonsRatio &quot;0.33&quot;</span>
+<span class="s2">         .ThermalExpansionRate &quot;17&quot;</span>
+<span class="s2">         .Colour &quot;1&quot;, &quot;1&quot;, &quot;0&quot;</span>
+<span class="s2">         .Wireframe &quot;False&quot;</span>
+<span class="s2">         .Reflection &quot;False&quot;</span>
+<span class="s2">         .Allowoutline &quot;True&quot;</span>
+<span class="s2">         .Transparentoutline &quot;False&quot;</span>
+<span class="s2">         .Transparency &quot;0&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    With Material</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;FR-4 (lossy)&quot;</span>
+<span class="s2">         .Folder &quot;&quot;</span>
+<span class="s2">         .FrqType &quot;all&quot;</span>
+<span class="s2">         .Type &quot;Normal&quot;</span>
+<span class="s2">         .SetMaterialUnit &quot;GHz&quot;, &quot;mm&quot;</span>
+<span class="s2">         .Epsilon &quot;4.3&quot;</span>
+<span class="s2">         .Mu &quot;1.0&quot;</span>
+<span class="s2">         .Kappa &quot;0.0&quot;</span>
+<span class="s2">         .TanD &quot;0.025&quot;</span>
+<span class="s2">         .TanDFreq &quot;10.0&quot;</span>
+<span class="s2">         .TanDGiven &quot;True&quot;</span>
+<span class="s2">         .TanDModel &quot;ConstTanD&quot;</span>
+<span class="s2">         .KappaM &quot;0.0&quot;</span>
+<span class="s2">         .TanDM &quot;0.0&quot;</span>
+<span class="s2">         .TanDMFreq &quot;0.0&quot;</span>
+<span class="s2">         .TanDMGiven &quot;False&quot;</span>
+<span class="s2">         .TanDMModel &quot;ConstKappa&quot;</span>
+<span class="s2">         .DispModelEps &quot;None&quot;</span>
+<span class="s2">         .DispModelMu &quot;None&quot;</span>
+<span class="s2">         .DispersiveFittingSchemeEps &quot;General 1st&quot;</span>
+<span class="s2">         .DispersiveFittingSchemeMu &quot;General 1st&quot;</span>
+<span class="s2">         .UseGeneralDispersionEps &quot;False&quot;</span>
+<span class="s2">         .UseGeneralDispersionMu &quot;False&quot;</span>
+<span class="s2">         .Rho &quot;0.0&quot;</span>
+<span class="s2">         .ThermalType &quot;Normal&quot;</span>
+<span class="s2">         .ThermalConductivity &quot;0.3&quot;</span>
+<span class="s2">         .SetActiveMaterial &quot;all&quot;</span>
+<span class="s2">         .Colour &quot;0.94&quot;, &quot;0.82&quot;, &quot;0.76&quot;</span>
+<span class="s2">         .Wireframe &quot;False&quot;</span>
+<span class="s2">         .Transparency &quot;0.9&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    With Brick</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;pcb&quot;</span>
+<span class="s2">         .Component &quot;component1&quot;</span>
+<span class="s2">         .Material &quot;Copper (annealed)&quot;</span>
+<span class="s2">         .Xrange &quot;0&quot;, &quot;300&quot;</span>
+<span class="s2">         .Yrange &quot;0&quot;, &quot;75&quot;</span>
+<span class="s2">         .Zrange &quot;-1.235&quot;, &quot;-1.2&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    With Brick</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;substrate_layer&quot;</span>
+<span class="s2">         .Component &quot;component1&quot;</span>
+<span class="s2">         .Material &quot;FR-4 (lossy)&quot;</span>
+<span class="s2">         .Xrange &quot;-0&quot;, &quot;300&quot;</span>
+<span class="s2">         .Yrange &quot;-0&quot;, &quot;75&quot;</span>
+<span class="s2">         .Zrange &quot;-1.2&quot;, &quot;0&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    With Polygon</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;polygon1&quot;</span>
+<span class="s2">         .Curve &quot;curve1&quot;</span>
+<span class="s2">         .Point &quot;50&quot;, &quot;50&quot;</span>
+<span class="s2">         .LineTo &quot;100&quot;, &quot;50&quot;</span>
+<span class="s2">         .LineTo &quot;100&quot;, &quot;25&quot;</span>
+<span class="s2">         .LineTo &quot;150&quot;, &quot;25&quot;</span>
+<span class="s2">         .LineTo &quot;150&quot;, &quot;50&quot;</span>
+<span class="s2">         .LineTo &quot;200&quot;, &quot;50&quot;</span>
+<span class="s2">         .LineTo &quot;200&quot;, &quot;25&quot;</span>
+<span class="s2">         .LineTo &quot;250&quot;, &quot;25&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    With TraceFromCurve</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .Name &quot;signal&quot;</span>
+<span class="s2">         .Component &quot;component1&quot;</span>
+<span class="s2">         .Material &quot;Copper (annealed)&quot;</span>
+<span class="s2">         .Curve &quot;curve1:polygon1&quot;</span>
+<span class="s2">         .Thickness &quot;0.035&quot;</span>
+<span class="s2">         .Width &quot;2&quot;</span>
+<span class="s2">         .RoundStart &quot;False&quot;</span>
+<span class="s2">         .RoundEnd &quot;False&quot;</span>
+<span class="s2">         .DeleteCurve &quot;True&quot;</span>
+<span class="s2">         .GapType &quot;2&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;create example PCB geometry&quot;</span><span class="p">,</span> <span class="n">vba_snippet</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>This function is used to populate the new project:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+<span class="n">create_pcb_geometry</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>The signal shape is created by a polygon curve starting at <strong>(50,50,0)</strong> and ending at <strong>(250,25,0)</strong>.
+The curve is then used to create a trace with a width of <strong>2</strong>.
+The resulting shape starts with an edge at <strong>[(49,50,0),(51,50,0)]</strong> and ends with one
+at <strong>[(250, 24, 0), (250, 26, 0)]</strong>.</p>
+<p>In future projects, we can call the <code class="docutils literal notranslate"><span class="pre">create_pcb_geometry</span></code> function and pass our project,
+resulting in a PCB geometry like the one seen below.</p>
+<p><img alt="Example environment" src="images/example_environment_untouched.png" /></p>
+</section>
+<section id="creating-discrete-ports">
+<h2>Creating Discrete Ports<a class="headerlink" href="#creating-discrete-ports" title="Permalink to this heading">¶</a></h2>
+<p>Using the previously created example geometry, we set up discrete ports between signal and ground.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># create the example environment</span>
+<span class="n">create_pcb_geometry</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+
+
+<span class="n">port_num</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
+
+<span class="c1"># [((start point signal),(same point at height of pcb)),((end point signal),(same point at height of pcb))]</span>
+<span class="n">port_coords</span> <span class="o">=</span> <span class="p">[((</span><span class="mi">50</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">50</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">)),</span> <span class="p">((</span><span class="mi">250</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">250</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">))]</span>
+
+<span class="n">vba_code</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+<span class="k">for</span> <span class="n">num</span><span class="p">,</span> <span class="n">coords</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">port_num</span><span class="p">,</span> <span class="n">port_coords</span><span class="p">):</span>
+    <span class="n">discrete_port_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    With DiscretePort</span>
+<span class="s2">         .Reset</span>
+<span class="s2">         .PortNumber &quot;</span><span class="si">{</span><span class="n">num</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .Type &quot;SParameter&quot;</span>
+<span class="s2">         .Label &quot;&quot;</span>
+<span class="s2">         .Folder &quot;&quot;</span>
+<span class="s2">         .Impedance &quot;50.0&quot;</span>
+<span class="s2">         .Voltage &quot;1.0&quot;</span>
+<span class="s2">         .Current &quot;1.0&quot;</span>
+<span class="s2">         .Monitor &quot;True&quot;</span>
+<span class="s2">         .Radius &quot;0.0&quot;</span>
+<span class="s2">         .SetP1 &quot;False&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .SetP2 &quot;False&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">         .InvertDirection &quot;False&quot;</span>
+<span class="s2">         .LocalCoordinates &quot;False&quot;</span>
+<span class="s2">         .Wire &quot;&quot;</span>
+<span class="s2">         .Position &quot;end1&quot;</span>
+<span class="s2">         .Create</span>
+<span class="s2">    End With</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">vba_code</span> <span class="o">+=</span> <span class="n">discrete_port_vba</span>
+
+<span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;create discrete edge ports&quot;</span><span class="p">,</span> <span class="n">vba_code</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>As shown in <a class="reference internal" href="#example-pcb-geometry"><span class="xref myst">Example geometry</span></a> it is possible to combine multiple VBA code strings and add the
+resulting string to the History List in one go.
+We will use this in the current and in future examples as well.</p>
+<p>In the example code above, after creating a new project as usual, we call the “create_pcb_geometry” function to set up
+our project.
+Next, we define our port numbers and the coordinates we want to create the ports at.
+For the coordinates, we use the center points of the start and end of the signal trace and the same points
+at the elevation of the ground plane.
+Finally, we assemble our VBA code for both discrete ports and add it to the History List.
+The resulting ports are shown in the image below.</p>
+<p><img alt="Discrete Edge Ports" src="images/discrete_ports_added.png" /></p>
+</section>
+<section id="creating-discrete-face-ports">
+<h2>Creating Discrete Face Ports<a class="headerlink" href="#creating-discrete-face-ports" title="Permalink to this heading">¶</a></h2>
+<p>With a similar procedure as for the discrete <em>edge</em> ports, we can also create discrete <em>face</em> ports.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># create a new Microwave Studio project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># create the example environment</span>
+<span class="n">create_pcb_geometry</span><span class="p">(</span><span class="n">prj</span><span class="p">)</span>
+
+<span class="c1"># define the coordinates of the vertices</span>
+<span class="n">port1_coords</span> <span class="o">=</span> <span class="p">(((</span><span class="mi">50</span><span class="p">,</span> <span class="mi">49</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span> <span class="p">((</span><span class="mi">50</span><span class="p">,</span> <span class="mi">49</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">),</span> <span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">)))</span>
+<span class="n">port2_coords</span> <span class="o">=</span> <span class="p">(((</span><span class="mi">250</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">250</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span> <span class="p">((</span><span class="mi">250</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">),</span> <span class="p">(</span><span class="mi">250</span><span class="p">,</span> <span class="mi">26</span><span class="p">,</span> <span class="o">-</span><span class="mf">1.2</span><span class="p">)))</span>
+
+<span class="n">edge_coords</span> <span class="o">=</span> <span class="p">(</span><span class="n">port1_coords</span><span class="p">,</span> <span class="n">port2_coords</span><span class="p">)</span>
+
+<span class="n">edges_vba</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">for</span> <span class="n">coords</span> <span class="ow">in</span> <span class="n">edge_coords</span><span class="p">:</span>
+    <span class="n">vertex1</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">vertex2</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">vertex3</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">vertex4</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">add_edges_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    Pick.AddEdge &quot;</span><span class="si">{</span><span class="n">vertex1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,</span><span class="se">\</span>
+<span class="s2">        &quot;</span><span class="si">{</span><span class="n">vertex2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">    Pick.AddEdge &quot;</span><span class="si">{</span><span class="n">vertex3</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex3</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex3</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,</span><span class="se">\</span>
+<span class="s2">        &quot;</span><span class="si">{</span><span class="n">vertex4</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex4</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;,&quot;</span><span class="si">{</span><span class="n">vertex4</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">edges_vba</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">add_edges_vba</span><span class="p">)</span>
+
+<span class="n">port_num</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
+<span class="n">vba_code</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+<span class="k">for</span> <span class="n">num</span><span class="p">,</span> <span class="n">edge_vba</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">port_num</span><span class="p">,</span> <span class="n">edges_vba</span><span class="p">):</span>
+    <span class="n">discrete_port_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="si">{</span><span class="n">edge_vba</span><span class="si">}</span>
+<span class="s2">With DiscreteFacePort</span>
+<span class="s2">     .Reset</span>
+<span class="s2">     .PortNumber &quot;</span><span class="si">{</span><span class="n">num</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">     .Type &quot;SParameter&quot;</span>
+<span class="s2">     .Label &quot;&quot;</span>
+<span class="s2">     .Folder &quot;&quot;</span>
+<span class="s2">     .Impedance &quot;50.0&quot;</span>
+<span class="s2">     .VoltageAmplitude &quot;1.0&quot;</span>
+<span class="s2">     .CurrentAmplitude &quot;1.0&quot;</span>
+<span class="s2">     .Monitor &quot;True&quot;</span>
+<span class="s2">     .CenterEdge &quot;True&quot;</span>
+<span class="s2">     .SetP1 &quot;True&quot;,&quot;0&quot;,&quot;0&quot;,&quot;0&quot;</span>
+<span class="s2">     .SetP2 &quot;True&quot;,&quot;0&quot;,&quot;0&quot;,&quot;1&quot;</span>
+<span class="s2">     .LocalCoordinates &quot;False&quot;</span>
+<span class="s2">     .InvertDirection &quot;False&quot;</span>
+<span class="s2">     .UseProjection &quot;False&quot;</span>
+<span class="s2">     .ReverseProjection &quot;False&quot;</span>
+<span class="s2">     .FaceType &quot;Linear&quot;</span>
+<span class="s2">     .Create</span>
+<span class="s2">End With</span>
+
+<span class="s2">    &quot;&quot;&quot;</span>
+    <span class="n">vba_code</span> <span class="o">+=</span> <span class="n">discrete_port_vba</span>
+
+<span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;create discrete face ports&quot;</span><span class="p">,</span> <span class="n">vba_code</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Instead of points, the discrete face ports are defined between edges.
+So to create the discrete face ports, we need to pick the two edges first.
+For this, the corresponding <code class="docutils literal notranslate"><span class="pre">PickEdge</span></code> commands for each port are created and put in a list.
+We then iterate through the list of port numbers and the list of PickEdge commands so that we first pick the two needed
+edges, and then create the corresponding discrete face port.
+The created ports are shown in the image below.</p>
+<p><img alt="Discrete Face Ports" src="images/discrete_face_ports_added.png" /></p>
+</section>
+<section id="solver-setup">
+<h2>Solver Setup<a class="headerlink" href="#solver-setup" title="Permalink to this heading">¶</a></h2>
+<p>After defining ports, we can start setting up the solver.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Set up a high-frequency solver with default values</span>
+<span class="n">min_freq</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">max_freq</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># GHz</span>
+<span class="n">solver_vba</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    Solver.FrequencyRange &quot;</span><span class="si">{</span><span class="n">min_freq</span><span class="si">}</span><span class="s2">&quot;, &quot;</span><span class="si">{</span><span class="n">max_freq</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="s2">    ChangeSolverType &quot;HF Time Domain&quot;</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">add_to_history</span><span class="p">(</span><span class="s2">&quot;setup solver&quot;</span><span class="p">,</span> <span class="n">solver_vba</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In the code above,
+the necessary steps for setting up a time domain solver with default values are bundled into one VBA code.</p>
+<p>First, we need to set a frequency range.
+It is set to the two parameters (“min_freq” &amp; “max_freq”) that are passed when calling the function.
+Next, we make sure that the solver type is set to “HF Time Domain”.
+Finally, the created VBA code is added to the History List of the passed project instance.</p>
+</section>
+<section id="run-solver">
+<h2>Run solver<a class="headerlink" href="#run-solver" title="Permalink to this heading">¶</a></h2>
+<p>After using the created function from <a class="reference internal" href="#solver-setup"><span class="xref myst">Solver Setup</span></a> to set up the solver, the solver is run.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">run_solver</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>If the run was not successful, an exception would have been raised. This behavior will be shown further down in this section.
+As we noted, the function <code class="docutils literal notranslate"><span class="pre">run_solver</span></code> is blocking, i.e. control has only returned to python after the solver was done.
+It is also possible to start the solver, using the <code class="docutils literal notranslate"><span class="pre">prj.model3d.start_solver()</span></code> method.
+Unlike <code class="docutils literal notranslate"><span class="pre">run_solver()</span></code>, <code class="docutils literal notranslate"><span class="pre">start_solver()</span></code> will not block the current thread.
+To check if the solver is running, <code class="docutils literal notranslate"><span class="pre">prj.model3d.is_solver_running()</span></code> can be used.</p>
+<p>When the solver is finished, <code class="docutils literal notranslate"><span class="pre">prj.model3d.Solver.GetTotalSimulationTime()</span></code> is used to read the simulation time of the
+complete solver run. We also save the project, and note the path for reuse in the next session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># get SimulationTime</span>
+<span class="n">solver_time</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">Solver</span><span class="o">.</span><span class="n">GetTotalSimulationTime</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Solver finished after </span><span class="si">{</span><span class="n">solver_time</span><span class="si">}</span><span class="s2"> seconds&quot;</span><span class="p">)</span>
+
+<span class="c1"># save the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span>  <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;simulation_done.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">cst_file_with_results</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">filename</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Simulation done! Results are in file </span><span class="si">{</span><span class="n">cst_file_with_results</span><span class="si">=}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;For reuse in the next session please copy the following line:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cst_file_with_results=r&#39;</span><span class="si">{</span><span class="n">cst_file_with_results</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>As mentioned before, when the solver does not finish successfully, <code class="docutils literal notranslate"><span class="pre">start_solver</span></code> will raise an exception.
+Running the code below shows this behavior.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># de.set_quiet_mode(False)</span>
+<span class="n">de</span><span class="o">.</span><span class="n">set_quiet_mode</span><span class="p">(</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">prj</span><span class="o">.</span><span class="n">model3d</span><span class="o">.</span><span class="n">run_solver</span><span class="p">()</span>
+<span class="k">except</span> <span class="ne">RuntimeError</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">prj</span><span class="o">.</span><span class="n">get_messages</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>While in quiet/scripting mode, the DesignEnvironment won’t open any pop-up windows of any kind.
+Using <code class="docutils literal notranslate"><span class="pre">prj.get_messages()</span></code> we can get the messages, that are in the Message Window of CST Studio Suite.
+These tell the details on the successful or failed solver run.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span>[{&#39;text&#39;: &#39;Solver run failed. Frequency range not set correctly.&#39;, &#39;type&#39;: &#39;ERROR&#39;},
+ {&#39;text&#39;: &#39;1 error occurred.&#39;, &#39;type&#39;: &#39;ERROR&#39;}]
+</pre></div>
+</div>
+<p>If we try the same code, but insert <code class="docutils literal notranslate"><span class="pre">de.set_quiet_mode(False)</span></code> before running the solver,
+we don’t run in to an error.
+Instead, a pop-up is opened asking for the frequency range for the solver run.</p>
+<p><img alt="Frequency Range Pop-up" src="images/pop_up_frequency_range.png" /></p>
+<p>If the frequency range is set, the solver will start after clicking on “OK”.
+Otherwise, the same exception is raised as before.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Simulation Setup</a><ul>
+<li><a class="reference internal" href="#example-pcb-geometry">Example PCB geometry</a></li>
+<li><a class="reference internal" href="#creating-discrete-ports">Creating Discrete Ports</a></li>
+<li><a class="reference internal" href="#creating-discrete-face-ports">Creating Discrete Face Ports</a></li>
+<li><a class="reference internal" href="#solver-setup">Solver Setup</a></li>
+<li><a class="reference internal" href="#run-solver">Run solver</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="3d_simulation_results.html" title="3D Simulation Results"
+             >next</a></li>
+        <li class="right" >
+          <a href="3d_simulation_structure_modeling.html" title="Shape Modeling"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Simulation Setup</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

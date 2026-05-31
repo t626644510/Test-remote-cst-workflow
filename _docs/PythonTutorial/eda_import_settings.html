@@ -1,0 +1,154 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>EDA import settings &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Settings for 3D simulation" href="eda_settings_for_3d_simulation.html" />
+    <link rel="prev" title="Components and Parts in PCB Studio" href="eda_pcb_studio_components_and_parts.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_settings_for_3d_simulation.html" title="Settings for 3D simulation"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_pcb_studio_components_and_parts.html" title="Components and Parts in PCB Studio"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">EDA import settings</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="eda-import-settings">
+<h1>EDA import settings<a class="headerlink" href="#eda-import-settings" title="Permalink to this heading">¶</a></h1>
+<p>CST Studio supports the import of various ECAD formats.
+Unfortunately, not all information needed/useful for simulation is conveyed in each data format.
+Using Python, the import can be extended to algorithmically enrich the imported data.
+The EDA Import Settings dialog contains settings for importing EDA files.
+All settings only affect new imports.
+Here you can define Python scripts to run during import for post-processing of the import data.</p>
+<section id="accessing-the-dialog">
+<h2>Accessing the dialog<a class="headerlink" href="#accessing-the-dialog" title="Permalink to this heading">¶</a></h2>
+<p>There are three ways to access the “EDA Import Settings” dialog.
+One way is from a PCBS project.
+Navigate to “Home &gt; Import/Export &gt; EDA Settings…” as shown in the image below.</p>
+<p><img alt="eda_import_settings_open_dialog_2.png" src="images/eda_import_settings_open_dialog_2.png" /></p>
+<p>A similar approach is from a Microwave, EM or Mphysics Studio project.
+In one of these projects, navigate to “Modeling &gt; Import/Export &gt; 2D/EDA Files &gt; EDA Import Settings…”.
+This can be seen in the image below.</p>
+<p><img alt="eda_import_settings_open_dialog_3.png" src="images/eda_import_settings_open_dialog_3.png" /></p>
+<p>The third option to open the dialog, is via the PCB import dialog.
+In the dialog, navigate to “Import &gt; Settings…”.
+This is shown in the image below.</p>
+<p><img alt="eda_import_settings_open_dialog_1.png" src="images/eda_import_settings_open_dialog_1.png" /></p>
+<blockquote>
+<div><p>You can find more information on the EDA Import dialog
+<a href="../mergedProjects/3D/common_tools/common_tools_pcb_import_dialog.htm">here</a>.</p>
+</div></blockquote>
+<p>Each of these three options will open the EDA Import Settings dialog.
+It should look similar to the dialog in the image below.</p>
+<p><img alt="eda_import_settings_dialog.png" src="images/eda_import_settings_dialog.png" /></p>
+</section>
+<section id="script-configuration">
+<h2>Script configuration<a class="headerlink" href="#script-configuration" title="Permalink to this heading">¶</a></h2>
+<p>In the EDA Import Settings dialog, you can add paths to scripts that should be run when importing a PCB.
+If multiple paths are set, they will be run in the configured order.
+Scripts can be referenced via an absolute path to run scripts from the local disk, or from network shares.
+It is possible to use (environment) variables like $(HOME) to construct paths.
+Scripts can also be referenced relative to the import source by using $(SRC).
+This variable contains the path to the ECAD source being imported.</p>
+<p>The default configuration specifies to run a Python script $(SRC).py.
+When importing ECAD data from e:\data\example_pcb.xml, CST Studio will look for a file e:\data\example_pcb.xml.py.
+If such a file exists, it will be run during the import.</p>
+<p>The configured script must define an entry point named “user_script”.
+The code below can be used as a template.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.eda.pcb_api</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pcb_api</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">user_script</span><span class="p">(</span><span class="n">pcb</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+</section>
+<section id="example">
+<h2>Example<a class="headerlink" href="#example" title="Permalink to this heading">¶</a></h2>
+<p>We added the path to the script shown below to the Import Settings.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.eda.pcb_api</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">user_script</span><span class="p">(</span><span class="n">pcb</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="c1"># Regular expression to match &quot;1V&quot;, &quot;3V&quot;, &quot;3V3&quot;, ...</span>
+    <span class="n">pattern</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\d+V&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Iterate through all nets of the pcb and find matches in their names</span>
+    <span class="k">for</span> <span class="n">net</span> <span class="ow">in</span> <span class="n">pcb</span><span class="o">.</span><span class="n">nets</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">net</span><span class="o">.</span><span class="n">name</span><span class="p">):</span>
+            <span class="n">net</span><span class="o">.</span><span class="n">net_type</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">NetType</span><span class="o">.</span><span class="n">Power</span>
+</pre></div>
+</div>
+<p>This code has the same logic as a previous code.
+It searches the names of the PCB nets for a pattern.
+The net type of the nets with matching names is changed to “Power”.</p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">EDA import settings</a><ul>
+<li><a class="reference internal" href="#accessing-the-dialog">Accessing the dialog</a></li>
+<li><a class="reference internal" href="#script-configuration">Script configuration</a></li>
+<li><a class="reference internal" href="#example">Example</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_settings_for_3d_simulation.html" title="Settings for 3D simulation"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_pcb_studio_components_and_parts.html" title="Components and Parts in PCB Studio"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">EDA import settings</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

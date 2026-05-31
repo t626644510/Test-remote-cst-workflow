@@ -1,0 +1,14 @@
+{
+  "TOP_SOLDER":   {"Thickness": 0.118,"Unit": "mil"},
+  "SIGNAL_1":     {"Thickness": 0.137,"Unit": "mil"},
+  "SIGNAL_2":     {"Thickness": 0.137,"Unit": "mil"},
+  "SIGNAL_HS_1":  {"Thickness": 1,"Unit": "mil"},
+  "SIGNAL_HS_2":  {"Thickness": 1,"Unit": "mil"},
+  "GND_1":        {"Thickness": 1,"Unit": "mil"},
+  "GND_2":        {"Thickness": 1,"Unit": "mil"},
+  "GND_2_1":      {"Thickness": 1,"Unit": "mil"},
+  "GND_3":        {"Thickness": 1,"Unit": "mil"},
+  "PWR_PLANE1":   {"Thickness": 1.35,"Unit": "mil"},
+  "PWR_PLANE2_N_CTRL":  {"Thickness": 1.35,"Unit": "mil"},
+  "BOTTOM_SOLDER":      {"Thickness": 0.118,"Unit": "mil"}
+}

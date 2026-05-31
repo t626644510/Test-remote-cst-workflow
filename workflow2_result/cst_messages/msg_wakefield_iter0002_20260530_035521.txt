@@ -1,0 +1,47 @@
+CST Messages — wakefield — iteration 2
+Captured: 2026-05-30T03:55:21.059536
+========================================================================
+
+--- Capture 1 ---
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Starting adaptive port meshing.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 1:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 2:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 2 successfully completed. Delta (Line Imp.): 0.25%', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 3 successfully completed. Delta (Line Imp.): 0.26%', 'type': 'INFO'}
+{'text': 'Mode calculation for port 3:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 2 successfully completed. Delta (Line Imp.): 0.97%', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Pass 3 successfully completed. Delta (Line Imp.): 0.32%', 'type': 'INFO'}
+{'text': 'Mode calculation for port 4:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 5:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for port 5.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Mode calculation for port 6:', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Using Generalized port mode solver.', 'type': 'INFO'}
+{'text': 'Automatically activated electric shielding for port 6.', 'type': 'INFO'}
+{'text': 'Pass 1 successfully completed.', 'type': 'INFO'}
+{'text': 'Adaptive port meshing finished.', 'type': 'INFO'}
+{'text': 'Using 8 threads for parallelized CAD processing', 'type': 'INFO'}
+{'text': 'Error in calculating solver matrix (parallelized)', 'type': 'ERROR'}
+{'text': 'Simulation was aborted.', 'type': 'WARNING'}
+{'text': '1 error and 1 warning occurred.', 'type': 'ERROR'}
+

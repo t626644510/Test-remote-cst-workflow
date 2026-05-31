@@ -1,0 +1,447 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Project Parameters &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Task Definition" href="circuit_simulation_task_definition.html" />
+    <link rel="prev" title="Creating &amp; Connecting Components" href="circuit_simulation_creating_connecting_blocks.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_task_definition.html" title="Task Definition"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_creating_connecting_blocks.html" title="Creating &amp; Connecting Components"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Project Parameters</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="project-parameters">
+<h1>Project Parameters<a class="headerlink" href="#project-parameters" title="Permalink to this heading">¶</a></h1>
+<p>Some functions from before will be needed here, so we have a larger block of preparations to execute:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="c1"># functions from previous sections:</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span>
+        <span class="n">block_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="nb">property</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">position</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">rotation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a new block in the given project of the given type, more attributes or the block are optional&quot;&quot;&quot;</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Type</span><span class="p">(</span><span class="n">block_type</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">property</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">property</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">position</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Position</span><span class="p">(</span><span class="n">position</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">position</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">rotation</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Rotate</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Create</span><span class="p">()</span>
+    
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_external_port</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">position</span><span class="p">:</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">rotation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a new external port in the given project, more attributes or the block are optional&quot;&quot;&quot;</span>
+
+    <span class="n">port</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">ExternalPort</span>
+    <span class="n">port</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+        <span class="n">port</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">label</span><span class="p">:</span>
+        <span class="n">port</span><span class="o">.</span><span class="n">SetLabel</span><span class="p">(</span><span class="n">label</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">position</span><span class="p">:</span>
+        <span class="n">port</span><span class="o">.</span><span class="n">Position</span><span class="p">(</span><span class="n">position</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">position</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">rotation</span><span class="p">:</span>
+        <span class="n">port</span><span class="o">.</span><span class="n">Rotate</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span>
+    <span class="n">port</span><span class="o">.</span><span class="n">Create</span><span class="p">()</span>
+    
+
+<span class="k">def</span><span class="w"> </span><span class="nf">connect_components</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span>
+        <span class="n">net_list</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">],</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">net_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Creates a net and connects the components given as [&quot;Component Type&quot;, &quot;Component Name&quot;, Port index]</span>
+<span class="sd">    within the net.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">net</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Net</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>    
+    <span class="n">net</span><span class="o">.</span><span class="n">AddComponentPorts</span><span class="p">(</span><span class="n">net_name</span><span class="p">,</span> <span class="n">net_list</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">Apply</span><span class="p">()</span>
+
+    
+<span class="k">def</span><span class="w"> </span><span class="nf">get_block_names</span><span class="p">(</span><span class="n">project</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Yields all block names of the given project&quot;&quot;&quot;</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">StartBlockNameIteration</span><span class="p">()</span>
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetNextBlockName</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">names</span>
+</pre></div>
+</div>
+<section id="model-setup">
+<h2>Model setup<a class="headerlink" href="#model-setup" title="Permalink to this heading">¶</a></h2>
+<p>For the further course of the guide, we will set up the “Lumped Filter” example from the “Getting Started Book”
+<a href="../../Documentation/CST Studio Suite - Circuit Simulation and SAM (System Assembly and Modeling).pdf">CST Studio Suite - Circuit Simulation and SAM</a>.</p>
+<p>The input data needed is summarized in the following definitions:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">blocks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;IND_1&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Inductor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Inductance&quot;</span><span class="p">:</span> <span class="s2">&quot;44&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49500</span><span class="p">,</span> <span class="mi">50000</span><span class="p">),</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;IND_2&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Inductor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Inductance&quot;</span><span class="p">:</span> <span class="s2">&quot;1.6&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49000</span><span class="p">,</span> <span class="mi">50200</span><span class="p">),</span>
+        <span class="s2">&quot;Rotation&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">90</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;IND_3&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Inductor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Inductance&quot;</span><span class="p">:</span> <span class="s2">&quot;1.6&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50250</span><span class="p">,</span> <span class="mi">50200</span><span class="p">),</span>
+        <span class="s2">&quot;Rotation&quot;</span><span class="p">:</span> <span class="mi">90</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;CAP_1&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Capacitor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">:</span> <span class="s2">&quot;1.2&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49750</span><span class="p">,</span> <span class="mi">50000</span><span class="p">),</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;CAP_2&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Capacitor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">:</span> <span class="s2">&quot;35&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49250</span><span class="p">,</span> <span class="mi">50200</span><span class="p">),</span>
+        <span class="s2">&quot;Rotation&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">90</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;CAP_3&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Capacitor&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;Properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">:</span> <span class="s2">&quot;35&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50000</span><span class="p">,</span> <span class="mi">50200</span><span class="p">),</span>
+        <span class="s2">&quot;Rotation&quot;</span><span class="p">:</span> <span class="mi">90</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;GND_1&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;Ground&quot;</span><span class="p">,</span> <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49000</span><span class="p">,</span> <span class="mi">50400</span><span class="p">)},</span>
+    <span class="s2">&quot;GND_2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;Ground&quot;</span><span class="p">,</span> <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">49250</span><span class="p">,</span> <span class="mi">50400</span><span class="p">)},</span>
+    <span class="s2">&quot;GND_3&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;Ground&quot;</span><span class="p">,</span> <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50000</span><span class="p">,</span> <span class="mi">50400</span><span class="p">)},</span>
+    <span class="s2">&quot;GND_4&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Type&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s2">&quot;Ground&quot;</span><span class="p">,</span> <span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50250</span><span class="p">,</span> <span class="mi">50400</span><span class="p">)},</span>
+<span class="p">}</span>
+
+<span class="n">ports</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;1&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">48750</span><span class="p">,</span> <span class="mi">50000</span><span class="p">)},</span> <span class="s2">&quot;2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;Position&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">50500</span><span class="p">,</span> <span class="mi">50000</span><span class="p">)}}</span>
+
+<span class="n">nets</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_2&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_2&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_1&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;ExternalPort&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_1&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_3&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_3&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;ExternalPort&quot;</span><span class="p">,</span> <span class="s2">&quot;2&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_1&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_1&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_2&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;GND_1&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_2&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;GND_2&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;CAP_3&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;GND_3&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+    <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;IND_3&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="s2">&quot;GND_4&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]],</span>
+<span class="p">]</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># start a new ds project</span>
+<span class="n">prj</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_ds</span><span class="p">()</span>
+
+<span class="c1"># Create Block Components from source</span>
+<span class="k">for</span> <span class="n">block_name</span><span class="p">,</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">blocks</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">,</span>
+        <span class="n">block</span><span class="p">[</span><span class="s2">&quot;Type&quot;</span><span class="p">],</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">block_name</span><span class="p">,</span>
+        <span class="n">position</span><span class="o">=</span><span class="n">block</span><span class="p">[</span><span class="s2">&quot;Position&quot;</span><span class="p">],</span>
+        <span class="nb">property</span><span class="o">=</span><span class="n">block</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Properties&quot;</span><span class="p">),</span>
+        <span class="n">rotation</span><span class="o">=</span><span class="n">block</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Rotation&quot;</span><span class="p">),</span>
+    <span class="p">)</span>
+
+<span class="c1"># Create External Ports</span>
+<span class="k">for</span> <span class="n">port_name</span><span class="p">,</span> <span class="n">port</span> <span class="ow">in</span> <span class="n">ports</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">create_external_port</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">port_name</span><span class="p">,</span> <span class="n">position</span><span class="o">=</span><span class="n">port</span><span class="p">[</span><span class="s2">&quot;Position&quot;</span><span class="p">])</span>
+
+<span class="c1"># Connect Cuircuit based on each net defined in nets</span>
+<span class="k">for</span> <span class="n">net</span> <span class="ow">in</span> <span class="n">nets</span><span class="p">:</span>
+    <span class="n">connect_components</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">net</span><span class="p">)</span>
+
+<span class="c1"># save the project</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">(</span> <span class="n">project_dir</span> <span class="o">/</span> <span class="s2">&quot;lumped_filter.cst&quot;</span><span class="p">,</span> <span class="n">allow_overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+</pre></div>
+</div>
+<p>First, we define two dictionaries that define our blocks and external ports.
+Additionally, we create a list of nets to define which component pins should be connected.
+These definitions can be seen below.</p>
+<p>The result of the code is seen in the image below.</p>
+<p><img alt="lumped_filter_creation.png" src="images/lumped_filter_creation.png" /></p>
+</section>
+<section id="project-units">
+<h2>Project Units<a class="headerlink" href="#project-units" title="Permalink to this heading">¶</a></h2>
+<p>In these examples, we are using the default project units.
+Nonetheless, we will show how to change them.
+By using <code class="docutils literal notranslate"><span class="pre">project.schematic.Units.SetUnit</span></code> the project units can be changed.
+The dimension that you want to change and the unit that it should be set to need to be passed to this method.</p>
+<p>A table of the available dimensions and their possible units is listed below.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>dimension</p></th>
+<th class="head"><p>supported units</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Length</p></td>
+<td><p>nm, um, mm, cm, m, mil, in, ft</p></td>
+</tr>
+<tr class="row-odd"><td><p>Time</p></td>
+<td><p>fs, ps, ns, us, ms, s</p></td>
+</tr>
+<tr class="row-even"><td><p>Frequency</p></td>
+<td><p>Hz, kHz, MHz, GHz, THz, PHz</p></td>
+</tr>
+<tr class="row-odd"><td><p>Temperature</p></td>
+<td><p>degC, K, degF</p></td>
+</tr>
+<tr class="row-even"><td><p>Voltage</p></td>
+<td><p>nV, uV, mV, V ,kV, MV</p></td>
+</tr>
+<tr class="row-odd"><td><p>Current</p></td>
+<td><p>nA, uA, mA, A, kA, MA</p></td>
+</tr>
+<tr class="row-even"><td><p>Resistance</p></td>
+<td><p>uOhm, mOhm, Ohm, kOhm, MOhm, GOhm</p></td>
+</tr>
+<tr class="row-odd"><td><p>Conductance</p></td>
+<td><p>nS, uS, mS, S</p></td>
+</tr>
+<tr class="row-even"><td><p>Capacitance</p></td>
+<td><p>fF, pF, nF, uF, mF, F</p></td>
+</tr>
+<tr class="row-odd"><td><p>Inductance</p></td>
+<td><p>pH, nH, uH, mH, H</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="creating-project-parameters">
+<h2>Creating Project Parameters<a class="headerlink" href="#creating-project-parameters" title="Permalink to this heading">¶</a></h2>
+<p>Instead of setting the parameters of a block to a specific value, we now want to use project parameters.
+For the lumped filter example, we will create the project parameters “C1”, “C2”, “L1” and “L2”.</p>
+<p>We define the following function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_parameter</span><span class="p">(</span><span class="n">project</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a parameter with given name and value, if description is provided, it will be added&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">description</span><span class="p">:</span>
+        <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">StoreParameterWithDescription</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">description</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">StoreParameter</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This function either calls <code class="docutils literal notranslate"><span class="pre">project.schematic.StoreParameterWithDescription</span></code> if a description was passed,
+or it calls <code class="docutils literal notranslate"><span class="pre">project.schematic.StoreParameter</span></code> if no description was passed.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># continue with `prj`</span>
+
+<span class="c1"># Define parameters with values and (optional) description</span>
+<span class="n">parameters</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;C1&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="mf">1.2</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Capacitance&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;C2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="mi">35</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Capacitance&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;L1&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="mi">44</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Inductance&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;L2&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="mf">1.6</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="s2">&quot;Inductance&quot;</span><span class="p">},</span>
+<span class="p">}</span>
+
+<span class="c1"># Create parameter values</span>
+<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">create_parameter</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">],</span> <span class="n">description</span><span class="o">=</span><span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>The resulting projects Parameter List can be seen below.</p>
+<p><img alt="parameter_list.png" src="images/parameter_list.png" /></p>
+<p>Next, we will have to change the values of the blocks that were created earlier.
+For this, we create the function <code class="docutils literal notranslate"><span class="pre">replace_values_with_parameters</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">replace_values_with_parameters</span><span class="p">(</span><span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span> <span class="n">parameters</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Replaces values of components with corresponding with parameter values with the parameters in given parameters&quot;&quot;&quot;</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="k">for</span> <span class="n">block_name</span> <span class="ow">in</span> <span class="n">get_block_names</span><span class="p">(</span><span class="n">prj</span><span class="p">):</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">block_name</span><span class="p">)</span>
+        <span class="nb">type</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetTypeShortName</span><span class="p">()</span>
+        <span class="k">if</span> <span class="nb">type</span> <span class="o">==</span> <span class="s2">&quot;CAP&quot;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span><span class="o">.</span><span class="n">GetProperty</span><span class="p">(</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Capacitance&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="n">value</span><span class="p">:</span>
+                        <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+        <span class="k">elif</span> <span class="nb">type</span> <span class="o">==</span> <span class="s2">&quot;IND&quot;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span><span class="o">.</span><span class="n">GetProperty</span><span class="p">(</span><span class="s2">&quot;Inductance&quot;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">parameters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;description&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Inductance&quot;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">str</span><span class="p">(</span><span class="n">parameter</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="n">value</span><span class="p">:</span>
+                        <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="s2">&quot;Inductance&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+                        
+<span class="c1"># run</span>
+<span class="n">replace_values_with_parameters</span><span class="p">(</span><span class="n">prj</span><span class="p">,</span> <span class="n">parameters</span><span class="p">)</span>
+<span class="n">prj</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The function checks all blocks of the project, whether the assigned value is in the parameter list that was passed.
+If that is the case, it changes the value to that parameter.</p>
+<blockquote>
+<div><p>This function was created specifically for this use case and is not suitable for every project.</p>
+</div></blockquote>
+<p>The result can be seen in the image below.</p>
+<p><img alt="project_parameter_assigned.png" src="images/project_parameter_assigned.png" /></p>
+<p>In the next example, we want to create new parameters for each block in our project.
+For this, some basic blocks are created in a new project as seen below.</p>
+<p><img alt="random_basic_blocks.png" src="images/random_basic_blocks.png" /></p>
+<p>All of these blocks, except for the ground blocks, have a value for their specific property.
+Some have the same value, but in our case, we want separate parameters for these blocks.</p>
+<p>The function below completes this task.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_parameter_from_blocks</span><span class="p">(</span><span class="n">project</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Takes the values from the projects blocks and creates new parameter for each value.</span>
+<span class="sd">    The created Parameter is assigned to the block&quot;&quot;&quot;</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="k">for</span> <span class="n">block_name</span> <span class="ow">in</span> <span class="n">get_block_names</span><span class="p">(</span><span class="n">project</span><span class="p">):</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">block_name</span><span class="p">)</span>
+        <span class="n">block_type</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetTypeShortName</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;CAP&quot;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span><span class="o">.</span><span class="n">GetProperty</span><span class="p">(</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">)</span>
+            <span class="n">parameter_name</span> <span class="o">=</span> <span class="s2">&quot;C&quot;</span>
+        <span class="k">elif</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;IND&quot;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span><span class="o">.</span><span class="n">GetProperty</span><span class="p">(</span><span class="s2">&quot;Inductance&quot;</span><span class="p">)</span>
+            <span class="n">parameter_name</span> <span class="o">=</span> <span class="s2">&quot;L&quot;</span>
+        <span class="k">elif</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;RES&quot;</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span><span class="o">.</span><span class="n">GetProperty</span><span class="p">(</span><span class="s2">&quot;Resistance&quot;</span><span class="p">)</span>
+            <span class="n">parameter_name</span> <span class="o">=</span> <span class="s2">&quot;R&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">break</span>
+
+        <span class="n">parameter_index</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">proj_parameter_name</span> <span class="o">=</span> <span class="n">parameter_name</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">parameter_index</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">DoesParameterExist</span><span class="p">(</span><span class="n">proj_parameter_name</span><span class="p">):</span>
+            <span class="n">parameter_index</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">proj_parameter_name</span> <span class="o">=</span> <span class="n">parameter_name</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">parameter_index</span><span class="p">)</span>
+
+        <span class="n">create_parameter</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">proj_parameter_name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+        <span class="n">assign_parameter_to_block</span><span class="p">(</span><span class="n">project</span><span class="p">,</span> <span class="n">block_name</span><span class="p">,</span> <span class="n">proj_parameter_name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We use the previously created function <code class="docutils literal notranslate"><span class="pre">get_block_names</span></code> to iterate through the blocks of the project.
+Using the Block methods,
+we determine whether the block is of the type of one of the block types that we want to parameterize or not.
+If it is, we get the value of its corresponding property and determine an unused parameter name.
+The parameter name is created by choosing the first letter according to the block type (“R”, “L”, C”),
+and then appending a number to make it unique.
+The number is choosen by iteratively testing the existance of parameter names using <code class="docutils literal notranslate"><span class="pre">project.schematic.DoesParameterExist</span></code>.</p>
+<p>To create the parameter, we can use the function <code class="docutils literal notranslate"><span class="pre">create_parameter</span></code>, that was shown at the beginning of this chapter.
+Using <code class="docutils literal notranslate"><span class="pre">assign_parameter_to_block</span></code>, shown below, we can assign the created parameter to the block it was created from.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">assign_parameter_to_block</span><span class="p">(</span><span class="n">project</span><span class="p">:</span> <span class="s2">&quot;cst.interface.Project&quot;</span><span class="p">,</span> <span class="n">block_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">parameter_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Assigns the parameter_name as value of the block with the given block_name&quot;&quot;&quot;</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">project</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">block_name</span><span class="p">)</span>
+    <span class="n">block_type</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetTypeShortName</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;CAP&quot;</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">,</span> <span class="n">parameter_name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;IND&quot;</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="s2">&quot;Inductance&quot;</span><span class="p">,</span> <span class="n">parameter_name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">block_type</span> <span class="o">==</span> <span class="s2">&quot;RES&quot;</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="s2">&quot;Resistance&quot;</span><span class="p">,</span> <span class="n">parameter_name</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The results can be seen below.</p>
+<p><img alt="random_blocks_with_parameters.png" src="images/random_blocks_with_parameters.png" /></p>
+<p><img alt="random_block_parameter_list.png" src="images/random_block_parameter_list.png" /></p>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Project Parameters</a><ul>
+<li><a class="reference internal" href="#model-setup">Model setup</a></li>
+<li><a class="reference internal" href="#project-units">Project Units</a></li>
+<li><a class="reference internal" href="#creating-project-parameters">Creating Project Parameters</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="circuit_simulation_task_definition.html" title="Task Definition"
+             >next</a></li>
+        <li class="right" >
+          <a href="circuit_simulation_creating_connecting_blocks.html" title="Creating &amp; Connecting Components"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Project Parameters</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

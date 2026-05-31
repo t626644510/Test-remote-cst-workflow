@@ -1,0 +1,10 @@
+CST Messages — frequency_domain — iteration 1
+Captured: 2026-05-30T03:51:18.274665
+========================================================================
+
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 2 warnings occurred.

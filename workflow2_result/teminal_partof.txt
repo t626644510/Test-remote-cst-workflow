@@ -1,0 +1,750 @@
+(.venv) PS D:\code_framework\cst_ver4> 
+
+                                       python run_watchdog.py --max-restarts 5 --cooldown 30 -- run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
+Watchdog [start] launching: D:\code_framework\cst_ver4\.venv\Scripts\python.exe run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
+Loading 1D curve database from: D:/Results/raw_curves/index.jsonl
+  10 valid evaluations for warmup
+  Best penalty: 0.071137 (index 0)
+Parameters: 14
+Objectives: 4
+Constraints: 8
+Algorithm: SurrogateAssistedOptimizer
+Initial samples: 10,  Iterations: 50
+------------------------------------------------------------
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (78s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=18388) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=6412
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-28.12 penalty=0.356 [WARMUP — force run]
+  [wakefield] OK (4598s, ? cells)
+  [atomize] saving wakefield .npz
+You are working in interactive mode.
+  [wakefield_offset] TRIGGER — z_longitudinal raw=0.00 penalty=0.380 [WARMUP — force run]
+Solver error (unclassified, 126.1 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Time Domain Solver (HEX): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [wakefield_offset] FAIL [None] (126s)
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+You are working in interactive mode.
+You are working in interactive mode.
+Failed to evaluate objective 'z_transverse' (project 'wakefield_offset'): tree path not found: '1D Results\Particle Beams\ParticleBeam2\Wake impedance\Z'.
+  objectives: z_longitudinal=0.004895  z_transverse=N/A  antenna_absorption=-28.12  antenna_absorption_db=-33.22
+Tier 1 exhausted for iteration 0 after 0 attempts
+Tier 3 attempt 1/2 for iteration 0: cleaning result folder and reconnecting
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (74s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=15368) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=11144
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-28.12 penalty=0.356 [WARMUP — force run]
+Solver mesh error (102.9 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Hexahedral mesher terminated abnormally.
+ERROR: Error in calculating solver matrix
+ERROR: Error in calculating solver matrix (parallelized)
+ERROR: 3 errors and 1 warning occurred.
+Solver mesh error (119.6 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Waveguide for port number 2 is too short. The waveguide must be homogeneous for at least three equidistant mesh planes along propagation direction.
+ERROR: 1 error and 2 warnings occurred.
+Solver mesh error (104.3 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Hexahedral mesher terminated abnormally.
+ERROR: Error in calculating solver matrix
+ERROR: Error in calculating solver matrix (parallelized)
+ERROR: 3 errors and 1 warning occurred.
+Solver error (unclassified, 4141.4 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+Mesh error persisted after rebuildlength 8
+  [wakefield] FAIL [mesh] (0s)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+  objectives: z_longitudinal=0.004851  z_transverse=N/A  antenna_absorption=-28.12  antenna_absorption_db=-33.22
+Tier 3 attempt 2/2 for iteration 0: cleaning result folder and reconnecting
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 13.6 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [frequency_domain] FAIL [None] (14s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=6088) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=3892
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 exhausted for iteration 0 after 2 attempts
+All retry tiers exhausted for iteration 0: solver_failed. Skipping.
+[iter 1] selfangle1=58.4254, selfangle2=65.9631, inner_angle=-54.3445, inner_angle3=62.5920, FolkHeight=20.0393, FolkHeight2=22.9860, UpperHeight1=7.8888, UpperHeight2=11.8243, DownHeight1=7.5908, DownHeight2=3.1227, Lin2=18.5000, inner_r2=10.3550, Lin=18.9652, inner_r=-8.5111
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (4.8 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (5s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=3892) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=8448
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 1 exhausted for iteration 1 after 0 attempts
+Tier 3 attempt 1/2 for iteration 1: cleaning result folder and reconnecting
+[iter 1] selfangle1=58.4254, selfangle2=65.9631, inner_angle=-54.3445, inner_angle3=62.5920, FolkHeight=20.0393, FolkHeight2=22.9860, UpperHeight1=7.8888, UpperHeight2=11.8243, DownHeight1=7.5908, DownHeight2=3.1227, Lin2=18.5000, inner_r2=10.3550, Lin=18.9652, inner_r=-8.5111
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 18.5 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [frequency_domain] FAIL [None] (19s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=18596) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=15404
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 attempt 2/2 for iteration 1: cleaning result folder and reconnecting
+[iter 1] selfangle1=58.4254, selfangle2=65.9631, inner_angle=-54.3445, inner_angle3=62.5920, FolkHeight=20.0393, FolkHeight2=22.9860, UpperHeight1=7.8888, UpperHeight2=11.8243, DownHeight1=7.5908, DownHeight2=3.1227, Lin2=18.5000, inner_r2=10.3550, Lin=18.9652, inner_r=-8.5111
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 17.5 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 2 warnings occurred.
+  [frequency_domain] FAIL [None] (18s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 2 warnings occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=2480) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=3092
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 exhausted for iteration 1 after 2 attempts
+All retry tiers exhausted for iteration 1: solver_failed. Skipping.
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 1 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 3 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 5 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 7 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 9 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 11 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 13 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:442: ConvergenceWarning: The optimal value found for dimension 0 of parameter k2__noise_level is close to the specified lower bound 1e-06. Decreasing the bound and calling fit again may find a better value.
+  warnings.warn(
+[iter 2] selfangle1=69.4642, selfangle2=93.7779, inner_angle=-47.2935, inner_angle3=75.2219, FolkHeight=20.9377, FolkHeight2=37.0451, UpperHeight1=28.8567, UpperHeight2=22.4955, DownHeight1=4.4261, DownHeight2=25.2146, Lin2=26.2570, inner_r2=5.4567, Lin=13.0456, inner_r=-10.8128
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (76s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=3092) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=1980
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-26.02 penalty=0.774 [WARMUP — force run]
+Solver error (unclassified, 32.5 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Error in calculating solver matrix (parallelized)
+ERROR: 1 error and 1 warning occurred.
+  [wakefield] FAIL [None] (32s)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+Failed to evaluate objective 'z_longitudinal' (project 'wakefield'): tree path not found: '1D Results\Particle Beams\ParticleBeam1\Wake impedance\Z'.
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=-26.02  antenna_absorption_db=-31.01
+Tier 1 exhausted for iteration 2 after 0 attempts
+Tier 3 attempt 1/2 for iteration 2: cleaning result folder and reconnecting
+[iter 2] selfangle1=69.4642, selfangle2=93.7779, inner_angle=-47.2935, inner_angle3=75.2219, FolkHeight=20.9377, FolkHeight2=37.0451, UpperHeight1=28.8567, UpperHeight2=22.4955, DownHeight1=4.4261, DownHeight2=25.2146, Lin2=26.2570, inner_r2=5.4567, Lin=13.0456, inner_r=-10.8128
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (9.9 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (10s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=10708) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=10968
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 attempt 2/2 for iteration 2: cleaning result folder and reconnecting
+[iter 2] selfangle1=69.4642, selfangle2=93.7779, inner_angle=-47.2935, inner_angle3=75.2219, FolkHeight=20.9377, FolkHeight2=37.0451, UpperHeight1=28.8567, UpperHeight2=22.4955, DownHeight1=4.4261, DownHeight2=25.2146, Lin2=26.2570, inner_r2=5.4567, Lin=13.0456, inner_r=-10.8128
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (75s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=10088) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=9980
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-26.02 penalty=0.774 [WARMUP — force run]
+Solver error (unclassified, 104.3 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Error in calculating solver matrix (parallelized)
+ERROR: 1 error and 1 warning occurred.
+  [wakefield] FAIL [None] (104s)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+Failed to evaluate objective 'z_longitudinal' (project 'wakefield'): tree path not found: '1D Results\Particle Beams\ParticleBeam1\Wake impedance\Z'.
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=-26.02  antenna_absorption_db=-31.01
+Tier 3 exhausted for iteration 2 after 2 attempts
+All retry tiers exhausted for iteration 2: solver_failed. Skipping.
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 1 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 3 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 6 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 7 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 8 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 9 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 11 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 13 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+[iter 3] selfangle1=116.4262, selfangle2=35.3370, inner_angle=-65.3235, inner_angle3=78.7059, FolkHeight=22.5970, FolkHeight2=2.1905, UpperHeight1=20.2173, UpperHeight2=4.8398, DownHeight1=9.8122, DownHeight2=3.0598, Lin2=16.6299, inner_r2=9.0026, Lin=16.5737, inner_r=-14.2671
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 17.3 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 2 warnings occurred.
+  [frequency_domain] FAIL [None] (17s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 2 warnings occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=9980) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=7112
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 1 exhausted for iteration 3 after 0 attempts
+Tier 3 attempt 1/2 for iteration 3: cleaning result folder and reconnecting
+[iter 3] selfangle1=116.4262, selfangle2=35.3370, inner_angle=-65.3235, inner_angle3=78.7059, FolkHeight=22.5970, FolkHeight2=2.1905, UpperHeight1=20.2173, UpperHeight2=4.8398, DownHeight1=9.8122, DownHeight2=3.0598, Lin2=16.6299, inner_r2=9.0026, Lin=16.5737, inner_r=-14.2671
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (93s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=4432) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=13996
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-28.55 penalty=0.200 [WARMUP — force run]
+  [wakefield] OK (4282s, ? cells)
+  [atomize] saving wakefield .npz
+You are working in interactive mode.
+  [wakefield_offset] TRIGGER — z_longitudinal raw=0.00 penalty=0.195 [WARMUP — force run]
+  [wakefield_offset] OK (4389s, ? cells)
+  [atomize] saving wakefield_offset .npz
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+You are working in interactive mode.
+You are working in interactive mode.
+  objectives: z_longitudinal=0.001933  z_transverse=0.001214  antenna_absorption=-28.55  antenna_absorption_db=-30.53
+  [log] written to D:/Results/optimization_log.xlsx (1 evals)
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 1 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 4 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 5 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 6 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 7 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 8 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 9 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:442: ConvergenceWarning: The optimal value found for dimension 0 of parameter k2__noise_level is close to the specified lower bound 1e-06. Decreasing the bound and calling fit again may find a better value.
+  warnings.warn(
+Watchdog: child exited 3221225501 — restarting in 30s (1/5)
+Watchdog: child exited 3221225501 — restart 1/5 after 30s cooldown
+Watchdog [restart 1/5] launching: D:\code_framework\cst_ver4\.venv\Scripts\python.exe run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
+Resuming from checkpoint: 2 completed, 86 pending
+Loading 1D curve database from: D:/Results/raw_curves/index.jsonl
+  14 valid evaluations for warmup
+  Best penalty: 0.071137 (index 1)
+Parameters: 14
+Objectives: 4
+Constraints: 8
+Algorithm: SurrogateAssistedOptimizer
+Initial samples: 10,  Iterations: 50
+------------------------------------------------------------
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 18.4 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [frequency_domain] FAIL [None] (18s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=11880) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=832
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 1 exhausted for iteration 0 after 0 attempts
+Tier 3 attempt 1/2 for iteration 0: cleaning result folder and reconnecting
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 17.8 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [frequency_domain] FAIL [None] (18s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=12900) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=5484
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 attempt 2/2 for iteration 0: cleaning result folder and reconnecting
+[iter 0] selfangle1=48.4188, selfangle2=143.5606, inner_angle=-62.0674, inner_angle3=40.9698, FolkHeight=1.5694, FolkHeight2=4.5499, UpperHeight1=12.3823, UpperHeight2=14.9182, DownHeight1=18.4006, DownHeight2=9.4582, Lin2=21.1545, inner_r2=13.0417, Lin=23.6157, inner_r=-14.4453
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (9.2 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (9s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=11324) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=13216
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 exhausted for iteration 0 after 2 attempts
+All retry tiers exhausted for iteration 0: solver_failed. Skipping.
+[iter 1] selfangle1=58.4254, selfangle2=65.9631, inner_angle=-54.3445, inner_angle3=62.5920, FolkHeight=20.0393, FolkHeight2=22.9860, UpperHeight1=7.8888, UpperHeight2=11.8243, DownHeight1=7.5908, DownHeight2=3.1227, Lin2=18.5000, inner_r2=10.3550, Lin=18.9652, inner_r=-8.5111
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (74s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=13216) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=5788
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-27.77 penalty=0.461 [WARMUP — force run]
+  [wakefield] OK (3743s, ? cells)
+  [atomize] saving wakefield .npz
+You are working in interactive mode.
+  [wakefield_offset] TRIGGER — z_longitudinal raw=0.00 penalty=0.262 [WARMUP — force run]
+  [wakefield_offset] OK (3566s, ? cells)
+  [atomize] saving wakefield_offset .npz
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+You are working in interactive mode.
+You are working in interactive mode.
+  objectives: z_longitudinal=0.002838  z_transverse=0.0009112  antenna_absorption=-27.77  antenna_absorption_db=-28.51
+  [log] written to D:/Results/optimization_log.xlsx (1 evals)
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 1 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 5 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 8 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 9 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 11 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 13 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:442: ConvergenceWarning: The optimal value found for dimension 0 of parameter k2__noise_level is close to the specified lower bound 1e-06. Decreasing the bound and calling fit again may find a better value.
+  warnings.warn(
+[iter 2] selfangle1=76.3186, selfangle2=141.6839, inner_angle=-70.3601, inner_angle3=52.8900, FolkHeight=25.7427, FolkHeight2=32.8183, UpperHeight1=6.4352, UpperHeight2=21.1770, DownHeight1=19.1830, DownHeight2=6.2242, Lin2=14.0390, inner_r2=10.5007, Lin=27.1465, inner_r=-13.2906
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (5.2 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (5s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=5788) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=16168
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 1 exhausted for iteration 2 after 0 attempts
+Tier 3 attempt 1/2 for iteration 2: cleaning result folder and reconnecting
+[iter 2] selfangle1=76.3186, selfangle2=141.6839, inner_angle=-70.3601, inner_angle3=52.8900, FolkHeight=25.7427, FolkHeight2=32.8183, UpperHeight1=6.4352, UpperHeight2=21.1770, DownHeight1=19.1830, DownHeight2=6.2242, Lin2=14.0390, inner_r2=10.5007, Lin=27.1465, inner_r=-13.2906
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (79s, ? cells)
+You are working in interactive mode.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=13292) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=12764
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-19.23 penalty=0.992 [WARMUP — force run]
+  [wakefield] OK (4543s, ? cells)
+  [atomize] saving wakefield .npz
+You are working in interactive mode.
+  [wakefield_offset] TRIGGER — z_longitudinal raw=0.00 penalty=0.128 [WARMUP — force run]
+  [wakefield_offset] OK (4673s, ? cells)
+  [atomize] saving wakefield_offset .npz
+[Phase 2] Evaluating 4 objectives
+You are working in interactive mode.
+You are working in interactive mode.
+You are working in interactive mode.
+  objectives: z_longitudinal=0.001171  z_transverse=0.0004199  antenna_absorption=-19.23  antenna_absorption_db=-25.43
+  [log] written to D:/Results/optimization_log.xlsx (2 evals)
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 3 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 4 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 6 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 11 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 13 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:442: ConvergenceWarning: The optimal value found for dimension 0 of parameter k2__noise_level is close to the specified lower bound 1e-06. Decreasing the bound and calling fit again may find a better value.
+  warnings.warn(
+[iter 3] selfangle1=66.7394, selfangle2=67.8097, inner_angle=-82.9653, inner_angle3=85.5423, FolkHeight=34.1436, FolkHeight2=30.8359, UpperHeight1=14.7531, UpperHeight2=10.0281, DownHeight1=1.7428, DownHeight2=16.3342, Lin2=28.2070, inner_r2=8.8639, Lin=16.9972, inner_r=-5.4874
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (9.0 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (9s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=12764) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=19360
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 1 exhausted for iteration 3 after 0 attempts
+Tier 3 attempt 1/2 for iteration 3: cleaning result folder and reconnecting
+[iter 3] selfangle1=66.7394, selfangle2=67.8097, inner_angle=-82.9653, inner_angle3=85.5423, FolkHeight=34.1436, FolkHeight2=30.8359, UpperHeight1=14.7531, UpperHeight2=10.0281, DownHeight1=1.7428, DownHeight2=16.3342, Lin2=28.2070, inner_r2=8.8639, Lin=16.9972, inner_r=-5.4874
+[Phase 1] Non-conditional projects (1)
+Solver mesh error (3.2 s): An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+  [frequency_domain] FAIL [mesh] (3s)
+Solver 'frequency_domain' failed [mesh]: An error occurred while trying to execute run_solver:
+Terminated on unknown error
+
+Reported error messages:
+ERROR: Tetrahedral Meshing: Terminated abnormally
+ERROR: Could not read mesh.
+ERROR: 2 errors occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=18112) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=956
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 attempt 2/2 for iteration 3: cleaning result folder and reconnecting
+[iter 3] selfangle1=66.7394, selfangle2=67.8097, inner_angle=-82.9653, inner_angle3=85.5423, FolkHeight=34.1436, FolkHeight2=30.8359, UpperHeight1=14.7531, UpperHeight2=10.0281, DownHeight1=1.7428, DownHeight2=16.3342, Lin2=28.2070, inner_r2=8.8639, Lin=16.9972, inner_r=-5.4874
+[Phase 1] Non-conditional projects (1)
+Solver error (unclassified, 17.6 s): An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+  [frequency_domain] FAIL [None] (18s)
+Solver 'frequency_domain' failed [None]: An error occurred while trying to execute run_solver:
+Terminated abnormally
+
+Reported error messages:
+ERROR: Frequency Domain Solver (TET): Terminated abnormally
+ERROR: 1 error and 1 warning occurred.
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=11004) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=832
+[Phase 1.5] Conditional projects (2)
+  [wakefield] SKIP — source project 'frequency_domain' not opened this eval (stale data guard)
+  [wakefield_offset] SKIP — source project 'wakefield' not opened this eval (stale data guard)
+[Phase 2] Evaluating 4 objectives
+Objective 'z_longitudinal' references project 'wakefield' — no results available
+Objective 'z_transverse' references project 'wakefield_offset' — no results available
+Objective 'antenna_absorption' references project 'frequency_domain' — no results available
+Objective 'antenna_absorption_db' references project 'frequency_domain' — no results available
+  objectives: z_longitudinal=N/A  z_transverse=N/A  antenna_absorption=N/A  antenna_absorption_db=N/A
+Tier 3 exhausted for iteration 3 after 2 attempts
+All retry tiers exhausted for iteration 3: solver_failed. Skipping.
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 0 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 1 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 2 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 4 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 5 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 6 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 7 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 10 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 11 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:452: ConvergenceWarning: The optimal value found for dimension 12 of parameter k1__k2__length_scale is close to the specified upper bound 5.0. Increasing the bound and calling fit again may find a better value.
+  warnings.warn(
+D:\code_framework\cst_ver4\.venv\lib\site-packages\sklearn\gaussian_process\kernels.py:442: ConvergenceWarning: The optimal value found for dimension 0 of parameter k2__noise_level is close to the specified lower bound 1e-06. Decreasing the bound and calling fit again may find a better value.
+  warnings.warn(
+[iter 4] selfangle1=87.0761, selfangle2=140.2064, inner_angle=-55.3478, inner_angle3=67.1170, FolkHeight=3.2161, FolkHeight2=8.9368, UpperHeight1=20.3921, UpperHeight2=11.8295, DownHeight1=22.1453, DownHeight2=19.0967, Lin2=21.5624, inner_r2=8.8383, Lin=24.2372, inner_r=-13.4627
+[Phase 1] Non-conditional projects (1)
+  [frequency_domain] OK (78s, ? cells)
+You are working in interactive mode.
+  [atomize] saving F2F .npz
+  [cooldown] 15s before inter-pass reset
+[Inter-pass] Resetting DE before conditional projects
+DesignEnvironment.close() hung (PID=832) — abandoning COM thread. The CST process may need a manual taskkill.
+[Inter-pass] New DE PID=17764
+[Phase 1.5] Conditional projects (2)
+  [wakefield] TRIGGER — antenna_absorption raw=-29.55 penalty=0.000 [WARMUP — force run]

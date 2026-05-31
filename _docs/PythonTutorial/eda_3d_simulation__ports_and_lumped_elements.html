@@ -1,0 +1,335 @@
+﻿<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>3D Simulation: Ports &amp; Lumped Elements &#8212; CST Python Tutorial</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/sphinxdoc.css?v=0a676766" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js?v=16ad857a"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=4825356b"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Working with Traces" href="eda_modify_net_geometries__working_with_traces.html" />
+    <link rel="prev" title="Settings for 3D simulation" href="eda_settings_for_3d_simulation.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__working_with_traces.html" title="Working with Traces"
+             accesskey="N">next</a></li>
+        <li class="right" >
+          <a href="eda_settings_for_3d_simulation.html" title="Settings for 3D simulation"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3D Simulation: Ports &amp; Lumped Elements</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="d-simulation-ports-lumped-elements">
+<h1>3D Simulation: Ports &amp; Lumped Elements<a class="headerlink" href="#d-simulation-ports-lumped-elements" title="Permalink to this heading">¶</a></h1>
+<p>In this chapter, we will use the functions explained in the
+<a href="eda_settings_for_3d_simulation.html">Settings for 3D Simulation</a>-Chapter.
+The goal is to move components from the PCB onto the schematic, and model their behavior with circuit elements.</p>
+<p>Preparations are a bit longer, since some code from the circuits module is needed:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cst.interface</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cst.eda</span><span class="w"> </span><span class="kn">import</span> <span class="n">pcb_api</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cst.units</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tempfile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="n">data_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">install_paths</span><span class="o">.</span><span class="n">root</span><span class="p">())</span> <span class="o">/</span> <span class="s2">&quot;Online Help&quot;</span> <span class="o">/</span> <span class="s2">&quot;PythonTutorial&quot;</span> <span class="o">/</span> <span class="s2">&quot;data&quot;</span>
+
+<span class="n">project_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Working in temporary directory: </span><span class="si">{</span><span class="n">project_dir</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="n">pcb_file</span> <span class="o">=</span> <span class="n">data_dir</span> <span class="o">/</span> <span class="s1">&#39;cst_phone.tgz&#39;</span>
+
+
+<span class="c1"># from circuits sesssion</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">create_block</span><span class="p">(</span>
+    <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span>
+    <span class="n">block_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="nb">property</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">position</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">rotation</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a new block in the given project of the given type, more attributes or the block are optional&quot;&quot;&quot;</span>
+    <span class="n">block</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Type</span><span class="p">(</span><span class="n">block_type</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">property</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="nb">property</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">block</span><span class="o">.</span><span class="n">SetDoubleProperty</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">position</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Position</span><span class="p">(</span><span class="n">position</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">position</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">rotation</span><span class="p">:</span>
+        <span class="n">block</span><span class="o">.</span><span class="n">Rotate</span><span class="p">(</span><span class="n">rotation</span><span class="p">)</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Create</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>We proceed step by step. First gather the inputs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create an instance of a PCB</span>
+<span class="n">pcb</span> <span class="o">=</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="o">.</span><span class="n">convert_from</span><span class="p">(</span><span class="n">pcb_file</span><span class="p">)</span>
+
+<span class="c1"># Dict of components that should be replaced with the given values</span>
+<span class="n">components</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;L4&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="mi">470</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+    <span class="s2">&quot;L5&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="mi">470</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+    <span class="s2">&quot;L6&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="mi">470</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+    <span class="s2">&quot;L7&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;R&quot;</span><span class="p">:</span> <span class="mf">0.001</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">:</span> <span class="mi">470</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>After creating an instance of our Example-PCB, we create a dictionary containing
+the names of the elements we want to replace, and the values for the replacement circuit.
+Using the names, we create a differential port between the two pins of the elements we want to replace.
+In our case, this is L4, L5, L6 and L7.
+This is done using the <code class="docutils literal notranslate"><span class="pre">create_differential_port_between_two_pins()</span></code> function:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_differential_port_for_component</span><span class="p">(</span><span class="n">pcb</span><span class="p">:</span> <span class="n">pcb_api</span><span class="o">.</span><span class="n">PCB</span><span class="p">,</span> <span class="n">refdes</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a differential port between two pins of the given component.&quot;&quot;&quot;</span>
+
+    <span class="n">comp</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">component</span><span class="p">(</span><span class="n">refdes</span><span class="p">)</span>
+    <span class="n">pins</span> <span class="o">=</span> <span class="n">comp</span><span class="o">.</span><span class="n">pins</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">pins</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span>
+
+    <span class="c1"># Create differential port between two pins</span>
+    <span class="n">discrete_port</span> <span class="o">=</span> <span class="n">pcb</span><span class="o">.</span><span class="n">simulation_settings</span><span class="o">.</span><span class="n">discrete_port</span><span class="p">(</span><span class="n">pins</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">discrete_port</span><span class="o">.</span><span class="n">use_pec_sheet</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">discrete_port</span><span class="o">.</span><span class="n">reference_pins</span> <span class="o">=</span> <span class="p">[</span><span class="n">pins</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">]</span>
+    <span class="n">discrete_port</span><span class="o">.</span><span class="n">label</span> <span class="o">=</span> <span class="n">refdes</span>
+    
+
+<span class="c1"># Create differential port for all listed components</span>
+<span class="k">for</span> <span class="n">refdes</span> <span class="ow">in</span> <span class="n">components</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+    <span class="n">create_differential_port_for_component</span><span class="p">(</span><span class="n">pcb</span><span class="p">,</span> <span class="n">refdes</span><span class="o">=</span><span class="n">refdes</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, the pcb setup is put into CST:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Connect to a running DesignEnvironment or start a new one</span>
+<span class="n">de</span> <span class="o">=</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">DesignEnvironment</span><span class="o">.</span><span class="n">connect_to_any_or_new</span><span class="p">()</span>
+
+<span class="c1"># create a new MWS project</span>
+<span class="n">prj_3d</span> <span class="o">=</span> <span class="n">de</span><span class="o">.</span><span class="n">new_mws</span><span class="p">()</span>
+
+<span class="c1"># import the pcb to the project</span>
+<span class="n">pcb</span><span class="o">.</span><span class="n">import_to</span><span class="p">(</span><span class="n">prj_3d</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, observe, that due to 3D ports, there are pins on the schematic block:
+<img alt="eda_3d_schematic_block.png" src="images/eda_3d_schematic_block.png" /></p>
+<p>Now, we put some inductor models on the schematic.
+We use the sophisticated function <code class="docutils literal notranslate"><span class="pre">create_standard_inductor_model_circuit</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">create_standard_inductor_model_circuit</span><span class="p">(</span>
+    <span class="n">prj</span><span class="p">:</span> <span class="n">cst</span><span class="o">.</span><span class="n">interface</span><span class="o">.</span><span class="n">Project</span><span class="p">,</span>
+    <span class="n">port_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">pcb_block_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">L</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">470</span><span class="p">,</span>
+    <span class="n">R</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">C</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a standard inductor model circuit in the given project.&quot;&quot;&quot;</span>
+
+    <span class="c1"># Get X- and Y-Position of the Pin in the Schematic</span>
+    <span class="n">pcb_block</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+    <span class="n">pcb_block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">pcb_block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">pcb_block_name</span><span class="p">)</span>
+
+    <span class="c1"># Get the pin index from the port index</span>
+    <span class="n">pin_index</span> <span class="o">=</span> <span class="n">pcb_block</span><span class="o">.</span><span class="n">GetPinIndexFromPortIndex</span><span class="p">(</span><span class="n">port_index</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">pin_index</span> <span class="o">&gt;=</span> <span class="mi">0</span>
+
+    <span class="n">pin_pos_x</span> <span class="o">=</span> <span class="n">pcb_block</span><span class="o">.</span><span class="n">GetPinPositionX</span><span class="p">(</span><span class="n">pin_index</span><span class="p">)</span>
+    <span class="n">pin_pos_y</span> <span class="o">=</span> <span class="n">pcb_block</span><span class="o">.</span><span class="n">GetPinPositionY</span><span class="p">(</span><span class="n">pin_index</span><span class="p">)</span>
+
+    <span class="c1"># Get the layout of the Pin</span>
+    <span class="n">layout</span> <span class="o">=</span> <span class="n">pcb_block</span><span class="o">.</span><span class="n">GetPinLayout</span><span class="p">(</span><span class="n">pin_index</span><span class="p">)</span>
+
+    <span class="c1"># Depending on the layout, Change settings for the Position of the model circuit</span>
+    <span class="k">if</span> <span class="n">layout</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;RIGHT&quot;</span><span class="p">:</span>
+        <span class="n">sign</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">rotation</span> <span class="o">=</span> <span class="mi">180</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">sign</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+        <span class="n">rotation</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">translator_x</span> <span class="o">=</span> <span class="n">sign</span> <span class="o">*</span> <span class="p">(</span><span class="mi">300</span> <span class="o">+</span> <span class="n">layout</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">600</span><span class="p">)</span>
+
+    <span class="c1"># Set X-Position for the components</span>
+    <span class="n">component_pos_x</span> <span class="o">=</span> <span class="n">pin_pos_x</span> <span class="o">+</span> <span class="n">translator_x</span>
+
+    <span class="c1"># Create Inductor</span>
+    <span class="n">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Inductor&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;L</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="n">component_pos_x</span> <span class="o">+</span> <span class="p">(</span><span class="n">sign</span> <span class="o">*</span> <span class="mi">100</span><span class="p">),</span> <span class="n">pin_pos_y</span> <span class="o">-</span> <span class="mi">100</span><span class="p">),</span>
+        <span class="nb">property</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Inductance&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">L</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">},</span>
+        <span class="n">rotation</span><span class="o">=</span><span class="n">rotation</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Create Resistor</span>
+    <span class="n">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Resistor&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;R</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="n">component_pos_x</span> <span class="o">-</span> <span class="p">(</span><span class="n">sign</span> <span class="o">*</span> <span class="mi">100</span><span class="p">),</span> <span class="n">pin_pos_y</span> <span class="o">-</span> <span class="mi">100</span><span class="p">),</span>
+        <span class="nb">property</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Resistance&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">R</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">},</span>
+        <span class="n">rotation</span><span class="o">=</span><span class="n">rotation</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Create Capacitor</span>
+    <span class="n">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;CircuitBasic\Capacitor&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;C</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="n">component_pos_x</span><span class="p">,</span> <span class="n">pin_pos_y</span><span class="p">),</span>
+        <span class="nb">property</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Capacitance&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">C</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">},</span>
+        <span class="n">rotation</span><span class="o">=</span><span class="n">rotation</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Create Ground</span>
+    <span class="n">create_block</span><span class="p">(</span>
+        <span class="n">prj</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s2">&quot;Ground&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;GND</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">position</span><span class="o">=</span><span class="p">(</span><span class="n">component_pos_x</span> <span class="o">+</span> <span class="p">(</span><span class="n">sign</span> <span class="o">*</span> <span class="mi">200</span><span class="p">),</span> <span class="n">pin_pos_y</span> <span class="o">+</span> <span class="mi">25</span><span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Create list of component pins that should be connected</span>
+    <span class="n">component_pins1</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="n">pcb_block_name</span><span class="p">,</span> <span class="n">pin_index</span><span class="p">],</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;R</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;C</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="p">]</span>
+    <span class="n">component_pins2</span> <span class="o">=</span> <span class="p">[[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;L</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;R</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span>
+    <span class="n">component_pins3</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;GND</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;L</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+        <span class="p">[</span><span class="s2">&quot;Block&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;C</span><span class="si">{</span><span class="n">pin_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">]</span>
+
+    <span class="c1"># Connect pins of each list of component pins</span>
+    <span class="n">net</span> <span class="o">=</span> <span class="n">prj</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Net</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">AddComponentPorts</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">component_pins1</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">AddComponentPorts</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">component_pins2</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">AddComponentPorts</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">component_pins3</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="n">net</span><span class="o">.</span><span class="n">Apply</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>
+<span class="c1"># Get the schematic Block of the PCB</span>
+<span class="n">block</span> <span class="o">=</span> <span class="n">prj_3d</span><span class="o">.</span><span class="n">schematic</span><span class="o">.</span><span class="n">Block</span>
+<span class="n">block</span><span class="o">.</span><span class="n">StartBlockNameIteration</span><span class="p">()</span>
+
+<span class="c1"># PCB Block is the only Block in the project at the moment</span>
+<span class="n">pcb_block_name</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetNextBlockName</span><span class="p">()</span>
+<span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">pcb_block_name</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">port_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">block</span><span class="o">.</span><span class="n">GetNumberOfPorts</span><span class="p">()):</span>
+    <span class="c1"># Get the block again, as it is reset in &quot;Create_standard_inductor_model_circuit&quot;</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="n">block</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="n">pcb_block_name</span><span class="p">)</span>
+
+    <span class="n">port_label</span> <span class="o">=</span> <span class="n">block</span><span class="o">.</span><span class="n">GetPortLabel</span><span class="p">(</span><span class="n">port_index</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">port_label</span> <span class="ow">in</span> <span class="n">components</span><span class="p">:</span>
+        <span class="n">create_standard_inductor_model_circuit</span><span class="p">(</span>
+            <span class="n">prj_3d</span><span class="p">,</span>
+            <span class="n">port_index</span><span class="p">,</span>
+            <span class="n">pcb_block_name</span><span class="p">,</span>
+            <span class="n">R</span><span class="o">=</span><span class="n">components</span><span class="p">[</span><span class="n">port_label</span><span class="p">][</span><span class="s2">&quot;R&quot;</span><span class="p">],</span>
+            <span class="n">L</span><span class="o">=</span><span class="n">components</span><span class="p">[</span><span class="n">port_label</span><span class="p">][</span><span class="s2">&quot;L&quot;</span><span class="p">],</span>
+            <span class="n">C</span><span class="o">=</span><span class="n">components</span><span class="p">[</span><span class="n">port_label</span><span class="p">][</span><span class="s2">&quot;C&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+</pre></div>
+</div>
+<p>The function needs:</p>
+<ul class="simple">
+<li><p>an instance of “pcb_api.PCB”</p></li>
+<li><p>a component name</p></li>
+</ul>
+<p>The function then queries the API for the pins of the component, and whether there are exactly two pins.
+It then creates a discrete port between the two pins.</p>
+<ul class="simple">
+<li><p>The first pin is passed to <code class="docutils literal notranslate"><span class="pre">pcb.simulation_settings.discrete_port(pin)</span></code>.</p></li>
+<li><p>The second pin is then put into <code class="docutils literal notranslate"><span class="pre">reference_pins</span></code>.</p></li>
+</ul>
+<p>By setting <code class="docutils literal notranslate"><span class="pre">use_pec_sheet</span> <span class="pre">=</span> <span class="pre">False</span></code> we instruct the 3D model creation, to not create a component PEC sheet, but instead
+create a horizontal port.
+The label of the port is set to the name of the element replaced.
+All other settings are left at their default value.</p>
+<p>After this is done for all four components that we want to replace, we are ready to import the pcb to a 3D project.
+This is done as usually, using <code class="docutils literal notranslate"><span class="pre">pcb.import_to()</span></code>.</p>
+<p>As shown below, we can see the differential ports on our PCB.</p>
+<p><img alt="eda_3d_simulation_differential_ports.png" src="images/eda_3d_simulation_differential_ports.png" /></p>
+<p>Now we can insert the equivalent circuits for the four inductors.
+To do this, we iterate through the pins of the PCB, get the corresponding label of the port,
+and pass the pin and the desired component values to <code class="docutils literal notranslate"><span class="pre">create_standard_inductor_model_circuit()</span></code>.</p>
+<p>Depending on the position of the pins, the created circuit is created at different positions in the schematic.
+To determine if the pin is on the right, or the left side of our PCB Block,
+we can use the <code class="docutils literal notranslate"><span class="pre">GetPinLayout(pin)</span></code> method on the PCB block.
+This returns a tuple of two values.
+The first one is a string stating what side the pin is positioned on the block.
+The values can be “LEFT”, “RIGHT”, “TOP” or “BOTTOM”.
+The second value of the tuple represents the position of the pin on the stated side.</p>
+<p>In the code shown above, we know that the pins will only be either on the “LEFT” side of the block or on the “RIGHT”.
+If the pin is on the right, we set the value of the “rotation” variable to 180.
+This will determine the rotation of the components later on so that we can easily create a mirrored circuit.
+The variable “sign” also depends on the side that the pin is.
+This variable determines if we translate the components to the right, or to the left.</p>
+<p>Using these calculations, a ground block and the three blocks required for the equivalent circuit are created.
+The position of each block is altered slightly from the previously calculated positions.
+Finally, three nets are created, connecting the components according to the equivalent circuit for the inductor.</p>
+<p>The resulting schematic can be seen below.</p>
+<p><img alt="eda_3d_simulation_equivalent_circuit_creation.png" src="images/eda_3d_simulation_equivalent_circuit_creation.png" /></p>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="eda_modify_net_geometries__working_with_traces.html" title="Working with Traces"
+             >next</a></li>
+        <li class="right" >
+          <a href="eda_settings_for_3d_simulation.html" title="Settings for 3D simulation"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">CST Python Tutorial</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">3D Simulation: Ports &amp; Lumped Elements</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2009-2025 Dassault Systemes Deutschland GmbH. All rights reserved.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.1.2.
+    </div>
+  </body>
+</html>

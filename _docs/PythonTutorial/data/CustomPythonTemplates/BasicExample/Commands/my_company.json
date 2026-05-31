@@ -1,0 +1,93 @@
+{
+    "name": "MyCompany",
+    "parameters": {
+        "venv_path": "${CST_APPDATA_PATH}{/}my_comp_venv",
+        "scripts": {
+            "linux": "${venv_path}/bin",
+            "win32": "${venv_path}{/}Scripts"
+        },
+        "base_python_interpreter": {
+            "win32": "${CST_INSTALL_PATH}{/}Python{/}python.exe",
+            "linux": "${CST_INSTALL_PATH}/Python/bin/python"
+        },
+        "venv_python_interpreter": "${scripts}{/}python"
+    },
+    "subcommands": [
+        {
+            "name": "Setup",
+            "subcommands": [
+                {
+                    "name": "Initialize/Update venv",
+                    "program": [
+                        "${base_python_interpreter}",
+                        "-m",
+                        "venv",
+                        "${venv_path}",
+                        "--clear",
+                        "&&",
+                        "${scripts}/pip",
+                        "install",
+                        "-e",
+                        "${CST_INSTALL_PATH_AMD64}{/}python_cst_libraries",
+                        "&&",
+                        "${scripts}{/}pip",
+                        "install",
+                        "-r",
+                        "${CST_COMMAND_DIR}{/}requirements.txt"
+                    ]
+                }
+            ],
+            "console": {
+                "success_exit_delay": 5,
+                "pause_on_error": true,
+                "keep_open": false
+            }
+        },
+        {
+            "name": "Scripts",
+            "subcommands": [
+                {
+                    "name": "Run hello world",
+                    "program": "${venv_python_interpreter}",
+                    "args": [
+                        "${CST_COMMAND_DIR}{/}..{/}src{/}my_company{/}hello_world.py",
+                        "--cst-pid=${CST_STUDIO_PID}",
+                        "--prj=\"${CST_ACTIVE_PROJECT}\""
+                    ]
+                },
+                {
+                    "name": "Run example script",
+                    "program": "${venv_python_interpreter}",
+                    "args": [
+                        "${CST_COMMAND_DIR}{/}..{/}src{/}my_company{/}example_script.py",
+                        "--cst-pid=${CST_STUDIO_PID}",
+                        "--prj=\"${CST_ACTIVE_PROJECT}\""
+                    ]
+                }
+            ],
+            "console": {
+                "success_exit_delay": 5,
+                "pause_on_error": true,
+                "keep_open": false
+            }
+        },
+        {
+            "name": "GUI Apps",
+            "subcommands": [
+                {
+                    "name": "Run example app",
+                    "program": "${venv_python_interpreter}",
+                    "args": [
+                        "${CST_COMMAND_DIR}{/}..{/}src{/}my_company{/}example_app.py",
+                        "--cst-pid=${CST_STUDIO_PID}",
+                        "--prj=\"${CST_ACTIVE_PROJECT}\""
+                    ]
+                }
+            ],
+            // For GUI apps we typically do not want/need a terminal
+            "console": {
+                "show": false
+            }
+        }
+    ]
+}

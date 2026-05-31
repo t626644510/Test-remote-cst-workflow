@@ -6,21 +6,26 @@ Separate Workflow 1 (single-project single-pass RF gun SAO
 optimisation) from the shared `cst_optimization` package into its own
 independent workflow package under `workflows/rfgun_single_pass/`.
 
-## Branch strategy
+## Status (Phase 7 -- complete)
 
-This branch is created from the shared codebase after Phase 1
-(inventory).  Every phase creates or updates a report in
-`reports/workflow1_split/phase_XX_*.md`.
+Workflow 1 now has its own:
+
+- **Runner** -- ``run.py`` with CLI flags and ``build_arg_parser()``
+- **Config** -- ``config.yaml`` (WF1 sections only)
+- **Builder** -- ``workflow.py::build_workflow_1()`` (local, no factory import)
+- **Evaluator** -- ``Workflow1Evaluator`` in ``evaluator.py``
+- **Tests** -- ``tests/workflows/test_rfgun_single_pass_imports.py`` (8 no-CST smoke tests)
+- **Shim** -- ``run_workflow_1.py`` (backward-compatible entry point)
 
 ## Allowed modifications
 
 | Path | When |
 |---|---|
-| `workflows/rfgun_single_pass/` | Phase 2 onward |
-| `workflows/rfgun_single_pass/config.yaml` | Phase 4 onward |
-| `workflows/rfgun_single_pass/evaluator.py` | Phase 5 onward |
-| `workflows/rfgun_single_pass/workflow.py` | Phase 5 onward |
-| `reports/workflow1_split/` | Phase 1 onward |
+| `workflows/rfgun_single_pass/` | All phases |
+| `workflows/rfgun_single_pass/config.yaml` | Phase 4 onward (with report) |
+| `workflows/rfgun_single_pass/evaluator.py` | Phase 5 onward (behaviour-preserving changes only) |
+| `workflows/rfgun_single_pass/workflow.py` | Phase 5 onward (behaviour-preserving changes only) |
+| `reports/workflow1_split/` | All phases |
 | `run_workflow_1.py` | Phase 3 onward (runner migration only) |
 | `tests/workflows/` | Phase 6 onward (unit / integration tests) |
 
@@ -33,27 +38,16 @@ This branch is created from the shared codebase after Phase 1
 - `src/cst_optimization/` (entire tree)
 - `examples/` (entire tree)
 - Writing Workflow 1 logic back into `src/cst_optimization/factory.py`
+- Modifying Workflow 2/3 to suit Workflow 1
 
-## Rules
+## Minimum validation before any WF1 commit
 
-1. Never modify Workflow 2 or Workflow 3 code to suit Workflow 1.
-2. Never push Workflow 1-specific logic back into `core/` or
-   `factory.py` once it has been extracted.
-3. Every phase must add or update a report in `reports/workflow1_split/`
-   documenting what was done, what was tested, and the real terminal
-   output.
-4. Every phase must run both compileall and the no-CST smoke tests, and
-   paste real output into the report:
+```powershell
+python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
+pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short
+```
 
-   ```powershell
-   python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
-   pytest tests/workflows/test_rfgun_single_pass_imports.py
-   ```
-
-5. Runtime behaviour must not change until Phase 7 (final end-to-end
-   validation with identical results).
-
-## Phase roadmap
+## Phase roadmap (completed)
 
 | Phase | Deliverable |
 |---|---|
@@ -61,6 +55,8 @@ This branch is created from the shared codebase after Phase 1
 | 2 | Directory skeleton |
 | 3 | Runner migration |
 | 4 | Config split |
+| 4.1 | Logging fix |
 | 5 | Evaluator extraction |
+| 5.1 | Path fix |
 | 6 | No-CST smoke tests |
 | 7 | Documentation / final report |

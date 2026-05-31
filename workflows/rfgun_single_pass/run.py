@@ -76,8 +76,7 @@ def _setup_logging(log_cfg: dict) -> str:
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for Workflow 1 CLI.
-    """
+    """Build the argument parser for Workflow 1 CLI."""
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
     parser.add_argument(
         "--config", type=str, default=str(DEFAULT_CONFIG_PATH),

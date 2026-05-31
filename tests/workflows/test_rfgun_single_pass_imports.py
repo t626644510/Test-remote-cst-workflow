@@ -166,6 +166,13 @@ def test_no_wf2_objective_side_effect_imports():
 # ============================================================
 
 
+
+
+def test_runner_does_not_use_loaded_count():
+    src = (WF1_PACKAGE / 'run.py').read_text('utf-8')
+    assert 'loaded_count' not in src
+    assert '.load()' in src
+    assert 'get_warm_xy' in src
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

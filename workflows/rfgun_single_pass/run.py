@@ -183,7 +183,7 @@ def main() -> None:
 
     # Load prior data from checkpoint for warm-start
     prior_data = None
-    if ckpt.loaded_count > 0:
+    if ckpt.load():
         warm_xy = ckpt.get_warm_xy()
         if warm_xy is not None and len(warm_xy[0]) > 0:
             prior_data = warm_xy

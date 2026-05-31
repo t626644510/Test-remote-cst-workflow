@@ -217,8 +217,8 @@ def main() -> None:
         )
         ckpt.clear()
         _logger.info("Workflow 1 completed. Best: %s", result)
-        print(f"\nDone. Best X: {result.get('x', 'N/A')}")
-        print(f"Best F: {result.get('fun', 'N/A')}")
+        print(f"\nDone. Best X: {result.x_opt}")
+        print(f"Best F: {result.f_opt}")
     except KeyboardInterrupt:
         _logger.info("Workflow 1 interrupted by user -- checkpoint preserved")
         print("\nInterrupted. Checkpoint saved.")

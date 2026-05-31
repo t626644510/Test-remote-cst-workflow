@@ -196,6 +196,13 @@ def test_workflow_build_sao_reads_n_initial_samples_key():
     src = (WF1_PACKAGE / 'workflow.py').read_text('utf-8')
     assert 'n_initial_samples' in src
     assert 'n_initial' in src
+
+
+def test_runner_prints_optimization_result_attributes():
+    src = (WF1_PACKAGE / 'run.py').read_text('utf-8')
+    assert 'result.get(' not in src
+    assert 'result.x_opt' in src
+    assert 'result.f_opt' in src
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

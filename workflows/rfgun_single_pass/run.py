@@ -214,8 +214,6 @@ def main() -> None:
         result = opt.optimize(
             evaluator=evaluator,
             prior_data=prior_data,
-            n_initial=n_initial,
-            n_iterations=n_iterations,
         )
         ckpt.clear()
         _logger.info("Workflow 1 completed. Best: %s", result)

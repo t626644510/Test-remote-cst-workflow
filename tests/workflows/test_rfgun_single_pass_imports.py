@@ -3,6 +3,7 @@
 import sys
 from pathlib import Path
 
+import ast
 import pytest
 import yaml
 
@@ -173,6 +174,22 @@ def test_runner_does_not_use_loaded_count():
     assert 'loaded_count' not in src
     assert '.load()' in src
     assert 'get_warm_xy' in src
+
+
+def test_runner_optimize_uses_only_supported_kwargs():
+    src = (WF1_PACKAGE / 'run.py').read_text('utf-8-sig')
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == 'optimize':
+                kwargs = {kw.arg for kw in node.keywords if kw.arg is not None}
+                assert 'evaluator' in kwargs
+                assert 'prior_data' in kwargs
+                assert 'n_initial' not in kwargs
+                assert 'n_iterations' not in kwargs
+                return
+    raise AssertionError('Could not find opt.optimize() call in run.py')
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

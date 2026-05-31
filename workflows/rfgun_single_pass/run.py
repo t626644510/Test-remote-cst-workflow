@@ -157,7 +157,7 @@ def main() -> None:
             ckpt.mark_failed(idx, error=error)
         ckpt.save()
 
-    from cst_optimization.factory import build_workflow_1  # noqa: F811
+    from workflows.rfgun_single_pass.workflow import build_workflow_1  # noqa: F811
 
     workflow, opt, evaluator = build_workflow_1(
         cfg, checkpoint_callback=_on_evaluation,

@@ -18,6 +18,8 @@ This branch is created from the shared codebase after Phase 1
 |---|---|
 | `workflows/rfgun_single_pass/` | Phase 2 onward |
 | `workflows/rfgun_single_pass/config.yaml` | Phase 4 onward |
+| `workflows/rfgun_single_pass/evaluator.py` | Phase 5 onward |
+| `workflows/rfgun_single_pass/workflow.py` | Phase 5 onward |
 | `reports/workflow1_split/` | Phase 1 onward |
 | `run_workflow_1.py` | Phase 3 onward (runner migration only) |
 | `tests/workflows/` | Phase 6 onward (unit / integration tests) |
@@ -30,11 +32,13 @@ This branch is created from the shared codebase after Phase 1
 - `config/workflow_3.yaml`
 - `src/cst_optimization/` (entire tree)
 - `examples/` (entire tree)
+- Writing Workflow 1 logic back into `src/cst_optimization/factory.py`
 
 ## Rules
 
 1. Never modify Workflow 2 or Workflow 3 code to suit Workflow 1.
-2. Never push Workflow 1-specific logic back into `core/`.
+2. Never push Workflow 1-specific logic back into `core/` or
+   `factory.py` once it has been extracted.
 3. Every phase must add or update a report in `reports/workflow1_split/`
    documenting what was done, what was tested, and the real terminal
    output.

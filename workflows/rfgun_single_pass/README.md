@@ -7,13 +7,19 @@ Optimisation (SAO) for the X-band RF gun cavity.  Workflow 1 evaluates
 a single CST project with a one-pass solve (fixed `f_data`), wrapped in
 a three-tier retry handler with post-evaluation graceful reset.
 
-## Current status (Phase 4 -- config split)
+## Current status (Phase 5 -- evaluator extracted)
 
 - The **actual runner** lives at ``run.py`` inside this package.
 - The root ``run_workflow_1.py`` is a thin compatibility shim.
 - The **default config** is ``config.yaml`` in this directory.
-- A ``--config`` CLI flag lets you override the config path.
-- CLI behaviour, logging, checkpoint, and optimizer are identical.
+- ``evaluator.py`` contains the ``Workflow1Evaluator`` class extracted
+  from the monolithic ``src/cst_optimization/factory.py``.
+- ``workflow.py`` contains the local ``build_workflow_1()`` builder that
+  does **not** import ``cst_optimization.factory``.
+- ``run.py`` now imports from ``workflows.rfgun_single_pass.workflow``
+  instead of ``cst_optimization.factory``.
+- All shared infrastructure (``core/``, ``parameters/``,
+  ``objectives/``, ``optimization/``) is still reused.
 
 ## Config
 
@@ -26,8 +32,8 @@ To use a different config:
 python run_workflow_1.py --config path/to/config.yaml
 ```
 
-The original ``config/default.yaml`` is **not deleted** -- it continues to
-serve Workflow 2, Workflow 3, and any legacy entry points.
+The original ``config/default.yaml`` is **not deleted** -- it continues
+to serve Workflow 2, Workflow 3, and any legacy entry points.
 
 ## Constraints respected in all phases
 
@@ -44,8 +50,8 @@ serve Workflow 2, Workflow 3, and any legacy entry points.
 ```powershell
 python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
 python run_workflow_1.py --help
-python run_workflow_1.py --config workflows/rfgun_single_pass/config.yaml --help
-python -c "from workflows.rfgun_single_pass.run import DEFAULT_CONFIG_PATH; print(DEFAULT_CONFIG_PATH)"
+python -c "from workflows.rfgun_single_pass.evaluator import Workflow1Evaluator; print(Workflow1Evaluator.__name__)"
+python -c "from workflows.rfgun_single_pass.workflow import build_workflow_1; print(build_workflow_1.__name__)"
 ```
 
 All must pass without errors.

@@ -20,3 +20,11 @@ Thumbs.db
 
 .vscode/
 .idea/
+
+workflow2_result/
+.claude/
+.pytest_cache/
+.vscode/
+AGENTS
+CLAUDE
+

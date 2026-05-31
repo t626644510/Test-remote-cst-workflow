@@ -1,7 +1,0 @@
-CST Messages — wakefield — iteration 0
-Captured: 2026-05-30T00:50:23.444980
-========================================================================
-
---- Capture 1 ---
-[MessageLogger] get_messages() raised: An error occurred while trying to retrieve all messages.
-

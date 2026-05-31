@@ -190,6 +190,12 @@ def test_runner_optimize_uses_only_supported_kwargs():
                 assert 'n_iterations' not in kwargs
                 return
     raise AssertionError('Could not find opt.optimize() call in run.py')
+
+
+def test_workflow_build_sao_reads_n_initial_samples_key():
+    src = (WF1_PACKAGE / 'workflow.py').read_text('utf-8')
+    assert 'n_initial_samples' in src
+    assert 'n_initial' in src
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

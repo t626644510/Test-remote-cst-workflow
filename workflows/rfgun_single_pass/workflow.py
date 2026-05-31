@@ -311,7 +311,7 @@ def _build_sao(
     seed: int,
 ) -> SurrogateAssistedOptimizer:
     """Build a single-objective SAO optimiser."""
-    n_initial = opt_cfg.get("n_initial", 20)
+    n_initial = opt_cfg.get("n_initial_samples", opt_cfg.get("n_initial", 20))
     n_iterations = opt_cfg.get("n_iterations", 100)
 
     acq_name = opt_cfg.get("acquisition_function", "ei")

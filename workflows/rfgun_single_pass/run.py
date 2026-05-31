@@ -21,8 +21,6 @@ import logging
 import os as _os
 import signal as _signal
 import sys
-import time as _time
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -109,9 +107,10 @@ def main() -> None:
     args = parser.parse_args()
 
     config_path: Path = Path(args.config).expanduser().resolve()
-    _logger.info("Workflow 1 starting  config=%s", config_path)
     cfg = yaml.safe_load(open(config_path, "r", encoding="utf-8"))
     log_dir = _setup_logging(cfg.get("logging", {}))
+    _logger.info("Workflow 1 starting")
+    _logger.info("Config: %s", config_path)
     _logger.info("Python: %s", sys.executable)
 
     # Apply CLI overrides

@@ -75,16 +75,8 @@ def _setup_logging(log_cfg: dict) -> str:
     return output_dir
 
 
-def main() -> None:
-    """Entry point for Workflow 1 SAO optimisation.
-
-    CLI overrides
-    -------------
-    --config     Path to Workflow 1 YAML config (default: ``config.yaml``
-                 next to this runner).
-    --seed       Override optimizer seed from config.
-    --n-iter     Override ``n_iterations`` from config.
-    --n-initial  Override ``n_initial_samples`` from config.
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for Workflow 1 CLI.
     """
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
     parser.add_argument(
@@ -104,6 +96,21 @@ def main() -> None:
         "--n-initial", type=int, default=None,
         help="Override n_initial_samples from config",
     )
+    return parser
+
+
+def main() -> None:
+    """Entry point for Workflow 1 SAO optimisation.
+
+    CLI overrides
+    -------------
+    --config     Path to Workflow 1 YAML config (default: ``config.yaml``
+                 next to this runner).
+    --seed       Override optimizer seed from config.
+    --n-iter     Override ``n_iterations`` from config.
+    --n-initial  Override ``n_initial_samples`` from config.
+    """
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     config_path: Path = Path(args.config).expanduser().resolve()

@@ -42,8 +42,14 @@ This branch is created from the shared codebase after Phase 1
 3. Every phase must add or update a report in `reports/workflow1_split/`
    documenting what was done, what was tested, and the real terminal
    output.
-4. Every phase must run `python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py`
-   and paste the real output into the phase report.
+4. Every phase must run both compileall and the no-CST smoke tests, and
+   paste real output into the report:
+
+   ```powershell
+   python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
+   pytest tests/workflows/test_rfgun_single_pass_imports.py
+   ```
+
 5. Runtime behaviour must not change until Phase 7 (final end-to-end
    validation with identical results).
 

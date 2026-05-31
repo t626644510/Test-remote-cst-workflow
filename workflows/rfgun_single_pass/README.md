@@ -1,5 +1,10 @@
 ﻿# Workflow 1 -- RF Gun Single-Pass SAO Optimisation
 
+## Status: VALIDATED
+
+The Workflow 1 separation is complete and validated end-to-end with
+both no-CST smoke tests and a live CST Studio Suite run.
+
 ## Purpose
 
 Single-project single-pass frequency-domain Surrogate-Assisted
@@ -7,34 +12,38 @@ Optimisation (SAO) for the X-band RF gun cavity.  Workflow 1 evaluates
 a single CST project with a one-pass solve (fixed `f_data`), wrapped in
 a three-tier retry handler with post-evaluation graceful reset.
 
-## Current status (Phase 7 -- finalised)
+## Validation
 
-Workflow 1 has been separated from the monolithic
-``src/cst_optimization/factory.py`` into its own package under
-``workflows/rfgun_single_pass/``.  The separation is stable: no-CST
-smoke tests pass, imports are clean, and the CLI/config/evaluator
-are independently testable.
+| Check | Result | Detail |
+|---|---|---|
+| no-CST smoke tests | **12/12 passed** | ``pytest tests/workflows/test_rfgun_single_pass_imports.py -v`` |
+| Live CST smoke | **PASS** | ``--n-initial 1 --n-iter 0``, all 7 metrics computed, no Python exceptions |
+| Final report | ``reports/workflow1_split/live_cst_smoke_report_final.md`` |
 
 ## Running
 
 ```powershell
-# Default config:
-python run_workflow_1.py
+# Production run (after localising config paths):
+python run_workflow_1.py --config workflows/rfgun_single_pass/config.local.yaml --n-initial 1 --n-iter 0
 
-# Explicit config:
-python run_workflow_1.py --config workflows/rfgun_single_pass/config.yaml
-
-# Via module:
-python -m workflows.rfgun_single_pass.run
-
-# CLI overrides:
-python run_workflow_1.py --seed 43 --n-iter 5 --n-initial 3
+# Quick smoke test (no CST):
+pytest tests/workflows/test_rfgun_single_pass_imports.py -v
 ```
 
-## Default config
+**Important:** ``config.local.yaml`` is a local copy of the config with
+machine-specific paths.  It should not be committed to the repository.
+Copy ``workflows/rfgun_single_pass/config.yaml`` to ``config.local.yaml``
+and adjust the ``cst.library_path`` and ``project.cst_path`` to match
+your environment.
 
-``workflows/rfgun_single_pass/config.yaml`` (extracted from the shared
-``config/default.yaml`` in Phase 4).
+### CLI flags
+
+| Flag | Description |
+|---|---|
+| ``--config`` | Path to YAML config (default: ``config.yaml`` next to runner) |
+| ``--seed`` | Override optimizer seed |
+| ``--n-iter`` | Override ``n_iterations`` |
+| ``--n-initial`` | Override ``n_initial_samples`` |
 
 ## Structure
 
@@ -42,12 +51,15 @@ python run_workflow_1.py --seed 43 --n-iter 5 --n-initial 3
 run_workflow_1.py                          # compatibility shim
 workflows/rfgun_single_pass/
     __init__.py                            # package marker
-    config.yaml                            # WF1-specific config
+    config.yaml                            # WF1-specific config (8 sections, 13 params, 7 objectives)
     run.py                                 # CLI runner + build_arg_parser()
     workflow.py                            # local build_workflow_1() builder
     evaluator.py                           # Workflow1Evaluator class
     README.md                              # this file
     BRANCH_CONTEXT.md                      # branch rules and roadmap
+tests/workflows/
+    test_rfgun_single_pass_imports.py       # 12 no-CST smoke tests
+reports/workflow1_split/                    # phase-by-phase reports
 ```
 
 ## Dependencies
@@ -61,24 +73,15 @@ workflows/rfgun_single_pass/
 - ``checkpoint.py`` (CheckpointManager)
 - ``workflows/recovery.py`` (EvaluationResult, EvaluationStatus)
 
-**Not imported (WF2/WF3 specific, not needed for WF1):**
-- ``cst_optimization.factory`` (monolithic builder -- was WF1 entry point)
-- ``objectives/wakefield.py`` (WF2 HOM analysis)
-- ``objectives/antenna.py`` (WF2 absorption analysis)
-- ``optimization/saea.py`` (WF2/3 evolutionary algorithm)
+**Not imported (intentionally excluded):**
+- ``cst_optimization.factory``
+- ``objectives/wakefield.py``
+- ``objectives/antenna.py``
 
-## Smoke tests
+## Branch recommendation
 
-No-CST smoke tests verify structural integrity without launching CST:
-
-```powershell
-python -m compileall src workflows run_workflow_1.py run_workflow_2.py run_workflow_3.py
-pytest tests/workflows/test_rfgun_single_pass_imports.py -v
-```
-
-## Live CST validation
-
-This branch has only passed no-CST smoke tests.  Numerical / behavioural
-equivalence with the pre-separation state must be validated with a
-small live CST run (e.g. ``--n-initial 1 --n-iter 0``) on a machine
-with CST Studio Suite installed before merging.
+This branch (``workflow/1-rfgun-single-pass``) can be kept as a
+long-lived Workflow 1 branch for ongoing development.  It should not
+be merged into ``main`` until the Workflow 2 and Workflow 3
+separation strategy is decided.  Generic improvements can be
+cherry-picked into ``main`` as needed.

@@ -18,7 +18,7 @@ still reused from ``src/cst_optimization/``.
 
 ## Commit range
 
-8 commits ahead of the shared baseline (``main`` from which this branch
+9 commits ahead of the shared baseline (``main`` from which this branch
 was created):
 
 | Commit | Phase | Description |
@@ -36,7 +36,7 @@ was created):
 ## Final structure
 
 ```
-run_workflow_1.py                                 # compatibility shim (unchanged, 12 lines)
+run_workflow_1.py                                 # compatibility shim 
 workflows/
     __init__.py
     rfgun_single_pass/

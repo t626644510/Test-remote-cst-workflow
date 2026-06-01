@@ -107,6 +107,6 @@ $ pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 
 ## Commits
 
-- Implementation commit: ``HEAD`` — ``Phase A20 rfgun_sao checkpoint persistence semantics``
-- Report/hash-fill commit: included in implementation commit
-- Final pushed HEAD: ``c598ee2``
+- Implementation commit: ``c598ee2`` — ``Phase A20 rfgun_sao checkpoint persistence semantics``
+- Report/hash-fill commit: ``2a8ee2e`` — ``A20 report: fill commit hash``
+- Final pushed HEAD: ``2a8ee2e``

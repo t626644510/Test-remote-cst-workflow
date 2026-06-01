@@ -83,6 +83,6 @@ $ pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 
 ## Commits
 
-- Implementation commit: ``HEAD`` — ``Phase A21 rfgun_sao checkpoint objective names hardening``
-- Report/hash-fill commit: included in implementation commit
-- Final pushed HEAD: ``133fef3``
+- Implementation commit: ``133fef3`` — ``Phase A21 rfgun_sao checkpoint objective names hardening``
+- Report/hash-fill commit: ``1344b00`` — ``A21 report: fill commit hash``
+- Final pushed HEAD: ``1344b00``

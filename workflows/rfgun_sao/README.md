@@ -41,25 +41,30 @@ CST objects), calibration diagnostics, accepted/rejected path logging, mixed
 gate precedence, multi-dip diagnostic status, checkpoint semantics audit,
 checkpoint persistence hardening, and metric invariant hardening.
 
-### Live CST two-pass (opt-in ``runtime=cst``)
+### Live CST smokes (opt-in ``runtime=cst``)
 
-| Phase | Validation | Result |
-|-------|------------|--------|
-| A13.4 | Full minimal pass — calibration success, measurement reached, 7 metrics computed | **Best F = -15185.95**, exit 0 |
-| A14 | Frequency gate rejection — ``target_ghz=0.0``, ``max_abs_offset_mhz=1.0`` | ``frequency_gate_reject``, measurement skipped, Best F = 1.0 |
-| A15 | S11 depth gate rejection — ``threshold_db=-100.0`` | ``s11_depth_gate_reject``, measurement skipped, Best F = 1.0 |
-| A16 | Mixed gate precedence no-CST regression | Cal failure > frequency > S11 depth > measurement, scalar/checkpoint semantics locked |
-| A17 | Multi-dip diagnostic status clarified | Diagnostic-only, runtime stores compact S11 summaries only, live plumbing future |
-| A19 | Checkpoint/evaluation-records semantics audit | 7-path semantic matrix, 6 new no-CST tests (93→93) |
-| A20 | Checkpoint persistence semantics fix | ``_record_checkpoint_evaluation`` helper, ``solver_ok``-driven decision, 5 new tests (98→98) |
-| A21 | Checkpoint objective_names hardening | ``_checkpoint_metric_names_from_wf_ref`` helper, 4 new tests (102→102) |
-| A22 | Checkpoint metric invariant hardening | String/duplicate/invalid name rejection, raw/penalty length check, 5 new tests (107→107) |
-| A23 | Report hash cleanup and evaluation_records policy | ``.ckpt`` authoritative, ``evaluation_records.jsonl`` not written, policy documented |
-| A24 | Live CST checkpoint evidence | **Best F = -15185.95**, ``status=completed``, ``solver_ok=True``, 7 metrics confirmed |
-| A24.1 | CST shutdown correction | Lingering DE process force-closed; background licensing service (no window) normal |
+| Phase | Type | Validation | Result |
+|-------|------|------------|--------|
+| A13.4 | Live CST | Full minimal pass — calibration success, measurement reached, 7 metrics computed | **Best F = -15185.95**, exit 0 |
+| A14 | Live CST | Frequency gate rejection — ``target_ghz=0.0``, ``max_abs_offset_mhz=1.0`` | ``frequency_gate_reject``, measurement skipped, Best F = 1.0 |
+| A15 | Live CST | S11 depth gate rejection — ``threshold_db=-100.0`` | ``s11_depth_gate_reject``, measurement skipped, Best F = 1.0 |
+| A24 | Live CST | Successful measurement checkpoint evidence — ``solver_ok=True``, 7 metrics | **Best F = -15185.95**, ``status=completed`` |
 
 Each live smoke used a valid local CST project (``D:/workflow_elgun/PickupDesign_2026.cst``)
 with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
+
+### No-CST / policy / hardening milestones
+
+| Phase | Type | Validation | Result |
+|-------|------|------------|--------|
+| A16 | no-CST regression | Mixed gate precedence | Cal failure > frequency > S11 depth > measurement, scalar/checkpoint semantics locked |
+| A17 | no-CST regression | Multi-dip diagnostic status clarified | Diagnostic-only, runtime stores compact S11 summaries only, live plumbing future |
+| A19 | no-CST audit | Checkpoint/evaluation-records semantics audit | 7-path semantic matrix, 6 new tests (93→93) |
+| A20 | no-CST fix | Checkpoint persistence semantics fix | ``_record_checkpoint_evaluation`` helper, ``solver_ok``-driven decision, 5 new tests (98→98) |
+| A21 | no-CST hardening | Checkpoint objective_names hardening | ``_checkpoint_metric_names_from_wf_ref`` helper, 4 new tests (102→102) |
+| A22 | no-CST hardening | Checkpoint metric invariant hardening | String/duplicate/invalid name rejection, raw/penalty length check, 5 new tests (107→107) |
+| A23 | policy / docs | Report hash cleanup and evaluation_records policy | ``.ckpt`` authoritative, ``evaluation_records.jsonl`` not written, policy documented |
+| A24.1 | shutdown correction | CST shutdown correction | Lingering DE process force-closed; background licensing service (no window) normal |
 
 ---
 

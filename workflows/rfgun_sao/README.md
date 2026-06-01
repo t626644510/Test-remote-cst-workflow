@@ -15,7 +15,7 @@ target for consolidating legacy Workflow 3 SAO capabilities.
 - pure gate utilities: FrequencyGate, S11DepthGate, MultiDipDetector (A7)
 - calibration primitives: CalibrationResult, MeasurementPlan, helpers (A8)
 - two-pass/gate config helpers: _build_*, _resolve_two_pass_settings (A9)
-- two-pass orchestration skeleton: TwoPassDecision, evaluate_two_pass_decision (A10): _build_*, _resolve_two_pass_settings (A9)
+- two-pass orchestration skeleton: TwoPassDecision, evaluate_two_pass_decision (A10)
 
 ## Not implemented yet
 

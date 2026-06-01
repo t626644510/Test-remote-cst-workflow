@@ -176,4 +176,4 @@ s11_min_db=-9.083, hpbw_ok=True}
 
 - Implementation/fix commit: **none** — no code changes needed.
 - Report commit: ``HEAD`` — ``A14 report frequency gate live smoke``
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``6ae3986``

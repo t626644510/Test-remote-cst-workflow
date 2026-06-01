@@ -1,18 +1,16 @@
-﻿"""Workflow 1 runner -- single-project single-pass frequency-domain SAO optimisation.
+"""Experimental RF gun SAO runner -- single-pass baseline.
 
 Usage from project root::
 
-    .venv\\Scripts\\python -m workflows.rfgun_single_pass.run
-    .venv\\Scripts\\python -m workflows.rfgun_single_pass.run --seed 43
-    .venv\\Scripts\\python run_workflow_1.py --config workflows/rfgun_single_pass/config.yaml
+    .venv\Scripts\python -m workflows.rfgun_sao.run
+    .venv\Scripts\python -m workflows.rfgun_sao.run --seed 43
+    .venv\Scripts\python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 
-Watchdog::
-
-    .venv\\Scripts\\python run_watchdog.py -- run_workflow_1.py
-
-The backwards-compatible entry point ``run_workflow_1.py`` (project root)
-delegates directly to :func:`main` in this module.
+The backwards-compatible root entry point ``run_workflow_1.py`` still
+delegates to ``workflows.rfgun_single_pass.run`` during A-series
+consolidation.  It is intentionally not repointed to this module yet.
 """
+
 
 from __future__ import annotations
 

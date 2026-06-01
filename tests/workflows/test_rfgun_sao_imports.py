@@ -1236,3 +1236,158 @@ def test_cst_measurement_runner_delegates_to_workflow1_evaluator():
     assert result.raw_metrics == {"resonant_freq": 11.424, "q0": 10000.0}
     assert result.objective_values is not None
     assert list(result.objective_values.keys()) == metric_names
+
+# ============================================================
+# L. Calibration diagnostics — A13.3
+# ============================================================
+
+def test_two_pass_runtime_calibration_failed_error_includes_detail():
+    """Rejection checkpoint error includes both reason and calibration.error."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=False,
+        error="solver convergence issue in test",
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append(err)
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    assert "calibration_failed" in captured[0]
+    assert "solver convergence issue in test" in captured[0]
+
+
+def test_cst_calibration_runner_result_reader_failure_reports_error_and_meta(
+    monkeypatch,
+):
+    """ResultReader failure returns CalibrationResult with error and meta."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+
+    class _RaisingReader:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("fake s11 read failed for test")
+        def get_s_parameter(self):
+            raise RuntimeError("should not be called")
+
+    monkeypatch.setattr(cst_mod, "ResultReader", _RaisingReader)
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is False
+    assert "fake s11 read failed for test" in result.error
+    assert isinstance(result.meta, dict)
+    assert result.meta.get("result_reader_ok") is False
+    assert project.close_called is True
+
+
+def test_cst_calibration_runner_success_meta_contains_s11_summary(monkeypatch):
+    """Successful calibration meta includes S11 summary, not full arrays."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    import numpy as np
+
+    # Lorentzian dip with baseline=0.9, gamma=0.015 GHz — wide enough for HPBW
+    freqs = np.linspace(11.0, 12.0, 5000)
+    mag = 0.9 - 0.89 / (1.0 + ((freqs - 11.424) / 0.015)**2)
+
+    monkeypatch.setattr(
+        cst_mod, "ResultReader",
+        _make_fake_s11_reader(freqs, mag),
+    )
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is True
+    meta = result.meta
+    assert isinstance(meta, dict)
+    assert meta.get("iteration") == 1
+    assert meta.get("s11_points") == 5000
+    assert "s11_freq_min_ghz" in meta
+    assert "s11_freq_max_ghz" in meta
+    assert "s11_min_db" in meta
+    assert np.isfinite(meta["s11_min_db"])
+    # Ensure no full arrays in meta values
+    for k, v in meta.items():
+        assert not isinstance(v, (np.ndarray, list)), f"meta contains array: {k}={v!r}"
+    # HPBW should succeed with a clear dip
+    assert meta.get("hpbw_ok") is True
+
+
+def test_decision_error_message_for_gate_reject_remains_reason():
+    """Gate reject reasons appear clearly in _decision_error_message."""
+    from workflows.rfgun_sao.two_pass import _decision_error_message, TwoPassDecision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+
+    # Frequency gate reject with no calibration error
+    dec1 = TwoPassDecision(
+        accepted=False,
+        reason="frequency_gate_reject",
+        calibration=CalibrationResult(success=True, f0_ghz=11.5),
+    )
+    msg1 = _decision_error_message(dec1)
+    assert msg1 == "frequency_gate_reject"
+
+    # Calibration failed with detailed error
+    dec2 = TwoPassDecision(
+        accepted=False,
+        reason="calibration_failed",
+        calibration=CalibrationResult(
+            success=False,
+            error="HPBW failed, dip-min also no valid resonance",
+        ),
+    )
+    msg2 = _decision_error_message(dec2)
+    assert "calibration_failed" in msg2
+    assert "HPBW failed" in msg2
+
+    # S11 gate reject
+    dec3 = TwoPassDecision(
+        accepted=False,
+        reason="s11_depth_gate_reject",
+        calibration=CalibrationResult(success=True, s11_min_db=0.0),
+    )
+    msg3 = _decision_error_message(dec3)
+    assert msg3 == "s11_depth_gate_reject"
+
+    # Calibration failed with empty error still shows reason
+    dec4 = TwoPassDecision(
+        accepted=False,
+        reason="calibration_failed",
+        calibration=CalibrationResult(success=False, error=""),
+    )
+    msg4 = _decision_error_message(dec4)
+    assert "calibration_failed" in msg4

@@ -43,6 +43,57 @@ def evaluate_two_pass_decision(
             _logger.info("TwoPassDecision: multi-dip detected, candidate accepted but flagged for review")
     return TwoPassDecision(accepted=True, reason="accepted", calibration=calibration, measurement_plan=measurement_plan, diagnostics=diagnostics)
 
+def _decision_error_message(decision: TwoPassDecision) -> str:
+    """Build a descriptive error string from a rejected ``TwoPassDecision``.
+
+    For ``calibration_failed`` the calibration.error is appended so the
+    caller can distinguish "solver crashed" from "S11 had no dip" without
+    digging into the decision object.  Gate rejections pass through their
+    reason, optionally augmented with calibration.error when present.
+
+    Parameters
+    ----------
+    decision : TwoPassDecision
+        A rejected (or accepted) decision with optional calibration detail.
+
+    Returns
+    -------
+    str
+        Human-readable error string for logging and checkpoint.
+    """
+    if decision.reason == "calibration_failed" and decision.calibration is not None and decision.calibration.error:
+        return f"calibration_failed: {decision.calibration.error}"
+    if decision.reason in ("frequency_gate_reject", "s11_depth_gate_reject"):
+        if decision.calibration is not None and decision.calibration.error:
+            return f"{decision.reason}: {decision.calibration.error}"
+        return decision.reason
+    return (
+        decision.reason
+        or (decision.calibration.error if decision.calibration else "")
+        or "unknown"
+    )
+
+
+def _safe_meta_str(meta: dict[str, Any]) -> str:
+    """Compact string representation of a meta dict for logging.
+
+    Floats are formatted with ``.6g``; long strings are truncated at 80
+    characters.  The result is guaranteed to be reasonably short and free
+    of huge arrays or nested structures.
+    """
+    if not meta:
+        return "{}"
+    items: list[str] = []
+    for k, v in meta.items():
+        if isinstance(v, float):
+            items.append(f"{k}={v:.6g}")
+        elif isinstance(v, str) and len(v) > 80:
+            items.append(f"{k}={v[:80]}...")
+        else:
+            items.append(f"{k}={v}")
+    return "{" + ", ".join(items) + "}"
+
+
 def make_two_pass_placeholder_evaluator(
     fallback_ghz: float = 11.424,
     frequency_gate: FrequencyGate | None = None,
@@ -242,11 +293,28 @@ def make_two_pass_runtime_evaluator(
             raw_arr = np.full(n_metrics, np.nan, dtype=float)
             if np.isfinite(calibration.f0_ghz) and "resonant_freq" in metric_names:
                 raw_arr[metric_names.index("resonant_freq")] = calibration.f0_ghz
+
+            error_msg = _decision_error_message(decision)
+            cal = decision.calibration
+            if cal is not None:
+                _logger.warning(
+                    "Two-pass rejected: reason=%s cal_success=%s "
+                    "f0_ghz=%s s11_min_db=%s cal_method=%s "
+                    "cal_error=%s meta=%s",
+                    decision.reason, cal.success, cal.f0_ghz,
+                    cal.s11_min_db, cal.method, cal.error,
+                    _safe_meta_str(cal.meta),
+                )
+            else:
+                _logger.warning(
+                    "Two-pass rejected: reason=%s", decision.reason,
+                )
+
             if checkpoint_callback is not None:
                 checkpoint_callback(
                     x_phys, raw_arr, penalties_arr,
                     False,
-                    decision.reason or calibration.error,
+                    error_msg,
                 )
             return float(np.dot(penalties_arr, weights))
 

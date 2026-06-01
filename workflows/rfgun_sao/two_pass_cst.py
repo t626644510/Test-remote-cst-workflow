@@ -21,6 +21,25 @@ from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 _logger = logging.getLogger(__name__)
 
 
+def _make_calibration_meta(
+    iteration: int,
+    calibration_guess_ghz: float,
+) -> dict[str, Any]:
+    """Build a fresh calibration meta dict with common fields."""
+    return {
+        "iteration": iteration,
+        "calibration_guess_ghz": calibration_guess_ghz,
+    }
+
+
+def _safe_str_meta(value: object, max_len: int = 200) -> str:
+    """Short string representation for meta fields (prevents huge values)."""
+    s = str(value)
+    if len(s) > max_len:
+        return s[:max_len] + "..."
+    return s
+
+
 def make_cst_calibration_runner(
     *,
     connection: Any,
@@ -32,7 +51,7 @@ def make_cst_calibration_runner(
 
     Opens the CST project, sets ``f_data`` to *calibration_guess_ghz*,
     runs the solver, reads S11, extracts resonant frequency / dip depth,
-    and returns a ``CalibrationResult``.
+    and returns a ``CalibrationResult`` with detailed diagnostic *meta*.
 
     Parameters
     ----------
@@ -54,26 +73,49 @@ def make_cst_calibration_runner(
         iteration: int,
     ) -> CalibrationResult:
         project = None
+        meta: dict[str, Any] = _make_calibration_meta(
+            iteration, calibration_guess_ghz,
+        )
         try:
             project = connection.open_project(project_path)
+            meta["project_filename"] = _safe_str_meta(
+                getattr(project, "filename", project_path),
+            )
+
             params = dict(param_dict)
             params["f_data"] = calibration_guess_ghz
             ok = project.update_parameters(params, use_full_rebuild=True)
+            meta["update_ok"] = ok
             if not ok:
                 return CalibrationResult(
                     success=False,
                     error="Parameter update failed",
                     method="cst_s11",
+                    meta=meta,
                 )
 
             solver_result = solver_runner.run(project)
+            meta["solver_success"] = solver_result.success
+            meta["solver_error_type"] = str(
+                getattr(solver_result, "error_type", "") or "",
+            )
+            err_msg = getattr(solver_result, "error_message", None)
+            meta["solver_error_message"] = _safe_str_meta(err_msg) if err_msg else ""
+            if hasattr(solver_result, "elapsed_s") and solver_result.elapsed_s is not None:
+                meta["solver_elapsed_s"] = float(solver_result.elapsed_s)
+            if hasattr(solver_result, "mesh_cells") and solver_result.mesh_cells is not None:
+                meta["solver_mesh_cells"] = int(solver_result.mesh_cells)
+
             if not solver_result.success:
-                err_type = str(getattr(solver_result, "error_type", "")).lower()
+                err_type = str(
+                    getattr(solver_result, "error_type", "") or "",
+                ).lower()
                 if "com" in err_type:
                     return CalibrationResult(
                         success=False,
                         error="COM connection lost during calibration",
                         method="cst_s11",
+                        meta=meta,
                     )
                 return CalibrationResult(
                     success=False,
@@ -82,6 +124,7 @@ def make_cst_calibration_runner(
                         f"{getattr(solver_result, 'error_message', None) or 'unknown'}"
                     ),
                     method="cst_s11",
+                    meta=meta,
                 )
 
             try:
@@ -89,12 +132,30 @@ def make_cst_calibration_runner(
             except Exception:
                 pass
 
-            reader = ResultReader(project.filename, allow_interactive=True)
-            s11 = reader.get_s_parameter()
+            # --- S11 read --------------------------------------------------
+            try:
+                reader = ResultReader(project.filename, allow_interactive=True)
+                meta["result_reader_ok"] = True
+                s11 = reader.get_s_parameter()
+            except Exception as read_exc:
+                meta["result_reader_ok"] = False
+                return CalibrationResult(
+                    success=False,
+                    error=f"S11 read failed: {str(read_exc)[:200]}",
+                    method="cst_s11",
+                    meta=meta,
+                )
+
             mag = np.abs(s11.s_complex)
             s11_min = s11_min_db_from_magnitude(mag)
 
-            # Try half-power bandwidth first; fall back to dip minimum.
+            # S11 summary (not full arrays)
+            meta["s11_points"] = int(len(mag))
+            meta["s11_freq_min_ghz"] = float(np.min(s11.frequencies))
+            meta["s11_freq_max_ghz"] = float(np.max(s11.frequencies))
+            meta["s11_min_db"] = float(s11_min)
+
+            # --- Half-power bandwidth; fall back to dip minimum ------------
             try:
                 f0, _f1, _f2, _gamma_min = half_power_bandwidth(
                     s11.frequencies, mag,
@@ -105,26 +166,34 @@ def make_cst_calibration_runner(
                         f"half_power_bandwidth returned non-finite f0: {f0}",
                     )
                 method = "cst_s11_hpbw"
-            except Exception:
+                meta["hpbw_ok"] = True
+            except Exception as hpbw_exc:
+                meta["hpbw_ok"] = False
+                meta["hpbw_error"] = str(hpbw_exc)[:200]
                 idx = int(np.argmin(mag))
                 f0 = float(s11.frequencies[idx])
                 method = "cst_s11_dip_min"
+                meta["fallback_used"] = "dip_minimum"
 
             return CalibrationResult(
                 success=True,
                 f0_ghz=float(f0),
                 s11_min_db=float(s11_min),
                 method=method,
-                meta={"iteration": iteration},
+                meta=meta,
             )
 
         except Exception as exc:
+            meta.setdefault("result_reader_ok", False)
+            meta["exception_type"] = type(exc).__name__
+            meta["exception_message"] = str(exc)[:200]
             error = str(exc)[:200]
             if any(w in error.lower() for w in ("com", "connection",
                                                  "designenvironment")):
                 error = "COM connection lost during calibration"
             return CalibrationResult(
                 success=False, error=error, method="cst_s11",
+                meta=meta,
             )
 
         finally:

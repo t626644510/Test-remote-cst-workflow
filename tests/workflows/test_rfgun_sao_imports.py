@@ -324,6 +324,62 @@ def test_s11_min_db_from_magnitude():
     db = s11_min_db_from_magnitude(np.array([0.1]))
     assert abs(db - (-20.0)) < 0.01
 
+
+def test_two_pass_successful_calibration_accepted():
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    cal = CalibrationResult(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    dec = evaluate_two_pass_decision(cal, 11.4)
+    assert dec.accepted is True
+    assert dec.reason == 'accepted'
+
+def test_two_pass_failed_calibration_rejected():
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    cal = CalibrationResult(success=False)
+    dec = evaluate_two_pass_decision(cal, 11.4)
+    assert dec.accepted is False
+    assert dec.reason == 'calibration_failed'
+    assert dec.measurement_plan is not None
+
+def test_two_pass_frequency_gate_rejects():
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    from workflows.rfgun_sao.gates import FrequencyGate
+    cal = CalibrationResult(success=True, f0_ghz=11.5)
+    gate = FrequencyGate(enabled=True, target_ghz=11.424, max_abs_offset_mhz=20.0)
+    dec = evaluate_two_pass_decision(cal, 11.4, frequency_gate=gate)
+    assert dec.accepted is False
+    assert dec.reason == 'frequency_gate_reject'
+
+def test_two_pass_s11_gate_rejects():
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    from workflows.rfgun_sao.gates import S11DepthGate
+    cal = CalibrationResult(success=True, f0_ghz=11.424, s11_min_db=0.0)
+    gate = S11DepthGate(enabled=True, threshold_db=-1.0)
+    dec = evaluate_two_pass_decision(cal, 11.4, s11_depth_gate=gate)
+    assert dec.accepted is False
+    assert dec.reason == 's11_depth_gate_reject'
+
+def test_two_pass_multidip_diagnostic_does_not_reject():
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    import numpy as np
+    cal = CalibrationResult(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    det = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    freqs = np.linspace(11.0, 12.0, 200)
+    mag = np.ones(200)
+    mag[50] = 0.1; mag[53] = 0.1
+    dec = evaluate_two_pass_decision(cal, 11.4, multi_dip_detector=det, frequencies_ghz=freqs, s11_magnitude=mag)
+    assert dec.accepted is True
+    assert dec.diagnostics.get('multi_dip_detected') is True
+
+def test_two_pass_source_no_factory_or_recovery():
+    src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'two_pass.py').read_text('utf-8')
+    assert 'cst_optimization.factory' not in src
+    assert 'cst_optimization.workflows.recovery' not in src
 def test_calibration_source_no_factory_or_recovery():
     src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'calibration.py').read_text('utf-8')
     assert 'cst_optimization.factory' not in src

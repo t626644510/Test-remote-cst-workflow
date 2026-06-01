@@ -1814,3 +1814,227 @@ def test_rfgun_sao_readme_status_current_after_a18():
     assert "run_workflow_1.py" in text
     assert "multi-dip" in text
     assert "future" in text
+
+# ============================================================
+# Q. Checkpoint/evaluation-records semantics audit — A19
+# ============================================================
+
+def test_two_pass_checkpoint_placeholder_runtime_semantics():
+    """Placeholder runtime checkpoint: calibration_failed, solver_ok=False, all NaN."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [{"name": "resonant_freq", "mode": "minimize"}],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    wf, opt, ev = build_workflow_1(cfg, checkpoint_callback=_ckpt)
+
+    assert wf._conn is None
+
+    val = ev(np.array([0.5]))
+
+    assert val == 1.0
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert "calibration_failed" in c_err
+    assert "placeholder_calibration_runner" in c_err
+    assert np.allclose(c_pen, [1.0])
+    assert np.all(np.isnan(c_raw))
+
+
+def test_two_pass_checkpoint_frequency_gate_reject_semantics():
+    """Frequency gate reject: solver_ok=False, error=frequency_gate_reject, scalar=1.0."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import FrequencyGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.5, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    gate = FrequencyGate(enabled=True, target_ghz=11.424, max_abs_offset_mhz=1.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        frequency_gate=gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert c_err == "frequency_gate_reject"
+    assert np.allclose(c_pen, [1.0])
+    # raw should have f0_ghz since it's finite and "resonant_freq" is in metric_names
+    assert np.allclose(c_raw, [11.5])
+
+
+def test_two_pass_checkpoint_s11_depth_gate_reject_semantics():
+    """S11 depth gate reject: solver_ok=False, error=s11_depth_gate_reject, scalar=1.0."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import S11DepthGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=0.0,
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    gate = S11DepthGate(enabled=True, threshold_db=-1.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        s11_depth_gate=gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert c_err == "s11_depth_gate_reject"
+    assert np.allclose(c_pen, [1.0])
+    assert np.allclose(c_raw, [11.424])
+
+
+def test_two_pass_checkpoint_measurement_success_full_semantics():
+    """Measurement success: solver_ok=True, error='', penalties from result."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.15, "f2": 0.35},
+        raw_values={"f1": 11.424, "f2": 0.5},
+    )
+    weights = np.array([0.3, 0.7])
+    expected = float(np.dot([0.15, 0.35], weights))
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1", "f2"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+
+    assert abs(val - expected) < 1e-12
+    assert meas_runner.call_count == 1
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert c_ok is True
+    assert c_err == ""
+    assert np.allclose(c_pen, [0.15, 0.35])
+    assert np.allclose(c_raw, [11.424, 0.5])
+
+
+def test_two_pass_checkpoint_measurement_failure_no_penalties():
+    """Measurement failure with penalty_values=None returns all-1 penalties and ok=False."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.types import EvaluationStatus
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values=None,
+        raw_values={"f1": 11.424},
+        status=EvaluationStatus.SOLVER_FAILED,
+        objective_values=None,
+        error="solver timed out",
+    )
+    weights = np.array([1.0])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+
+    assert val == 1.0
+    assert meas_runner.call_count == 1
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert c_err == "solver timed out"
+    assert np.allclose(c_pen, [1.0])
+    # raw falls back to raw_values since objective_values is None
+    assert np.allclose(c_raw, [11.424])
+
+
+def test_extract_raw_array_both_none():
+    """_extract_raw_array returns all NaN when both objective_values and raw_metrics are None."""
+    from workflows.rfgun_sao.two_pass import _extract_raw_array
+    from workflows.rfgun_sao.types import EvaluationResult
+    import numpy as np
+
+    result = EvaluationResult(
+        status=None,
+        objective_values=None,
+        raw_metrics=None,
+    )
+
+    arr = _extract_raw_array(result, ["m1", "m2", "m3"])
+    assert len(arr) == 3
+    assert np.all(np.isnan(arr))

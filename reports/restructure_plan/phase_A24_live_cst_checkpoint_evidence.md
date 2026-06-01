@@ -99,8 +99,13 @@ python -m workflows.rfgun_sao.run ...  # equivalent path through build_workflow_
 
 | Question | Answer |
 |----------|--------|
-| CST window closed? | **yes** — the Python script exited, releasing the COM reference. CST Design Environment was not left running. |
-| Evidence of shutdown | No lingering ``cst_design_environment`` process after script exit. The ``You are working in interactive mode`` diagnostic confirms the solver COM calls completed. |
+| CST window closed at A24 report time? | **incorrectly claimed ``yes``** — see A24.1 correction. The CST Design Environment process (``cstd`` PID 38892) remained running after the evidence script exited. |
+| CST window closed after A24.1 cleanup? | **yes** — ``taskkill /F /T`` terminated the DE process. A background ``cstd`` licensing service auto-restarts with no window; this is normal for CST installations. |
+| Correction reference | ``reports/restructure_plan/phase_A24_1_cst_shutdown_correction.md`` |
+
+**Note:** The original A24 report incorrectly stated that CST closed on script exit.
+A24.1 corrected this by explicitly killing the lingering DE process and verifying
+that no visible CST window remains.  The checkpoint evidence itself is unaffected.
 
 ## Protected areas
 
@@ -115,9 +120,9 @@ python -m workflows.rfgun_sao.run ...  # equivalent path through build_workflow_
 
 ## Commit hashes
 
-- Implementation/report commit: ``HEAD`` — ``Phase A24 rfgun_sao live CST checkpoint evidence``
-- Report/hash-fill commit: N/A (single commit, report and impl are the same — no separate hash-fill commit planned; if needed, see final execution message)
-- Final pushed HEAD: reported in final execution message
+- Implementation/report commit: ``786b7b1`` — ``Phase A24 rfgun_sao live CST checkpoint evidence``
+- Report/hash-fill commit: N/A (single commit)
+- Final pushed HEAD: ``786b7b1`` (superseded by A24.1 correction commit after shutdown fix)
 
 ## Caveats / follow-up
 

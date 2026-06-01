@@ -1,0 +1,157 @@
+﻿# Workflow 1 configuration -- single-project single-pass RF gun SAO optimisation.
+#
+# Extracted from config/default.yaml (Phase 4 split).  Only the sections
+# that Workflow 1 actually reads are included here.  The original
+# config/default.yaml is kept for backward compatibility with other
+# workflows and the older entry points.
+
+cst:
+  library_path: D:/CST2026/CST Studio Suite 2026/AMD64/python_cst_libraries
+  connect_mode: any_or_new
+
+solver:
+  stagnation_timeout_s: 300.0
+  settle_s: 2.0
+
+logging:
+  output_dir: D:/Results
+
+project:
+  cst_path: F:/workflow_elgun/PickupDesign_2026.cst
+
+evaluation:
+  post_eval_recovery: tier2
+
+optimization:
+  algorithm: sao
+  n_initial_samples: 20
+  n_iterations: 100
+  acquisition_function: ei
+  acquisition_xi: 0.01
+  acquisition_kappa: 2.0
+  seed: 42
+  retry:
+    enabled: true
+    max_tier1: 0
+    max_tier2: 2
+    max_tier3: 2
+    cooldown_s: 5.0
+
+parameters:
+- name: R_cell_3
+  display_name: Cell 3 Equator Radius
+  unit: mm
+  low: 10.779
+  high: 10.785
+  log_scale: false
+- name: R_between_cell_3_cutoff
+  display_name: Iris Radius Cell 3 to Cutoff
+  unit: mm
+  low: 4.035
+  high: 4.041
+  log_scale: false
+- name: R_between_cell_2_3
+  display_name: Iris Radius Between Cell 2 and 3
+  unit: mm
+  low: 3.279
+  high: 3.285
+  log_scale: false
+- name: R_bend_cell3_left
+  display_name: Bend Radius Cell 3 Left
+  unit: mm
+  low: 2.443
+  high: 2.449
+  log_scale: false
+- name: PickUpDeep
+  display_name: Pick Up Depth
+  unit: mm
+  low: 0.259
+  high: 0.265
+  log_scale: false
+- name: length1
+  display_name: Coupler Length
+  unit: mm
+  low: 1.026
+  high: 1.032
+  log_scale: false
+- name: e_x
+  display_name: Ellipse X
+  unit: mm
+  low: 1.779
+  high: 1.785
+  log_scale: false
+- name: e
+  display_name: Ellipse E
+  unit: mm
+  low: 1.561
+  high: 1.567
+  log_scale: false
+- name: esp_e_cell3_left
+  display_name: Ellipse E Cell 3 Left
+  unit: mm
+  low: 2.622
+  high: 2.628
+  log_scale: false
+- name: esp_e_cell3_right
+  display_name: Ellipse E Cell 3 Right
+  unit: mm
+  low: 2.808
+  high: 2.814
+  log_scale: false
+- name: cell_3_vertical_left
+  display_name: Cell 3 Vertical Left
+  unit: mm
+  low: 0.927
+  high: 0.933
+  log_scale: false
+- name: cell_3_vertical_right
+  display_name: Cell 3 Vertical Right
+  unit: mm
+  low: 0.928
+  high: 0.934
+  log_scale: false
+- name: bend1
+  display_name: Coupler Bend Parameter 1
+  unit: mm
+  low: 1.554
+  high: 1.560
+  log_scale: false
+
+objectives:
+- name: resonant_freq
+  mode: tolerance
+  mode_params:
+    target: 11.424
+    sigma: 0.00333
+- name: coupling_beta
+  mode: tolerance
+  mode_params:
+    target: 3.0
+    sigma: 1.0
+- name: peak_e_field
+  mode: maximize
+- name: q0
+  mode: maximize
+- name: max_modified_poynting
+  mode: less_than
+  mode_params:
+    threshold: 5000000000000.0
+    sigma: 1000000000000.0
+  obj_params:
+    project_dir: F:/workflow_elgun/PickupDesign_2026
+    gc: 0.125
+    e_target: 200000000.0
+- name: field_flatness
+  mode: tolerance
+  mode_params:
+    target: 0.0
+    sigma: 0.0085
+- name: pulsed_heating
+  mode: less_than
+  mode_params:
+    threshold: 10.0
+    sigma: 2.0
+  obj_params:
+    project_dir: F:/workflow_elgun/PickupDesign_2026
+    pulse_width_ns: 300
+    e_target: 200000000.0

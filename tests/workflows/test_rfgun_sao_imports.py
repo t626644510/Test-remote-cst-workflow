@@ -190,6 +190,30 @@ def test_types_expose_evaluation_types():
     assert EvaluationResult().solver_ok is False
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
 
+
+
+def test_default_weights_equal():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    w = _resolve_named_weights(None, ["a", "b", "c"])
+    assert list(w) == [1/3, 1/3, 1/3]
+
+def test_named_weights_by_objective_order():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    w = _resolve_named_weights({"b": 5.0, "a": 3.0}, ["a", "b"])
+    assert list(w) == [3/8, 5/8]
+
+def test_invalid_weights_raise_error():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    import pytest
+    with pytest.raises(ValueError):
+        _resolve_named_weights({"a": -1.0}, ["a"])
+    with pytest.raises(ValueError):
+        _resolve_named_weights({"a": float("nan")}, ["a"])
+
+def test_workflow_source_has_objective_weights():
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
+    assert "objective_weights" in src
 def test_no_legacy_recovery_import():
     for py_file in WF1_PACKAGE.glob('*.py'):
         src2 = py_file.read_text('utf-8')

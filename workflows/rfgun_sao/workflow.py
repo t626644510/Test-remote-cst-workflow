@@ -1,4 +1,4 @@
-﻿"""Workflow 1 builder -- local alternative to ``cst_optimization.factory.build_workflow_1``.
+"""Workflow 1 builder -- local alternative to ``cst_optimization.factory.build_workflow_1``.
 
 Extracted from the monolithic factory during Phase 5.  Behaviour is
 identical to the original ``cst_optimization.factory.build_workflow_1``
@@ -348,15 +348,39 @@ def _resolve_named_weights(
     configured: Any,
     objective_names: list[str],
 ) -> np.ndarray:
-    """Resolve scalarisation weights from config."""
+    """Resolve scalarisation weights from config.
+
+    Returns a normalised weight vector (sum = 1).
+    None or empty dict -> equal weights.
+    Dict -> weights by objective_names order, missing names default to 1.0.
+    List -> must match objective_names length.
+
+    Raises ValueError on NaN, negative, or non-positive total sum.
+    """
     if isinstance(configured, dict):
-        raw = np.array(
-            [float(configured.get(name, 1.0)) for name in objective_names],
-            dtype=float,
-        )
+        if not configured:
+            raw = np.ones(len(objective_names), dtype=float)
+        else:
+            raw = np.array(
+                [float(configured.get(name, 1.0)) for name in objective_names],
+                dtype=float,
+            )
+            unknown = [k for k in configured if k not in objective_names]
+            if unknown:
+                _logger.warning(
+                    "objective_weights contains unknown metric(s): %s", unknown,
+                )
     elif configured is not None and len(configured) == len(objective_names):
         raw = np.array(configured, dtype=float)
     else:
         raw = np.ones(len(objective_names), dtype=float)
+
+    if np.any(np.isnan(raw)):
+        raise ValueError(f"objective_weights contain NaN: {raw}")
+    if np.any(raw < 0):
+        raise ValueError(f"objective_weights contain negative values: {raw}")
     raw = np.where(raw > 0, raw, 1.0)
-    return raw / np.sum(raw)
+    total = np.sum(raw)
+    if total <= 0:
+        raise ValueError(f"objective_weights sum to non-positive: {total}")
+    return raw / total

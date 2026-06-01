@@ -26,7 +26,7 @@ import yaml
 
 # ---- Paths ----------------------------------------------------------------
 # Must be set up BEFORE any cst_optimization import.
-# run.py lives at workflows/rfgun_single_pass/run.py  -->  parents[2] = project root
+# run.py lives at workflows/rfgun_sao/run.py  -->  parents[2] = project root
 _PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 _SRC_DIR: str = str(_PROJECT_ROOT / "src")
 if _SRC_DIR not in sys.path:

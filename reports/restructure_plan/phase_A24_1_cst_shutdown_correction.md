@@ -75,9 +75,9 @@ unaffected by the shutdown correction.
 ## Commit hashes
 
 - A24 original report commit: ``786b7b1`` — ``Phase A24 rfgun_sao live CST checkpoint evidence``
-- A24.1 correction commit: ``(filled after commit)`` — ``Phase A24.1 CST shutdown correction``
-- Report/hash-fill commit: ``(filled after hash-fill if needed)``
-- Final pushed HEAD: reported in final execution message
+- A24.1 correction commit: ``c1e8b7c`` — ``Phase A24.1 CST shutdown correction``
+- Report/hash-fill commit: N/A (single commit)
+- Final pushed HEAD: ``c1e8b7c``
 
 ## Caveats / follow-up
 

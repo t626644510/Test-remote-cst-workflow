@@ -1790,3 +1790,27 @@ def test_readme_states_multidip_live_plumbing_future_work():
     assert "multi-dip" in text.lower() or "multidip" in text.lower()
     assert "diagnostic" in text.lower()
     assert "future" in text.lower() or "not implemented" in text.lower()
+
+# ============================================================
+# P. README milestone status — A18
+# ============================================================
+
+def test_rfgun_sao_readme_status_current_after_a18():
+    """README captures current milestone test count and validated phases."""
+    import pathlib
+    readme_path = (
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / "workflows" / "rfgun_sao" / "README.md"
+    )
+    text = readme_path.read_text("utf-8")
+    assert "86/86" in text
+    assert "A13.4" in text
+    assert "A14" in text
+    assert "A15" in text
+    assert "A16" in text
+    assert "A17" in text
+    assert "runtime=cst" in text or "evaluation.two_pass.runtime: cst" in text
+    assert "config.local.yaml" in text
+    assert "run_workflow_1.py" in text
+    assert "multi-dip" in text
+    assert "future" in text

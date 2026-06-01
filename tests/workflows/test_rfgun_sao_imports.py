@@ -2722,3 +2722,186 @@ def test_b1_backward_compatibility_flat_config():
     assert wf.objective_names == ["resonant_freq", "q0"]
     assert wf.report_metric_names == []
     assert hasattr(wf, "metric_specs")
+
+# ============================================================
+# W. Threshold penalty runtime wiring — Phase B3
+# ============================================================
+
+class _FakeMode:
+    """Dummy objective mode returning a fixed penalty."""
+    def __init__(self, penalty: float = 0.5):
+        self._penalty = penalty
+    def compute(self, value: float) -> float:
+        return self._penalty
+
+
+class _FakeObjective:
+    """Dummy objective with a name and mode."""
+    def __init__(self, name: str, penalty: float = 0.5):
+        self.name = name
+        self.mode = _FakeMode(penalty)
+
+
+def test_compute_role_penalties_optimize():
+    """Optimize role uses objective mode.compute; finite raw -> computed."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+
+    specs = [MetricSpec(name="a", role=MetricRole.OPTIMIZE)]
+    objs = {"a": _FakeObjective("a", penalty=0.3)}
+    raw = {"a": 11.424}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs, raw_metrics=raw,
+    )
+    assert pen == {"a": 0.3}
+
+
+def test_compute_role_penalties_optimize_non_finite():
+    """Optimize role missing/non-finite raw -> 1.0."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+    import numpy as np
+
+    specs = [MetricSpec(name="a", role=MetricRole.OPTIMIZE)]
+    objs = {"a": _FakeObjective("a", penalty=0.3)}
+    raw = {}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs, raw_metrics=raw,
+    )
+    assert pen == {"a": 1.0}
+
+    pen2 = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs,
+        raw_metrics={"a": np.nan},
+    )
+    assert pen2 == {"a": 1.0}
+
+
+def test_compute_role_penalties_threshold():
+    """Threshold role uses compute_threshold_penalty."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+    import numpy as np
+
+    specs = [MetricSpec(
+        name="t1", role=MetricRole.THRESHOLD,
+        threshold=10.0, sigma=2.0, direction="less_than",
+    )]
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name={}, raw_metrics={"t1": 12.0},
+    )
+    expected = 1.0 - np.exp(-1.0)
+    assert abs(pen["t1"] - expected) < 1e-12
+
+    pen2 = compute_role_penalties(
+        metric_specs=specs, objectives_by_name={}, raw_metrics={"t1": 9.0},
+    )
+    assert pen2["t1"] == 0.0
+
+
+def test_compute_role_penalties_threshold_non_finite():
+    """Threshold role missing/non-finite raw -> 1.0."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+    import numpy as np
+
+    specs = [MetricSpec(
+        name="t1", role=MetricRole.THRESHOLD,
+        threshold=10.0, sigma=2.0, direction="less_than",
+    )]
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name={}, raw_metrics={},
+    )
+    assert pen["t1"] == 1.0
+
+    pen2 = compute_role_penalties(
+        metric_specs=specs, objectives_by_name={},
+        raw_metrics={"t1": np.nan},
+    )
+    assert pen2["t1"] == 1.0
+
+
+def test_compute_role_penalties_report_only_excluded():
+    """Report_only metrics excluded from penalty dict."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="thr", role=MetricRole.THRESHOLD,
+                   threshold=10.0, sigma=2.0, direction="less_than"),
+        MetricSpec(name="rep", role=MetricRole.REPORT_ONLY),
+    ]
+    objs = {"opt": _FakeObjective("opt", penalty=0.2)}
+    raw = {"opt": 1.0, "thr": 9.0, "rep": 100.0}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs, raw_metrics=raw,
+    )
+    assert "opt" in pen
+    assert "thr" in pen
+    assert "rep" not in pen
+
+
+def test_b3_workflow_container_metadata():
+    """Two-pass placeholder with role split preserves objective_names."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "max_modified_poynting", "role": "threshold",
+             "threshold": 5.0, "sigma": 2.0},
+            {"name": "q0", "role": "report_only"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq", "max_modified_poynting"]
+    assert wf.report_metric_names == ["q0"]
+    assert hasattr(wf, "metric_specs")
+
+
+def test_b3_placeholder_scalar_unchanged():
+    """Two-pass placeholder with role split still returns 1.0."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "q0", "role": "report_only"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq"]
+    assert wf.report_metric_names == ["q0"]
+    val = ev(np.array([0.5]))
+    assert val == 1.0
+
+
+def test_b3_direction_validation_threshold_only():
+    """Direction validated only for threshold role; non-threshold allowed."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+    import pytest
+
+    # Non-threshold with unknown direction should NOT raise
+    entries = [{"name": "a", "role": "optimize", "direction": "sideways"}]
+    specs = build_metric_specs(entries)
+    assert len(specs) == 1
+    assert specs[0].direction == "sideways"
+
+    # Threshold with unknown direction MUST raise
+    entries2 = [{"name": "a", "role": "threshold", "direction": "sideways"}]
+    with pytest.raises(ValueError, match="Unknown threshold direction"):
+        build_metric_specs(entries2)

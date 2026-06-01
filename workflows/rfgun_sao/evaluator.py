@@ -38,6 +38,10 @@ from cst_optimization.physics.poynting import (
     discover_field_files,
     max_modified_poynting,
 )
+from workflows.rfgun_sao.metrics import (
+    MetricSpec,
+    compute_role_penalties,
+)
 from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
@@ -76,6 +80,7 @@ class Workflow1Evaluator:
         objectives: list,
         param_names: list[str],
         metric_names: list[str],
+        metric_specs: list[MetricSpec] | None = None,
     ) -> None:
         self._conn = connection
         self._project_path = project_path
@@ -84,6 +89,16 @@ class Workflow1Evaluator:
         self._objectives = objectives
         self._param_names = list(param_names)
         self._metric_names = list(metric_names)
+        self._objectives_by_name = {obj.name: obj for obj in objectives}
+        if metric_specs is not None:
+            self._metric_specs = metric_specs
+        else:
+            # Fallback: treat all metric_names as optimize specs
+            from workflows.rfgun_sao.metrics import MetricRole, MetricSpec
+            self._metric_specs = [
+                MetricSpec(name=n, role=MetricRole.OPTIMIZE)
+                for n in metric_names
+            ]
 
     # ------------------------------------------------------------------
     # Reconnect hook
@@ -202,12 +217,12 @@ class Workflow1Evaluator:
                     frequency_hz=11.424e9, rrr=5.5,
                 ))
 
-            # --- Penalty computation ---
-            for obj in self._objectives:
-                val = raw_metrics.get(obj.name, np.nan)
-                penalties[obj.name] = (
-                    float(obj.mode.compute(float(val))) if np.isfinite(val) else 1.0
-                )
+            # --- Penalty computation (role-aware) ---
+            penalties = compute_role_penalties(
+                metric_specs=self._metric_specs,
+                objectives_by_name=self._objectives_by_name,
+                raw_metrics=raw_metrics,
+            )
 
             solver_ok = True
             _logger.info(

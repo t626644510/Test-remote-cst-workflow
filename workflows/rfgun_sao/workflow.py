@@ -184,6 +184,7 @@ def build_workflow_1(
                 objectives=objectives,
                 param_names=param_names,
                 metric_names=metric_names,
+                metric_specs=specs,
             )
 
             from workflows.rfgun_sao.two_pass_cst import (
@@ -289,6 +290,7 @@ def build_workflow_1(
         objectives=objectives,
         param_names=param_names,
         metric_names=metric_names,
+        metric_specs=specs,
     )
 
     # ---------------------------------------------------------------

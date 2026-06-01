@@ -172,9 +172,11 @@ def build_metric_specs(
         # Parse threshold fields for any role (only meaningful for THRESHOLD)
         threshold = _resolve_threshold_field(entry, "threshold")
         sigma = _resolve_threshold_field(entry, "sigma")
-        direction = _validate_direction(
-            _resolve_threshold_field(entry, "direction") or "less_than",
-        )
+        raw_direction = _resolve_threshold_field(entry, "direction") or "less_than"
+        if role == MetricRole.THRESHOLD:
+            direction = _validate_direction(raw_direction)
+        else:
+            direction = str(raw_direction).strip().lower()
         report_as = entry.get("report_as")
 
         specs.append(MetricSpec(
@@ -301,3 +303,70 @@ def compute_threshold_penalty(spec: MetricSpec, value: float) -> float:
 
     penalty = 1.0 - np.exp(-delta)
     return float(np.clip(penalty, 0.0, 1.0))
+
+
+# ---------------------------------------------------------------------------
+# Role-based penalty computation
+# ---------------------------------------------------------------------------
+
+
+def compute_role_penalties(
+    *,
+    metric_specs: list[MetricSpec],
+    objectives_by_name: dict[str, Any],
+    raw_metrics: dict[str, float],
+) -> dict[str, float]:
+    """Compute penalties for all active metrics based on their role.
+
+    Parameters
+    ----------
+    metric_specs : list[MetricSpec]
+        All metric specifications (in config order).
+    objectives_by_name : dict[str, ObjectiveFunction]
+        Objective instances keyed by metric name (for ``optimize`` role).
+    raw_metrics : dict[str, float]
+        Raw physics values keyed by metric name.
+
+    Returns
+    -------
+    dict[str, float]
+        Penalty values keyed by source metric name, aligned with
+        ``objective_metric_names(specs)``.  ``REPORT_ONLY`` metrics
+        are excluded.
+
+    Notes
+    -----
+    - ``OPTIMIZE``: delegates to ``obj.mode.compute(value)``.
+    - ``THRESHOLD``: delegates to ``compute_threshold_penalty(spec, value)``.
+    - ``REPORT_ONLY``: skipped (not returned).
+    - Disabled specs are skipped.
+    - Missing or non-finite raw values produce penalty ``1.0``.
+    """
+    penalties: dict[str, float] = {}
+    for spec in metric_specs:
+        if not spec.enabled:
+            continue
+        if spec.role == MetricRole.REPORT_ONLY:
+            continue
+
+        raw_val = raw_metrics.get(spec.name, np.nan)
+
+        if not np.isfinite(raw_val):
+            penalties[spec.name] = 1.0
+            continue
+
+        if spec.role == MetricRole.OPTIMIZE:
+            obj = objectives_by_name.get(spec.name)
+            if obj is not None:
+                penalties[spec.name] = float(obj.mode.compute(float(raw_val)))
+            else:
+                penalties[spec.name] = 1.0
+        elif spec.role == MetricRole.THRESHOLD:
+            penalties[spec.name] = compute_threshold_penalty(spec, float(raw_val))
+        else:
+            raise ValueError(
+                f"Unexpected metric role {spec.role!r} for metric "
+                f"{spec.name!r} in compute_role_penalties.",
+            )
+
+    return penalties

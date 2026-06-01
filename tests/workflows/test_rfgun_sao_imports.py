@@ -190,8 +190,6 @@ def test_types_expose_evaluation_types():
     assert EvaluationResult().solver_ok is False
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
 
-
-
 def test_default_weights_equal():
     from workflows.rfgun_sao.workflow import _resolve_named_weights
     w = _resolve_named_weights(None, ["a", "b", "c"])
@@ -201,8 +199,6 @@ def test_named_weights_by_objective_order():
     from workflows.rfgun_sao.workflow import _resolve_named_weights
     w = _resolve_named_weights({"b": 5.0, "a": 3.0}, ["a", "b"])
     assert list(w) == [3/8, 5/8]
-
-
 
 def test_weight_0_is_allowed():
     from workflows.rfgun_sao.workflow import _resolve_named_weights
@@ -228,8 +224,6 @@ def test_invalid_weights_raise_error():
     with pytest.raises(ValueError):
         _resolve_named_weights({"a": float("nan")}, ["a"])
 
-
-
 def test_config_yaml_has_evaluation_mode():
     import yaml
     with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
@@ -244,7 +238,6 @@ def test_resolve_evaluation_mode_defaults():
     import pytest
     with pytest.raises(ValueError):
         _resolve_evaluation_mode({"evaluation": {"mode": "invalid"}})
-
 
 def test_gates_frequency_disabled_always_accepts():
     from workflows.rfgun_sao.gates import FrequencyGate
@@ -298,7 +291,6 @@ def test_gates_multidip_detects_two_close_dips():
     mag[dip2_idx] = 0.1
     assert d.has_multiple_dips(freqs, mag) is True
 
-
 def test_calibration_default_is_unsuccessful():
     from workflows.rfgun_sao.calibration import CalibrationResult
     c = CalibrationResult()
@@ -323,7 +315,6 @@ def test_s11_min_db_from_magnitude():
     import numpy as np
     db = s11_min_db_from_magnitude(np.array([0.1]))
     assert abs(db - (-20.0)) < 0.01
-
 
 def test_two_pass_successful_calibration_accepted():
     from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
@@ -384,8 +375,6 @@ def test_calibration_source_no_factory_or_recovery():
     src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'calibration.py').read_text('utf-8')
     assert 'cst_optimization.factory' not in src
     assert 'cst_optimization.workflows.recovery' not in src
-
-
 
 def test_config_yaml_has_two_pass_defaults():
     import yaml

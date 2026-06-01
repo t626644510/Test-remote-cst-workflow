@@ -14,7 +14,7 @@ target for consolidating legacy Workflow 3 SAO capabilities.
 - evaluation.mode skeleton (single_pass default, two_pass fail-fast, A6)
 - pure gate utilities: FrequencyGate, S11DepthGate, MultiDipDetector (A7)
 - calibration primitives: CalibrationResult, MeasurementPlan, helpers (A8)
-- two-pass/gate config helpers (A9)
+- two-pass/gate config helpers: _build_*, _resolve_two_pass_settings (A9)
 - two-pass orchestration skeleton: TwoPassDecision, evaluate_two_pass_decision (A10): _build_*, _resolve_two_pass_settings (A9)
 
 ## Not implemented yet

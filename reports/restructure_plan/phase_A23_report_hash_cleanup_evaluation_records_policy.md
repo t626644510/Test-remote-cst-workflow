@@ -121,8 +121,8 @@ modified; no production code, tests, or README were touched.
 Following the two-step submission strategy to avoid ``HEAD`` placeholders:
 
 - Implementation/doc cleanup commit: ``f1b45e7`` — ``Phase A23 rfgun_sao report hash cleanup evaluation records policy``
-- Report/hash-fill commit: ``(filled after hash-fill)`` — ``A23 report: fill commit hash``
-- Final pushed HEAD: ``(filled after hash-fill and push)``
+- Report/hash-fill commit: ``ccb4af5`` — ``A23 report: fill commit hash``
+- Final pushed HEAD: ``(will be filled after next commit)``
 
 ## Caveats / follow-up
 

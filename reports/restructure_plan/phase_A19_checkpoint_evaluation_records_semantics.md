@@ -92,7 +92,7 @@ written by the two-pass path or if the ``.ckpt`` format is sufficient.
 
 - Implementation commit: ``HEAD`` — ``Phase A19 rfgun_sao checkpoint evaluation records audit``
 - Report/hash-fill commit: included in implementation commit
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``1841742``
 
 ## Caveats / follow-up
 

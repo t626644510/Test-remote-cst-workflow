@@ -2547,3 +2547,178 @@ def test_two_pass_placeholder_with_role_split_scalar():
 
     val = ev(np.array([0.5]))
     assert val == 1.0
+
+# ============================================================
+# V. Threshold penalty skeleton — Phase B2
+# ============================================================
+
+def test_normalize_metric_role_alias():
+    """normalize_metric_role alias works and rejects unknown."""
+    from workflows.rfgun_sao.metrics import normalize_metric_role
+    import pytest
+
+    assert normalize_metric_role(None) == "optimize"
+    assert normalize_metric_role("threshold") == "threshold"
+    assert normalize_metric_role("REPORT_ONLY") == "report_only"
+    with pytest.raises(ValueError, match="Unknown metric role"):
+        normalize_metric_role("banana")
+
+
+def test_threshold_field_parsing_top_level():
+    """Threshold/sigma/direction parsed from top-level entry."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+
+    entries = [{
+        "name": "m1",
+        "role": "threshold",
+        "threshold": 5.0,
+        "sigma": 2.0,
+        "direction": "less_than",
+    }]
+    specs = build_metric_specs(entries)
+    assert len(specs) == 1
+    s = specs[0]
+    assert s.threshold == 5.0
+    assert s.sigma == 2.0
+    assert s.direction == "less_than"
+
+
+def test_threshold_field_mode_params_fallback():
+    """threshold/sigma parsed from mode_params if not top-level."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+
+    entries = [{
+        "name": "m1",
+        "role": "threshold",
+        "mode_params": {
+            "threshold": 10.0,
+            "sigma": 3.0,
+            "direction": "greater_than",
+        },
+    }]
+    specs = build_metric_specs(entries)
+    assert len(specs) == 1
+    s = specs[0]
+    assert s.threshold == 10.0
+    assert s.sigma == 3.0
+    assert s.direction == "greater_than"
+
+
+def test_threshold_penalty_less_than():
+    """less_than direction penalty formula."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_threshold_penalty
+    import numpy as np
+
+    spec = MetricSpec(
+        name="t1", role=MetricRole.THRESHOLD,
+        threshold=10.0, sigma=2.0, direction="less_than",
+    )
+    # Below threshold
+    assert compute_threshold_penalty(spec, 9.0) == 0.0
+    # At threshold
+    assert compute_threshold_penalty(spec, 10.0) == 0.0
+    # Above threshold
+    p = compute_threshold_penalty(spec, 12.0)
+    expected = 1.0 - np.exp(-1.0)
+    assert abs(p - expected) < 1e-12
+
+
+def test_threshold_penalty_greater_than():
+    """greater_than direction penalty formula."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_threshold_penalty
+    import numpy as np
+
+    spec = MetricSpec(
+        name="t1", role=MetricRole.THRESHOLD,
+        threshold=10.0, sigma=2.0, direction="greater_than",
+    )
+    # Above threshold
+    assert compute_threshold_penalty(spec, 11.0) == 0.0
+    # At threshold
+    assert compute_threshold_penalty(spec, 10.0) == 0.0
+    # Below threshold
+    p = compute_threshold_penalty(spec, 8.0)
+    expected = 1.0 - np.exp(-1.0)
+    assert abs(p - expected) < 1e-12
+
+
+def test_threshold_penalty_non_finite():
+    """NaN and Inf return penalty 1.0."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_threshold_penalty
+    import numpy as np
+
+    spec = MetricSpec(
+        name="t1", role=MetricRole.THRESHOLD,
+        threshold=10.0, sigma=2.0, direction="less_than",
+    )
+    assert compute_threshold_penalty(spec, np.nan) == 1.0
+    assert compute_threshold_penalty(spec, np.inf) == 1.0
+    assert compute_threshold_penalty(spec, -np.inf) == 1.0
+
+
+def test_threshold_penalty_invalid_direction():
+    """Unknown direction in config raises ValueError."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+    import pytest
+
+    entries = [{
+        "name": "m1",
+        "role": "threshold",
+        "direction": "sideways",
+    }]
+    with pytest.raises(ValueError, match="Unknown threshold direction"):
+        build_metric_specs(entries)
+
+
+def test_threshold_penalty_non_threshold_spec_raises():
+    """compute_threshold_penalty on non-threshold spec raises TypeError."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_threshold_penalty
+    import pytest
+
+    spec = MetricSpec(name="opt", role=MetricRole.OPTIMIZE)
+    with pytest.raises(TypeError, match="Expected role.*threshold"):
+        compute_threshold_penalty(spec, 1.0)
+
+
+def test_workflow_container_threshold_metadata():
+    """Workflow container exposes threshold_metric_names and metric_specs."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "max_modified_poynting", "role": "threshold",
+             "threshold": 5.0, "sigma": 2.0},
+            {"name": "q0", "role": "report_only"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq", "max_modified_poynting"]
+    assert wf.report_metric_names == ["q0"]
+    assert hasattr(wf, "metric_specs")
+    assert len(wf.metric_specs) == 3
+    assert wf.optimize_metric_names == ["resonant_freq"]
+    assert wf.threshold_metric_names == ["max_modified_poynting"]
+
+
+def test_b1_backward_compatibility_flat_config():
+    """B1 flat config with no role still works."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "mode": "tolerance",
+             "mode_params": {"target": 11.424, "sigma": 0.00333}},
+            {"name": "q0", "mode": "maximize"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq", "q0"]
+    assert wf.report_metric_names == []
+    assert hasattr(wf, "metric_specs")

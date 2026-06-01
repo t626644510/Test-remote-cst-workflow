@@ -49,7 +49,13 @@ from workflows.rfgun_sao.types import (
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_sao.evaluator import Workflow1Evaluator
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
-from workflows.rfgun_sao.metrics import build_metric_specs, objective_metric_names, report_metric_names
+from workflows.rfgun_sao.metrics import (
+    build_metric_specs,
+    objective_metric_names,
+    optimize_metric_names,
+    report_metric_names,
+    threshold_metric_names,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -225,6 +231,9 @@ def build_workflow_1(
         workflow._conn = cst_conn
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
+        workflow.metric_specs = specs
+        workflow.optimize_metric_names = optimize_metric_names(specs)
+        workflow.threshold_metric_names = threshold_metric_names(specs)
         log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
         workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
         return workflow, optimizer, evaluator
@@ -392,6 +401,9 @@ def build_workflow_1(
     workflow._conn = conn
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
+    workflow.metric_specs = specs
+    workflow.optimize_metric_names = optimize_metric_names(specs)
+    workflow.threshold_metric_names = threshold_metric_names(specs)
     log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
     workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
 

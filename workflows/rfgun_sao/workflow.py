@@ -326,9 +326,12 @@ def _build_sao(
         acq = ExpectedImprovement(xi=acq_xi)
 
     if len(objectives) > 1:
-        weights = opt_cfg.get("objective_weights", None)
-        if isinstance(weights, dict):
-            weights = [float(weights.get(obj.name, 1.0)) for obj in objectives]
+        objective_names = [obj.name for obj in objectives]
+        weights_arr = _resolve_named_weights(
+            opt_cfg.get("objective_weights", None),
+            objective_names,
+        )
+        weights = list(weights_arr)
         composite = CompositeObjective(objectives, weights=weights)
         sao_objectives: list[ObjectiveFunction] = [composite]
     else:
@@ -375,11 +378,10 @@ def _resolve_named_weights(
     else:
         raw = np.ones(len(objective_names), dtype=float)
 
-    if np.any(np.isnan(raw)):
-        raise ValueError(f"objective_weights contain NaN: {raw}")
+    if not np.all(np.isfinite(raw)):
+        raise ValueError(f"objective_weights contain non-finite values: {raw}")
     if np.any(raw < 0):
         raise ValueError(f"objective_weights contain negative values: {raw}")
-    raw = np.where(raw > 0, raw, 1.0)
     total = np.sum(raw)
     if total <= 0:
         raise ValueError(f"objective_weights sum to non-positive: {total}")

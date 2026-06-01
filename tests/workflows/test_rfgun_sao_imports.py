@@ -202,6 +202,24 @@ def test_named_weights_by_objective_order():
     w = _resolve_named_weights({"b": 5.0, "a": 3.0}, ["a", "b"])
     assert list(w) == [3/8, 5/8]
 
+
+
+def test_weight_0_is_allowed():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    w = _resolve_named_weights({'a': 0.0, 'b': 2.0}, ['a', 'b'])
+    assert w[0] == 0.0 and w[1] == 1.0
+
+def test_all_zero_weights_raise_error():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    import pytest
+    with pytest.raises(ValueError):
+        _resolve_named_weights({'a': 0.0, 'b': 0.0}, ['a', 'b'])
+
+def test_inf_weights_raise_error():
+    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    import pytest
+    with pytest.raises(ValueError):
+        _resolve_named_weights({'a': float('inf')}, ['a'])
 def test_invalid_weights_raise_error():
     from workflows.rfgun_sao.workflow import _resolve_named_weights
     import pytest

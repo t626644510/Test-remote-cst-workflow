@@ -175,4 +175,4 @@ s11_min_db=-9.083, hpbw_ok=True}
 
 - Implementation/fix commit: **none** — no code changes needed.
 - Report commit: ``HEAD`` — ``A15 report S11 depth gate live smoke``
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``2a258c6``

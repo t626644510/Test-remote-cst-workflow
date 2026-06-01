@@ -48,8 +48,9 @@ workflows/rfgun_sao/
     run.py            # CLI runner (imports from rfgun_sao.workflow)
     workflow.py       # build_workflow_1() builder
     evaluator.py      # Workflow1Evaluator (imports from rfgun_sao.types)
+    gates.py           # FrequencyGate, S11DepthGate, MultiDipDetector (pure Python)
     README.md         # this file
     BRANCH_CONTEXT.md # branch rules and phase status
 tests/workflows/
-    test_rfgun_sao_imports.py  # 14 no-CST import tests
+    test_rfgun_sao_imports.py  # no-CST import tests (24+ tests)
 `

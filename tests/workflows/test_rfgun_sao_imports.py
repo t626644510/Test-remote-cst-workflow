@@ -245,6 +245,63 @@ def test_resolve_evaluation_mode_defaults():
     with pytest.raises(ValueError):
         _resolve_evaluation_mode({"evaluation": {"mode": "invalid"}})
 
+
+def test_gates_frequency_disabled_always_accepts():
+    from workflows.rfgun_sao.gates import FrequencyGate
+    g = FrequencyGate(enabled=False)
+    assert g.accepts(10.0) is True
+
+def test_gates_frequency_enabled_accepts_within_20mhz():
+    from workflows.rfgun_sao.gates import FrequencyGate
+    g = FrequencyGate(enabled=True, target_ghz=11.424, max_abs_offset_mhz=20.0)
+    assert g.accepts(11.424) is True
+    assert g.accepts(11.434) is True
+
+def test_gates_frequency_enabled_rejects_outside_20mhz():
+    from workflows.rfgun_sao.gates import FrequencyGate
+    g = FrequencyGate(enabled=True, target_ghz=11.424, max_abs_offset_mhz=20.0)
+    assert g.accepts(11.5) is False
+    assert g.accepts(11.3) is False
+
+def test_gates_s11_disabled_always_accepts():
+    from workflows.rfgun_sao.gates import S11DepthGate
+    g = S11DepthGate(enabled=False)
+    assert g.accepts(0.0) is True
+
+def test_gates_s11_enabled_accepts_deep_dip():
+    from workflows.rfgun_sao.gates import S11DepthGate
+    g = S11DepthGate(enabled=True, threshold_db=-1.0)
+    assert g.accepts(-10.0) is True
+    assert g.accepts(-1.0) is True
+
+def test_gates_s11_enabled_rejects_shallow_dip():
+    from workflows.rfgun_sao.gates import S11DepthGate
+    g = S11DepthGate(enabled=True, threshold_db=-1.0)
+    assert g.accepts(0.0) is False
+
+def test_gates_multidip_disabled_returns_false():
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    import numpy as np
+    d = MultiDipDetector(enabled=False)
+    assert d.has_multiple_dips(np.array([11.0, 11.5]), np.array([0.5, 0.3])) is False
+
+def test_gates_multidip_detects_two_close_dips():
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    import numpy as np
+    d = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    freqs = np.linspace(11.0, 12.0, 200)
+    mag = np.ones(200)
+    # Create two dips close together
+    dip1_idx = 50
+    dip2_idx = 53
+    mag[dip1_idx] = 0.1
+    mag[dip2_idx] = 0.1
+    assert d.has_multiple_dips(freqs, mag) is True
+
+def test_gates_source_no_factory_or_recovery_import():
+    src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "gates.py").read_text("utf-8")
+    assert "cst_optimization.factory" not in src
+    assert "cst_optimization.workflows.recovery" not in src
 def test_workflow_source_has_two_pass_fail_fast():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
     assert "NotImplementedError" in src

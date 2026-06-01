@@ -2412,3 +2412,138 @@ def test_checkpoint_metric_names_valid_regression():
         assert rec.error == ""
         assert rec.raw_values == {"a": 11.424, "b": 0.5}
         assert rec.penalties == {"a": 0.3, "b": 0.7}
+
+# ============================================================
+# U. Metric roles skeleton — Phase B1
+# ============================================================
+
+def test_metric_role_defaults_to_optimize():
+    """Missing role defaults to optimize."""
+    from workflows.rfgun_sao.metrics import MetricRole
+
+    assert MetricRole.from_value(None) == MetricRole.OPTIMIZE
+
+
+def test_metric_role_accepts_known_roles():
+    """All known roles normalize correctly."""
+    from workflows.rfgun_sao.metrics import MetricRole
+
+    assert MetricRole.from_value("optimize") == MetricRole.OPTIMIZE
+    assert MetricRole.from_value("OPTIMIZE") == MetricRole.OPTIMIZE
+    assert MetricRole.from_value("threshold") == MetricRole.THRESHOLD
+    assert MetricRole.from_value("report_only") == MetricRole.REPORT_ONLY
+
+
+def test_metric_role_unknown_raises():
+    """Unknown role raises ValueError with stable message."""
+    from workflows.rfgun_sao.metrics import MetricRole
+    import pytest
+
+    with pytest.raises(ValueError, match="Unknown metric role"):
+        MetricRole.from_value("banana")
+
+
+def test_build_metric_specs_flat_backward_compatible():
+    """Flat config with no role produces specs all optimize."""
+    from workflows.rfgun_sao.metrics import build_metric_specs, objective_metric_names, report_metric_names
+
+    entries = [
+        {"name": "a", "mode": "minimize"},
+        {"name": "b", "mode": "maximize"},
+    ]
+    specs = build_metric_specs(entries)
+    assert len(specs) == 2
+    assert objective_metric_names(specs) == ["a", "b"]
+    assert report_metric_names(specs) == []
+
+
+def test_build_metric_specs_role_split():
+    """Role split: optimize + threshold in objective_names, report_only excluded."""
+    from workflows.rfgun_sao.metrics import build_metric_specs, objective_metric_names, report_metric_names
+
+    entries = [
+        {"name": "freq", "role": "optimize"},
+        {"name": "poynting", "role": "threshold"},
+        {"name": "q0", "role": "report_only"},
+    ]
+    specs = build_metric_specs(entries)
+    assert objective_metric_names(specs) == ["freq", "poynting"]
+    assert report_metric_names(specs) == ["q0"]
+
+
+def test_build_workflow_flat_objective_names_backward_compatible():
+    """Workflow builder with flat config (no role) preserves objective_names."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "mode": "tolerance",
+             "mode_params": {"target": 11.424, "sigma": 0.00333}},
+            {"name": "q0", "mode": "maximize"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq", "q0"]
+    assert hasattr(wf, "report_metric_names")
+    assert wf.report_metric_names == []
+
+
+def test_build_workflow_role_split_objective_names():
+    """Role split: only optimize + threshold in objective_names."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "max_modified_poynting", "role": "threshold"},
+            {"name": "q0", "role": "report_only"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq", "max_modified_poynting"]
+    assert wf.report_metric_names == ["q0"]
+
+
+def test_build_workflow_unknown_role_raises():
+    """Unknown role in config raises ValueError."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import pytest
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "banana"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    with pytest.raises(ValueError, match="Unknown metric role"):
+        build_workflow_1(cfg)
+
+
+def test_two_pass_placeholder_with_role_split_scalar():
+    """Two-pass placeholder with role split still returns 1.0 (all-ones penalty)."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "q0", "role": "report_only"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq"]
+    assert wf.report_metric_names == ["q0"]
+
+    val = ev(np.array([0.5]))
+    assert val == 1.0

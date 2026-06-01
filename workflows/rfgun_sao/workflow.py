@@ -49,6 +49,7 @@ from workflows.rfgun_sao.types import (
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_sao.evaluator import Workflow1Evaluator
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
+from workflows.rfgun_sao.metrics import build_metric_specs, objective_metric_names, report_metric_names
 
 _logger = logging.getLogger(__name__)
 
@@ -126,8 +127,11 @@ def build_workflow_1(
         param_set = ParameterSet(params_list)
         param_names = param_set.names
         obj_entries = config.get("objectives", [])
-        objectives = _build_objectives(obj_entries)
-        metric_names = [o.name for o in objectives]
+        specs = build_metric_specs(obj_entries)
+        metric_names = objective_metric_names(specs)
+        report_names = report_metric_names(specs)
+        optimize_entries = [e for e in obj_entries if e.get("name") in metric_names]
+        objectives = _build_objectives(optimize_entries)
         opt_cfg = config.get("optimization", {})
         weights = _resolve_named_weights(
             opt_cfg.get("objective_weights", None), metric_names,
@@ -220,6 +224,7 @@ def build_workflow_1(
         workflow._params = param_set
         workflow._conn = cst_conn
         workflow.objective_names = metric_names
+        workflow.report_metric_names = report_names
         log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
         workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
         return workflow, optimizer, evaluator
@@ -238,8 +243,11 @@ def build_workflow_1(
     # Objectives
     # ---------------------------------------------------------------
     obj_entries = config.get("objectives", [])
-    objectives = _build_objectives(obj_entries)
-    metric_names = [o.name for o in objectives]
+    specs = build_metric_specs(obj_entries)
+    metric_names = objective_metric_names(specs)
+    report_names = report_metric_names(specs)
+    optimize_entries = [e for e in obj_entries if e.get("name") in metric_names]
+    objectives = _build_objectives(optimize_entries)
 
     # ---------------------------------------------------------------
     # CST connection
@@ -383,6 +391,7 @@ def build_workflow_1(
     workflow._params = param_set
     workflow._conn = conn
     workflow.objective_names = metric_names
+    workflow.report_metric_names = report_names
     log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
     workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
 

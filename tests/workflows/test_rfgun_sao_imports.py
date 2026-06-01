@@ -1671,3 +1671,122 @@ def test_two_pass_rejection_scalar_all_ones_with_normalized_weights():
     c_pen, c_ok = captured[0]
     assert np.allclose(c_pen, [1.0, 1.0, 1.0])
     assert c_ok is False
+
+# ============================================================
+# O. Multi-dip diagnostic status — A17
+# ============================================================
+
+def test_multidip_detector_detects_but_decision_accepts():
+    """Multi-dip detector flags diagnostics but decision remains accepted."""
+    from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    import numpy as np
+
+    det = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    freqs = np.linspace(11.0, 12.0, 200)
+    mag = np.ones(200)
+    mag[50] = 0.1
+    mag[53] = 0.1
+
+    cal = CalibrationResult(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    dec = evaluate_two_pass_decision(
+        cal, 11.424,
+        multi_dip_detector=det,
+        frequencies_ghz=freqs,
+        s11_magnitude=mag,
+    )
+    assert dec.accepted is True
+    assert dec.reason == "accepted"
+    assert dec.diagnostics.get("multi_dip_detected") is True
+
+
+def test_multidip_runtime_without_arrays_does_not_reject():
+    """Runtime evaluator with multi_dip_detector proceeds without S11 arrays."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    import numpy as np
+
+    det = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    cal_runner = _FakeCalibrationRunner(
+        success=True,
+        f0_ghz=11.424,
+        s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        multi_dip_detector=det,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.25) < 1e-12
+
+
+def test_two_pass_cst_calibration_meta_does_not_store_full_s11_arrays(
+    monkeypatch,
+):
+    """Calibration meta stores compact S11 summaries, not full arrays."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    import numpy as np
+
+    freqs = np.linspace(11.0, 12.0, 2000)
+    mag = 0.9 - 0.89 / (1.0 + ((freqs - 11.424) / 0.015)**2)
+
+    monkeypatch.setattr(
+        cst_mod, "ResultReader",
+        _make_fake_s11_reader(freqs, mag),
+    )
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is True
+    meta = result.meta
+    assert isinstance(meta, dict)
+
+    # Has compact summary fields
+    assert "s11_points" in meta
+    assert "s11_freq_min_ghz" in meta
+    assert "s11_freq_max_ghz" in meta
+    assert "s11_min_db" in meta
+
+    # No full arrays stored
+    assert "frequencies_ghz" not in meta
+    assert "s11_magnitude" not in meta
+    assert "s_complex" not in meta
+    for v in meta.values():
+        assert not isinstance(v, (np.ndarray, list)), (
+            f"meta contains array-like value for key"
+        )
+
+
+def test_readme_states_multidip_live_plumbing_future_work():
+    """README clarifies multi-dip diagnostic-only and live plumbing as future."""
+    import pathlib
+    readme_path = (
+        pathlib.Path(__file__).resolve().parent.parent.parent
+        / "workflows" / "rfgun_sao" / "README.md"
+    )
+    text = readme_path.read_text("utf-8")
+    assert "multi-dip" in text.lower() or "multidip" in text.lower()
+    assert "diagnostic" in text.lower()
+    assert "future" in text.lower() or "not implemented" in text.lower()

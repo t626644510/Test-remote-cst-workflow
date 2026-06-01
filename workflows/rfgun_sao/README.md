@@ -26,6 +26,12 @@ target for consolidating legacy Workflow 3 SAO capabilities.
   - make_cst_calibration_runner: S11-based f0 detection with HPBW/dip-minimum
   - make_cst_measurement_runner: delegates to Workflow1Evaluator
   - only active when evaluation.two_pass.runtime=cst; default remains placeholder
+- calibration diagnostics: compact S11 meta (points, freq range, min) without full arrays (A13.3)
+- accepted/rejected path logging with full calibration detail (A13.3/A13.5)
+- mixed gate precedence no-CST regression tests: cal failure > frequency > S11 depth > measurement (A16)
+- MultiDipDetector utility can detect close dips; evaluate_two_pass_decision writes diagnostics["multi_dip_detected"] when S11 arrays are explicitly supplied (A17)
+  - runtime CST two-pass stores only compact S11 summaries, not full frequency/magnitude arrays
+  - multi-dip remains diagnostic-only: does not reject candidates, does not affect penalty/scalar
 
 ## Not implemented yet
 
@@ -35,12 +41,17 @@ target for consolidating legacy Workflow 3 SAO capabilities.
 - adaptive bounds
 - staged search
 - root shim repointing (run_workflow_1.py still points to rfgun_single_pass)
+- live multi-dip detection (runtime needs S11 frequency/magnitude array plumbing; currently stores only compact S11 summaries)
 
 **Notes:**
 - evaluation.mode=two_pass defaults to placeholder (no CST, penalty=1.0).
 - Set ``evaluation.two_pass.runtime: cst`` in config to activate real CST two-pass.
 - config.local.yaml should be used for local CST paths and must not be committed.
 - Single-pass is unchanged; run_workflow_1.py still points to rfgun_single_pass.
+- MultiDipDetector is diagnostic-only: it does not reject candidates.
+  - ``evaluate_two_pass_decision`` writes ``diagnostics["multi_dip_detected"]`` only when ``frequencies_ghz`` / ``s11_magnitude`` arrays are explicitly supplied.
+  - The CST runtime calibration path stores only compact S11 summaries (points, freq range, min dB) to avoid storing full arrays.
+  - Live/runtime multi-dip detection (deriving dip features from the calibration solve) is future work.
 
 ## Running
 

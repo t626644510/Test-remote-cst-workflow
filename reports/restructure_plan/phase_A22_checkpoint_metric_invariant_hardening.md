@@ -77,7 +77,7 @@ $ pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 - Report/hash-fill commit: **1344b00** — `A21 report: fill commit hash`
 - A22 implementation commit: ``HEAD`` — ``Phase A22 rfgun_sao checkpoint metric invariant hardening``
 - A22 report/hash-fill commit: included in A22 implementation commit (same hash)
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``167a6f5``
 
 **Note on A20/A21 report hashes:** The A20 report (``c598ee2``) and A21 report
 (``133fef3``) contained ``HEAD`` in their implementation commit fields at

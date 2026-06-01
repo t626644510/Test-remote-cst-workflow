@@ -40,11 +40,15 @@ class _FakeCalibrationRunner:
         f0_ghz: float = 11.424,
         s11_min_db: float = -10.0,
         error: str = "",
+        method: str = "cst_s11_hpbw",
+        meta: dict | None = None,
     ):
         self._success = success
         self._f0_ghz = f0_ghz
         self._s11_min_db = s11_min_db
         self._error = error
+        self._method = method
+        self._meta = meta or {}
         self.call_count = 0
         self.last_params: dict | None = None
         self.last_iter: int | None = None
@@ -59,6 +63,8 @@ class _FakeCalibrationRunner:
             f0_ghz=self._f0_ghz,
             s11_min_db=self._s11_min_db,
             error=self._error,
+            method=self._method,
+            meta=dict(self._meta),
         )
 
 
@@ -1391,3 +1397,54 @@ def test_decision_error_message_for_gate_reject_remains_reason():
     )
     msg4 = _decision_error_message(dec4)
     assert "calibration_failed" in msg4
+
+# ============================================================
+# M. Accepted-path calibration diagnostics — A13.5
+# ============================================================
+
+def test_two_pass_runtime_logs_accepted_calibration_details(caplog):
+    """Accepted path logs calibration success details."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import logging
+    import numpy as np
+
+    caplog.set_level(logging.INFO, logger="workflows.rfgun_sao.two_pass")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True,
+        f0_ghz=11.4245,
+        s11_min_db=-20.0,
+        method="cst_s11_hpbw",
+        meta={
+            "s11_points": 123,
+            "hpbw_ok": True,
+        },
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"resonant_freq": 0.3},
+        raw_values={"resonant_freq": 11.4245},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+
+    assert meas_runner.call_count == 1
+    assert np.isfinite(val)
+    assert val != 1.0
+
+    log_text = caplog.text
+    assert "Two-pass accepted" in log_text
+    assert "f0_ghz" in log_text
+    assert "11.4245" in log_text
+    assert "s11_min_db" in log_text
+    assert "cst_s11_hpbw" in log_text or "cst_s11_dip_min" in log_text
+    assert "cal_success" in log_text

@@ -318,6 +318,22 @@ def make_two_pass_runtime_evaluator(
                 )
             return float(np.dot(penalties_arr, weights))
 
+        # Accepted — log calibration success details
+        cal = decision.calibration
+        if cal is not None:
+            _logger.info(
+                "Two-pass accepted: reason=%s cal_success=%s "
+                "f0_ghz=%s s11_min_db=%s cal_method=%s meta=%s",
+                decision.reason, cal.success, cal.f0_ghz,
+                cal.s11_min_db, cal.method,
+                _safe_meta_str(cal.meta),
+            )
+        else:
+            _logger.info(
+                "Two-pass accepted: reason=%s (no calibration object)",
+                decision.reason,
+            )
+
         # Measurement pass
         result = measurement_runner(
             param_dict, decision.measurement_plan, iteration,

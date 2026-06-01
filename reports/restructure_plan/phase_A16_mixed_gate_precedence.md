@@ -81,4 +81,4 @@ The 5 new tests formally capture the following semantics:
 
 - Implementation/fix commit: ``HEAD`` — ``A16 add mixed gate precedence regression tests``
 - Report commit: included in implementation commit (same hash)
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``2ffe4b3``

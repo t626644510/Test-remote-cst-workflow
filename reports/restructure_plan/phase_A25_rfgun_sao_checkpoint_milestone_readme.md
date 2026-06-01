@@ -63,9 +63,9 @@ further hash-only commits are needed for A24.1.
 
 ## Commit hashes
 
-- Implementation/doc commit: ``(filled after commit)`` — ``Phase A25 rfgun_sao checkpoint milestone README``
+- Implementation/doc commit: ``c329e9f`` — ``Phase A25 rfgun_sao checkpoint milestone README``
 - Report/hash-fill commit: N/A (single commit)
-- Final pushed HEAD: reported in final execution message
+- Final pushed HEAD: ``c329e9f``
 
 ## Caveats / follow-up
 

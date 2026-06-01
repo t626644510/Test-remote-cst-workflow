@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 from workflows.rfgun_sao.calibration import CalibrationResult, MeasurementPlan, make_measurement_plan
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
+from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
 _logger = logging.getLogger(__name__)
 
@@ -68,4 +69,172 @@ def make_two_pass_placeholder_evaluator(
             multi_dip_detector=multi_dip_detector,
         )
         return 1.0
+    return _evaluator
+
+
+def make_placeholder_calibration_runner(
+) -> Callable[[dict[str, float], int], CalibrationResult]:
+    """Return a calibration runner that always fails.
+
+    This is a placeholder for the CST-based calibration runner.
+    Every call returns ``CalibrationResult(success=False)``.
+    """
+    def _runner(param_dict: dict[str, float], iteration: int) -> CalibrationResult:
+        return CalibrationResult(
+            success=False,
+            f0_ghz=np.nan,
+            error="placeholder_calibration_runner",
+            method="placeholder",
+        )
+    return _runner
+
+
+def make_placeholder_measurement_runner(
+) -> Callable[[dict[str, float], MeasurementPlan, int], EvaluationResult]:
+    """Return a measurement runner that always fails.
+
+    This is a placeholder for the CST-based measurement runner.
+    Every call returns ``EvaluationResult(status=SOLVER_FAILED)``.
+    """
+    def _runner(
+        param_dict: dict[str, float],
+        plan: MeasurementPlan,
+        iteration: int,
+    ) -> EvaluationResult:
+        return EvaluationResult(
+            status=EvaluationStatus.SOLVER_FAILED,
+            error="placeholder_measurement_runner",
+            f0_ghz=np.nan,
+        )
+    return _runner
+
+
+def make_two_pass_runtime_evaluator(
+    *,
+    param_names: list[str],
+    metric_names: list[str],
+    objectives: list,
+    weights: np.ndarray,
+    fallback_ghz: float = 11.424,
+    frequency_gate: FrequencyGate | None = None,
+    s11_depth_gate: S11DepthGate | None = None,
+    multi_dip_detector: MultiDipDetector | None = None,
+    calibration_runner: Callable[[dict[str, float], int], CalibrationResult],
+    measurement_runner: Callable[[dict[str, float], MeasurementPlan, int], EvaluationResult],
+    checkpoint_callback: Callable[
+        [np.ndarray, np.ndarray, np.ndarray, bool, str], None
+    ] | None = None,
+) -> Callable[[np.ndarray], float]:
+    """Return a two-pass runtime evaluator with injectable runners.
+
+    This factory creates a callable ``f(x_phys) -> float`` suitable for
+    passing as the ``evaluator`` argument to
+    ``SurrogateAssistedOptimizer.optimize()``.
+
+    The internal control flow is:
+
+    1. Convert ``x_phys`` to ``param_dict`` via ``param_names``.
+    2. **Calibration pass:** invoke ``calibration_runner``.
+    3. **Decision gate:** ``evaluate_two_pass_decision`` checks gates.
+    4. **Rejected path:** return penalty=1.0, no measurement runner call.
+    5. **Accepted path:** invoke ``measurement_runner``.
+    6. **Penalty extraction:** build ``penalties_arr`` from result.
+    7. **Checkpoint:** call ``checkpoint_callback`` if provided.
+    8. **Weighted scalar:** return ``dot(penalties_arr, weights)``.
+
+    Parameters are keyword-only.
+
+    Parameters
+    ----------
+    param_names : list[str]
+        Ordered parameter names (maps ``x_phys`` index to name).
+    metric_names : list[str]
+        Ordered metric (objective) names for penalty extraction.
+    objectives : list
+        Objective function list (forward-compat, not used in control flow yet).
+    weights : np.ndarray
+        Normalised weight vector aligned with ``metric_names``.
+    fallback_ghz : float
+        Fallback frequency if calibration fails.
+    frequency_gate : FrequencyGate | None
+    s11_depth_gate : S11DepthGate | None
+    multi_dip_detector : MultiDipDetector | None
+    calibration_runner : callable
+        ``(param_dict, iteration) -> CalibrationResult``
+    measurement_runner : callable
+        ``(param_dict, measurement_plan, iteration) -> EvaluationResult``
+    checkpoint_callback : callable or None
+        ``(x_phys, raw_values, penalties, solver_ok, error) -> None``
+
+    Returns
+    -------
+    callable
+        ``f(x_phys: np.ndarray) -> float``
+    """
+    def _evaluator(x_phys: np.ndarray, _it: list[int] = [0]) -> float:
+        iteration = int(_it[0])
+        _it[0] += 1
+
+        param_dict = dict(zip(param_names, x_phys))
+
+        # Calibration pass
+        calibration = calibration_runner(param_dict, iteration)
+
+        # Decision gate
+        decision = evaluate_two_pass_decision(
+            calibration=calibration,
+            fallback_ghz=fallback_ghz,
+            frequency_gate=frequency_gate,
+            s11_depth_gate=s11_depth_gate,
+            multi_dip_detector=multi_dip_detector,
+        )
+
+        n_metrics = len(metric_names)
+
+        if not decision.accepted:
+            penalties_arr = np.full(n_metrics, 1.0, dtype=float)
+            raw_arr = np.full(n_metrics, np.nan, dtype=float)
+            if np.isfinite(calibration.f0_ghz) and "resonant_freq" in metric_names:
+                raw_arr[metric_names.index("resonant_freq")] = calibration.f0_ghz
+            if checkpoint_callback is not None:
+                checkpoint_callback(
+                    x_phys, raw_arr, penalties_arr,
+                    False,
+                    decision.reason or calibration.error,
+                )
+            return float(np.dot(penalties_arr, weights))
+
+        # Measurement pass
+        result = measurement_runner(
+            param_dict, decision.measurement_plan, iteration,
+        )
+
+        if (
+            result.status == EvaluationStatus.SUCCESS
+            and result.penalty_values is not None
+        ):
+            penalties_arr = np.array(
+                [float(result.penalty_values.get(name, 1.0)) for name in metric_names],
+                dtype=float,
+            )
+            raw_arr = np.array(
+                [
+                    float(result.objective_values.get(name, np.nan))
+                    if result.objective_values is not None else np.nan
+                    for name in metric_names
+                ],
+                dtype=float,
+            )
+        else:
+            penalties_arr = np.full(n_metrics, 1.0, dtype=float)
+            raw_arr = np.full(n_metrics, np.nan, dtype=float)
+
+        solver_ok = result.status == EvaluationStatus.SUCCESS
+        if checkpoint_callback is not None:
+            checkpoint_callback(
+                x_phys, raw_arr, penalties_arr, solver_ok, result.error or "",
+            )
+
+        return float(np.dot(penalties_arr, weights))
+
     return _evaluator

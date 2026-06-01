@@ -32,6 +32,69 @@ def _minimal_two_pass_cfg() -> dict:
     }
 
 
+class _FakeCalibrationRunner:
+    """Fake calibration runner with configurable success/failure."""
+    def __init__(
+        self,
+        success: bool = True,
+        f0_ghz: float = 11.424,
+        s11_min_db: float = -10.0,
+        error: str = "",
+    ):
+        self._success = success
+        self._f0_ghz = f0_ghz
+        self._s11_min_db = s11_min_db
+        self._error = error
+        self.call_count = 0
+        self.last_params: dict | None = None
+        self.last_iter: int | None = None
+
+    def __call__(self, param_dict: dict, iteration: int):
+        self.call_count += 1
+        self.last_params = param_dict
+        self.last_iter = iteration
+        from workflows.rfgun_sao.calibration import CalibrationResult
+        return CalibrationResult(
+            success=self._success,
+            f0_ghz=self._f0_ghz,
+            s11_min_db=self._s11_min_db,
+            error=self._error,
+        )
+
+
+class _FakeMeasurementRunner:
+    """Fake measurement runner with configurable results."""
+    def __init__(
+        self,
+        penalty_values: dict | None = None,
+        raw_values: dict | None = None,
+        status=None,
+    ):
+        from workflows.rfgun_sao.types import EvaluationStatus
+        self._penalty_values = penalty_values or {"resonant_freq": 0.0}
+        self._raw_values = raw_values or {"resonant_freq": 11.424}
+        self._status = status or EvaluationStatus.SUCCESS
+        self.call_count = 0
+        self.last_params: dict | None = None
+        self.last_plan = None
+        self.last_iter: int | None = None
+
+    def __call__(self, param_dict: dict, plan, iteration: int):
+        self.call_count += 1
+        self.last_params = param_dict
+        self.last_plan = plan
+        self.last_iter = iteration
+        from workflows.rfgun_sao.types import EvaluationResult
+        return EvaluationResult(
+            status=self._status,
+            error="",
+            f0_ghz=11.424,
+            raw_metrics=self._raw_values,
+            objective_values=self._raw_values,
+            penalty_values=self._penalty_values,
+        )
+
+
 # ============================================================
 # A. Runner import and default config path
 # ============================================================
@@ -490,3 +553,136 @@ def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src
     assert "import cst_optimization.factory" not in src
+
+
+# ============================================================
+# I. Injectable two-pass runtime evaluator skeleton
+# ============================================================
+
+def test_two_pass_runtime_placeholder_returns_one():
+    """Default placeholder path returns 1.0 and skips measurement."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+
+    cfg = _minimal_two_pass_cfg()
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf._conn is None
+
+    val = ev(np.array([0.5]))
+    assert val == 1.0
+
+
+def test_two_pass_runtime_reject_does_not_call_measurement():
+    """Calibration rejection prevents measurement runner call."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=False)
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+
+
+def test_two_pass_runtime_success_uses_measurement_penalties_and_weights():
+    """Successful path computes weighted scalar from measurement penalties."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    penalty_vals = {"f1": 0.2, "f2": 0.8}
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values=penalty_vals,
+        raw_values={"f1": 11.424, "f2": 0.5},
+    )
+    weights = np.array([0.3, 0.7])
+    expected = float(np.dot([0.2, 0.8], weights))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1", "f2"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert abs(val - expected) < 1e-12
+    assert meas_runner.call_count == 1
+
+
+def test_two_pass_runtime_checkpoint_called_on_success():
+    """Checkpoint callback is invoked on successful measurement path."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    penalty_vals = {"f1": 0.3}
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values=penalty_vals,
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((x.copy(), raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    x_in = np.array([0.5])
+    evaluator(x_in)
+    assert len(captured) == 1
+    c_x, c_raw, c_pen, c_ok, c_err = captured[0]
+    assert np.allclose(c_x, x_in)
+    assert np.allclose(c_raw, [11.424])
+    assert np.allclose(c_pen, [0.3])
+    assert c_ok is True
+    assert c_err == ""
+
+
+def test_two_pass_runtime_frequency_gate_rejects_before_measurement():
+    """Frequency gate rejection prevents measurement runner call."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import FrequencyGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.5, s11_min_db=-10.0)
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    gate = FrequencyGate(enabled=True, target_ghz=11.424, max_abs_offset_mhz=20.0)
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        frequency_gate=gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0

@@ -102,17 +102,34 @@ def build_workflow_1(
         param_entries = config.get("parameters", [])
         params_list = _build_parameters(param_entries)
         param_set = ParameterSet(params_list)
+        param_names = param_set.names
         obj_entries = config.get("objectives", [])
         objectives = _build_objectives(obj_entries)
         metric_names = [o.name for o in objectives]
-        from workflows.rfgun_sao.two_pass import make_two_pass_placeholder_evaluator
-        placeholder_eval = make_two_pass_placeholder_evaluator(
+        opt_cfg = config.get("optimization", {})
+        weights = _resolve_named_weights(
+            opt_cfg.get("objective_weights", None), metric_names,
+        )
+        from workflows.rfgun_sao.two_pass import (
+            make_two_pass_runtime_evaluator,
+            make_placeholder_calibration_runner,
+            make_placeholder_measurement_runner,
+        )
+        cal_runner = make_placeholder_calibration_runner()
+        meas_runner = make_placeholder_measurement_runner()
+        placeholder_eval = make_two_pass_runtime_evaluator(
+            param_names=param_names,
+            metric_names=metric_names,
+            objectives=objectives,
+            weights=weights,
             fallback_ghz=settings["calibration_guess_ghz"],
             frequency_gate=settings["frequency_gate"],
             s11_depth_gate=settings["s11_depth_gate"],
             multi_dip_detector=settings["multi_dip_detector"],
+            calibration_runner=cal_runner,
+            measurement_runner=meas_runner,
+            checkpoint_callback=checkpoint_callback,
         )
-        opt_cfg = config.get("optimization", {})
         seed = opt_cfg.get("seed", 42)
         _logger.info("Workflow 1 (two_pass placeholder): no CST connection")
         optimizer = _build_sao(opt_cfg, param_set, objectives, seed)

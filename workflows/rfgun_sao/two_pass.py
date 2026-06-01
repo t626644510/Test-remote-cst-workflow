@@ -72,6 +72,52 @@ def make_two_pass_placeholder_evaluator(
     return _evaluator
 
 
+# ---- Raw extraction helpers -------------------------------------------------
+
+
+def _extract_raw_array(
+    result: EvaluationResult,
+    metric_names: list[str],
+) -> np.ndarray:
+    """Extract raw metric array from an ``EvaluationResult`` with fallback.
+
+    For each metric name in order:
+
+    1. Try ``result.objective_values[name]``.
+    2. Fall back to ``result.raw_metrics[name]``.
+    3. Fall back to ``numpy.nan``.
+
+    Non-finite or unconvertible values are replaced with ``numpy.nan``.
+
+    Parameters
+    ----------
+    result : EvaluationResult
+        The evaluation result from a measurement runner.
+    metric_names : list[str]
+        Ordered metric names.
+
+    Returns
+    -------
+    np.ndarray
+        Float array of length ``len(metric_names)``.
+    """
+    raw_arr: list[float] = []
+    for name in metric_names:
+        val: float = np.nan
+        if result.objective_values is not None and name in result.objective_values:
+            val = result.objective_values[name]
+        elif result.raw_metrics is not None and name in result.raw_metrics:
+            val = result.raw_metrics[name]
+        try:
+            fv = float(val)
+            if not np.isfinite(fv):
+                fv = np.nan
+        except (TypeError, ValueError):
+            fv = np.nan
+        raw_arr.append(fv)
+    return np.array(raw_arr, dtype=float)
+
+
 def make_placeholder_calibration_runner(
 ) -> Callable[[dict[str, float], int], CalibrationResult]:
     """Return a calibration runner that always fails.
@@ -217,17 +263,10 @@ def make_two_pass_runtime_evaluator(
                 [float(result.penalty_values.get(name, 1.0)) for name in metric_names],
                 dtype=float,
             )
-            raw_arr = np.array(
-                [
-                    float(result.objective_values.get(name, np.nan))
-                    if result.objective_values is not None else np.nan
-                    for name in metric_names
-                ],
-                dtype=float,
-            )
+            raw_arr = _extract_raw_array(result, metric_names)
         else:
             penalties_arr = np.full(n_metrics, 1.0, dtype=float)
-            raw_arr = np.full(n_metrics, np.nan, dtype=float)
+            raw_arr = _extract_raw_array(result, metric_names)
 
         solver_ok = result.status == EvaluationStatus.SUCCESS
         if checkpoint_callback is not None:

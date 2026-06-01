@@ -64,16 +64,26 @@ class _FakeCalibrationRunner:
 
 class _FakeMeasurementRunner:
     """Fake measurement runner with configurable results."""
+    _OBJ_SENTINEL = object()
+
     def __init__(
         self,
         penalty_values: dict | None = None,
         raw_values: dict | None = None,
         status=None,
+        objective_values=None,
+        error: str = "",
     ):
         from workflows.rfgun_sao.types import EvaluationStatus
         self._penalty_values = penalty_values or {"resonant_freq": 0.0}
         self._raw_values = raw_values or {"resonant_freq": 11.424}
         self._status = status or EvaluationStatus.SUCCESS
+        # Allow explicit None vs default-to-raw distinction
+        if objective_values is self._OBJ_SENTINEL:
+            self._objective_values = self._raw_values
+        else:
+            self._objective_values = objective_values
+        self._error = error
         self.call_count = 0
         self.last_params: dict | None = None
         self.last_plan = None
@@ -87,10 +97,10 @@ class _FakeMeasurementRunner:
         from workflows.rfgun_sao.types import EvaluationResult
         return EvaluationResult(
             status=self._status,
-            error="",
+            error=self._error,
             f0_ghz=11.424,
             raw_metrics=self._raw_values,
-            objective_values=self._raw_values,
+            objective_values=self._objective_values,
             penalty_values=self._penalty_values,
         )
 
@@ -686,3 +696,118 @@ def test_two_pass_runtime_frequency_gate_rejects_before_measurement():
     val = evaluator(np.array([0.5]))
     assert val == 1.0
     assert meas_runner.call_count == 0
+
+
+def test_two_pass_runtime_raw_array_falls_back_to_raw_metrics():
+    """Raw extraction falls back objective_values -> raw_metrics -> NaN."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    penalty_vals = {"f1": 0.2, "f2": 0.8}
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values=penalty_vals,
+        raw_values={"f1": 11.424, "f2": 0.5},
+        objective_values=None,
+    )
+    weights = np.array([0.5, 0.5])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((raw.copy(), ok))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1", "f2"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    evaluator(np.array([0.5]))
+    assert len(captured) == 1
+    c_raw, c_ok = captured[0]
+    assert np.allclose(c_raw, [11.424, 0.5])
+    assert c_ok is True
+
+
+def test_two_pass_runtime_failed_measurement_preserves_raw_metrics_for_checkpoint():
+    """Failed measurement path preserves available raw metrics for checkpoint."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.types import EvaluationStatus
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.2},
+        raw_values={"f1": 11.424},
+        status=EvaluationStatus.SOLVER_FAILED,
+        objective_values=None,
+        error="fake measurement failed",
+    )
+    weights = np.array([1.0])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((raw.copy(), pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert len(captured) == 1
+    c_raw, c_pen, c_ok, c_err = captured[0]
+    # Raw should use raw_metrics fallback
+    assert np.allclose(c_raw, [11.424])
+    # Penalties are still all 1.0 on failure
+    assert np.allclose(c_pen, [1.0])
+    assert c_ok is False
+    assert c_err == "fake measurement failed"
+
+
+def test_two_pass_runtime_s11_gate_rejects_before_measurement():
+    """S11 depth gate rejection prevents measurement runner call."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import S11DepthGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(success=True, f0_ghz=11.424, s11_min_db=0.0)
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    gate = S11DepthGate(enabled=True, threshold_db=-1.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        s11_depth_gate=gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert "s11_depth_gate_reject" in c_err

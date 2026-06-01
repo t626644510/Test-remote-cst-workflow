@@ -43,15 +43,21 @@ _logger: logging.Logger = logging.getLogger("workflow_1")
 
 
 def _checkpoint_metric_names_from_wf_ref(wf_ref: list) -> list[str] | None:
-    """Extract metric names from *wf_ref* for checkpoint recording.
+    """Extract and validate metric names from *wf_ref* for checkpoint recording.
 
-    Returns ``None`` (with no exception) when the names are unavailable,
-    so the caller can fall back to ``mark_failed`` with a stable error.
+    Returns ``None`` (with no exception) when the names are unavailable
+    or fail validation, so the caller can fall back to ``mark_failed``
+    with a stable error.
 
-    Unavailable cases:
-    - *wf_ref* is empty.
-    - ``wf_ref[0]`` has no ``.objective_names`` attribute.
-    - ``.objective_names`` is ``None``, empty, or not iterable.
+    Validation rules
+    ----------------
+    - *wf_ref* must be non-empty.
+    - ``wf_ref[0]`` must have ``.objective_names``.
+    - ``.objective_names`` must be an iterable of non-empty ``str``.
+    - ``.objective_names`` must not be a ``str`` or ``bytes`` (which would
+      be misinterpreted as a sequence of characters).
+    - Each element must be a non-empty ``str``.
+    - Names must not contain duplicates.
     """
     if not wf_ref:
         return None
@@ -59,11 +65,18 @@ def _checkpoint_metric_names_from_wf_ref(wf_ref: list) -> list[str] | None:
     names = getattr(obj, "objective_names", None)
     if names is None:
         return None
+    if isinstance(names, (str, bytes)):
+        return None
     try:
         result = list(names)
     except TypeError:
         return None
     if not result:
+        return None
+    for n in result:
+        if not isinstance(n, str) or not n.strip():
+            return None
+    if len(set(result)) != len(result):
         return None
     return result
 
@@ -100,7 +113,8 @@ def _record_checkpoint_evaluation(
     metric_names = _checkpoint_metric_names_from_wf_ref(wf_ref)
 
     if solver_ok and all_finite and metric_names is not None:
-        if len(metric_names) != len(raw_values):
+        if (len(metric_names) != len(raw_values)
+                or len(metric_names) != len(penalties)):
             ckpt.mark_failed(
                 idx, error="checkpoint_metric_length_mismatch",
             )

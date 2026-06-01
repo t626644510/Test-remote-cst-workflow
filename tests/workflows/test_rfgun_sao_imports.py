@@ -2277,3 +2277,129 @@ def test_checkpoint_metric_names_valid_still_completes():
         assert rec.error == ""
         assert rec.raw_values == {"m1": 11.424, "m2": 0.5}
         assert rec.penalties == {"m1": 0.3, "m2": 0.7}
+
+# ============================================================
+# T. Checkpoint metric invariant hardening — A22
+# ============================================================
+
+def test_checkpoint_metric_names_string_rejected():
+    """objective_names='abc' (str) -> mark_failed, not character-split."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer("abc")]
+        x = np.array([0.5])
+        raw = np.array([11.424])
+        pen = np.array([0.2])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert "checkpoint_objective_names_unavailable" in rec.error
+
+
+def test_checkpoint_metric_names_duplicate_rejected():
+    """Duplicate metric names -> mark_failed."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a", "a"])]
+        x = np.array([0.5])
+        raw = np.array([11.424, 0.5])
+        pen = np.array([0.2, 0.8])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert "checkpoint_objective_names_unavailable" in rec.error
+
+
+def test_checkpoint_metric_names_invalid_member_rejected():
+    """objective_names with empty-str or None member -> mark_failed."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a", ""])]
+        x = np.array([0.5])
+        raw = np.array([11.424, 0.5])
+        pen = np.array([0.2, 0.8])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert "checkpoint_objective_names_unavailable" in rec.error
+
+
+def test_checkpoint_metric_names_penalties_mismatch():
+    """penalties length != metric_names length -> mark_failed."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a", "b"])]
+        x = np.array([0.5])
+        raw = np.array([11.424, 0.5])   # 2 elements, matches
+        pen = np.array([0.2])            # 1 element, mismatch
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert "checkpoint_metric_length_mismatch" in rec.error
+
+
+def test_checkpoint_metric_names_valid_regression():
+    """Valid names + matching lengths still produces completed record."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a", "b"])]
+        x = np.array([0.5])
+        raw = np.array([11.424, 0.5])
+        pen = np.array([0.3, 0.7])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status == "completed"
+        assert rec.solver_ok is True
+        assert rec.error == ""
+        assert rec.raw_values == {"a": 11.424, "b": 0.5}
+        assert rec.penalties == {"a": 0.3, "b": 0.7}

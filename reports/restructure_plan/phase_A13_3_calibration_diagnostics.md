@@ -178,4 +178,4 @@ point to a valid file.
 
 - Implementation/fix commit: ``HEAD`` — ``A13.3 add CST calibration diagnostics``
 - Report commit: included in implementation commit (same hash)
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``46feec2``

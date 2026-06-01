@@ -1448,3 +1448,226 @@ def test_two_pass_runtime_logs_accepted_calibration_details(caplog):
     assert "s11_min_db" in log_text
     assert "cst_s11_hpbw" in log_text or "cst_s11_dip_min" in log_text
     assert "cal_success" in log_text
+
+# ============================================================
+# N. Mixed gate precedence and checkpoint semantics — A16
+# ============================================================
+
+def test_two_pass_gate_precedence_calibration_failure_before_gates():
+    """Calibration failure has highest precedence over all gates."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=False,
+        f0_ghz=np.nan,
+        error="fake calibration failure",
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    freq_gate = FrequencyGate(
+        enabled=True, target_ghz=11.424, max_abs_offset_mhz=1.0,
+    )
+    s11_gate = S11DepthGate(enabled=True, threshold_db=-10.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        frequency_gate=freq_gate,
+        s11_depth_gate=s11_gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    c_ok, c_err = captured[0]
+    assert c_ok is False
+    assert "calibration_failed" in c_err
+    assert "fake calibration failure" in c_err
+
+
+def test_two_pass_gate_precedence_frequency_before_s11():
+    """Frequency gate is checked before S11 depth gate."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True,
+        f0_ghz=11.5,
+        s11_min_db=0.0,
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    freq_gate = FrequencyGate(
+        enabled=True, target_ghz=11.424, max_abs_offset_mhz=1.0,
+    )
+    s11_gate = S11DepthGate(enabled=True, threshold_db=-1.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append(err)
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        frequency_gate=freq_gate,
+        s11_depth_gate=s11_gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    assert captured[0] == "frequency_gate_reject"
+    assert "s11_depth_gate_reject" not in captured[0]
+
+
+def test_two_pass_gate_precedence_s11_after_frequency_accepts():
+    """S11 depth gate applies after frequency gate accepts."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True,
+        f0_ghz=11.424,
+        s11_min_db=0.0,
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+    freq_gate = FrequencyGate(
+        enabled=True, target_ghz=11.424, max_abs_offset_mhz=20.0,
+    )
+    s11_gate = S11DepthGate(enabled=True, threshold_db=-1.0)
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append(err)
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["resonant_freq"],
+        objectives=[],
+        weights=weights,
+        frequency_gate=freq_gate,
+        s11_depth_gate=s11_gate,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    assert "s11_depth_gate_reject" in captured[0]
+
+
+def test_two_pass_multidip_diagnostic_does_not_reject_runtime():
+    """Multi-dip detector is diagnostic-only; does not reject."""
+    from workflows.rfgun_sao.two_pass import (
+        make_two_pass_runtime_evaluator,
+        evaluate_two_pass_decision,
+    )
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    import numpy as np
+
+    # Part A: direct decision call detects multi-dip but does not reject
+    det = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    freqs = np.linspace(11.0, 12.0, 200)
+    mag = np.ones(200)
+    mag[50] = 0.1
+    mag[53] = 0.1
+
+    cal = CalibrationResult(success=True, f0_ghz=11.424, s11_min_db=-10.0)
+    dec = evaluate_two_pass_decision(
+        cal, 11.4,
+        multi_dip_detector=det,
+        frequencies_ghz=freqs,
+        s11_magnitude=mag,
+    )
+    assert dec.accepted is True
+    assert dec.diagnostics.get("multi_dip_detected") is True
+
+    # Part B: runtime evaluator with multi_dip_detector proceeds normally
+    cal_runner = _FakeCalibrationRunner(
+        success=True,
+        f0_ghz=11.424,
+        s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        multi_dip_detector=det,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.3) < 1e-12
+
+
+def test_two_pass_rejection_scalar_all_ones_with_normalized_weights():
+    """Rejection scalar equals dot(ones, normalized weights) = 1.0."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=False,
+        error="rejection test",
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([0.2, 0.3, 0.5])
+
+    captured: list = []
+
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((pen.copy(), ok))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["a", "b", "c"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert meas_runner.call_count == 0
+    assert len(captured) == 1
+    c_pen, c_ok = captured[0]
+    assert np.allclose(c_pen, [1.0, 1.0, 1.0])
+    assert c_ok is False

@@ -298,6 +298,45 @@ def test_gates_multidip_detects_two_close_dips():
     mag[dip2_idx] = 0.1
     assert d.has_multiple_dips(freqs, mag) is True
 
+
+def test_calibration_default_is_unsuccessful():
+    from workflows.rfgun_sao.calibration import CalibrationResult
+    c = CalibrationResult()
+    assert c.success is False
+
+def test_make_measurement_plan_uses_f0_when_success():
+    from workflows.rfgun_sao.calibration import CalibrationResult, make_measurement_plan
+    cal = CalibrationResult(success=True, f0_ghz=11.424)
+    plan = make_measurement_plan(cal, 11.4)
+    assert plan.f_data_ghz == 11.424
+    assert plan.reason == 'calibrated_resonance'
+
+def test_make_measurement_plan_fallback_when_failed():
+    from workflows.rfgun_sao.calibration import CalibrationResult, make_measurement_plan
+    cal = CalibrationResult(success=False)
+    plan = make_measurement_plan(cal, 11.4)
+    assert plan.f_data_ghz == 11.4
+    assert plan.reason == 'fallback'
+
+def test_s11_min_db_from_magnitude():
+    from workflows.rfgun_sao.calibration import s11_min_db_from_magnitude
+    import numpy as np
+    db = s11_min_db_from_magnitude(np.array([0.1]))
+    assert abs(db - (-20.0)) < 0.01
+
+def test_calibration_source_no_factory_or_recovery():
+    src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'calibration.py').read_text('utf-8')
+    assert 'cst_optimization.factory' not in src
+    assert 'cst_optimization.workflows.recovery' not in src
+
+def test_gates_multidip_disabled_with_single_dip_returns_false():
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    import numpy as np
+    d = MultiDipDetector(enabled=True, mode_spacing_ghz=0.04)
+    freqs = np.linspace(11.0, 12.0, 200)
+    mag = np.ones(200)
+    mag[100] = 0.1
+    assert d.has_multiple_dips(freqs, mag) is False
 def test_gates_source_no_factory_or_recovery_import():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "gates.py").read_text("utf-8")
     assert "cst_optimization.factory" not in src

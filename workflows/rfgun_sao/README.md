@@ -49,6 +49,7 @@ workflows/rfgun_sao/
     workflow.py       # build_workflow_1() builder
     evaluator.py      # Workflow1Evaluator (imports from rfgun_sao.types)
     gates.py           # FrequencyGate, S11DepthGate, MultiDipDetector (pure Python)
+    calibration.py     # CalibrationResult, MeasurementPlan, helpers (primitives only)
     README.md         # this file
     BRANCH_CONTEXT.md # branch rules and phase status
 tests/workflows/

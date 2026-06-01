@@ -79,7 +79,7 @@ def make_cst_calibration_runner(
                     success=False,
                     error=(
                         f"Calibration solver failed: "
-                        f"{getattr(solver_result, 'error', 'unknown')}"
+                        f"{getattr(solver_result, 'error_message', None) or 'unknown'}"
                     ),
                     method="cst_s11",
                 )

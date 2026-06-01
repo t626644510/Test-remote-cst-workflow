@@ -941,3 +941,298 @@ def test_two_pass_cst_runtime_branch_wires_fake_connection(monkeypatch):
     assert np.isfinite(val)
     # With weights=[1.0] and penalty=0.3, expected = 0.3
     assert abs(val - 0.3) < 1e-12
+
+
+# ============================================================
+# K. CST runner adapter hardening (A13.1)
+# ============================================================
+
+class _FakeProject:
+    """Fake CST project for calibration runner unit tests."""
+    filename = "fake.cst"
+
+    def __init__(self):
+        self.update_params = None
+        self.update_rebuild = None
+        self.save_called = False
+        self.close_called = False
+        self.close_save = None
+
+    def update_parameters(self, params, use_full_rebuild=True):
+        self.update_params = params
+        self.update_rebuild = use_full_rebuild
+        return True
+
+    def save(self):
+        self.save_called = True
+
+    def close(self, save=False):
+        self.close_called = True
+        self.close_save = save
+
+
+class _FakeConnection:
+    """Fake CST connection that returns a given project."""
+    def __init__(self, project=None):
+        self.project = project or _FakeProject()
+        self.opened_path = None
+
+    def open_project(self, path):
+        self.opened_path = path
+        return self.project
+
+
+class _FakeSolverResult:
+    """Fake solver result with configurable fields."""
+    def __init__(self, success=True, error_type="", error_message=None):
+        self.success = success
+        self.error_type = error_type
+        self.error_message = error_message
+
+
+class _FakeSolverRunner:
+    """Fake solver runner returning a canned result."""
+    def __init__(self, result=None):
+        self._result = result or _FakeSolverResult(success=True)
+
+    def run(self, project):
+        return self._result
+
+
+def _make_fake_s11_reader(frequencies, magnitude):
+    """Build a fake ResultReader class that returns given S11 data."""
+    import numpy as np
+
+    class _FakeS11:
+        def __init__(self):
+            self.frequencies = frequencies
+            self.s_complex = magnitude.astype(np.complex64)
+
+    class _FakeReader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_s_parameter(self):
+            return _FakeS11()
+
+    return _FakeReader
+
+
+def test_cst_calibration_runner_success_hpbw(monkeypatch):
+    """Calibration runner succeeds with HPBW method."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    import numpy as np
+
+    # Fake S11 with a clear dip at 11.424 GHz
+    freqs = np.linspace(11.0, 12.0, 2000)
+    mag = np.full_like(freqs, 0.5)
+    dip_idx = np.argmin(np.abs(freqs - 11.424))
+    mag[dip_idx] = 0.01
+
+    monkeypatch.setattr(
+        cst_mod, "ResultReader",
+        _make_fake_s11_reader(freqs, mag),
+    )
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn,
+        project_path="test.cst",
+        solver_runner=solver,
+        calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is True
+    assert np.isfinite(result.f0_ghz)
+    assert np.isfinite(result.s11_min_db)
+    assert "cst_s11" in result.method
+    assert project.update_params is not None
+    assert project.update_params.get("f_data") == 11.424
+    assert project.close_called is True
+
+
+def test_cst_calibration_runner_solver_failure_uses_error_message(monkeypatch):
+    """Solver failure uses error_message field."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+
+    class _FakeReader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_s_parameter(self):
+            raise RuntimeError("should not be called")
+
+    monkeypatch.setattr(cst_mod, "ResultReader", _FakeReader)
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver_result = _FakeSolverResult(
+        success=False,
+        error_type="mesh",
+        error_message="mesh failed for fake test",
+    )
+    solver = _FakeSolverRunner(result=solver_result)
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is False
+    assert "mesh failed for fake test" in result.error
+
+
+def test_cst_calibration_runner_com_failure_classified(monkeypatch):
+    """COM failure returns COM connection lost error."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+
+    class _FakeReader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_s_parameter(self):
+            raise RuntimeError("should not be called")
+
+    monkeypatch.setattr(cst_mod, "ResultReader", _FakeReader)
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver_result = _FakeSolverResult(
+        success=False, error_type="com", error_message="COM error",
+    )
+    solver = _FakeSolverRunner(result=solver_result)
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is False
+    assert "COM connection lost" in result.error
+
+
+def test_cst_calibration_runner_parameter_update_failure(monkeypatch):
+    """Parameter update failure returns appropriate error."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+
+    class _FakeReader:
+        def __init__(self, *args, **kwargs):
+            pass
+        def get_s_parameter(self):
+            raise RuntimeError("should not be called")
+
+    monkeypatch.setattr(cst_mod, "ResultReader", _FakeReader)
+
+    # Project that fails parameter update
+    class _FailProject:
+        filename = "fake.cst"
+        def __init__(self):
+            self.update_params = None
+            self.save_called = False
+            self.close_called = False
+        def update_parameters(self, params, use_full_rebuild=True):
+            self.update_params = params
+            return False
+        def save(self):
+            self.save_called = True
+        def close(self, save=False):
+            self.close_called = True
+
+    project = _FailProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is False
+    assert "Parameter update failed" in result.error
+
+
+def test_cst_calibration_runner_hpbw_fallback_to_dip_min(monkeypatch):
+    """HPBW failure falls back to dip minimum method."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    import numpy as np
+
+    # Monkeypatch half_power_bandwidth to raise
+    def _raise_hpbw(*args, **kwargs):
+        raise RuntimeError("HPBW failed for test")
+    monkeypatch.setattr(cst_mod, "half_power_bandwidth", _raise_hpbw)
+
+    # Fake S11 with dip at known location (11.5 GHz)
+    freqs = np.linspace(11.0, 12.0, 2000)
+    mag = np.full_like(freqs, 0.5)
+    dip_idx = np.argmin(np.abs(freqs - 11.5))
+    mag[dip_idx] = 0.01
+    expected_f0 = float(freqs[dip_idx])
+
+    monkeypatch.setattr(
+        cst_mod, "ResultReader",
+        _make_fake_s11_reader(freqs, mag),
+    )
+
+    project = _FakeProject()
+    conn = _FakeConnection(project)
+    solver = _FakeSolverRunner()
+
+    runner = cst_mod.make_cst_calibration_runner(
+        connection=conn, project_path="test.cst",
+        solver_runner=solver, calibration_guess_ghz=11.424,
+    )
+
+    result = runner({"p1": 0.5}, 1)
+    assert result.success is True
+    assert result.method == "cst_s11_dip_min"
+    assert abs(result.f0_ghz - expected_f0) < 1e-6
+    assert project.close_called is True
+
+
+def test_cst_measurement_runner_delegates_to_workflow1_evaluator():
+    """Measurement runner delegates to Workflow1Evaluator correctly."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    from workflows.rfgun_sao.types import EvaluationStatus
+    from workflows.rfgun_sao.calibration import MeasurementPlan
+    import numpy as np
+
+    class _FakeWF1Evaluator:
+        def __init__(self):
+            self.last_params = None
+            self.last_iter = None
+            self.call_count = 0
+        def evaluate_single_pass(self, params, iteration):
+            self.last_params = params
+            self.last_iter = iteration
+            self.call_count += 1
+            raw = {"resonant_freq": 11.424, "q0": 10000.0}
+            pen = {"resonant_freq": 0.1, "q0": 0.2}
+            return raw, pen, True, EvaluationStatus.SUCCESS, ""
+
+    fake_evaluator = _FakeWF1Evaluator()
+    metric_names = ["resonant_freq", "q0"]
+
+    runner = cst_mod.make_cst_measurement_runner(
+        wf1_evaluator=fake_evaluator,
+        metric_names=metric_names,
+    )
+
+    plan = MeasurementPlan(f_data_ghz=11.425)
+    result = runner({"p1": 0.5, "p2": 1.0}, plan, 7)
+
+    assert fake_evaluator.call_count == 1
+    assert fake_evaluator.last_iter == 7
+    assert fake_evaluator.last_params is not None
+    assert fake_evaluator.last_params["f_data"] == 11.425
+    assert fake_evaluator.last_params["p1"] == 0.5
+    assert fake_evaluator.last_params["p2"] == 1.0
+
+    assert result.status == EvaluationStatus.SUCCESS
+    assert result.penalty_values == {"resonant_freq": 0.1, "q0": 0.2}
+    assert result.raw_metrics == {"resonant_freq": 11.424, "q0": 10000.0}
+    assert result.objective_values is not None
+    assert list(result.objective_values.keys()) == metric_names

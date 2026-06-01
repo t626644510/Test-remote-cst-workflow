@@ -228,6 +228,27 @@ def test_invalid_weights_raise_error():
     with pytest.raises(ValueError):
         _resolve_named_weights({"a": float("nan")}, ["a"])
 
+
+
+def test_config_yaml_has_evaluation_mode():
+    import yaml
+    with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh)
+    assert cfg.get("evaluation", {}).get("mode", "") == "single_pass"
+
+def test_resolve_evaluation_mode_defaults():
+    from workflows.rfgun_sao.workflow import _resolve_evaluation_mode
+    assert _resolve_evaluation_mode({}) == "single_pass"
+    assert _resolve_evaluation_mode({"evaluation": {"mode": "single_pass"}}) == "single_pass"
+    assert _resolve_evaluation_mode({"evaluation": {"mode": "two_pass"}}) == "two_pass"
+    import pytest
+    with pytest.raises(ValueError):
+        _resolve_evaluation_mode({"evaluation": {"mode": "invalid"}})
+
+def test_workflow_source_has_two_pass_fail_fast():
+    src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
+    assert "NotImplementedError" in src
+    assert "two_pass" in src
 def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")

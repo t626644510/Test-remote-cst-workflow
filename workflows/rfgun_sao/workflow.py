@@ -57,6 +57,16 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+
+
+def _resolve_evaluation_mode(config: dict[str, Any]) -> str:
+    """Resolve the evaluation mode from config."""
+    mode = str(config.get("evaluation", {}).get("mode", "single_pass")).strip().lower()
+    if mode not in {"single_pass", "two_pass"}:
+        raise ValueError(f"Unsupported evaluation.mode: {mode}")
+    return mode
+
+
 def build_workflow_1(
     config: dict[str, Any],
     checkpoint_callback: (
@@ -86,6 +96,13 @@ def build_workflow_1(
     from cst_optimization.objectives.base import CompositeObjective  # noqa: F811
 
     library_path = config["cst"]["library_path"]
+
+    eval_mode = _resolve_evaluation_mode(config)
+    if eval_mode == "two_pass":
+        raise NotImplementedError(
+            "evaluation.mode=two_pass is reserved for the upcoming "
+            "two-pass implementation in a later phase"
+        )
 
     # ---------------------------------------------------------------
     # Parameters

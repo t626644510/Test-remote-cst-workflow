@@ -20,6 +20,7 @@ project:
   cst_path: F:/workflow_elgun/PickupDesign_2026.cst
 
 evaluation:
+  mode: single_pass
   post_eval_recovery: tier2
 
 optimization:

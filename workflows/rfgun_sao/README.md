@@ -6,52 +6,40 @@ This package is derived from the validated
 `workflows/rfgun_single_pass/` (Phase 8.8 validated) and is the
 target for consolidating legacy Workflow 3 SAO capabilities.
 
-**Default behaviour is still validated single-pass.**  No two-pass,
-gates, objective_weights, or metric roles are implemented yet.
+**Default runtime remains validated single-pass.**
 
-The validated reference at `workflows/rfgun_single_pass/` remains
-untouched.
+## Implemented so far
+
+- objective_weights support (named dict, validated, A5)
+- evaluation.mode skeleton (single_pass default, two_pass fail-fast, A6)
+- pure gate utilities: FrequencyGate, S11DepthGate, MultiDipDetector (A7)
+- calibration primitives: CalibrationResult, MeasurementPlan, helpers (A8)
+- two-pass/gate config helpers: _build_*, _resolve_two_pass_settings (A9)
+
+## Not implemented yet
+
+- actual two-pass CST execution (evaluation.mode: two_pass)
+- gate integration into evaluator
+- metric roles (optimize / threshold / report_only)
+- adaptive bounds
+- staged search
+- root shim repointing (run_workflow_1.py still points to rfgun_single_pass)
 
 ## Running
 
+rfgun_sao only runs explicitly via `python -m workflows.rfgun_sao.run`.
+The root shim `run_workflow_1.py` still points to `rfgun_single_pass`
+and is not changed during consolidation.
+
 `powershell
-# Explicit module invocation (current):
 python -m workflows.rfgun_sao.run --help
-
-# With overrides (same CLI as rfgun_single_pass):
 python -m workflows.rfgun_sao.run --n-initial 1 --n-iter 0
+python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 `
-
-The `run_workflow_1.py` shim still points to `rfgun_single_pass`
-and is not changed by this phase.
 
 ## No-CST tests
 
 `powershell
-pytest tests/workflows/test_rfgun_sao_imports.py -v
-`
-
-Both the new SAO tests and the original single-pass tests must pass:
-
-`powershell
-pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
-`
-
-## Structure
-
-`
-workflows/rfgun_sao/
-    __init__.py       # package marker
-    types.py          # EvaluationStatus, EvaluationResult (local, no recovery import)
-    config.yaml       # default config (same schema as validated WF1)
-    run.py            # CLI runner (imports from rfgun_sao.workflow)
-    workflow.py       # build_workflow_1() builder
-    evaluator.py      # Workflow1Evaluator (imports from rfgun_sao.types)
-    gates.py           # FrequencyGate, S11DepthGate, MultiDipDetector (pure Python)
-    calibration.py     # CalibrationResult, MeasurementPlan, helpers (primitives only)
-    README.md         # this file
-    BRANCH_CONTEXT.md # branch rules and phase status
-tests/workflows/
-    test_rfgun_sao_imports.py  # no-CST import tests (24+ tests)
+pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short  # 12/12
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short          # 45/45 as of A9
 `

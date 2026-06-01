@@ -87,4 +87,4 @@ reports are provided by A13.4/A14/A15.
 
 - Implementation/fix commit: ``HEAD`` — ``A18 consolidate rfgun_sao milestone README``
 - Report commit: included in implementation commit (same hash)
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``bbcdad1``

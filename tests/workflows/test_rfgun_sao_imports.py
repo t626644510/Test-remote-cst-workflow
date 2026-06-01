@@ -329,6 +329,58 @@ def test_calibration_source_no_factory_or_recovery():
     assert 'cst_optimization.factory' not in src
     assert 'cst_optimization.workflows.recovery' not in src
 
+
+
+def test_config_yaml_has_two_pass_defaults():
+    import yaml
+    with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh)
+    e = cfg["evaluation"]
+    assert e["target_freq_ghz"] == 11.424
+    assert e["calibration_guess_ghz"] == 11.424
+    assert e["inter_pass_recovery"] is False
+    assert e["frequency_gate"]["enabled"] is False
+    assert e["s11_depth_gate"]["enabled"] is False
+    assert e["multi_dip_detection"]["enabled"] is False
+
+def test_build_frequency_gate_returns_disabled_by_default():
+    from workflows.rfgun_sao.workflow import _build_frequency_gate
+    from workflows.rfgun_sao.gates import FrequencyGate
+    gate = _build_frequency_gate({})
+    assert isinstance(gate, FrequencyGate)
+    assert gate.enabled is False
+
+def test_build_s11_depth_gate_returns_disabled_by_default():
+    from workflows.rfgun_sao.workflow import _build_s11_depth_gate
+    from workflows.rfgun_sao.gates import S11DepthGate
+    gate = _build_s11_depth_gate({})
+    assert isinstance(gate, S11DepthGate)
+    assert gate.enabled is False
+
+def test_build_multi_dip_detector_returns_disabled_by_default():
+    from workflows.rfgun_sao.workflow import _build_multi_dip_detector
+    from workflows.rfgun_sao.gates import MultiDipDetector
+    det = _build_multi_dip_detector({})
+    assert isinstance(det, MultiDipDetector)
+    assert det.enabled is False
+
+def test_custom_frequency_gate_config_parsed():
+    from workflows.rfgun_sao.workflow import _build_frequency_gate
+    from workflows.rfgun_sao.gates import FrequencyGate
+    gate = _build_frequency_gate({"frequency_gate": {"enabled": True, "target_ghz": 11.5, "max_abs_offset_mhz": 10.0}})
+    assert gate.enabled is True
+    assert gate.target_ghz == 11.5
+    assert gate.max_abs_offset_mhz == 10.0
+
+def test_resolve_two_pass_settings_returns_mode_and_gates():
+    from workflows.rfgun_sao.workflow import _resolve_two_pass_settings
+    from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
+    cfg = {"evaluation": {"mode": "single_pass"}}
+    s = _resolve_two_pass_settings(cfg)
+    assert s["mode"] == "single_pass"
+    assert isinstance(s["frequency_gate"], FrequencyGate)
+    assert isinstance(s["s11_depth_gate"], S11DepthGate)
+    assert isinstance(s["multi_dip_detector"], MultiDipDetector)
 def test_gates_multidip_disabled_with_single_dip_returns_false():
     from workflows.rfgun_sao.gates import MultiDipDetector
     import numpy as np

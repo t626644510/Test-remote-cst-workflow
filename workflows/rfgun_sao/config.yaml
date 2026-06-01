@@ -21,7 +21,20 @@ project:
 
 evaluation:
   mode: single_pass
+  target_freq_ghz: 11.424
+  calibration_guess_ghz: 11.424
   post_eval_recovery: tier2
+  inter_pass_recovery: false
+  frequency_gate:
+    enabled: false
+    target_ghz: 11.424
+    max_abs_offset_mhz: 20.0
+  s11_depth_gate:
+    enabled: false
+    threshold_db: -1.0
+  multi_dip_detection:
+    enabled: false
+    mode_spacing_ghz: 0.04
 
 optimization:
   algorithm: sao

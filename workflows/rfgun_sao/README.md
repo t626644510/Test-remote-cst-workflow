@@ -51,5 +51,5 @@ workflows/rfgun_sao/
     README.md         # this file
     BRANCH_CONTEXT.md # branch rules and phase status
 tests/workflows/
-    test_rfgun_sao_imports.py  # 12 no-CST import tests
+    test_rfgun_sao_imports.py  # 14 no-CST import tests
 `

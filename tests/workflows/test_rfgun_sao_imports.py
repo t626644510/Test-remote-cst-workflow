@@ -19,22 +19,18 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
 WF1_PACKAGE = _PROJECT_ROOT / "workflows" / "rfgun_sao"
 CONFIG_PATH = WF1_PACKAGE / "config.yaml"
 
-
 # ============================================================
 # A. Runner import and default config path
 # ============================================================
-
 
 def test_import_runner_without_cst():
     import workflows.rfgun_sao.run as run_mod
     assert run_mod.DEFAULT_CONFIG_PATH.name == "config.yaml"
     assert run_mod.DEFAULT_CONFIG_PATH.exists()
 
-
 # ============================================================
 # B. CLI parser accepts expected flags
 # ============================================================
-
 
 def test_cli_parser_accepts_expected_flags():
     from workflows.rfgun_sao.run import build_arg_parser
@@ -50,11 +46,9 @@ def test_cli_parser_accepts_expected_flags():
     assert args.n_iter == 4
     assert args.n_initial == 5
 
-
 # ============================================================
 # C. Config YAML has WF1 sections only
 # ============================================================
-
 
 def test_config_yaml_has_wf1_sections_only():
     assert CONFIG_PATH.exists(), f"Config not found: {CONFIG_PATH}"
@@ -86,11 +80,9 @@ def test_config_yaml_has_wf1_sections_only():
         f"Expected {len(expected_objs)} objectives, got {len(obj_names)}"
     )
 
-
 # ============================================================
 # D. Local workflow module imports without factory
 # ============================================================
-
 
 def test_local_workflow_module_imports_without_factory():
     sys.modules.pop("cst_optimization.factory", None)
@@ -101,21 +93,17 @@ def test_local_workflow_module_imports_without_factory():
     assert "cst_optimization.factory" not in sys.modules
     assert hasattr(wf_mod, "build_workflow_1")
 
-
 # ============================================================
 # E. Evaluator class can be constructed without CST
 # ============================================================
-
 
 class _DummyMode:
     def compute(self, value: float) -> float:
         return 0.0
 
-
 class _DummyObjective:
     name = "resonant_freq"
     mode = _DummyMode()
-
 
 def test_evaluator_class_can_be_constructed_without_cst_connection():
     from workflows.rfgun_sao.evaluator import Workflow1Evaluator
@@ -139,42 +127,33 @@ def test_evaluator_class_can_be_constructed_without_cst_connection():
     assert callable(evaluator.adapt_for_retry)
     assert callable(evaluator.on_reconnect)
 
-
 # ============================================================
 # F. Workflow source has no factory import
 # ============================================================
-
 
 def test_workflow_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "workflow.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src
     assert "import cst_optimization.factory" not in src
 
-
 # ============================================================
 # G. No WF2 objective side-effect imports
 # ============================================================
-
 
 def test_no_wf2_objective_side_effect_imports():
     src = (WF1_PACKAGE / "workflow.py").read_text("utf-8")
     assert "objectives import wakefield" not in src
     assert "objectives import antenna" not in src
 
-
 # ============================================================
 # H. Evaluator source has no factory import
 # ============================================================
-
-
-
 
 def test_runner_does_not_use_loaded_count():
     src = (WF1_PACKAGE / 'run.py').read_text('utf-8')
     assert 'loaded_count' not in src
     assert '.load()' in src
     assert 'get_warm_xy' in src
-
 
 def test_runner_optimize_uses_only_supported_kwargs():
     src = (WF1_PACKAGE / 'run.py').read_text('utf-8-sig')
@@ -191,19 +170,16 @@ def test_runner_optimize_uses_only_supported_kwargs():
                 return
     raise AssertionError('Could not find opt.optimize() call in run.py')
 
-
 def test_workflow_build_sao_reads_n_initial_samples_key():
     src = (WF1_PACKAGE / 'workflow.py').read_text('utf-8')
     assert 'n_initial_samples' in src
     assert 'n_initial' in src
-
 
 def test_runner_prints_optimization_result_attributes():
     src = (WF1_PACKAGE / 'run.py').read_text('utf-8')
     assert 'result.get(' not in src
     assert 'result.x_opt' in src
     assert 'result.f_opt' in src
-
 
 def test_types_expose_evaluation_types():
     from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
@@ -213,7 +189,6 @@ def test_types_expose_evaluation_types():
     assert hasattr(EvaluationResult, 'error')
     assert EvaluationResult().solver_ok is False
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
-
 
 def test_no_legacy_recovery_import():
     for py_file in WF1_PACKAGE.glob('*.py'):

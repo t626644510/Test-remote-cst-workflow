@@ -31,3 +31,11 @@ pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 
 **A3:** Copy from `rfgun_single_pass` + import localisation (types.py).
 No new features.  Default single-pass behaviour unchanged.
+
+## A4 status
+
+- Explicit module runner validated (`python -m workflows.rfgun_sao.run --help`).
+- `run_workflow_1.py` remains untouched (still points to
+  `workflows.rfgun_single_pass.run`).
+- Any future phase that wants to repoint `run_workflow_1.py` must
+  first pass a live single-pass regression on `rfgun_sao`.

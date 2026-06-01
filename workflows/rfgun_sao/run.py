@@ -42,6 +42,59 @@ from cst_optimization.checkpoint import CheckpointManager
 _logger: logging.Logger = logging.getLogger("workflow_1")
 
 
+def _record_checkpoint_evaluation(
+    ckpt: CheckpointManager,
+    wf_ref: list,
+    x_phys: np.ndarray,
+    raw_values: np.ndarray,
+    penalties: np.ndarray,
+    solver_ok: bool,
+    error: str,
+) -> None:
+    """Record one evaluation result into *ckpt* with stable semantics.
+
+    The decision to ``mark_completed`` or ``mark_failed`` is driven by
+    ``solver_ok`` first, then by ``all_finite(raw_values)``, and finally
+    by whether *wf_ref* contains an object with ``.objective_names``.
+
+    Rules
+    -----
+    1. ``solver_ok=True`` **and** all raw values finite **and** *wf_ref*
+       populated → ``mark_completed`` with ``solver_ok=True``.
+    2. Otherwise → ``mark_failed`` with a stable error string (preserving
+       the passed *error* if non-empty; falling back to an explanatory
+       string otherwise).
+
+    This replaces the old heuristic that based the decision on
+    ``all_finite(raw_values)`` alone, which could ``mark_completed`` a
+    record whose solver had actually failed.
+    """
+    idx = ckpt.add_pending(x_phys)
+    all_finite = bool(np.all(np.isfinite(raw_values)))
+
+    if solver_ok and all_finite and wf_ref:
+        metric_names = wf_ref[0].objective_names
+        raw_dict = dict(zip(metric_names, raw_values))
+        pen_dict = dict(zip(metric_names, penalties))
+        ckpt.mark_completed(
+            idx,
+            raw_values=raw_dict,
+            penalties=pen_dict,
+            solver_ok=True,
+        )
+    else:
+        if not error:
+            if not solver_ok:
+                error = "checkpoint_solver_failed"
+            elif not all_finite:
+                error = "non_finite_raw_values"
+            elif not wf_ref:
+                error = "checkpoint_objective_names_unavailable"
+        ckpt.mark_failed(idx, error=error)
+
+    ckpt.save()
+
+
 def _setup_logging(log_cfg: dict) -> str:
     """Configure root logger with file + stderr handlers.
 
@@ -147,19 +200,10 @@ def main() -> None:
     _wf_ref: list = []
 
     def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
-        idx = ckpt.add_pending(x_phys)
-        all_finite = bool(np.all(np.isfinite(raw_values)))
-        if all_finite and _wf_ref:
-            metric_names = _wf_ref[0].objective_names
-            raw_dict = dict(zip(metric_names, raw_values))
-            pen_dict = dict(zip(metric_names, penalties))
-            ckpt.mark_completed(
-                idx, raw_values=raw_dict, penalties=pen_dict,
-                solver_ok=solver_ok,
-            )
-        elif not all_finite:
-            ckpt.mark_failed(idx, error=error)
-        ckpt.save()
+        _record_checkpoint_evaluation(
+            ckpt, _wf_ref, x_phys, raw_values, penalties,
+            solver_ok, error,
+        )
 
     from workflows.rfgun_sao.workflow import build_workflow_1  # noqa: F811
 

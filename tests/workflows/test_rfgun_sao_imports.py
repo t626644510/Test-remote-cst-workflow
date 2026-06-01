@@ -2038,3 +2038,140 @@ def test_extract_raw_array_both_none():
     arr = _extract_raw_array(result, ["m1", "m2", "m3"])
     assert len(arr) == 3
     assert np.all(np.isnan(arr))
+
+# ============================================================
+# R. Checkpoint persistence semantics — A20
+# ============================================================
+
+class _FakeObjectiveNamesContainer:
+    """Minimal container with objective_names for checkpoint tests."""
+    def __init__(self, objective_names):
+        self.objective_names = objective_names
+
+
+def test_checkpoint_persistence_completed_success():
+    """solver_ok=True + finite raw + wf_ref -> mark_completed, status=completed."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a", "b"])]
+        x = np.array([0.5])
+        raw = np.array([11.424, 0.5])
+        pen = np.array([0.2, 0.8])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status == "completed"
+        assert rec.solver_ok is True
+        assert rec.error == ""
+        assert rec.raw_values == {"a": 11.424, "b": 0.5}
+        assert rec.penalties == {"a": 0.2, "b": 0.8}
+
+
+def test_checkpoint_persistence_failure_finite_raw():
+    """solver_ok=False + finite raw -> mark_failed, status != completed."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+        x = np.array([0.5])
+        raw = np.array([11.424])
+        pen = np.array([1.0])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=False, error="solver timed out",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert rec.solver_ok is False
+        assert "solver timed out" in rec.error
+
+
+def test_checkpoint_persistence_rejection_nan_raw():
+    """solver_ok=False + NaN raw + calibration_failed -> mark_failed, error preserved."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+        x = np.array([0.5])
+        raw = np.array([np.nan])
+        pen = np.array([1.0])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=False,
+            error="calibration_failed: placeholder_calibration_runner",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert rec.solver_ok is False
+        assert "calibration_failed" in rec.error
+        assert "placeholder_calibration_runner" in rec.error
+
+
+def test_checkpoint_persistence_solver_ok_nan_raw():
+    """solver_ok=True + NaN raw -> mark_failed, fallback error."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+        x = np.array([0.5])
+        raw = np.array([np.nan])
+        pen = np.array([1.0])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert rec.solver_ok is False  # mark_failed does not set solver_ok
+        assert "non_finite_raw_values" in rec.error
+
+
+def test_checkpoint_persistence_no_wf_ref():
+    """Missing wf_ref -> mark_failed, not silently ambiguous."""
+    from workflows.rfgun_sao.run import _record_checkpoint_evaluation
+    from cst_optimization.checkpoint import CheckpointManager
+    import tempfile, os, numpy as np
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt = CheckpointManager(os.path.join(tmpdir, "test.ckpt"))
+        wf_ref: list = []
+        x = np.array([0.5])
+        raw = np.array([11.424])
+        pen = np.array([0.2])
+
+        _record_checkpoint_evaluation(
+            ckpt, wf_ref, x, raw, pen,
+            solver_ok=True, error="",
+        )
+
+        assert len(ckpt.records) == 1
+        rec = ckpt.records[0]
+        assert rec.status != "completed"
+        assert "checkpoint_objective_names_unavailable" in rec.error

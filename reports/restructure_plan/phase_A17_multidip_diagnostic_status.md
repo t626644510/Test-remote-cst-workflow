@@ -93,4 +93,4 @@ Key design decisions enforced:
 
 - Implementation/fix commit: ``HEAD`` — ``A17 document multi-dip diagnostic status``
 - Report commit: included in implementation commit (same hash)
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``1d9f735``

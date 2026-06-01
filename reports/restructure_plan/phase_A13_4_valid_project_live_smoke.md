@@ -153,4 +153,4 @@ Future phases (retry, recovery, gates, staged search) remain separate.
 
 - Implementation/fix commit: **none** — no code changes needed
 - Report commit: ``HEAD`` — ``A13.4 report valid-project live CST smoke``
-- Final pushed HEAD: ``<filled after push>``
+- Final pushed HEAD: ``44dcece``

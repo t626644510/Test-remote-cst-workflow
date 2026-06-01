@@ -102,11 +102,9 @@ def build_workflow_1(
         param_entries = config.get("parameters", [])
         params_list = _build_parameters(param_entries)
         param_set = ParameterSet(params_list)
-        param_names = param_set.names
         obj_entries = config.get("objectives", [])
         objectives = _build_objectives(obj_entries)
         metric_names = [o.name for o in objectives]
-        weights = _resolve_named_weights(config.get("optimization", {}).get("objective_weights", None), metric_names)
         from workflows.rfgun_sao.two_pass import make_two_pass_placeholder_evaluator
         placeholder_eval = make_two_pass_placeholder_evaluator(
             fallback_ghz=settings["calibration_guess_ghz"],

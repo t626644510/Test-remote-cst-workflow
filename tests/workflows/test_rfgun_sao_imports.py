@@ -19,6 +19,19 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
 WF1_PACKAGE = _PROJECT_ROOT / "workflows" / "rfgun_sao"
 CONFIG_PATH = WF1_PACKAGE / "config.yaml"
 
+
+# ---- Test helpers ----------------------------------------------------------
+
+def _minimal_two_pass_cfg() -> dict:
+    """Minimal config dict for two-pass placeholder tests."""
+    return {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [{"name": "resonant_freq", "mode": "minimize"}],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+
+
 # ============================================================
 # A. Runner import and default config path
 # ============================================================
@@ -216,6 +229,7 @@ def test_inf_weights_raise_error():
     import pytest
     with pytest.raises(ValueError):
         _resolve_named_weights({'a': float('inf')}, ['a'])
+
 def test_invalid_weights_raise_error():
     from workflows.rfgun_sao.workflow import _resolve_named_weights
     import pytest
@@ -319,7 +333,7 @@ def test_s11_min_db_from_magnitude():
 
 def test_two_pass_placeholder_build_does_not_raise():
     from workflows.rfgun_sao.workflow import build_workflow_1
-    cfg = {"evaluation": {"mode": "two_pass"}, "parameters": [{"name": "p1", "low": 0, "high": 1}], "objectives": [{"name": "resonant_freq", "mode": "minimize"}], "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42}}
+    cfg = _minimal_two_pass_cfg()
     wf, opt, ev = build_workflow_1(cfg)
     assert wf._conn is None
     import numpy as np
@@ -329,10 +343,10 @@ def test_two_pass_placeholder_build_does_not_raise():
 def test_two_pass_placeholder_no_cst_connection():
     from workflows.rfgun_sao.workflow import build_workflow_1
     import numpy as np
-    import numpy as np
-    cfg = {"evaluation": {"mode": "two_pass"}, "parameters": [{"name": "p1", "low": 0, "high": 1}], "objectives": [{"name": "resonant_freq", "mode": "minimize"}], "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42}}
+    cfg = _minimal_two_pass_cfg()
     wf, opt, ev = build_workflow_1(cfg)
     assert wf._conn is None
+
 def test_two_pass_successful_calibration_accepted():
     from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
     from workflows.rfgun_sao.calibration import CalibrationResult
@@ -388,6 +402,7 @@ def test_two_pass_source_no_factory_or_recovery():
     src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'two_pass.py').read_text('utf-8')
     assert 'cst_optimization.factory' not in src
     assert 'cst_optimization.workflows.recovery' not in src
+
 def test_calibration_source_no_factory_or_recovery():
     src = (Path(__file__).resolve().parent.parent.parent / 'workflows' / 'rfgun_sao' / 'calibration.py').read_text('utf-8')
     assert 'cst_optimization.factory' not in src
@@ -443,6 +458,7 @@ def test_resolve_two_pass_settings_returns_mode_and_gates():
     assert isinstance(s["frequency_gate"], FrequencyGate)
     assert isinstance(s["s11_depth_gate"], S11DepthGate)
     assert isinstance(s["multi_dip_detector"], MultiDipDetector)
+
 def test_gates_multidip_disabled_with_single_dip_returns_false():
     from workflows.rfgun_sao.gates import MultiDipDetector
     import numpy as np
@@ -451,6 +467,7 @@ def test_gates_multidip_disabled_with_single_dip_returns_false():
     mag = np.ones(200)
     mag[100] = 0.1
     assert d.has_multiple_dips(freqs, mag) is False
+
 def test_gates_source_no_factory_or_recovery_import():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "gates.py").read_text("utf-8")
     assert "cst_optimization.factory" not in src

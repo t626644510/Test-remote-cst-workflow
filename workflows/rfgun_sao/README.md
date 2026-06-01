@@ -16,8 +16,7 @@ target for consolidating legacy Workflow 3 SAO capabilities.
 - calibration primitives: CalibrationResult, MeasurementPlan, helpers (A8)
 - two-pass/gate config helpers: _build_*, _resolve_two_pass_settings (A9)
 - two-pass orchestration skeleton: TwoPassDecision, evaluate_two_pass_decision (A10)
-- two-pass runtime placeholder path (A11)
-- two-pass runtime placeholder path: evaluation.mode=two_pass produces placeholder penalties (A11)
+- two-pass runtime placeholder path: evaluation.mode=two_pass returns placeholder penalty=1.0 (A11)
 
 ## Not implemented yet
 

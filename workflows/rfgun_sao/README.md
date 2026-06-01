@@ -32,13 +32,14 @@ explicitly via ``python -m workflows.rfgun_sao.run``.
 ### no-CST tests
 
 ```powershell
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 86/86 as of A17
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 107/107 as of A22
 ```
 
 The no-CST test suite covers imports, gate utilities, calibration primitives,
 orchestration skeleton, injectable runners, CST adapter unit tests (with fake
 CST objects), calibration diagnostics, accepted/rejected path logging, mixed
-gate precedence, and multi-dip diagnostic status.
+gate precedence, multi-dip diagnostic status, checkpoint semantics audit,
+checkpoint persistence hardening, and metric invariant hardening.
 
 ### Live CST two-pass (opt-in ``runtime=cst``)
 
@@ -49,6 +50,13 @@ gate precedence, and multi-dip diagnostic status.
 | A15 | S11 depth gate rejection — ``threshold_db=-100.0`` | ``s11_depth_gate_reject``, measurement skipped, Best F = 1.0 |
 | A16 | Mixed gate precedence no-CST regression | Cal failure > frequency > S11 depth > measurement, scalar/checkpoint semantics locked |
 | A17 | Multi-dip diagnostic status clarified | Diagnostic-only, runtime stores compact S11 summaries only, live plumbing future |
+| A19 | Checkpoint/evaluation-records semantics audit | 7-path semantic matrix, 6 new no-CST tests (93→93) |
+| A20 | Checkpoint persistence semantics fix | ``_record_checkpoint_evaluation`` helper, ``solver_ok``-driven decision, 5 new tests (98→98) |
+| A21 | Checkpoint objective_names hardening | ``_checkpoint_metric_names_from_wf_ref`` helper, 4 new tests (102→102) |
+| A22 | Checkpoint metric invariant hardening | String/duplicate/invalid name rejection, raw/penalty length check, 5 new tests (107→107) |
+| A23 | Report hash cleanup and evaluation_records policy | ``.ckpt`` authoritative, ``evaluation_records.jsonl`` not written, policy documented |
+| A24 | Live CST checkpoint evidence | **Best F = -15185.95**, ``status=completed``, ``solver_ok=True``, 7 metrics confirmed |
+| A24.1 | CST shutdown correction | Lingering DE process force-closed; background licensing service (no window) normal |
 
 Each live smoke used a valid local CST project (``D:/workflow_elgun/PickupDesign_2026.cst``)
 with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
@@ -95,6 +103,20 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Gate rejection does not call measurement runner, returns all-ones penalty
   scalar (dot(ones, normalized weights) = 1.0)
 
+### Checkpoint persistence
+- ``_record_checkpoint_evaluation`` module-level helper in ``run.py`` (A20)
+- Completed-record semantics: ``solver_ok=True`` **and** all raw values finite
+  **and** valid metric names **and** raw/penalty length match → ``mark_completed``
+  (A20, A22)
+- Failure/rejection paths → ``mark_failed`` with stable error string;
+  decision driven by ``solver_ok``, not ``all_finite(raw)`` alone (A20)
+- Metric name validation: rejects ``str``/``bytes``, empty, duplicate, or
+  invalid-member ``objective_names`` (A21, A22)
+- Persistent record: ``CheckpointManager`` writes ``.ckpt`` file;
+  ``evaluation_records.jsonl`` is **not** currently written (A23 policy)
+- Live evidence: successful two-pass measurement produces ``status=completed``,
+  ``solver_ok=True``, ``error=''``, all 7 objective raw/penalty entries (A24)
+
 ### Multi-dip detection
 - MultiDipDetector utility: detects close dips when S11 arrays are explicitly
   supplied (A7)
@@ -116,6 +138,9 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
+- ``evaluation_records.jsonl`` sidecar writer (``.ckpt`` / ``CheckpointManager``
+  is current authoritative record; ``workflow.record_path`` set but unused)
+- Live gate rejection checkpoint evidence (covered by no-CST regression)
 - Production-scale validation (full parameter ranges, enabled gates, retry,
   warm-start from single-pass checkpoint)
 - Root shim repointing (``run_workflow_1.py`` still points to
@@ -166,3 +191,10 @@ For ``runtime=cst`` operation you need a local ``config.local.yaml``
 **Never commit ``config.local.yaml``.**  Always restore it to
 ``evaluation.mode: single_pass`` after live smokes that change it to
 ``two_pass``.
+
+**Live CST shutdown note:** After any live smoke, explicitly verify that
+the CST Design Environment window is closed (e.g. via ``Get-Process`` /
+``MainWindowTitle`` inspection).  Python script exit may **not** terminate
+the ``cstd`` DE process.  A background ``cstd`` licensing service with no
+window is normal and should not be confused with an open DE.  See A24.1
+report for details.

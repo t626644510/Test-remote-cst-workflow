@@ -42,6 +42,32 @@ from cst_optimization.checkpoint import CheckpointManager
 _logger: logging.Logger = logging.getLogger("workflow_1")
 
 
+def _checkpoint_metric_names_from_wf_ref(wf_ref: list) -> list[str] | None:
+    """Extract metric names from *wf_ref* for checkpoint recording.
+
+    Returns ``None`` (with no exception) when the names are unavailable,
+    so the caller can fall back to ``mark_failed`` with a stable error.
+
+    Unavailable cases:
+    - *wf_ref* is empty.
+    - ``wf_ref[0]`` has no ``.objective_names`` attribute.
+    - ``.objective_names`` is ``None``, empty, or not iterable.
+    """
+    if not wf_ref:
+        return None
+    obj = wf_ref[0]
+    names = getattr(obj, "objective_names", None)
+    if names is None:
+        return None
+    try:
+        result = list(names)
+    except TypeError:
+        return None
+    if not result:
+        return None
+    return result
+
+
 def _record_checkpoint_evaluation(
     ckpt: CheckpointManager,
     wf_ref: list,
@@ -71,9 +97,15 @@ def _record_checkpoint_evaluation(
     """
     idx = ckpt.add_pending(x_phys)
     all_finite = bool(np.all(np.isfinite(raw_values)))
+    metric_names = _checkpoint_metric_names_from_wf_ref(wf_ref)
 
-    if solver_ok and all_finite and wf_ref:
-        metric_names = wf_ref[0].objective_names
+    if solver_ok and all_finite and metric_names is not None:
+        if len(metric_names) != len(raw_values):
+            ckpt.mark_failed(
+                idx, error="checkpoint_metric_length_mismatch",
+            )
+            ckpt.save()
+            return
         raw_dict = dict(zip(metric_names, raw_values))
         pen_dict = dict(zip(metric_names, penalties))
         ckpt.mark_completed(
@@ -88,8 +120,10 @@ def _record_checkpoint_evaluation(
                 error = "checkpoint_solver_failed"
             elif not all_finite:
                 error = "non_finite_raw_values"
-            elif not wf_ref:
+            elif metric_names is None:
                 error = "checkpoint_objective_names_unavailable"
+            else:
+                error = "checkpoint_record_failed"
         ckpt.mark_failed(idx, error=error)
 
     ckpt.save()

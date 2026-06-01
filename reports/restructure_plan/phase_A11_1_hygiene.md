@@ -72,5 +72,6 @@ reports/restructure_plan/phase_A11_1_hygiene.md
 
 ## Commit hash
 
-<!-- filled after commit -->
+```
+21a76b9
 ```

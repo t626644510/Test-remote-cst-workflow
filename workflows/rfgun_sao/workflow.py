@@ -68,6 +68,28 @@ def _resolve_evaluation_mode(config: dict[str, Any]) -> str:
     return mode
 
 
+def _resolve_two_pass_runtime(config: dict[str, Any]) -> str:
+    """Resolve the two-pass runtime backend.
+
+    Reads ``evaluation.two_pass.runtime`` from config.
+    Defaults to ``"placeholder"`` (no CST connection).
+
+    Raises
+    ------
+    ValueError
+        If runtime is not one of ``{"placeholder", "cst"}``.
+    """
+    eval_cfg = config.get("evaluation", {})
+    two_pass_cfg = eval_cfg.get("two_pass", {})
+    runtime = str(two_pass_cfg.get("runtime", "placeholder")).strip().lower()
+    if runtime not in {"placeholder", "cst"}:
+        raise ValueError(
+            f"Unsupported evaluation.two_pass.runtime: {runtime}. "
+            f"Expected 'placeholder' or 'cst'.",
+        )
+    return runtime
+
+
 def build_workflow_1(
     config: dict[str, Any],
     checkpoint_callback: (
@@ -110,14 +132,72 @@ def build_workflow_1(
         weights = _resolve_named_weights(
             opt_cfg.get("objective_weights", None), metric_names,
         )
-        from workflows.rfgun_sao.two_pass import (
-            make_two_pass_runtime_evaluator,
-            make_placeholder_calibration_runner,
-            make_placeholder_measurement_runner,
-        )
-        cal_runner = make_placeholder_calibration_runner()
-        meas_runner = make_placeholder_measurement_runner()
-        placeholder_eval = make_two_pass_runtime_evaluator(
+
+        runtime = _resolve_two_pass_runtime(config)
+
+        from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+
+        if runtime == "placeholder":
+            from workflows.rfgun_sao.two_pass import (
+                make_placeholder_calibration_runner,
+                make_placeholder_measurement_runner,
+            )
+            cal_runner = make_placeholder_calibration_runner()
+            meas_runner = make_placeholder_measurement_runner()
+            cst_conn = None
+            _logger.info("Workflow 1 (two_pass placeholder): no CST connection")
+        else:
+            library_path = config["cst"]["library_path"]
+            cst_conn = CSTConnection(
+                library_path,
+                mode=config["cst"].get("connect_mode", "any_or_new"),
+            )
+            cst_conn.connect()
+            cst_conn.set_quiet_mode(True)
+            _logger.info(
+                "Workflow 1 (two_pass CST): connected to CST DE, PID=%s",
+                cst_conn.pid,
+            )
+
+            solver_cfg = config.get("solver", {})
+            solver_runner = SolverRunner(
+                timeout_s=solver_cfg.get("stagnation_timeout_s", 300),
+                settle_s=solver_cfg.get("settle_s", 2.0),
+            )
+
+            project_path = config["project"]["cst_path"]
+
+            wf1_evaluator = Workflow1Evaluator(
+                connection=cst_conn,
+                project_path=project_path,
+                solver_runner=solver_runner,
+                objectives=objectives,
+                param_names=param_names,
+                metric_names=metric_names,
+            )
+
+            from workflows.rfgun_sao.two_pass_cst import (
+                make_cst_calibration_runner,
+                make_cst_measurement_runner,
+            )
+            cal_runner = make_cst_calibration_runner(
+                connection=cst_conn,
+                project_path=project_path,
+                solver_runner=solver_runner,
+                calibration_guess_ghz=settings["calibration_guess_ghz"],
+            )
+            meas_runner = make_cst_measurement_runner(
+                wf1_evaluator=wf1_evaluator,
+                metric_names=metric_names,
+            )
+
+            if settings.get("inter_pass_recovery", False):
+                _logger.warning(
+                    "Workflow 1 (two_pass CST): "
+                    "inter_pass_recovery=True not implemented; ignoring",
+                )
+
+        evaluator = make_two_pass_runtime_evaluator(
             param_names=param_names,
             metric_names=metric_names,
             objectives=objectives,
@@ -130,18 +210,19 @@ def build_workflow_1(
             measurement_runner=meas_runner,
             checkpoint_callback=checkpoint_callback,
         )
+
         seed = opt_cfg.get("seed", 42)
-        _logger.info("Workflow 1 (two_pass placeholder): no CST connection")
         optimizer = _build_sao(opt_cfg, param_set, objectives, seed)
+
         class _TwoPassContainer:
             pass
         workflow = _TwoPassContainer()
         workflow._params = param_set
-        workflow._conn = None
+        workflow._conn = cst_conn
         workflow.objective_names = metric_names
         log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
         workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
-        return workflow, optimizer, placeholder_eval
+        return workflow, optimizer, evaluator
 
     library_path = config["cst"]["library_path"]
 

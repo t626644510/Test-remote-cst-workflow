@@ -22,17 +22,25 @@ target for consolidating legacy Workflow 3 SAO capabilities.
   - placeholder measurement runner (always fails)
   - default path returns penalty=1.0 (simulating failed calibration)
   - fake-runner tests verify real orchestration path
+- opt-in CST two-pass calibration/measurement runner adapters (A13)
+  - make_cst_calibration_runner: S11-based f0 detection with HPBW/dip-minimum
+  - make_cst_measurement_runner: delegates to Workflow1Evaluator
+  - only active when evaluation.two_pass.runtime=cst; default remains placeholder
 
 ## Not implemented yet
 
-- actual two-pass CST calibration/measurement execution (placeholder runners exist but are not physically meaningful)
-- physically meaningful two-pass measurement (gates are wired but default-disabled)
+- retry integration for CST two-pass
+- inter-pass recovery for CST two-pass (warn-and-ignore if enabled)
 - metric roles (optimize / threshold / report_only)
 - adaptive bounds
 - staged search
 - root shim repointing (run_workflow_1.py still points to rfgun_single_pass)
 
-**Note:** evaluation.mode=two_pass no longer raises NotImplementedError, but returns placeholder (1.0) penalties and is not physically meaningful.
+**Notes:**
+- evaluation.mode=two_pass defaults to placeholder (no CST, penalty=1.0).
+- Set ``evaluation.two_pass.runtime: cst`` in config to activate real CST two-pass.
+- config.local.yaml should be used for local CST paths and must not be committed.
+- Single-pass is unchanged; run_workflow_1.py still points to rfgun_single_pass.
 
 ## Running
 
@@ -50,5 +58,5 @@ python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 
 `powershell
 pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short  # 12/12
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short          # 58/58 as of A12
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short          # 66/66 as of A13
 `

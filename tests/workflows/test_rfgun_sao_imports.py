@@ -71,14 +71,15 @@ class _FakeMeasurementRunner:
         penalty_values: dict | None = None,
         raw_values: dict | None = None,
         status=None,
-        objective_values=None,
+        objective_values=_OBJ_SENTINEL,
         error: str = "",
     ):
         from workflows.rfgun_sao.types import EvaluationStatus
         self._penalty_values = penalty_values or {"resonant_freq": 0.0}
         self._raw_values = raw_values or {"resonant_freq": 11.424}
         self._status = status or EvaluationStatus.SUCCESS
-        # Allow explicit None vs default-to-raw distinction
+        # Default objective_values = raw_values (backward compatible).
+        # Pass objective_values=None explicitly to test fallback.
         if objective_values is self._OBJ_SENTINEL:
             self._objective_values = self._raw_values
         else:
@@ -549,7 +550,8 @@ def test_workflow_source_has_two_pass_placeholder():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
     assert "NotImplementedError" not in src
     assert "two_pass" in src
-    assert "placeholder_eval" in src
+    assert "make_two_pass_runtime_evaluator" in src
+    assert "placeholder" in src
 def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
@@ -811,3 +813,131 @@ def test_two_pass_runtime_s11_gate_rejects_before_measurement():
     c_ok, c_err = captured[0]
     assert c_ok is False
     assert "s11_depth_gate_reject" in c_err
+
+
+# ============================================================
+# J. Opt-in CST two-pass runners (A13)
+# ============================================================
+
+def test_resolve_two_pass_runtime_defaults_to_placeholder():
+    """Two-pass runtime defaults to placeholder."""
+    from workflows.rfgun_sao.workflow import _resolve_two_pass_runtime
+
+    assert _resolve_two_pass_runtime({}) == "placeholder"
+    assert (
+        _resolve_two_pass_runtime({"evaluation": {"mode": "two_pass"}})
+        == "placeholder"
+    )
+
+
+def test_resolve_two_pass_runtime_accepts_cst():
+    """Two-pass runtime accepts 'cst'."""
+    from workflows.rfgun_sao.workflow import _resolve_two_pass_runtime
+
+    cfg = {"evaluation": {"mode": "two_pass", "two_pass": {"runtime": "cst"}}}
+    assert _resolve_two_pass_runtime(cfg) == "cst"
+
+
+def test_resolve_two_pass_runtime_rejects_invalid():
+    """Two-pass runtime rejects invalid values."""
+    from workflows.rfgun_sao.workflow import _resolve_two_pass_runtime
+    import pytest
+
+    with pytest.raises(ValueError, match="runtime"):
+        _resolve_two_pass_runtime(
+            {"evaluation": {"two_pass": {"runtime": "bad"}}},
+        )
+
+
+def test_two_pass_cst_module_imports_without_recovery():
+    """two_pass_cst module imports cleanly and has expected factories."""
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+
+    assert hasattr(cst_mod, "make_cst_calibration_runner")
+    assert hasattr(cst_mod, "make_cst_measurement_runner")
+
+    src = (WF1_PACKAGE / "two_pass_cst.py").read_text("utf-8")
+    assert "cst_optimization.factory" not in src
+    assert "cst_optimization.workflows.recovery" not in src
+
+
+def test_two_pass_cst_runtime_branch_wires_fake_connection(monkeypatch):
+    """CST runtime branch wires fake connection without real CST."""
+    import workflows.rfgun_sao.workflow as wf_mod
+    import workflows.rfgun_sao.two_pass_cst as cst_mod
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+    import numpy as np
+
+    # -- Fake CST connection ------------------------------------------------
+    fake_conn_instances: list = []
+
+    class FakeCSTConnection:
+        pid = 99999
+        def __init__(self, *args, **kwargs):
+            self.connect_called = False
+            self.quiet_mode = False
+            fake_conn_instances.append(self)
+        def connect(self):
+            self.connect_called = True
+        def set_quiet_mode(self, val):
+            self.quiet_mode = True
+
+    class FakeSolverRunner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(wf_mod, "CSTConnection", FakeCSTConnection)
+    monkeypatch.setattr(wf_mod, "SolverRunner", FakeSolverRunner)
+
+    # -- Fake calibration/measurement runner factories ----------------------
+    def _fake_cal_factory(**kw):
+        def _run(param_dict, iteration):
+            from workflows.rfgun_sao.calibration import CalibrationResult
+            return CalibrationResult(
+                success=True, f0_ghz=11.424, s11_min_db=-10.0,
+                method="fake_test",
+            )
+        return _run
+
+    def _fake_meas_factory(**kw):
+        def _run(param_dict, plan, iteration):
+            return EvaluationResult(
+                status=EvaluationStatus.SUCCESS,
+                penalty_values={"resonant_freq": 0.3},
+                objective_values={"resonant_freq": 11.424},
+                raw_metrics={"resonant_freq": 11.424},
+                error="",
+            )
+        return _run
+
+    monkeypatch.setattr(cst_mod, "make_cst_calibration_runner", _fake_cal_factory)
+    monkeypatch.setattr(cst_mod, "make_cst_measurement_runner", _fake_meas_factory)
+
+    # -- Build config with runtime=cst --------------------------------------
+    cfg = {
+        "evaluation": {
+            "mode": "two_pass",
+            "two_pass": {"runtime": "cst"},
+        },
+        "cst": {"library_path": "dummy_lib", "connect_mode": "any_or_new"},
+        "project": {"cst_path": "dummy.cst"},
+        "solver": {},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [{"name": "resonant_freq", "mode": "minimize"}],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+
+    wf, opt, ev = wf_mod.build_workflow_1(cfg)
+
+    # -- Assertions ---------------------------------------------------------
+    assert len(fake_conn_instances) == 1
+    fake_conn = fake_conn_instances[0]
+    assert fake_conn.connect_called is True
+    assert fake_conn.quiet_mode is True
+    assert wf._conn is fake_conn
+
+    # Evaluator returns finite weighted scalar
+    val = ev(np.array([0.5]))
+    assert np.isfinite(val)
+    # With weights=[1.0] and penalty=0.3, expected = 0.3
+    assert abs(val - 0.3) < 1e-12

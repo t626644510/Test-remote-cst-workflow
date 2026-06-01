@@ -16,15 +16,19 @@ target for consolidating legacy Workflow 3 SAO capabilities.
 - calibration primitives: CalibrationResult, MeasurementPlan, helpers (A8)
 - two-pass/gate config helpers: _build_*, _resolve_two_pass_settings (A9)
 - two-pass orchestration skeleton: TwoPassDecision, evaluate_two_pass_decision (A10)
+- two-pass runtime placeholder path (A11)
+- two-pass runtime placeholder path: evaluation.mode=two_pass produces placeholder penalties (A11)
 
 ## Not implemented yet
 
-- actual two-pass CST execution (evaluation.mode: two_pass still NotImplementedError)
-- gate integration into evaluator (two_pass.py exists but not plugged into workflow)
+- actual two-pass CST calibration/measurement execution (placeholder path exists but not physically meaningful)
+- gate integration into evaluator (two_pass.py exists but placeholder only)
 - metric roles (optimize / threshold / report_only)
 - adaptive bounds
 - staged search
 - root shim repointing (run_workflow_1.py still points to rfgun_single_pass)
+
+**Note:** evaluation.mode=two_pass no longer raises NotImplementedError, but returns placeholder (1.0) penalties and is not physically meaningful.
 
 ## Running
 
@@ -42,5 +46,5 @@ python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 
 `powershell
 pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short  # 12/12
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short          # 51/51 as of A10
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short          # 53/53 as of A11
 `

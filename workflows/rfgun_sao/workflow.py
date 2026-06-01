@@ -96,14 +96,39 @@ def build_workflow_1(
     """
     from cst_optimization.objectives.base import CompositeObjective  # noqa: F811
 
-    library_path = config["cst"]["library_path"]
-
     eval_mode = _resolve_evaluation_mode(config)
     if eval_mode == "two_pass":
-        raise NotImplementedError(
-            "evaluation.mode=two_pass is reserved for the upcoming "
-            "two-pass implementation in a later phase"
+        settings = _resolve_two_pass_settings(config)
+        param_entries = config.get("parameters", [])
+        params_list = _build_parameters(param_entries)
+        param_set = ParameterSet(params_list)
+        param_names = param_set.names
+        obj_entries = config.get("objectives", [])
+        objectives = _build_objectives(obj_entries)
+        metric_names = [o.name for o in objectives]
+        weights = _resolve_named_weights(config.get("optimization", {}).get("objective_weights", None), metric_names)
+        from workflows.rfgun_sao.two_pass import make_two_pass_placeholder_evaluator
+        placeholder_eval = make_two_pass_placeholder_evaluator(
+            fallback_ghz=settings["calibration_guess_ghz"],
+            frequency_gate=settings["frequency_gate"],
+            s11_depth_gate=settings["s11_depth_gate"],
+            multi_dip_detector=settings["multi_dip_detector"],
         )
+        opt_cfg = config.get("optimization", {})
+        seed = opt_cfg.get("seed", 42)
+        _logger.info("Workflow 1 (two_pass placeholder): no CST connection")
+        optimizer = _build_sao(opt_cfg, param_set, objectives, seed)
+        class _TwoPassContainer:
+            pass
+        workflow = _TwoPassContainer()
+        workflow._params = param_set
+        workflow._conn = None
+        workflow.objective_names = metric_names
+        log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
+        workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
+        return workflow, optimizer, placeholder_eval
+
+    library_path = config["cst"]["library_path"]
 
     # ---------------------------------------------------------------
     # Parameters

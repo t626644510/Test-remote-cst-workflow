@@ -316,6 +316,23 @@ def test_s11_min_db_from_magnitude():
     db = s11_min_db_from_magnitude(np.array([0.1]))
     assert abs(db - (-20.0)) < 0.01
 
+
+def test_two_pass_placeholder_build_does_not_raise():
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    cfg = {"evaluation": {"mode": "two_pass"}, "parameters": [{"name": "p1", "low": 0, "high": 1}], "objectives": [{"name": "resonant_freq", "mode": "minimize"}], "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42}}
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf._conn is None
+    import numpy as np
+    val = ev(np.array([0.5]))
+    assert np.isfinite(val)
+
+def test_two_pass_placeholder_no_cst_connection():
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    import numpy as np
+    import numpy as np
+    cfg = {"evaluation": {"mode": "two_pass"}, "parameters": [{"name": "p1", "low": 0, "high": 1}], "objectives": [{"name": "resonant_freq", "mode": "minimize"}], "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42}}
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf._conn is None
 def test_two_pass_successful_calibration_accepted():
     from workflows.rfgun_sao.two_pass import evaluate_two_pass_decision
     from workflows.rfgun_sao.calibration import CalibrationResult
@@ -438,10 +455,11 @@ def test_gates_source_no_factory_or_recovery_import():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "gates.py").read_text("utf-8")
     assert "cst_optimization.factory" not in src
     assert "cst_optimization.workflows.recovery" not in src
-def test_workflow_source_has_two_pass_fail_fast():
+def test_workflow_source_has_two_pass_placeholder():
     src = (Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
-    assert "NotImplementedError" in src
+    assert "NotImplementedError" not in src
     assert "two_pass" in src
+    assert "placeholder_eval" in src
 def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")

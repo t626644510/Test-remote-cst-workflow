@@ -227,6 +227,7 @@ def make_two_pass_runtime_evaluator(
         [np.ndarray, np.ndarray, np.ndarray, bool, str], None
     ] | None = None,
     metric_specs: list[MetricSpec] | None = None,
+    evaluation_record_callback: Callable[..., None] | None = None,
 ) -> Callable[[np.ndarray], float]:
     """Return a two-pass runtime evaluator with injectable runners.
 
@@ -322,6 +323,30 @@ def make_two_pass_runtime_evaluator(
                     False,
                     error_msg,
                 )
+
+            # Enriched evaluation record (rejected path)
+            if evaluation_record_callback is not None:
+                try:
+                    cal_diag = getattr(cal, "meta", None) or None
+                    evaluation_record_callback(
+                        x_phys=x_phys,
+                        raw_values=raw_arr,
+                        penalties=penalties_arr,
+                        solver_ok=False,
+                        error=error_msg,
+                        diagnostics=cal_diag,
+                        gate_results=None,
+                        metadata={
+                            "two_pass_phase": "rejected",
+                            "reject_reason": decision.reason,
+                        },
+                    )
+                except Exception:
+                    _logger.warning(
+                        "Evaluation record callback failed (rejected path)",
+                        exc_info=True,
+                    )
+
             return float(np.dot(penalties_arr, weights))
 
         # Accepted — log calibration success details
@@ -354,6 +379,7 @@ def make_two_pass_runtime_evaluator(
 
         # Gate rejection (only after successful measurement with metric_specs)
         gate_reject_error: str = ""
+        gate_results: dict[str, bool] | None = None
         if (
             metric_specs is not None
             and result.status == EvaluationStatus.SUCCESS
@@ -396,6 +422,34 @@ def make_two_pass_runtime_evaluator(
             checkpoint_callback(
                 x_phys, raw_arr, penalties_arr, solver_ok, error_for_ckpt,
             )
+
+        # Enriched evaluation record (diagnostics + gate_results)
+        if evaluation_record_callback is not None:
+            try:
+                measurement_diag = (
+                    result.diagnostics if result.diagnostics else None
+                )
+                measurement_gate = (
+                    gate_results if gate_results else None
+                )
+                evaluation_record_callback(
+                    x_phys=x_phys,
+                    raw_values=raw_arr,
+                    penalties=penalties_arr,
+                    solver_ok=solver_ok,
+                    error=error_for_ckpt,
+                    diagnostics=measurement_diag,
+                    gate_results=measurement_gate,
+                    metadata={
+                        "two_pass_phase": "measurement",
+                        "gate_reject": bool(gate_reject_error),
+                    },
+                )
+            except Exception:
+                _logger.warning(
+                    "Evaluation record callback failed (measurement path)",
+                    exc_info=True,
+                )
 
         return float(np.dot(penalties_arr, weights))
 

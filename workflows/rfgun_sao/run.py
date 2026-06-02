@@ -157,6 +157,10 @@ def _record_jsonl_sidecar_evaluation(
     penalties: np.ndarray,
     solver_ok: bool,
     error: str,
+    *,
+    diagnostics: dict | None = None,
+    gate_results: dict | None = None,
+    extra_metadata: dict | None = None,
 ) -> bool:
     """Optionally append an evaluation record to the JSONL sidecar.
 
@@ -207,6 +211,13 @@ def _record_jsonl_sidecar_evaluation(
             )
             return False
 
+        meta: dict[str, object] = {
+            "source": "rfgun_sao.run.checkpoint_callback",
+            "authoritative_record": "checkpoint",
+        }
+        if extra_metadata:
+            meta.update(extra_metadata)
+
         record = build_evaluation_record(
             iteration=iteration,
             x_phys=x_phys,
@@ -215,10 +226,9 @@ def _record_jsonl_sidecar_evaluation(
             penalties=penalties,
             solver_ok=solver_ok,
             error=error,
-            metadata={
-                "source": "rfgun_sao.run.checkpoint_callback",
-                "authoritative_record": "checkpoint",
-            },
+            diagnostics=diagnostics,
+            gate_results=gate_results,
+            metadata=meta,
         )
         append_jsonl_record(path, record)
         return True
@@ -387,22 +397,53 @@ def main() -> None:
     _wf_ref: list = []
     _eval_counter: list[int] = [0]
 
-    def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
+    def _enrichment_callback(
+        *,
+        x_phys,
+        raw_values,
+        penalties,
+        solver_ok,
+        error,
+        diagnostics=None,
+        gate_results=None,
+        metadata=None,
+    ):
         iteration = int(_eval_counter[0])
         _eval_counter[0] += 1
+        _record_jsonl_sidecar_evaluation(
+            records_cfg, _wf_ref, iteration,
+            np.asarray(x_phys), np.asarray(raw_values),
+            np.asarray(penalties), solver_ok, error,
+            diagnostics=diagnostics,
+            gate_results=gate_results,
+            extra_metadata=metadata,
+        )
+
+    _eval_records_callback_active: bool = records_cfg.get("enabled", False)
+
+    def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
         _record_checkpoint_evaluation(
             ckpt, _wf_ref, x_phys, raw_values, penalties,
             solver_ok, error,
         )
-        _record_jsonl_sidecar_evaluation(
-            records_cfg, _wf_ref, iteration,
-            x_phys, raw_values, penalties, solver_ok, error,
-        )
+        # Core-only JSONL sidecar (enriched callback used for two_pass)
+        if not _eval_records_callback_active:
+            _record_jsonl_sidecar_evaluation(
+                records_cfg, _wf_ref, int(_eval_counter[0]),
+                x_phys, raw_values, penalties, solver_ok, error,
+            )
+        _eval_counter[0] += 1
+
+    _eval_records_callback_active: bool = records_cfg.get("enabled", False)
 
     from workflows.rfgun_sao.workflow import build_workflow_1  # noqa: F811
 
     workflow, opt, evaluator = build_workflow_1(
-        cfg, checkpoint_callback=_on_evaluation,
+        cfg,
+        checkpoint_callback=_on_evaluation,
+        evaluation_record_callback=(
+            _enrichment_callback if records_cfg.get("enabled") else None
+        ),
     )
     _wf_ref.append(workflow)
 

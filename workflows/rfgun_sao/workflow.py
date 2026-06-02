@@ -103,6 +103,7 @@ def build_workflow_1(
     checkpoint_callback: (
         Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None] | None
     ) = None,
+    evaluation_record_callback: Callable[..., None] | None = None,
 ):
     """Build the Workflow 1 SAO optimiser with evaluator and retry handler.
 
@@ -222,6 +223,7 @@ def build_workflow_1(
             measurement_runner=meas_runner,
             checkpoint_callback=checkpoint_callback,
             metric_specs=specs,
+            evaluation_record_callback=evaluation_record_callback,
         )
 
         seed = opt_cfg.get("seed", 42)

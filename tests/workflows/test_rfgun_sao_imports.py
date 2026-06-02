@@ -4293,3 +4293,256 @@ def test_jsonl_sidecar_append_failure_caught(monkeypatch, caplog):
 
     assert "JSONL sidecar write failed" in caplog.text
     assert "forced jsonl failure" in caplog.text
+
+# ============================================================
+# AG. JSONL diagnostics/gate enrichment — C3
+# ============================================================
+
+def test_jsonl_sidecar_diagnostics_included(tmp_path):
+    """_record_jsonl_sidecar_evaluation writes diagnostics when provided."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+    p = str(tmp_path / "diag.jsonl")
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": p}, wf_ref, 0, x, raw, pen, True, "",
+        diagnostics={"q0_diag": 18630.0},
+        gate_results={"g1": True},
+    )
+    assert result is True
+    rec = read_jsonl_records(p)[0]
+    assert rec["diagnostics"] == {"q0_diag": 18630.0}
+    assert rec["gate_results"] == {"g1": True}
+
+
+def test_c3_two_pass_measurement_diagnostics_in_jsonl(monkeypatch):
+    """Two-pass measurement with diagnostics enriches JSONL, not checkpoint."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    captured = []
+
+    def _jsonl_cb(**kw):
+        captured.append(kw)
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 11.424},
+        diagnostics={"q0_diag": 18630.0},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        evaluation_record_callback=_jsonl_cb,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert abs(val - 0.25) < 1e-12
+    assert len(captured) == 1
+    cb = captured[0]
+    assert cb["diagnostics"] == {"q0_diag": 18630.0}
+    assert cb["solver_ok"] is True
+    assert cb["error"] == ""
+
+
+def test_c3_two_pass_gate_fail_enriches_jsonl(monkeypatch):
+    """Gate fail: JSONL has gate_results, scalar=1.0, solver_ok=False."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    captured = []
+
+    def _jsonl_cb(**kw):
+        captured.append(kw)
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 5.0},
+    )
+    weights = np.array([1.0])
+    specs = [MetricSpec(
+        name="f1", role=MetricRole.GATE,
+        threshold=10.0, direction="greater_than",
+    )]
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        metric_specs=specs,
+        evaluation_record_callback=_jsonl_cb,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert len(captured) == 1
+    cb = captured[0]
+    assert cb["gate_results"] is not None
+    assert cb["gate_results"].get("f1") is False
+    assert cb["solver_ok"] is False
+    assert "gate_reject" in cb["error"]
+
+
+def test_c3_jsonl_disabled_no_file(tmp_path):
+    """JSONL disabled: extended callback does not write."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    write_count = [0]
+
+    def _jsonl_cb(**kw):
+        write_count[0] += 1
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+    evaluator(np.array([0.5]))
+    # callback not passed -> no writes
+    assert write_count[0] == 0
+
+
+def test_c3_callback_exception_does_not_crash():
+    """Callback raises -> evaluator still returns scalar."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    def _failing_cb(**kw):
+        raise RuntimeError("cb crash")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        evaluation_record_callback=_failing_cb,
+    )
+    val = evaluator(np.array([0.5]))
+    assert abs(val - 0.3) < 1e-12  # scalar unaffected
+
+
+def test_c3_gate_pass_jsonl_solver_ok():
+    """Gate pass: JSONL solver_ok=True, error empty, scalar unchanged."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    captured = []
+
+    def _jsonl_cb(**kw):
+        captured.append(kw)
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 15.0},
+    )
+    weights = np.array([1.0])
+    specs = [MetricSpec(
+        name="f1", role=MetricRole.GATE,
+        threshold=10.0, direction="greater_than",
+    )]
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        metric_specs=specs,
+        evaluation_record_callback=_jsonl_cb,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert abs(val - 0.25) < 1e-12
+    assert len(captured) == 1
+    cb = captured[0]
+    assert cb["gate_results"]["f1"] is True
+    assert cb["solver_ok"] is True
+    assert cb["error"] == ""
+
+
+def test_c3_rejected_path_enriches_jsonl():
+    """Rejected path: JSONL gets calibration meta, solver_ok=False."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    captured = []
+
+    def _jsonl_cb(**kw):
+        captured.append(kw)
+
+    cal_runner = _FakeCalibrationRunner(
+        success=False,
+        f0_ghz=np.nan,
+        error="calibration failed",
+    )
+    meas_runner = _FakeMeasurementRunner()
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        evaluation_record_callback=_jsonl_cb,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert val == 1.0
+    assert len(captured) == 1
+    cb = captured[0]
+    assert cb["solver_ok"] is False
+    assert "calibration_failed" in cb["error"]

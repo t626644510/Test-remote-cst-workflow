@@ -153,8 +153,9 @@ b) Move on to other non-live hardening or documentation work.
 | L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Accepted |
 | L1 | Warm-start/prior semantics hardening — `record_to_prior_candidate` eligibility fix, diagnostic-only classification, missing tests, next-directions cleanup | Accepted |
 | M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Accepted |
-| N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Needs N1 probably-infeasible hardening |
-| N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Completed / pending review |
+| N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Accepted at 9dcbadf |
+| N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Accepted at 9dcbadf |
+| O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 
@@ -165,11 +166,23 @@ b) Move on to other non-live hardening or documentation work.
 - Do **not** repoint the root shim (``run_workflow_1.py``) until staged/adaptive/retry/database are stable.
 - Subsequent phases use single-letter names F, G, H, I, J, K, ... with decimal sub-phases (F1, F2, ...).
 
+### Phase O caveats
+
+- Phase O is no-CST only — no live CST retry validation.
+- Runtime uses `classify_retry_eligibility()` to decide retry; does **not** use `should_escalate_to_probably_infeasible()` for skip/reuse.
+- `use_probably_infeasible_for_skip` is rejected with diagnostic; not implemented.
+- No durable DB — no append/lookup/load/save.
+- No failure reuse implementation.
+- No optimizer/runtime warm-start injection.
+- No root shim repoint.
+- Inter-pass/post-eval recovery are callback-only skeletons — no real CST cleanup invoked.
+- Phase C JSONL diagnostic sidecar is not referenced or used.
+
 ### Next possible directions
 
-- **Phase N1** — Retry taxonomy helper semantics hardening (if needed)
-- **Phase O** — Retry / inter-pass recovery runtime wiring no-CST only, opt-in disabled by default
-- **Phase O+** — Live CST smokes / production validation (only when explicitly requested)
+- **Phase O1** — Retry runtime no-CST semantics hardening, if reviewer finds issues
+- **Phase P** — Live CST smoke for retry/recovery only when explicitly requested
+- **Phase Q+** — Production-scale validation / root shim repoint last
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

@@ -60,7 +60,6 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C3.3 | JSONL docs/status polish — final Phase C docs alignment | Accepted |
 | C3.4 | README JSONL policy cleanup — removed stale `not written` wording | Accepted |
 | C3.5 | JSONL milestone closeout — status alignment | Accepted |
-| D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup on second Ctrl+C | Completed / pending review |
 
 ### Authoritative behaviour
 
@@ -89,14 +88,15 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** D1 accepted; D1.1 helper/docs polish pending review; live CST validation pending.
+**Status:** D1 and D1.1 accepted; D1.2 docs cleanup pending review; live CST validation pending.
 
 ### Completed
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup before `_os._exit`, no-CST tests | Accepted |
-| D1.1 | D1 helper polish — return-after-exit guard, cleanup failure warning fallback, BRANCH_CONTEXT cleanup | Completed / pending review |
+| D1.1 | D1 helper polish — return-after-exit guard, cleanup failure warning fallback, BRANCH_CONTEXT cleanup | Accepted |
+| D1.2 | Phase C/D BRANCH_CONTEXT table structure cleanup — removed stray D1 from Phase C table | Completed / pending review |
 
 ### Authoritative behaviour
 

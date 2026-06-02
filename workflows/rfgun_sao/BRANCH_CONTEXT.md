@@ -86,6 +86,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 |-------|--------|------------------|
 | B5 (role metrics) | -17534.24 | optimize + threshold in objective (5 of 7 metrics); report_only diagnostics logged with `report_as` aliases; threshold penalty formula verified |
 | B5.1 (shutdown) | — | `CST cleanup: attempted=True closed=True pid=50700`; no DE window left open after run |
+| B9 (gate rejection) | 1.0 | q0 raw=18630.8 vs threshold=999999999 greater_than → `q0_gate=False`; `error="gate_reject:q0_gate"`; objective/checkpoint arrays exclude gate; cleanup closed=True pid=59364 |
 
 ### Known caveats
 
@@ -98,7 +99,6 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 ### Next possible directions
 
-a) Gate role live CST validation.
-b) JSONL diagnostics sidecar.
-c) Ctrl+C hard-exit cleanup hardening (if desired).
-d) Additional live CST regression smoke (only when explicitly requested).
+a) JSONL diagnostics sidecar.
+b) Ctrl+C hard-exit cleanup hardening (if desired).
+c) Additional live CST regression smoke (only when explicitly requested).

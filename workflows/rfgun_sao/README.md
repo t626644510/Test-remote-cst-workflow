@@ -141,7 +141,7 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - ``objective_metric_names`` = optimize + threshold; ``report_metric_names`` =
   report_only (source names); ``report_only_output_names`` = report_as aliases (B1, B4)
 - Missing role defaults to ``optimize``; unknown role raises ``ValueError`` (B1)
-- Direction validated only for threshold role (B3)
+- Direction validated for threshold and gate roles; optimize/report_only do not use direction for scalar behaviour (B3, B7)
 - ``compute_threshold_penalty(spec, value)`` — less_than / greater_than formula (B2)
 - ``compute_role_penalties`` integrates role-based penalties into ``Workflow1Evaluator`` (B3)
   - optimize: uses ``objective.mode.compute(value)``
@@ -183,7 +183,6 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
   calibration solve; currently stores only compact summaries)
 - ``evaluation_records.jsonl`` sidecar writer (``.ckpt`` / ``CheckpointManager``
   is current authoritative record; ``workflow.record_path`` set but unused)
-- Live gate rejection checkpoint evidence (covered by no-CST regression)
 - Production-scale validation (full parameter ranges, enabled gates, retry,
   warm-start from single-pass checkpoint)
 - Root shim repointing (``run_workflow_1.py`` still points to

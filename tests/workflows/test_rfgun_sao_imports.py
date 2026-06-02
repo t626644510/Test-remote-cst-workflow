@@ -3321,3 +3321,116 @@ def test_b5_b4_1_regression():
         diagnostics={"q0": 1.0},
     )
     assert r2.diagnostics == {"q0": 1.0}
+
+# ============================================================
+# AA. CST shutdown detection and cleanup — B5.1
+# ============================================================
+
+def test_cleanup_workflow_none():
+    """workflow is None -> attempted=False, no error."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    r = _cleanup_workflow_connection(None)
+    assert r["attempted"] is False
+    assert r["error"] == ""
+
+
+def test_cleanup_workflow_no_conn():
+    """workflow without _conn -> attempted=False, no error."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    class _NoConn:
+        pass
+
+    r = _cleanup_workflow_connection(_NoConn())
+    assert r["attempted"] is False
+
+
+def test_cleanup_workflow_conn_none():
+    """workflow._conn is None -> attempted=False, no error."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    class _NoneConn:
+        _conn = None
+
+    r = _cleanup_workflow_connection(_NoneConn())
+    assert r["attempted"] is False
+
+
+def test_cleanup_workflow_normal_close():
+    """Normal cleanup calls close(force=False) on connection."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    close_kwargs = {}
+
+    class _FakeConn:
+        pid = 12345
+        def close(self, force=False):
+            close_kwargs["force"] = force
+
+    class _WF:
+        _conn = _FakeConn()
+
+    r = _cleanup_workflow_connection(_WF())
+    assert r["attempted"] is True
+    assert r["closed"] is True
+    assert r["pid"] == 12345
+    assert close_kwargs.get("force") is False
+
+
+def test_cleanup_workflow_force_close():
+    """Force cleanup calls close(force=True) on connection."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    close_kwargs = {}
+
+    class _FakeConn:
+        pid = 12345
+        def close(self, force=False):
+            close_kwargs["force"] = force
+
+    class _WF:
+        _conn = _FakeConn()
+
+    r = _cleanup_workflow_connection(_WF(), force=True)
+    assert r["attempted"] is True
+    assert r["closed"] is True
+    assert r["force"] is True
+    assert close_kwargs.get("force") is True
+
+
+def test_cleanup_workflow_close_raises():
+    """Connection.close() raises -> helper returns error without raising."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    class _FailingConn:
+        pid = 999
+        def close(self, force=False):
+            raise RuntimeError("close failed")
+
+    class _WF:
+        _conn = _FailingConn()
+
+    r = _cleanup_workflow_connection(_WF())
+    assert r["attempted"] is True
+    assert r["closed"] is False
+    assert "close failed" in r["error"]
+
+
+def test_cleanup_workflow_pid_raises():
+    """pid getter raises -> helper still attempts close."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    class _BadPidConn:
+        @property
+        def pid(self):
+            raise RuntimeError("pid unavailable")
+        def close(self, force=False):
+            pass
+
+    class _WF:
+        _conn = _BadPidConn()
+
+    r = _cleanup_workflow_connection(_WF())
+    assert r["attempted"] is True
+    assert r["closed"] is True

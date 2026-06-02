@@ -174,6 +174,55 @@ def _setup_logging(log_cfg: dict) -> str:
     return output_dir
 
 
+def _cleanup_workflow_connection(
+    workflow,
+    *,
+    force: bool = False,
+) -> dict:
+    """Best-effort cleanup of the CST connection on a workflow container.
+
+    Parameters
+    ----------
+    workflow :
+        A workflow container (may be ``None``, lack ``_conn``, or have
+        ``_conn = None``).
+    force : bool
+        Whether to force-close the connection (used on interrupt paths).
+
+    Returns
+    -------
+    dict
+        Cleanup outcome summary: ``{"attempted", "force", "pid",
+        "closed", "error"}``.
+    """
+    result: dict = {
+        "attempted": False,
+        "force": force,
+        "pid": None,
+        "closed": False,
+        "error": "",
+    }
+    if workflow is None:
+        return result
+    conn = getattr(workflow, "_conn", None)
+    if conn is None:
+        return result
+    result["attempted"] = True
+    try:
+        pid = getattr(conn, "pid", None)
+        result["pid"] = pid
+    except Exception:
+        pass
+    try:
+        conn.close(force=force)
+        result["closed"] = True
+    except Exception as exc:
+        msg = str(exc)[:200]
+        result["error"] = msg
+        _logger.warning("CST cleanup (force=%s, pid=%s): %s", force, result["pid"], msg)
+    return result
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the argument parser for Workflow 1 CLI."""
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
@@ -300,6 +349,7 @@ def main() -> None:
     except Exception:
         pass
 
+    cleanup_info: dict = {}
     try:
         result = opt.optimize(
             evaluator=evaluator,
@@ -311,7 +361,22 @@ def main() -> None:
         print(f"Best F: {result.f_opt}")
     except KeyboardInterrupt:
         _logger.info("Workflow 1 interrupted by user -- checkpoint preserved")
+        cleanup_info = _cleanup_workflow_connection(workflow, force=True)
         print("\nInterrupted. Checkpoint saved.")
+    finally:
+        if not cleanup_info.get("attempted"):
+            cleanup_info = _cleanup_workflow_connection(workflow)
+        _logger.info(
+            "CST cleanup: attempted=%s closed=%s pid=%s",
+            cleanup_info.get("attempted"),
+            cleanup_info.get("closed"),
+            cleanup_info.get("pid"),
+        )
+        print(
+            f"CST cleanup: attempted={cleanup_info.get('attempted')} "
+            f"closed={cleanup_info.get('closed')} "
+            f"pid={cleanup_info.get('pid') or 'none'}"
+        )
 
     print(f"Log: {_os.path.join(ckpt_dir, 'workflow_1_runtime.log')}")
 

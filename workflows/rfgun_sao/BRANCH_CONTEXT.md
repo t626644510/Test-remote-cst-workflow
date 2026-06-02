@@ -141,8 +141,9 @@ b) Move on to other non-live hardening or documentation work.
 | Phase | Scope | Status |
 |-------|-------|--------|
 | E | Workflow3 capability migration design — staged search, adaptive bounds, retry/recovery, evaluation database, future phase order | Accepted |
-| F | Stage search no-CST helpers — `StageCandidateStatus`, `StageBounds`, `StageSummary`, `summarize_stage_observations`, `decide_stage_transition`, `make_recentered_bounds`, no-CST tests | Reviewed / needs F1 polish |
-| F1 | Stage search helper semantics hardening — min-span using reference_span, database-reused accounting fix, rate clamp, high-fail-recenters regression tests | Completed / pending review |
+| F | Stage search no-CST helpers — `StageCandidateStatus`, `StageBounds`, `StageSummary`, `summarize_stage_observations`, `decide_stage_transition`, `make_recentered_bounds`, no-CST tests | Accepted |
+| F1 | Stage search helper semantics hardening — min-span using reference_span, database-reused accounting fix, rate clamp, high-fail-recenters regression tests | Accepted |
+| G | Adaptive bounds no-CST helpers — `detect_best_boundary_clipping`, `detect_quality_boundary_clustering`, `recommend_adaptive_bounds`, `apply_symmetric_expand`, `apply_asymmetric_expand`, `clamp_to_hard_bounds_and_min_step`, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 
@@ -155,8 +156,6 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase F** — Stage search no-CST helpers
-- **Phase G** — Adaptive bounds no-CST helpers
 - **Phase H** — Stage + adaptive integration policy
 - **Phase I** — Stage runtime wiring no-CST
 - **Phase J** — Evaluation database design/schema

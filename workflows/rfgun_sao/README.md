@@ -190,6 +190,47 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 
 ---
 
+## Workflow3 capability gap / migration plan
+
+### Implemented in rfgun_sao
+
+| Capability | Phase | Status |
+|------------|-------|--------|
+| Two-pass orchestration + injectable runners | A11–A12 | ✅ |
+| CST runner adapters (HPBW / dip-min calibration) | A13 | ✅ |
+| Checkpoint hardening (persistence, metric names, invariants) | A19–A22 | ✅ |
+| Metric roles (optimize / threshold / report_only / gate) | B1–B10 | ✅ |
+| Threshold penalty formula + runtime wiring | B2–B3 | ✅ |
+| Gate parsing + pass/fail helpers + runtime rejection | B7–B9 | ✅ |
+| Report-only diagnostics (``EvaluationResult.diagnostics``) | B4 | ✅ |
+| JSONL diagnostic sidecar (opt-in, diagnostic-only) | C1–C3.5 | ✅ |
+| Runner-level CST cleanup (normal + second Ctrl+C best-effort) | B5.1, D1 | ✅ |
+| Gate rejection live CST validated | B9 | ✅ |
+| Normal cleanup live CST validated | D2 | ✅ (partial) |
+
+### Not yet implemented (planned future phases)
+
+| Capability | Planned phase | Notes |
+|------------|---------------|-------|
+| Staged search (feasibility-aware multi-stage controller) | F | Do not copy legacy fixed-stage approach |
+| Adaptive bounds (per-parameter buffer against over-shrink) | G | Prevents local-optimum trapping |
+| Evaluation database (raw-data resume, dedup, cross-run warm-start) | J–L | Separate opt-in concept from JSONL sidecar |
+| Retry integration for two-pass path | M–N | Error taxonomy + tiered recovery |
+| Inter-pass recovery (calibration→measurement) | N | Currently warn-and-ignore |
+| Post-eval recovery (two-pass path) | N | Currently single-pass only |
+| Root shim repointing (``run_workflow_1.py`` → ``rfgun_sao``) | After F–N stable | Safety measure, not deferred indefinitely |
+| SAEA / wakefield / antenna objectives | Not planned | Excluded at Phase 5 split |
+
+### Key design policies
+
+- **Staged search** is feasibility-aware, not fixed-stage-count. High fail rate → recenter; high gate reject → shrink; convergence plateau → refine.
+- **Evaluation database** is a separate explicit opt-in; the JSONL diagnostic sidecar must not be promoted to a recovery source.
+- **Parameter match is the primary dedup key** for database reuse. Provenance (git commit, CST version, machine) is diagnostic only.
+- **Failure reuse:** single calibration/solver failures should be retried, not skipped. Repeated permanent failures may become ``probably_infeasible`` after taxonomy design.
+- **Root shim** repointing is deferred until staged search, adaptive bounds, retry, and database are stable in the consolidated package.
+
+---
+
 ## Not implemented yet / future work
 
 - Retry integration for CST two-pass

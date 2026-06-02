@@ -88,7 +88,7 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** Phase D blocked cleanup milestone accepted through D2.6; D2.7 closeout pending review. Normal live CST cleanup validated; hard-exit live Ctrl+C validation deferred to future true interactive terminal.
+**Status:** Phase D blocked cleanup milestone closed through D2.7. Normal live CST cleanup validated; hard-exit live Ctrl+C validation deferred to future true interactive terminal.
 
 ### Completed
 
@@ -105,7 +105,7 @@ b) Phase C docs/report consolidation (if needed).
 | D2.4 | Duplicate D2.2 row cleanup | Accepted |
 | D2.5 | Blocked closeout final status polish | Accepted |
 | D2.6 | Final acceptance polish | Accepted |
-| D2.7 | Blocked cleanup milestone closeout | Completed / pending review |
+| D2.7 | Blocked cleanup milestone closeout | Accepted |
 
 ### Authoritative behaviour
 
@@ -131,6 +131,33 @@ b) Phase C docs/report consolidation (if needed).
 a) True manual interactive live CST Ctrl+C validation outside local-agent
    tool context.
 b) Move on to other non-live hardening or documentation work.
+
+## Phase E — Workflow3 capability migration design
+
+**Status:** Design document accepted; implementation deferred to future phases (F, G, H, ...).
+
+### Completed
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| E | Workflow3 capability migration design — staged search, adaptive bounds, retry/recovery, evaluation database, future phase order | Completed / pending review |
+
+### Migration constraints
+
+- Staged search, adaptive bounds, retry, and evaluation database are **planned but not yet implemented.**
+- JSONL diagnostic sidecar (Phase C) remains **diagnostic-only** and must not be promoted to a recovery source.
+- The future evaluation database (Phase J+) is a **separate explicit opt-in concept** and is not equivalent to the JSONL sidecar.
+- Do **not** import ``cst_optimization.workflows.recovery``; do **not** copy legacy ``RecoveryWorkflowEvaluator``.
+- Do **not** repoint the root shim (``run_workflow_1.py``) until staged/adaptive/retry/database are stable.
+- Subsequent phases use single-letter names F, G, H, I, J, K, ... with decimal sub-phases (F1, F2, ...).
+
+### Next possible directions
+
+- **Phase F** — Stage search no-CST helpers
+- **Phase G** — Adaptive bounds no-CST helpers
+- **Phase H** — Stage + adaptive integration policy
+- **Phase I** — Stage runtime wiring no-CST
+- **Phase J** — Evaluation database design/schema
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 
@@ -179,15 +206,14 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Known caveats
 
-- `evaluation_records.jsonl` not written.
-- JSONL diagnostics sidecar remains future.
-- Ctrl+C hard-exit cleanup hardening remains future.
 - Production-scale validation remains future.
 - Report-only diagnostics not persisted to checkpoint.
-- Second Ctrl+C / `_os._exit` bypasses cleanup.
+
+> **Historical Phase B caveats (superseded by later phases):**
+> JSONL sidecar (Phase C) is now opt-in diagnostic-only; second Ctrl+C (Phase D)
+> now performs best-effort cleanup before hard exit (live hard-exit validation
+> remains blocked by non-interactive tool environment).
 
 ### Next possible directions
 
-a) JSONL diagnostics sidecar.
-b) Ctrl+C hard-exit cleanup hardening (if desired).
-c) Additional live CST regression smoke (only when explicitly requested).
+a) Additional live CST regression smoke (only when explicitly requested).

@@ -32,7 +32,7 @@ explicitly via ``python -m workflows.rfgun_sao.run``.
 ### no-CST tests
 
 ```powershell
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 158/158 as of B5.1
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 184/184 as of B9
 ```
 
 The no-CST test suite covers imports, gate utilities, calibration primitives,
@@ -41,7 +41,7 @@ CST objects), calibration diagnostics, accepted/rejected path logging, mixed
 gate precedence, multi-dip diagnostic status, checkpoint semantics audit,
 checkpoint persistence hardening, metric invariant hardening, metric roles
 skeleton, threshold penalty computation, report-only diagnostic extraction,
-and CST cleanup helper.
+CST cleanup helper, and gate role pass/fail and runtime rejection.
 
 ### Live CST smokes (opt-in ``runtime=cst``)
 
@@ -52,6 +52,7 @@ and CST cleanup helper.
 | A15 | Live CST | S11 depth gate rejection — ``threshold_db=-100.0`` | ``s11_depth_gate_reject``, measurement skipped, Best F = 1.0 |
 | A24 | Live CST | Successful measurement checkpoint evidence — ``solver_ok=True``, 7 metrics | **Best F = -15185.95**, ``status=completed`` |
 | B5 | Live CST | Role-based metrics: optimize + threshold in objective vector, report_only excluded, diagnostics logged | **Best F = -17534.24**, threshold penalty verified, diagnostics INFO log confirmed |
+| B9 | Live CST | Gate runtime rejection: q0 raw=18630.8 vs threshold=999999999 greater_than | **Best F = 1.0**, ``gate_reject:q0_gate``, cleanup closed=True |
 
 Each live smoke used a valid local CST project (``D:/workflow_elgun/PickupDesign_2026.cst``)
 with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
@@ -133,7 +134,7 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Live evidence: successful two-pass measurement produces ``status=completed``,
   ``solver_ok=True``, ``error=''``, all 7 objective raw/penalty entries (A24)
 
-### Metric roles (optimize / threshold / report_only)
+### Metric roles (optimize / threshold / report_only / gate)
 - ``MetricRole`` enum and ``MetricSpec`` dataclass with ``threshold``/``sigma``/
   ``direction``/``report_as`` fields (B1, B2)
 - ``build_metric_specs`` parses config entries into specs (B1)
@@ -150,6 +151,15 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
   ``EvaluationResult.diagnostics`` (B4)
 - Diagnostics surfaced in two-pass measurement path via INFO log when non-empty (B5)
 - ``evaluation_records.jsonl`` is **not** written; ``.ckpt`` is authoritative (A23)
+- **Gate role (B7, B8, B9)**:
+  - Parsed as ``MetricRole.GATE``; direction validated (B7)
+  - Exposed as ``gate_metric_names`` on workflow containers (B7)
+  - ``compute_gate_pass(spec, value)`` — less_than / greater_than pass/fail (B7)
+  - ``compute_gate_results`` — bulk evaluation with ``report_as`` alias and duplicate-key detection (B7)
+  - ``summarize_gate_results`` — compact pass summary with stable ``"gate_reject:key1,key2"`` error (B8)
+  - Runtime rejection wired in two-pass evaluator: after measurement SUCCESS, failing gate → all-ones penalties, ``solver_ok=False``, ``error="gate_reject:..."`` (B8)
+  - **Live CST validated** — B9 confirmed q0 gate fail with ``gate_reject:q0_gate``, Best F=1.0, cleanup closed=True
+  - Excluded from ``objective_names``, checkpoint arrays, and ``compute_role_penalties`` in all phases
 
 ### Multi-dip detection
 - MultiDipDetector utility: detects close dips when S11 arrays are explicitly
@@ -171,9 +181,6 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
-- Gate role live CST validation (gate parsed, pass/fail computed, candidate
-  rejection wired in two-pass evaluator; no-CST tests cover rejection path;
-  live CST smoke remains future work)
 - ``evaluation_records.jsonl`` sidecar writer (``.ckpt`` / ``CheckpointManager``
   is current authoritative record; ``workflow.record_path`` set but unused)
 - Live gate rejection checkpoint evidence (covered by no-CST regression)

@@ -43,7 +43,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 **Status:** Closed.  Checkpoint milestone accepted through A25.1.
 
-## Phase B — Metric roles (B1–B5.1)
+## Phase B — Metric roles and gate skeleton (B1–B7)
 
 ### Completed
 
@@ -56,6 +56,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | B4.1 | Diagnostics preservation hardening (stale reset, measurement runner) | Accepted |
 | B5 | Live CST role-metrics smoke (optimize + threshold + report_only) | Accepted |
 | B5.1 | Runner-level CST cleanup (`_cleanup_workflow_connection`) | Accepted |
+| B7 | Gate metric role skeleton (`compute_gate_pass`, `compute_gate_results`, no runtime rejection yet) | Accepted |
 
 ### Authoritative behaviour
 
@@ -70,6 +71,10 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 - **Runner-level CST cleanup**: `_cleanup_workflow_connection` runs in
   `finally` block, outputting
   `CST cleanup: attempted=<bool> closed=<bool> pid=<PID>`.
+- **gate**: parsed and exposed as `gate_metric_names`; pure pass/fail
+  helpers exist (`compute_gate_pass`, `compute_gate_results`); excluded
+  from `objective_names`, checkpoint arrays, and `compute_role_penalties`;
+  **runtime candidate rejection not yet wired**.
 
 ### Live evidence
 
@@ -81,13 +86,15 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 ### Known caveats
 
 - `evaluation_records.jsonl` not written.
-- Gate role not implemented.
+- Gate role runtime enforcement not yet wired (parsed and exposed as
+  `gate_metric_names`; pure pass/fail helpers exist; candidate rejection
+  is deferred).
 - Report-only diagnostics not persisted to checkpoint.
 - Second Ctrl+C / `_os._exit` bypasses cleanup.
 
 ### Next possible directions
 
-a) Gate role skeleton.
+a) Gate role runtime rejection wiring.
 b) JSONL diagnostics sidecar.
 c) Ctrl+C hard-exit cleanup hardening (if desired).
 d) Additional live CST regression smoke (only when explicitly requested).

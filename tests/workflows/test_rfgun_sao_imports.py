@@ -1826,6 +1826,7 @@ def test_rfgun_sao_readme_status_current_after_b6():
     assert "B4.1" in text
     assert "B5" in text
     assert "B5.1" in text
+    assert "B7" in text
     assert "runtime=cst" in text or "evaluation.two_pass.runtime: cst" in text
     assert "config.local.yaml" in text
     assert "run_workflow_1.py" in text
@@ -3441,3 +3442,215 @@ def test_cleanup_workflow_pid_raises():
     r = _cleanup_workflow_connection(_WF())
     assert r["attempted"] is True
     assert r["closed"] is True
+
+# ============================================================
+# AB. Gate metric role skeleton — B7
+# ============================================================
+
+def test_gate_role_accepted():
+    """MetricRole accepts 'gate' and normalize returns 'gate'."""
+    from workflows.rfgun_sao.metrics import MetricRole, normalize_metric_role
+
+    assert MetricRole.from_value("gate") == MetricRole.GATE
+    assert normalize_metric_role("gate") == "gate"
+
+
+def test_gate_spec_parsed():
+    """build_metric_specs parses gate role with threshold/sigma/direction."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+
+    entries = [{
+        "name": "g1", "role": "gate",
+        "threshold": 100.0, "sigma": 5.0, "direction": "less_than",
+    }]
+    specs = build_metric_specs(entries)
+    assert len(specs) == 1
+    s = specs[0]
+    assert s.role.value == "gate"
+    assert s.threshold == 100.0
+    assert s.sigma == 5.0
+    assert s.direction == "less_than"
+
+
+def test_gate_invalid_direction_raises():
+    """Gate role with invalid direction raises ValueError."""
+    from workflows.rfgun_sao.metrics import build_metric_specs
+    import pytest
+
+    entries = [{"name": "g1", "role": "gate", "direction": "sideways"}]
+    with pytest.raises(ValueError, match="Unknown threshold direction"):
+        build_metric_specs(entries)
+
+
+def test_gate_metric_names():
+    """gate_metric_names returns enabled gate names only."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, gate_metric_names,
+    )
+
+    specs = [
+        MetricSpec(name="g1", role=MetricRole.GATE),
+        MetricSpec(name="g2", role=MetricRole.GATE, enabled=False),
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+    ]
+    assert gate_metric_names(specs) == ["g1"]
+
+
+def test_gate_excluded_from_objective_names():
+    """objective_metric_names excludes gate."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, objective_metric_names, report_metric_names,
+    )
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="thr", role=MetricRole.THRESHOLD),
+        MetricSpec(name="rep", role=MetricRole.REPORT_ONLY),
+        MetricSpec(name="gate", role=MetricRole.GATE),
+    ]
+    assert objective_metric_names(specs) == ["opt", "thr"]
+    assert report_metric_names(specs) == ["rep"]
+
+
+def test_compute_role_penalties_skips_gate():
+    """compute_role_penalties excludes gate and does not crash."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="gate", role=MetricRole.GATE,
+                   threshold=10.0, sigma=2.0, direction="less_than"),
+    ]
+    objs = {"opt": _FakeObjective("opt", penalty=0.2)}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs,
+        raw_metrics={"opt": 1.0, "gate": 5.0},
+    )
+    assert "opt" in pen
+    assert "gate" not in pen
+
+
+def test_compute_gate_pass_less_than():
+    """Gate less_than pass/fail."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_gate_pass
+
+    spec = MetricSpec(name="g", role=MetricRole.GATE,
+                      threshold=10.0, direction="less_than")
+    assert compute_gate_pass(spec, 9.0) is True
+    assert compute_gate_pass(spec, 10.0) is True
+    assert compute_gate_pass(spec, 11.0) is False
+
+
+def test_compute_gate_pass_greater_than():
+    """Gate greater_than pass/fail."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_gate_pass
+
+    spec = MetricSpec(name="g", role=MetricRole.GATE,
+                      threshold=10.0, direction="greater_than")
+    assert compute_gate_pass(spec, 11.0) is True
+    assert compute_gate_pass(spec, 10.0) is True
+    assert compute_gate_pass(spec, 9.0) is False
+
+
+def test_compute_gate_pass_non_finite():
+    """Non-finite value -> False."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_gate_pass
+    import numpy as np
+
+    spec = MetricSpec(name="g", role=MetricRole.GATE,
+                      threshold=10.0, direction="less_than")
+    assert compute_gate_pass(spec, np.nan) is False
+    assert compute_gate_pass(spec, np.inf) is False
+
+
+def test_compute_gate_pass_no_threshold():
+    """Missing threshold -> False."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_gate_pass
+
+    spec = MetricSpec(name="g", role=MetricRole.GATE, direction="less_than")
+    assert compute_gate_pass(spec, 5.0) is False
+
+
+def test_compute_gate_pass_wrong_role_raises():
+    """Wrong role raises TypeError."""
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole, compute_gate_pass
+    import pytest
+
+    spec = MetricSpec(name="opt", role=MetricRole.OPTIMIZE)
+    with pytest.raises(TypeError, match="Expected role.*gate"):
+        compute_gate_pass(spec, 1.0)
+
+
+def test_compute_gate_results_basic():
+    """compute_gate_results returns pass/fail for gate specs."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_gate_results,
+    )
+
+    specs = [
+        MetricSpec(name="g1", role=MetricRole.GATE,
+                   threshold=10.0, direction="less_than"),
+        MetricSpec(name="g2", role=MetricRole.GATE,
+                   threshold=5.0, direction="greater_than"),
+    ]
+    raw = {"g1": 9.0, "g2": 6.0}
+    r = compute_gate_results(metric_specs=specs, raw_metrics=raw)
+    assert r == {"g1": True, "g2": True}
+
+
+def test_compute_gate_results_report_as():
+    """report_as alias works for gate results."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_gate_results,
+    )
+
+    specs = [
+        MetricSpec(name="g1", role=MetricRole.GATE,
+                   threshold=10.0, direction="less_than",
+                   report_as="gate_alias"),
+    ]
+    r = compute_gate_results(
+        metric_specs=specs, raw_metrics={"g1": 11.0},
+    )
+    assert "gate_alias" in r
+    assert r["gate_alias"] is False
+
+
+def test_compute_gate_results_duplicate_key_raises():
+    """Duplicate output key raises ValueError."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_gate_results,
+    )
+    import pytest
+
+    specs = [
+        MetricSpec(name="g1", role=MetricRole.GATE,
+                   threshold=10.0, direction="less_than",
+                   report_as="x"),
+        MetricSpec(name="g2", role=MetricRole.GATE,
+                   threshold=5.0, direction="greater_than",
+                   report_as="x"),
+    ]
+    with pytest.raises(ValueError, match="Duplicate gate result key"):
+        compute_gate_results(metric_specs=specs, raw_metrics={"g1": 1.0, "g2": 6.0})
+
+
+def test_gate_workflow_container():
+    """Two-pass placeholder workflow exposes gate_metric_names."""
+    from workflows.rfgun_sao.workflow import build_workflow_1
+
+    cfg = {
+        "evaluation": {"mode": "two_pass"},
+        "parameters": [{"name": "p1", "low": 0, "high": 1}],
+        "objectives": [
+            {"name": "resonant_freq", "role": "optimize"},
+            {"name": "q0", "role": "gate", "threshold": 18000.0,
+             "direction": "greater_than"},
+        ],
+        "optimization": {"n_initial": 1, "n_iterations": 0, "seed": 42},
+    }
+    wf, opt, ev = build_workflow_1(cfg)
+    assert wf.objective_names == ["resonant_freq"]
+    assert wf.gate_metric_names == ["q0"]

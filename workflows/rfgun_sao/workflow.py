@@ -51,6 +51,7 @@ from workflows.rfgun_sao.evaluator import Workflow1Evaluator
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
 from workflows.rfgun_sao.metrics import (
     build_metric_specs,
+    gate_metric_names,
     objective_metric_names,
     optimize_metric_names,
     report_metric_names,
@@ -235,6 +236,7 @@ def build_workflow_1(
         workflow.metric_specs = specs
         workflow.optimize_metric_names = optimize_metric_names(specs)
         workflow.threshold_metric_names = threshold_metric_names(specs)
+        workflow.gate_metric_names = gate_metric_names(specs)
         log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
         workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
         return workflow, optimizer, evaluator
@@ -406,6 +408,7 @@ def build_workflow_1(
     workflow.metric_specs = specs
     workflow.optimize_metric_names = optimize_metric_names(specs)
     workflow.threshold_metric_names = threshold_metric_names(specs)
+    workflow.gate_metric_names = gate_metric_names(specs)
     log_dir = config.get("logging", {}).get("output_dir", "D:/Results")
     workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
 

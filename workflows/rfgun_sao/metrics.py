@@ -19,6 +19,7 @@ class MetricRole(str, Enum):
     OPTIMIZE = "optimize"
     THRESHOLD = "threshold"
     REPORT_ONLY = "report_only"
+    GATE = "gate"
 
     @classmethod
     def from_value(cls, value: str | None) -> MetricRole:
@@ -173,7 +174,7 @@ def build_metric_specs(
         threshold = _resolve_threshold_field(entry, "threshold")
         sigma = _resolve_threshold_field(entry, "sigma")
         raw_direction = _resolve_threshold_field(entry, "direction") or "less_than"
-        if role == MetricRole.THRESHOLD:
+        if role in (MetricRole.THRESHOLD, MetricRole.GATE):
             direction = _validate_direction(raw_direction)
         else:
             direction = str(raw_direction).strip().lower()
@@ -225,6 +226,14 @@ def threshold_metric_names(specs: list[MetricSpec]) -> list[str]:
     return [
         s.name for s in specs
         if s.enabled and s.role == MetricRole.THRESHOLD
+    ]
+
+
+def gate_metric_names(specs: list[MetricSpec]) -> list[str]:
+    """Return metric names with role ``GATE``."""
+    return [
+        s.name for s in specs
+        if s.enabled and s.role == MetricRole.GATE
     ]
 
 
@@ -306,6 +315,119 @@ def compute_threshold_penalty(spec: MetricSpec, value: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Gate pass/fail helpers
+# ---------------------------------------------------------------------------
+
+
+def compute_gate_pass(spec: MetricSpec, value: float) -> bool:
+    """Evaluate whether a single gate metric value passes its constraint.
+
+    Parameters
+    ----------
+    spec : MetricSpec
+        The metric specification (must have ``role == GATE``).
+    value : float
+        The raw physics value for this metric.
+
+    Returns
+    -------
+    bool
+        ``True`` if the value passes the gate constraint, ``False`` otherwise.
+
+    Raises
+    ------
+    TypeError
+        If ``spec.role`` is not ``GATE``.
+
+    Notes
+    -----
+    - Non-finite *value* → ``False``.
+    - Missing or non-finite *threshold* → ``False``.
+    - ``"less_than"``: pass if ``value <= threshold``.
+    - ``"greater_than"``: pass if ``value >= threshold``.
+    - *sigma* is parsed for future use but not used in pass/fail.
+    """
+    if spec.role != MetricRole.GATE:
+        raise TypeError(
+            f"compute_gate_pass called on a "
+            f"'{spec.role.value}' metric (name={spec.name!r}). "
+            f"Expected role 'gate'.",
+        )
+
+    if not np.isfinite(value):
+        return False
+
+    threshold = spec.threshold
+    if threshold is None or not np.isfinite(threshold):
+        return False
+
+    threshold_f = float(threshold)
+
+    if spec.direction == "less_than":
+        return bool(value <= threshold_f)
+    elif spec.direction == "greater_than":
+        return bool(value >= threshold_f)
+    else:
+        raise ValueError(
+            f"Unexpected direction {spec.direction!r} in gate pass/fail. "
+            f"This should have been validated during spec construction.",
+        )
+
+
+def compute_gate_results(
+    metric_specs: list[MetricSpec],
+    raw_metrics: dict[str, float],
+) -> dict[str, bool]:
+    """Evaluate gate pass/fail for all enabled ``GATE`` specs.
+
+    Parameters
+    ----------
+    metric_specs : list[MetricSpec]
+        All metric specifications (in config order).
+    raw_metrics : dict[str, float]
+        Raw physics values keyed by metric name.
+
+    Returns
+    -------
+    dict[str, bool]
+        Gate results keyed by output name (``report_as`` or source name).
+
+    Raises
+    ------
+    ValueError
+        If two ``GATE`` specs would produce the same output key.
+
+    Notes
+    -----
+    - Only enabled ``GATE`` specs are included.
+    - Missing raw values produce ``False``.
+    - Duplicate output keys raise ``ValueError``.
+    - *raw_metrics* is not mutated.
+    """
+    from collections import Counter
+
+    candidates: list[tuple[str, bool]] = []
+    for spec in metric_specs:
+        if not spec.enabled or spec.role != MetricRole.GATE:
+            continue
+        output_key = str(spec.report_as or spec.name)
+        passed = compute_gate_pass(
+            spec, raw_metrics.get(spec.name, np.nan),
+        )
+        candidates.append((output_key, passed))
+
+    keys = [k for k, _ in candidates]
+    dupes = {k for k, cnt in Counter(keys).items() if cnt > 1}
+    if dupes:
+        raise ValueError(
+            f"Duplicate gate result key(s): {sorted(dupes)}. "
+            f"Use 'report_as' to disambiguate.",
+        )
+
+    return dict(candidates)
+
+
+# ---------------------------------------------------------------------------
 # Role-based penalty computation
 # ---------------------------------------------------------------------------
 
@@ -346,7 +468,7 @@ def compute_role_penalties(
     for spec in metric_specs:
         if not spec.enabled:
             continue
-        if spec.role == MetricRole.REPORT_ONLY:
+        if spec.role in (MetricRole.REPORT_ONLY, MetricRole.GATE):
             continue
 
         raw_val = raw_metrics.get(spec.name, np.nan)

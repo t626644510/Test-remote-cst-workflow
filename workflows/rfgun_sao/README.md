@@ -169,6 +169,8 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
+- Gate role runtime enforcement (parsed and exposed as ``gate_metric_names``;
+  pure pass/fail helpers exist in B7; candidate rejection not yet wired)
 - ``evaluation_records.jsonl`` sidecar writer (``.ckpt`` / ``CheckpointManager``
   is current authoritative record; ``workflow.record_path`` set but unused)
 - Live gate rejection checkpoint evidence (covered by no-CST regression)

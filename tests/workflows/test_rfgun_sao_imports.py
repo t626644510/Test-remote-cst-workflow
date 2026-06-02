@@ -3054,3 +3054,144 @@ def test_b4_b3_regression():
     assert "opt" in pen
     assert "thr" in pen
     assert "rep" not in pen
+
+# ============================================================
+# Y. Diagnostics preservation hardening — B4.1
+# ============================================================
+
+def test_evaluation_result_carries_diagnostics():
+    """EvaluationResult can carry diagnostics without breaking defaults."""
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+
+    r = EvaluationResult()
+    assert r.diagnostics is None
+
+    r2 = EvaluationResult(status=EvaluationStatus.SUCCESS, diagnostics={"q0": 1.0})
+    assert r2.diagnostics == {"q0": 1.0}
+
+
+def test_evaluator_resets_stale_diagnostics_on_failure():
+    """Stale _last_diagnostics are reset before each evaluate_single_pass."""
+    from workflows.rfgun_sao.evaluator import Workflow1Evaluator
+    import numpy as np
+
+    # Use the no-CST path: construct with connection=None, force a path that
+    # fails before CST.  Access _last_diagnostics after a failed call.
+    class _NullConn:
+        def open_project(self, path):
+            raise RuntimeError("no CST available")
+
+    class _DummyMode:
+        def compute(self, value):
+            return 0.0
+    class _DummyObj:
+        name = "x"
+        mode = _DummyMode()
+
+    ev = Workflow1Evaluator(
+        connection=_NullConn(),
+        project_path="dummy.cst",
+        solver_runner=None,
+        objectives=[_DummyObj()],
+        param_names=["p1"],
+        metric_names=["x"],
+    )
+
+    # Set stale diagnostics
+    ev._last_diagnostics = {"stale": 999.0}
+
+    # Attempt evaluation (will fail — no CST)
+    ev.evaluate_single_pass({"p1": 0.5}, 0)
+
+    # After failure, _last_diagnostics should be reset (not stale)
+    diag = ev.last_diagnostics()
+    assert diag == {}, (
+        f"Expected empty diagnostics after failed eval, got {diag}"
+    )
+
+
+def test_measurement_runner_preserves_diagnostics():
+    """make_cst_measurement_runner preserves diagnostics from evaluator."""
+    from workflows.rfgun_sao.two_pass_cst import make_cst_measurement_runner
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+    from workflows.rfgun_sao.calibration import MeasurementPlan
+    import numpy as np
+
+    class _FakeEvaluator:
+        def evaluate_single_pass(self, params, iteration):
+            raw = {"resonant_freq": 11.424, "q0": 18630.0}
+            pen = {"resonant_freq": 0.1}
+            return raw, pen, True, EvaluationStatus.SUCCESS, ""
+        def last_diagnostics(self):
+            return {"q0_diag": 18630.0}
+
+    runner = make_cst_measurement_runner(
+        wf1_evaluator=_FakeEvaluator(),
+        metric_names=["resonant_freq"],
+    )
+
+    plan = MeasurementPlan(f_data_ghz=11.424)
+    result = runner({"p1": 0.5}, plan, 0)
+
+    assert result.diagnostics == {"q0_diag": 18630.0}
+    assert result.status == EvaluationStatus.SUCCESS
+
+
+def test_measurement_runner_failure_returns_empty_diagnostics():
+    """Failed measurement returns empty diagnostics, not stale."""
+    from workflows.rfgun_sao.two_pass_cst import make_cst_measurement_runner
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+    from workflows.rfgun_sao.calibration import MeasurementPlan
+    import numpy as np
+
+    class _FakeFailedEvaluator:
+        def evaluate_single_pass(self, params, iteration):
+            raw = {}
+            pen = {}
+            return raw, pen, False, EvaluationStatus.SOLVER_FAILED, "solver error"
+        def last_diagnostics(self):
+            return {}
+
+    runner = make_cst_measurement_runner(
+        wf1_evaluator=_FakeFailedEvaluator(),
+        metric_names=["resonant_freq"],
+    )
+
+    plan = MeasurementPlan(f_data_ghz=11.424)
+    result = runner({"p1": 0.5}, plan, 0)
+
+    assert result.diagnostics == {}
+    assert result.status == EvaluationStatus.SOLVER_FAILED
+
+
+def test_b4_1_core_b3_b4_imports_work():
+    """Key B3/B4 helpers still import and function correctly."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+        report_only_diagnostics, report_only_output_names,
+    )
+    import numpy as np
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="thr", role=MetricRole.THRESHOLD,
+                   threshold=10.0, sigma=2.0),
+        MetricSpec(name="rep", role=MetricRole.REPORT_ONLY),
+    ]
+    objs = {"opt": _FakeObjective("opt", penalty=0.2)}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs,
+        raw_metrics={"opt": 1.0, "thr": 9.0, "rep": 100.0},
+    )
+    assert "opt" in pen
+    assert "thr" in pen
+    assert "rep" not in pen
+
+    diag = report_only_diagnostics(
+        metric_specs=specs, raw_metrics={"rep": 100.0},
+    )
+    assert diag == {"rep": 100.0}
+
+    names = report_only_output_names(specs)
+    assert "rep" in names
+    assert "opt" not in names

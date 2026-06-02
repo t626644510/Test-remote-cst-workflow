@@ -242,6 +242,9 @@ def make_cst_measurement_runner(
         raw, pen, _ok, status, err = wf1_evaluator.evaluate_single_pass(
             params, iteration,
         )
+        # Preserve report-only diagnostics from the evaluator
+        last_diag = getattr(wf1_evaluator, "last_diagnostics", None)
+        diagnostics = dict(last_diag()) if callable(last_diag) else {}
         return EvaluationResult(
             status=status,
             error=err,
@@ -251,6 +254,7 @@ def make_cst_measurement_runner(
             objective_values={
                 name: raw.get(name, np.nan) for name in metric_names
             },
+            diagnostics=diagnostics,
         )
 
     return _runner

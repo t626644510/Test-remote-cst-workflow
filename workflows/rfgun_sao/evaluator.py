@@ -111,6 +111,18 @@ class Workflow1Evaluator:
         self._conn = new_conn
 
     # ------------------------------------------------------------------
+    # Diagnostics accessor
+    # ------------------------------------------------------------------
+
+    def last_diagnostics(self) -> dict[str, float]:
+        """Return report-only diagnostics from the most recent evaluation.
+
+        Returns an empty dict if no evaluation has succeeded or if the
+        last evaluation failed before diagnostics were computed.
+        """
+        return dict(self._last_diagnostics)
+
+    # ------------------------------------------------------------------
     # Main evaluation
     # ------------------------------------------------------------------
 
@@ -141,6 +153,7 @@ class Workflow1Evaluator:
         error : str
             Error message (empty on success).
         """
+        self._last_diagnostics = {}
         raw_metrics: dict[str, float] = {}
         penalties: dict[str, float] = {}
         solver_ok = False

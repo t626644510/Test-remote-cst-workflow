@@ -155,7 +155,8 @@ b) Move on to other non-live hardening or documentation work.
 | M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Accepted |
 | N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Accepted at 9dcbadf |
 | N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Accepted at 9dcbadf |
-| O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Completed / pending review |
+| O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Needs O1 retry progress hardening |
+| O1 | Retry runtime no-CST progress hardening — `_normalize_retry_record` helper, internal `attempts_consumed` guard, progress guard activations diagnostic, 23 new O1 regression tests (83 total) | Completed / pending review |
 
 ### Migration constraints
 
@@ -180,7 +181,6 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase O1** — Retry runtime no-CST semantics hardening, if reviewer finds issues
 - **Phase P** — Live CST smoke for retry/recovery only when explicitly requested
 - **Phase Q+** — Production-scale validation / root shim repoint last
 

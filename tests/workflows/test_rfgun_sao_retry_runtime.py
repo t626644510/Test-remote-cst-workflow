@@ -32,6 +32,7 @@ from workflows.rfgun_sao.retry_runtime import (
     run_retry_loop_no_cst,
     run_inter_pass_recovery_no_cst,
     run_post_eval_recovery_no_cst,
+    _normalize_retry_record,
 )
 
 
@@ -525,6 +526,364 @@ class TestRetryLoopProbablyInfeasible:
             {"retry": {"enabled": True, "use_probably_infeasible_for_skip": True}}
         )
         assert cfg.use_probably_infeasible_for_skip is True
+
+
+    def test_probably_infeasible_still_rejected_before_evaluate(self) -> None:
+        """use_probably_infeasible_for_skip=True rejects before calling evaluate_once."""
+        called = False
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            nonlocal called
+            called = True
+            return _rec([1.0], status="success")
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, use_probably_infeasible_for_skip=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+        assert called is False
+        assert result.stopped_reason == "probably_infeasible_skip_not_supported"
+
+
+# ---------------------------------------------------------------------------
+# O1 — _normalize_retry_record unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeRetryRecord:
+    def test_success_passthrough(self) -> None:
+        """SUCCESS records are returned as-is (no normalisation)."""
+        rec = _rec([1.0], status="success", retries=0)
+        result, diag = _normalize_retry_record(rec, 3)
+        assert result.retry_count == 0
+        assert result.status == "success"
+        assert diag == {}
+
+    def test_already_advanced_passthrough(self) -> None:
+        """Records with retry_count > previous are returned as-is."""
+        rec = _rec([1.0], status="calibration_failed", retries=5)
+        result, diag = _normalize_retry_record(rec, 3)
+        assert result.retry_count == 5
+        assert diag == {}
+
+    def test_same_retry_count_advanced(self) -> None:
+        """Records with retry_count == previous are advanced by 1."""
+        rec = _rec([1.0], status="calibration_failed", retries=2)
+        result, diag = _normalize_retry_record(rec, 2)
+        assert result.retry_count == 3
+        assert result.status == "calibration_failed"
+        assert diag["retry_count_advanced"] is True
+        assert diag["retry_count_before"] == 2
+        assert diag["retry_count_after"] == 3
+
+    def test_lower_retry_count_advanced(self) -> None:
+        """Records with retry_count < previous are advanced to previous + 1."""
+        rec = _rec([1.0], status="solver_failed", retries=0)
+        result, diag = _normalize_retry_record(rec, 5)
+        assert result.retry_count == 6
+        assert diag["retry_count_advanced"] is True
+        assert diag["retry_count_before"] == 0
+        assert diag["retry_count_after"] == 6
+
+    def test_preserves_other_fields(self) -> None:
+        """Normalisation preserves fields other than retry_count."""
+        pid = _pid([1.0, 2.0])
+        rec = EvaluationDatabaseRecord(
+            parameter_identity=pid,
+            status="transient_failed",
+            retry_count=1,
+            schema_version=2,
+            source="test",
+            error_taxonomy={"cause": "network"},
+        )
+        result, diag = _normalize_retry_record(rec, 1)
+        assert result.retry_count == 2
+        assert result.parameter_identity == pid
+        assert result.status == "transient_failed"
+        assert result.schema_version == 2
+        assert result.source == "test"
+        assert result.error_taxonomy == {"cause": "network"}
+        assert diag["retry_count_advanced"] is True
+
+
+# ---------------------------------------------------------------------------
+# O1 — progress guard: same retry_count repeated
+# ---------------------------------------------------------------------------
+
+
+class TestRetryLoopProgressSameFailure:
+    def test_same_retry_count_terminates_at_max_tier(self) -> None:
+        """Same retryable failure with unchanged retry_count terminates at max_tier."""
+        call_count = 0
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            nonlocal call_count
+            call_count += 1
+            return _rec([1.0], status="calibration_failed", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=3)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_max_tiers_reached"
+        assert len(result.attempts) == 3
+        assert call_count == 3
+        assert result.retry_count_consumed == 3
+        # Progress guard should have activated for each attempt
+        assert len(result.diagnostics.get("progress_guard_activations", [])) == 3
+
+    def test_same_retry_count_max_tier_1_terminates(self) -> None:
+        """With max_tier=1, repeated same failures stop after 1 attempt."""
+        call_count = 0
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            nonlocal call_count
+            call_count += 1
+            return _rec([1.0], status="calibration_failed", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=1)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert len(result.attempts) == 1
+        assert call_count == 1
+
+    def test_same_retry_count_solver_failed(self) -> None:
+        """Same retry_count with solver_failed also terminates."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="solver_failed", retries=2)
+
+        initial = _rec([1.0], status="solver_failed", retries=2)
+        config = RetryRuntimeConfig(enabled=True, max_tier=3)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_max_tiers_reached"
+        # One attempt brings retry_count from 2 to 3 (capped at max_tier)
+        assert len(result.attempts) == 1
+
+    def test_multiple_same_retry_count_unknown_failed(self) -> None:
+        """Same unknown_failed with unchanged retry_count terminates."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="unknown_failed", retries=0)
+
+        initial = _rec([1.0], status="unknown_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, allow_unknown_retry=True, max_tier=3)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert len(result.attempts) == 3
+
+
+# ---------------------------------------------------------------------------
+# O1 — progress guard: lower retry_count returned
+# ---------------------------------------------------------------------------
+
+
+class TestRetryLoopProgressLowerRetryCount:
+    def test_lower_retry_count_terminates_at_max_tier(self) -> None:
+        """evaluate_once returning lower retry_count terminates at max_tier."""
+        call_count = 0
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            nonlocal call_count
+            call_count += 1
+            return _rec([1.0], status="solver_failed", retries=0)
+
+        initial = _rec([1.0], status="solver_failed", retries=3)
+        config = RetryRuntimeConfig(enabled=True, max_tier=5)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_max_tiers_reached"
+        # Each normalisation advances: 3->4->5, so 2 attempts
+        assert len(result.attempts) == 2
+        # Progress guard should have activated
+        assert len(result.diagnostics.get("progress_guard_activations", [])) >= 1
+
+    def test_decreasing_then_increasing(self) -> None:
+        """Decreasing then increasing retry_count still terminates."""
+        call_count = 0
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            nonlocal call_count
+            call_count += 1
+            return _rec([1.0], status="calibration_failed", retries=1)
+
+        initial = _rec([1.0], status="calibration_failed", retries=5)
+        config = RetryRuntimeConfig(enabled=True, max_tier=8)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_max_tiers_reached"
+        # 5 -> normalise 6, 6 -> 7, 7 -> 8 (max_tier), so 3 attempts
+        assert len(result.attempts) == 3
+
+
+# ---------------------------------------------------------------------------
+# O1 — progress guard: terminal after retry
+# ---------------------------------------------------------------------------
+
+
+class TestRetryLoopProgressTerminalAfterRetry:
+    def test_gate_rejected_after_retry_stops(self) -> None:
+        """evaluate_once returning gate_rejected after a retry stops."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="gate_rejected", retries=1)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_gate_rejected"
+        assert len(result.attempts) == 1
+
+    def test_diagnostic_only_after_retry_stops(self) -> None:
+        """evaluate_once returning diagnostic_only after a retry stops."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="diagnostic_only")
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.stopped_reason == "no_retry_diagnostic_only"
+
+    def test_incompatible_schema_after_retry_stops(self) -> None:
+        """evaluate_once returning incompatible schema stops."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="calibration_failed", schema=99)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0, schema=1)
+        config = RetryRuntimeConfig(enabled=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.stopped_reason == "no_retry_incompatible_schema"
+
+    def test_missing_identity_after_retry_stops(self) -> None:
+        """evaluate_once returning missing identity stops."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return EvaluationDatabaseRecord(status="calibration_failed")
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.stopped_reason == "no_retry_missing_identity"
+
+
+# ---------------------------------------------------------------------------
+# O1 — progress guard: success with no retry_count advance
+# ---------------------------------------------------------------------------
+
+
+class TestRetryLoopProgressSuccess:
+    def test_success_with_unchanged_retry_count(self) -> None:
+        """evaluate_once returning SUCCESS with unchanged retry_count stops as success."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="success", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is True
+        assert result.stopped_reason == "success"
+        assert len(result.attempts) == 1
+        assert result.attempts[0].status_after == "success"
+        # retry_count_consumed = max(current.retry_count=0, attempts_consumed=1)
+        assert result.retry_count_consumed == 1
+
+    def test_success_with_lower_retry_count(self) -> None:
+        """evaluate_once returning SUCCESS with lower retry_count stops as success."""
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="success", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=3)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+
+        assert result.succeeded is True
+        assert result.stopped_reason == "success"
+        assert len(result.attempts) == 1
+
+
+# ---------------------------------------------------------------------------
+# O1 — progress guard: recovery + same failure
+# ---------------------------------------------------------------------------
+
+
+class TestRetryLoopProgressRecovery:
+    def test_recovery_exception_and_same_failure_terminates(self) -> None:
+        """recovery exception + same failed retry_count terminates at max_tier."""
+        def recovery_callback(tier: int, record: EvaluationDatabaseRecord) -> bool:
+            raise ValueError("recovery problem")
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="calibration_failed", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=2)
+        result = run_retry_loop_no_cst(
+            initial, evaluate_once, config=config, recovery_callback=recovery_callback,
+        )
+
+        assert result.succeeded is False
+        assert result.stopped_reason == "no_retry_max_tiers_reached"
+        assert len(result.attempts) == 2
+        for attempt in result.attempts:
+            assert "recovery_exception" in attempt.recovery_label
+        assert len(result.diagnostics.get("progress_guard_activations", [])) == 2
+
+    def test_recovery_false_and_same_failure_terminates(self) -> None:
+        """recovery callback returning False + same failure terminates."""
+        def recovery_callback(tier: int, record: EvaluationDatabaseRecord) -> bool:
+            return False
+
+        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
+            return _rec([1.0], status="calibration_failed", retries=0)
+
+        initial = _rec([1.0], status="calibration_failed", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=3)
+        result = run_retry_loop_no_cst(
+            initial, evaluate_once, config=config, recovery_callback=recovery_callback,
+        )
+
+        assert result.succeeded is False
+        assert len(result.attempts) == 3
+
+
+# ---------------------------------------------------------------------------
+# O1 — safety: internal progress guard present in source
+# ---------------------------------------------------------------------------
+
+
+class TestO1Safety:
+    def test_normalize_retry_record_in_source(self) -> None:
+        """retry_runtime module contains _normalize_retry_record."""
+        import workflows.rfgun_sao.retry_runtime as rt
+        src_path = rt.__file__
+        with open(src_path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        assert "_normalize_retry_record" in text
+
+    def test_attempts_consumed_in_source(self) -> None:
+        """retry_runtime contains the internal attempts_consumed guard."""
+        import workflows.rfgun_sao.retry_runtime as rt
+        src_path = rt.__file__
+        with open(src_path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        assert "attempts_consumed" in text
+
+    def test_no_should_escalate_to_probably_infeasible(self) -> None:
+        """retry_runtime does not call should_escalate_to_probably_infeasible."""
+        import workflows.rfgun_sao.retry_runtime as rt
+        src_path = rt.__file__
+        with open(src_path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        assert "should_escalate_to_probably_infeasible" not in text
 
 
 # ---------------------------------------------------------------------------

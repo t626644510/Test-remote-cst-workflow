@@ -45,6 +45,8 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 ## Phase C — Diagnostics sidecar
 
+**Status:** JSONL diagnostics sidecar milestone accepted through C3.4; C3.5 closeout pending review.
+
 ### Completed
 
 | Phase | Scope | Status |
@@ -55,8 +57,9 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C3 | JSONL diagnostics/gate_results enrichment — extended callback, two-pass runtime enrichment, no-CST tests | Accepted |
 | C3.1 | JSONL mode gating fix — `_should_use_enriched_jsonl` helper, single_pass core-only path preserved | Accepted |
 | C3.2 | JSONL counter ordering fix — enriched path no longer double-increments; each path increments once per eval | Accepted |
-| C3.3 | JSONL docs/status polish — final Phase C docs alignment | Needs C3.4 README cleanup |
-| C3.4 | README JSONL policy cleanup — removed stale `not written` wording | Completed / pending review |
+| C3.3 | JSONL docs/status polish — final Phase C docs alignment | Accepted |
+| C3.4 | README JSONL policy cleanup — removed stale `not written` wording | Accepted |
+| C3.5 | JSONL milestone closeout — status alignment | Completed / pending review |
 
 ### Authoritative behaviour
 

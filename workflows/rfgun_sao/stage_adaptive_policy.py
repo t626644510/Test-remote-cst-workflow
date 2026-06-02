@@ -184,6 +184,7 @@ def combine_stage_and_adaptive_decisions(
     inp: StageAdaptivePolicyInput,
     *,
     expand_fraction: float = 0.1,
+    proximity_fraction: float = 0.05,
 ) -> StageAdaptivePolicyDecision:
     """Combine a stage transition decision with adaptive bounds review.
 
@@ -247,11 +248,13 @@ def combine_stage_and_adaptive_decisions(
 
     # 4. SHRINK — run adaptive review
     if stage.action == StageTransitionAction.SHRINK:
-        return _handle_stage_shrink(inp, diag)
+        return _handle_stage_shrink(inp, diag, expand_fraction=expand_fraction,
+                                   proximity_fraction=proximity_fraction)
 
     # 5. REQUEST_ADAPTIVE_REVIEW
     if stage.action == StageTransitionAction.REQUEST_ADAPTIVE_REVIEW:
-        return _handle_adaptive_review(inp, diag)
+        return _handle_adaptive_review(inp, diag, expand_fraction=expand_fraction,
+                                      proximity_fraction=proximity_fraction)
 
     # Catch-all
     return StageAdaptivePolicyDecision(
@@ -271,6 +274,9 @@ def combine_stage_and_adaptive_decisions(
 def _handle_stage_shrink(
     inp: StageAdaptivePolicyInput,
     diag: dict[str, Any],
+    *,
+    expand_fraction: float = 0.1,
+    proximity_fraction: float = 0.05,
 ) -> StageAdaptivePolicyDecision:
     """Evaluate a stage SHRINK decision against adaptive bounds."""
     adaptive_inp = build_adaptive_input_from_stage_decision(inp)
@@ -285,7 +291,11 @@ def _handle_stage_shrink(
             diagnostics=diag,
         )
 
-    adaptive_rec = recommend_adaptive_bounds(adaptive_inp)
+    adaptive_rec = recommend_adaptive_bounds(
+        adaptive_inp,
+        proximity_fraction=proximity_fraction,
+        expand_fraction=expand_fraction,
+    )
     diag["adaptive_action"] = adaptive_rec.action.value
     diag["adaptive_reason"] = adaptive_rec.reason
 
@@ -345,6 +355,9 @@ def _handle_stage_shrink(
 def _handle_adaptive_review(
     inp: StageAdaptivePolicyInput,
     diag: dict[str, Any],
+    *,
+    expand_fraction: float = 0.1,
+    proximity_fraction: float = 0.05,
 ) -> StageAdaptivePolicyDecision:
     """Evaluate a stage REQUEST_ADAPTIVE_REVIEW decision."""
     adaptive_inp = build_adaptive_input_from_stage_decision(inp)
@@ -357,7 +370,11 @@ def _handle_adaptive_review(
             diagnostics=diag,
         )
 
-    adaptive_rec = recommend_adaptive_bounds(adaptive_inp)
+    adaptive_rec = recommend_adaptive_bounds(
+        adaptive_inp,
+        proximity_fraction=proximity_fraction,
+        expand_fraction=expand_fraction,
+    )
     diag["adaptive_action"] = adaptive_rec.action.value
     diag["adaptive_reason"] = adaptive_rec.reason
 

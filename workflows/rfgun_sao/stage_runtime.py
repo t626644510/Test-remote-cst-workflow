@@ -245,6 +245,7 @@ def maybe_update_stage_bounds(
         policy_dec = combine_stage_and_adaptive_decisions(
             policy_inp,
             expand_fraction=adaptive_cfg.get("expand_fraction", 0.1),
+            proximity_fraction=adaptive_cfg.get("proximity_fraction", 0.05),
         )
     else:
         # Without adaptive, map stage decision directly
@@ -252,11 +253,12 @@ def maybe_update_stage_bounds(
 
     state.last_adaptive_policy_decision = policy_dec
 
-    # Update state if a transition occurred
+    # Update state if a transition occurred.
+    # BLOCK_STAGE_SHRINK does NOT advance stage or clear observations;
+    # the safe current bounds are retained.
     if policy_dec.final_bounds is not None and policy_dec.action in (
         StageAdaptiveAction.USE_STAGE_DECISION,
         StageAdaptiveAction.USE_ADAPTIVE_BOUNDS,
-        StageAdaptiveAction.BLOCK_STAGE_SHRINK,
     ):
         state.current_bounds = policy_dec.final_bounds
         # Increment stage counter for non-continue actions

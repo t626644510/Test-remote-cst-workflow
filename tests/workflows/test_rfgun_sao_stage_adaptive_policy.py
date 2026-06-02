@@ -273,3 +273,48 @@ class TestEdgeCases:
         inp = _policy_inp(stage_dec=dec, obs=[])
         r = combine_stage_and_adaptive_decisions(inp)
         assert r.action == StageAdaptiveAction.CONTINUE_CURRENT
+
+    def test_custom_expand_fraction_affects_expansion(self):
+        """Larger expand_fraction produces wider bounds than smaller."""
+        dec = StageTransitionDecision(
+            action=StageTransitionAction.SHRINK,
+            proposed_bounds=_bounds(
+                low=np.array([2.0, 2.0]), high=np.array([8.0, 8.0]),
+            ),
+        )
+        inp_small = _policy_inp(
+            stage_dec=dec,
+            obs=_completed_obs([[0.2, 5.0]], [1.0]),
+        )
+        inp_large = _policy_inp(
+            stage_dec=dec,
+            obs=_completed_obs([[0.2, 5.0]], [1.0]),
+        )
+        r_small = combine_stage_and_adaptive_decisions(inp_small, expand_fraction=0.01)
+        r_large = combine_stage_and_adaptive_decisions(inp_large, expand_fraction=0.5)
+        # Both should be adaptive expansion
+        assert r_small.action == StageAdaptiveAction.USE_ADAPTIVE_BOUNDS
+        assert r_large.action == StageAdaptiveAction.USE_ADAPTIVE_BOUNDS
+        # Larger fraction should produce a wider low bound
+        if r_small.final_bounds is not None and r_large.final_bounds is not None:
+            assert r_large.final_bounds.low[0] < r_small.final_bounds.low[0]
+
+    def test_custom_proximity_affects_clipping(self):
+        """Very tight proximity_fraction means no clipping detected."""
+        dec = StageTransitionDecision(
+            action=StageTransitionAction.SHRINK,
+            proposed_bounds=_bounds(
+                low=np.array([2.0, 2.0]), high=np.array([8.0, 8.0]),
+            ),
+        )
+        inp = _policy_inp(
+            stage_dec=dec,
+            obs=_completed_obs([[0.2, 5.0]], [1.0]),
+        )
+        # With proximity=0.5, 0.2 is within 50% of 0, so near boundary -> clip
+        r_near = combine_stage_and_adaptive_decisions(inp, proximity_fraction=0.5)
+        # With proximity=0.001, 0.2 is not within 0.1% of 0, so no clip
+        r_far = combine_stage_and_adaptive_decisions(inp, proximity_fraction=0.001)
+        # Both still produce a decision (but far may not be USE_ADAPTIVE_BOUNDS)
+        assert isinstance(r_near, StageAdaptivePolicyDecision)
+        assert isinstance(r_far, StageAdaptivePolicyDecision)

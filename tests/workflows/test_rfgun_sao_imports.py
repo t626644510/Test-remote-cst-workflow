@@ -2905,3 +2905,152 @@ def test_b3_direction_validation_threshold_only():
     entries2 = [{"name": "a", "role": "threshold", "direction": "sideways"}]
     with pytest.raises(ValueError, match="Unknown threshold direction"):
         build_metric_specs(entries2)
+
+# ============================================================
+# X. Report-only diagnostic extraction — Phase B4
+# ============================================================
+
+def test_report_only_diagnostics_basic():
+    """report_only_diagnostics extracts only REPORT_ONLY metrics."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_diagnostics,
+    )
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="thr", role=MetricRole.THRESHOLD,
+                   threshold=10.0, sigma=2.0),
+        MetricSpec(name="q0", role=MetricRole.REPORT_ONLY),
+    ]
+    raw = {"opt": 1.0, "thr": 9.0, "q0": 18630.8}
+    diag = report_only_diagnostics(metric_specs=specs, raw_metrics=raw)
+    assert diag == {"q0": 18630.8}
+
+
+def test_report_only_diagnostics_report_as():
+    """report_as alias is used as output key."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_diagnostics,
+    )
+
+    specs = [
+        MetricSpec(name="q0", role=MetricRole.REPORT_ONLY,
+                   report_as="intrinsic_q0"),
+    ]
+    raw = {"q0": 18630.8}
+    diag = report_only_diagnostics(metric_specs=specs, raw_metrics=raw)
+    assert "intrinsic_q0" in diag
+    assert diag["intrinsic_q0"] == 18630.8
+    assert "q0" not in diag
+
+
+def test_report_only_diagnostics_non_finite():
+    """Missing or non-finite raw produces NaN."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_diagnostics,
+    )
+    import numpy as np
+
+    specs = [MetricSpec(name="q0", role=MetricRole.REPORT_ONLY)]
+
+    # Missing raw
+    diag = report_only_diagnostics(metric_specs=specs, raw_metrics={})
+    assert np.isnan(diag["q0"])
+
+    # NaN raw
+    diag2 = report_only_diagnostics(
+        metric_specs=specs, raw_metrics={"q0": np.nan},
+    )
+    assert np.isnan(diag2["q0"])
+
+    # Inf raw
+    diag3 = report_only_diagnostics(
+        metric_specs=specs, raw_metrics={"q0": np.inf},
+    )
+    assert np.isnan(diag3["q0"])
+
+
+def test_report_only_diagnostics_disabled_excluded():
+    """Disabled report_only spec is excluded."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_diagnostics,
+    )
+
+    specs = [
+        MetricSpec(name="q0", role=MetricRole.REPORT_ONLY, enabled=True),
+        MetricSpec(name="q1", role=MetricRole.REPORT_ONLY, enabled=False),
+    ]
+    raw = {"q0": 1.0, "q1": 2.0}
+    diag = report_only_diagnostics(metric_specs=specs, raw_metrics=raw)
+    assert "q0" in diag
+    assert "q1" not in diag
+
+
+def test_report_only_diagnostics_duplicate_key_raises():
+    """Duplicate report_as/output key raises ValueError."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_diagnostics,
+    )
+    import pytest
+
+    specs = [
+        MetricSpec(name="q0", role=MetricRole.REPORT_ONLY, report_as="q"),
+        MetricSpec(name="q1", role=MetricRole.REPORT_ONLY, report_as="q"),
+    ]
+    raw = {"q0": 1.0, "q1": 2.0}
+    with pytest.raises(ValueError, match="Duplicate report_only"):
+        report_only_diagnostics(metric_specs=specs, raw_metrics=raw)
+
+
+def test_report_only_output_names_basic():
+    """report_only_output_names returns report_as or name."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, report_only_output_names,
+    )
+
+    specs = [
+        MetricSpec(name="q0", role=MetricRole.REPORT_ONLY),
+        MetricSpec(name="q1", role=MetricRole.REPORT_ONLY, report_as="intrinsic_q1"),
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+    ]
+    names = report_only_output_names(specs)
+    assert names == ["q0", "intrinsic_q1"]
+
+
+def test_report_only_objective_names_unchanged():
+    """report_metric_names and objective_metric_names unchanged by B4."""
+    from workflows.rfgun_sao.metrics import (
+        build_metric_specs, objective_metric_names, report_metric_names,
+    )
+
+    entries = [
+        {"name": "a", "role": "optimize"},
+        {"name": "b", "role": "threshold"},
+        {"name": "c", "role": "report_only", "report_as": "c_alias"},
+    ]
+    specs = build_metric_specs(entries)
+    assert objective_metric_names(specs) == ["a", "b"]
+    # report_metric_names returns source name, not report_as
+    assert report_metric_names(specs) == ["c"]
+
+
+def test_b4_b3_regression():
+    """compute_role_penalties still excludes report_only."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_role_penalties,
+    )
+
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="thr", role=MetricRole.THRESHOLD,
+                   threshold=10.0, sigma=2.0),
+        MetricSpec(name="rep", role=MetricRole.REPORT_ONLY),
+    ]
+    objs = {"opt": _FakeObjective("opt", penalty=0.2)}
+    pen = compute_role_penalties(
+        metric_specs=specs, objectives_by_name=objs,
+        raw_metrics={"opt": 1.0, "thr": 9.0, "rep": 100.0},
+    )
+    assert "opt" in pen
+    assert "thr" in pen
+    assert "rep" not in pen

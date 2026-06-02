@@ -36,6 +36,8 @@ class EvaluationResult:
     raw_metrics : dict[str, float] | None
     objective_values : dict[str, float] | None
     penalty_values : dict[str, float] | None
+    diagnostics : dict[str, Any] | None
+        Report-only metric values for diagnostic / side-channel use.
     elapsed_s : float
     """
     status: EvaluationStatus = EvaluationStatus.UNKNOWN_ERROR
@@ -44,6 +46,7 @@ class EvaluationResult:
     raw_metrics: dict[str, float] | None = None
     objective_values: dict[str, float] | None = None
     penalty_values: dict[str, float] | None = None
+    diagnostics: dict[str, Any] | None = None
     elapsed_s: float = 0.0
 
     @property

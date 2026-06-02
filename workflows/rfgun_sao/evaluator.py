@@ -41,6 +41,7 @@ from cst_optimization.physics.poynting import (
 from workflows.rfgun_sao.metrics import (
     MetricSpec,
     compute_role_penalties,
+    report_only_diagnostics,
 )
 from workflows.rfgun_sao.types import (
     EvaluationResult,
@@ -99,6 +100,7 @@ class Workflow1Evaluator:
                 MetricSpec(name=n, role=MetricRole.OPTIMIZE)
                 for n in metric_names
             ]
+        self._last_diagnostics: dict[str, float] = {}
 
     # ------------------------------------------------------------------
     # Reconnect hook
@@ -224,6 +226,12 @@ class Workflow1Evaluator:
                 raw_metrics=raw_metrics,
             )
 
+            # --- Report-only diagnostics ---
+            self._last_diagnostics = report_only_diagnostics(
+                metric_specs=self._metric_specs,
+                raw_metrics=raw_metrics,
+            )
+
             solver_ok = True
             _logger.info(
                 "Workflow 1 iter %d done: %s", iteration,
@@ -279,4 +287,5 @@ class Workflow1Evaluator:
             raw_metrics=raw,
             penalty_values=pen,
             objective_values={k: raw.get(k, np.nan) for k in self._metric_names},
+            diagnostics=dict(self._last_diagnostics),
         )

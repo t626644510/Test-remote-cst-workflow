@@ -370,3 +370,77 @@ def compute_role_penalties(
             )
 
     return penalties
+
+
+# ---------------------------------------------------------------------------
+# Report-only diagnostic extraction
+# ---------------------------------------------------------------------------
+
+
+def report_only_output_names(specs: list[MetricSpec]) -> list[str]:
+    """Return output names for ``REPORT_ONLY`` metrics.
+
+    Uses ``spec.report_as`` if set, otherwise ``spec.name``.
+    This may differ from ``report_metric_names(specs)`` which always
+    returns the source metric name.
+    """
+    result: list[str] = []
+    for spec in specs:
+        if spec.enabled and spec.role == MetricRole.REPORT_ONLY:
+            result.append(spec.report_as or spec.name)
+    return result
+
+
+def report_only_diagnostics(
+    *,
+    metric_specs: list[MetricSpec],
+    raw_metrics: dict[str, float],
+) -> dict[str, float]:
+    """Extract diagnostics from ``raw_metrics`` for ``REPORT_ONLY`` specs.
+
+    Parameters
+    ----------
+    metric_specs : list[MetricSpec]
+        All metric specifications (in config order).
+    raw_metrics : dict[str, float]
+        Raw physics values keyed by metric name.
+
+    Returns
+    -------
+    dict[str, float]
+        Diagnostic values keyed by output name (``report_as`` or source name).
+
+    Raises
+    ------
+    ValueError
+        If two ``REPORT_ONLY`` specs would produce the same output key.
+
+    Notes
+    -----
+    - Only enabled ``REPORT_ONLY`` specs are included.
+    - Missing or non-finite raw values produce ``numpy.nan``.
+    - ``OPTIMIZE`` and ``THRESHOLD`` roles are excluded.
+    """
+    from collections import Counter
+
+    candidates: list[tuple[str, float]] = []
+    for spec in metric_specs:
+        if not spec.enabled or spec.role != MetricRole.REPORT_ONLY:
+            continue
+        output_key = str(spec.report_as or spec.name)
+        raw_val = raw_metrics.get(spec.name, np.nan)
+        if np.isfinite(raw_val):
+            candidates.append((output_key, float(raw_val)))
+        else:
+            candidates.append((output_key, float(np.nan)))
+
+    # Check for duplicate output keys
+    keys = [k for k, _ in candidates]
+    dupes = {k for k, count in Counter(keys).items() if count > 1}
+    if dupes:
+        raise ValueError(
+            f"Duplicate report_only diagnostic key(s): {sorted(dupes)}. "
+            f"Use 'report_as' to disambiguate.",
+        )
+
+    return dict(candidates)

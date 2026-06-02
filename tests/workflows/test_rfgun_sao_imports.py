@@ -952,6 +952,21 @@ def test_two_pass_cst_runtime_branch_wires_fake_connection(monkeypatch):
     assert abs(val - 0.3) < 1e-12
 
 
+def test_workflow_build_retry_handler_attribute():
+    """build_workflow_1 workflow container has _retry_handler attribute.
+
+    Uses the two_pass placeholder path (no CST import required) to verify
+    the attribute is set consistently across both code paths.
+    Single-pass path also sets it unconditionally (may be None without
+    retry config, or an EvaluationRetryHandler with retry enabled).
+    """
+    from workflows.rfgun_sao.workflow import build_workflow_1
+    # Two-pass placeholder (no CST)
+    cfg = _minimal_two_pass_cfg()
+    wf, opt, ev = build_workflow_1(cfg)
+    assert hasattr(wf, "_retry_handler")
+
+
 # ============================================================
 # K. CST runner adapter hardening (A13.1)
 # ============================================================

@@ -314,6 +314,25 @@ def _cleanup_workflow_connection(
         msg = str(exc)[:200]
         result["error"] = msg
         _logger.warning("CST cleanup (force=%s, pid=%s): %s", force, result["pid"], msg)
+
+    # Close ALL retry handler connections (orphan DE protection).
+    # After force_reset() the retry handler creates a new CST DE but
+    # workflow._conn still references the old nulled connection.  Closing
+    # only workflow._conn misses the replacement DE, leaving an orphan
+    # window.  close_all() iterates every connection the handler created.
+    rh = getattr(workflow, "_retry_handler", None)
+    if rh is not None:
+        try:
+            rh.close_all(force=force)
+            _logger.debug(
+                "Retry handler connections closed (force=%s)", force,
+            )
+        except Exception as exc:
+            _logger.warning(
+                "Retry handler close_all failed (force=%s): %s",
+                force, str(exc)[:200],
+            )
+
     return result
 
 

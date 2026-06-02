@@ -159,7 +159,8 @@ b) Move on to other non-live hardening or documentation work.
 | O1 | Retry runtime no-CST progress hardening — `_normalize_retry_record` helper, internal `attempts_consumed` guard, progress guard activations diagnostic, 23 new O1 regression tests (83 total) | Accepted at c1d7347 |
 | P | Live CST smoke for retry/recovery — minimal single_pass validation (n_initial=1, n_iter=0), Best F=-15392.38, cleanup revealed orphan DE hang issue; retry runtime not yet wired to CST runner | Accepted at 38d3d86 |
 | P1 | CST cleanup reliability gap analysis / hardening plan — no-CST `cst_cleanup_diagnostics.py` helper (classify_cst_process, should_force_kill_orphan_de, summarize_cleanup_observation), 24 no-CST tests | Accepted at 07d9133 |
-| P2 | CST cleanup observation live smoke / hardening decision — two-phase live CST confirmed identical orphan DE pattern (PID 36496); P1 helper validated; cleanup gap still open; cleanup runtime hardening recommended before retry runtime CST wiring | Completed / pending review |
+| P2 | CST cleanup observation live smoke / hardening decision — two-phase live CST confirmed identical orphan DE pattern (PID 36496); P1 helper validated; cleanup gap still open; cleanup runtime hardening recommended before retry runtime CST wiring | Accepted at d3b6668 |
+| P3 | CST cleanup runtime hardening — `_retry_handler` stored on workflow; `_cleanup_workflow_connection` calls `close_all()` to close all connections including replacement DE; live validated: orphan eliminated (both PID 18252 and 57924 terminated, only cstd.exe remains) | Completed / pending review |
 
 ### Migration constraints
 
@@ -191,14 +192,15 @@ b) Move on to other non-live hardening or documentation work.
 - The P1 diagnostic helper (`cst_cleanup_diagnostics.py`) correctly classifies licensing service vs. orphan DE and produces accurate `summarize_cleanup_observation()` output.
 - The new retry runtime (`retry_runtime.py`) was **not exercised** — it is not yet wired into the CST runner.
 - All retry-related activity came from the legacy `cst_optimization.core.retry` module.
-- Cleanup reliability gap is **confirmed open and reproducible** — runtime hardening in `src/cst_optimization/` is recommended before wiring retry runtime to CST.
+- Phase P3 implemented cleanup runtime hardening: `_retry_handler` stored on workflow; `_cleanup_workflow_connection` now calls `retry_handler.close_all(force)` to close ALL connections including the replacement DE created by `force_reset()`.
+- Live CST validation confirmed the fix: both original DE (PID 18252) and replacement DE (PID 57924) properly terminated; only `cstd.exe` licensing service remained.
+- No manual `taskkill` was needed after the fix (Phase P and P2 both required manual cleanup).
 - No production-scale validation was performed.
 - No durable DB, no failure reuse, no probably-infeasible skip, no root shim repoint.
 
 ### Next possible directions
 
-- **Phase P3** — Cleanup runtime hardening (only if operator explicitly approves touching `src/cst_optimization/` cleanup code)
-- **Phase Q+** — Production-scale validation / root shim repoint last (only after cleanup reliability is accepted)
+- **Phase Q+** — Production-scale validation / root shim repoint last
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

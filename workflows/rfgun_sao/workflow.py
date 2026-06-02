@@ -234,6 +234,7 @@ def build_workflow_1(
         workflow = _TwoPassContainer()
         workflow._params = param_set
         workflow._conn = cst_conn
+        workflow._retry_handler = None
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
         workflow.metric_specs = specs
@@ -406,6 +407,7 @@ def build_workflow_1(
     workflow = _Workflow1Container()
     workflow._params = param_set
     workflow._conn = conn
+    workflow._retry_handler = retry_handler
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
     workflow.metric_specs = specs

@@ -146,8 +146,9 @@ b) Move on to other non-live hardening or documentation work.
 | G | Adaptive bounds no-CST helpers — boundary/quality detection, `recommend_adaptive_bounds`, expand/shift helpers | Accepted |
 | G1 | Adaptive bounds semantics hardening — per-parameter clipping, affected-param-only expansion, validation, quality clustering threshold | Accepted |
 | H | Stage + adaptive integration policy — `combine_stage_and_adaptive_decisions`, `build_adaptive_input_from_stage_decision`, `extract_high_quality_points`, no-CST tests | Accepted |
-| I | Stage runtime wiring no-CST — `StageRuntimeState`, `record_stage_observation`, `maybe_update_stage_bounds`, config helpers, opt-in only, disabled by default | Reviewed / needs I1 polish |
-| I1 | Stage runtime semantics hardening — adaptive config propagation, BLOCK_STAGE_SHRINK non-transition, tightened test assertions | Completed / pending review |
+| I | Stage runtime wiring no-CST — `StageRuntimeState`, `record_stage_observation`, `maybe_update_stage_bounds`, config helpers, opt-in only, disabled by default | Accepted |
+| I1 | Stage runtime semantics hardening — adaptive config propagation, BLOCK_STAGE_SHRINK non-transition, tightened test assertions | Accepted |
+| J | Evaluation database design/schema — `ParameterIdentity`, `EvaluationDatabaseRecord`, `RawEvaluationPayload`, `record_to_json_dict`, `record_from_json_dict`, schema DDL, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 
@@ -160,7 +161,6 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase J** — Evaluation database design/schema
 - **Phase K** — Evaluation database dedup no-CST skeleton
 - **Phase L** — Evaluation database warm-start / prior construction
 

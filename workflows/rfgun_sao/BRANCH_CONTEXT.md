@@ -52,9 +52,10 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C1 | JSONL diagnostics sidecar skeleton — ``records.py`` helpers | Accepted |
 | C2 | JSONL runtime opt-in wiring — ``_record_jsonl_sidecar_evaluation``, ``_on_evaluation`` integration, no-CST tests | Accepted |
 | C2.1 | JSONL sidecar polish — write-failure monkeypatch test, doc wording hardening | Accepted |
-| C3 | JSONL diagnostics/gate_results enrichment — extended callback, two-pass runtime enrichment, no-CST tests | Needs C3.1 fix |
-| C3.1 | JSONL mode gating fix — `_should_use_enriched_jsonl` helper, single_pass core-only path preserved | Needs C3.2 counter fix |
-| C3.2 | JSONL counter ordering fix — enriched path no longer double-increments; each path increments once per eval | Completed / pending review |
+| C3 | JSONL diagnostics/gate_results enrichment — extended callback, two-pass runtime enrichment, no-CST tests | Accepted |
+| C3.1 | JSONL mode gating fix — `_should_use_enriched_jsonl` helper, single_pass core-only path preserved | Accepted |
+| C3.2 | JSONL counter ordering fix — enriched path no longer double-increments; each path increments once per eval | Accepted |
+| C3.3 | JSONL docs/status polish — final Phase C docs alignment | Completed / pending review |
 
 ### Authoritative behaviour
 
@@ -70,13 +71,16 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 ### Known caveats
 
-- Diagnostics/gate_results enrichment in JSONL sidecar wired in C3 (two-pass enrichment callback); core-only fallback for single_pass.
+- JSONL diagnostics/gate_results enrichment is wired for two-pass; single_pass gets core-only fallback.
+- No live CST validation of JSONL sidecar output yet.
+- JSONL is diagnostic only; not a recovery or warm-start source.
+- Ctrl+C hard-exit cleanup hardening remains future.
 
 ### Next possible directions
 
-a) JSONL diagnostics/gate_results sidecar enrichment.
-b) Ctrl+C hard-exit cleanup hardening.
-c) Production-scale live CST regression (only when explicitly requested).
+a) Ctrl+C hard-exit cleanup hardening.
+b) Live CST JSONL sidecar smoke (only when explicitly requested).
+c) Phase C docs/report consolidation (if needed).
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

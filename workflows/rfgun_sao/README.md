@@ -161,6 +161,23 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
   - **Live CST validated** — B9 confirmed q0 gate fail with ``gate_reject:q0_gate``, Best F=1.0, cleanup closed=True
   - Excluded from ``objective_names``, checkpoint arrays, and ``compute_role_penalties`` in all phases
 
+### JSONL evaluation records sidecar (C1–C3)
+- Helper module ``records.py`` with ``make_json_safe``, ``build_evaluation_record``,
+  ``append_jsonl_record``, ``read_jsonl_records``, ``resolve_records_config`` (C1)
+- Runtime write wiring via ``_record_jsonl_sidecar_evaluation`` in ``run.py`` (C2)
+- **Opt-in only** — disabled by default; enable via
+  ``logging.evaluation_records.enabled: true`` in untracked local config (C2)
+- ``.ckpt`` / ``CheckpointManager`` remains authoritative; JSONL is **not** a
+  recovery or warm-start source (C2)
+- ``single_pass`` + enabled → core-only record (schema_version, iteration,
+  objective_names, raw_values, penalties, solver_ok, error, metadata) (C2)
+- ``two_pass`` + enabled → enriched record including report_only diagnostics
+  and gate_results when available (C3)
+- Enriched record uses separate ``evaluation_record_callback`` to avoid
+  duplicate writes; core-only fallback for single_pass (C3.1)
+- One JSONL iteration per evaluation, starting at 0 (C3.2)
+- Write or enrichment failures are logged as non-fatal warnings (C2, C3)
+
 ### Multi-dip detection
 - MultiDipDetector utility: detects close dips when S11 arrays are explicitly
   supplied (A7)
@@ -181,9 +198,7 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
-- ``evaluation_records.jsonl`` runtime sidecar writer (helper module exists,
-  runtime writing **opt-in only** via ``logging.evaluation_records.enabled: true``;
-  default disabled; C2 runtime wiring done; diagnostics/gate_results enrichment deferred)
+- JSONL sidecar live CST smoke validation (no-CST testing complete through C3.2)
 - Production-scale validation (full parameter ranges, enabled gates, retry,
   warm-start from single-pass checkpoint)
 - Root shim repointing (``run_workflow_1.py`` still points to

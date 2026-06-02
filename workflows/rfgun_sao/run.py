@@ -37,6 +37,11 @@ DEFAULT_CONFIG_PATH: Path = Path(__file__).resolve().with_name("config.yaml")
 
 # ---- cst_optimization imports (require SRC_DIR on sys.path) ---------------
 from cst_optimization.checkpoint import CheckpointManager
+from workflows.rfgun_sao.records import (
+    append_jsonl_record,
+    build_evaluation_record,
+    resolve_records_config,
+)
 
 # ---- Module-level logger --------------------------------------------------
 _logger: logging.Logger = logging.getLogger("workflow_1")
@@ -141,6 +146,85 @@ def _record_checkpoint_evaluation(
         ckpt.mark_failed(idx, error=error)
 
     ckpt.save()
+
+
+def _record_jsonl_sidecar_evaluation(
+    records_cfg: dict,
+    wf_ref: list,
+    iteration: int,
+    x_phys: np.ndarray,
+    raw_values: np.ndarray,
+    penalties: np.ndarray,
+    solver_ok: bool,
+    error: str,
+) -> bool:
+    """Optionally append an evaluation record to the JSONL sidecar.
+
+    This is a best-effort diagnostic ledger only.  Failures are logged as
+    warnings and do **not** propagate to the checkpoint, optimizer, or
+    exit path.
+
+    Parameters
+    ----------
+    records_cfg : dict
+        Resolved records config (``{"enabled": bool, "path": str|None}``).
+    wf_ref : list
+        Workflow reference for metric name extraction.
+    iteration : int
+        Evaluation iteration index.
+    x_phys : np.ndarray
+        Physical parameter vector.
+    raw_values : np.ndarray
+        Raw objective values.
+    penalties : np.ndarray
+        Penalty values.
+    solver_ok : bool
+        Whether the solver completed.
+    error : str
+        Error message.
+
+    Returns
+    -------
+    bool
+        ``True`` if a record was written, ``False`` if disabled or failed.
+    """
+    if not records_cfg.get("enabled"):
+        return False
+    path = records_cfg.get("path")
+    if not path:
+        return False
+
+    try:
+        metric_names = _checkpoint_metric_names_from_wf_ref(wf_ref)
+        if metric_names is None:
+            _logger.warning("JSONL sidecar: metric names unavailable, skipping")
+            return False
+
+        if len(metric_names) != len(raw_values) or len(metric_names) != len(penalties):
+            _logger.warning(
+                "JSONL sidecar: length mismatch (names=%d, raw=%d, pen=%d), skipping",
+                len(metric_names), len(raw_values), len(penalties),
+            )
+            return False
+
+        record = build_evaluation_record(
+            iteration=iteration,
+            x_phys=x_phys,
+            objective_names=metric_names,
+            raw_values=raw_values,
+            penalties=penalties,
+            solver_ok=solver_ok,
+            error=error,
+            metadata={
+                "source": "rfgun_sao.run.checkpoint_callback",
+                "authoritative_record": "checkpoint",
+            },
+        )
+        append_jsonl_record(path, record)
+        return True
+    except Exception as exc:
+        _logger.warning("JSONL sidecar write failed: %s", exc)
+        return False
 
 
 def _setup_logging(log_cfg: dict) -> str:
@@ -263,6 +347,12 @@ def main() -> None:
     config_path: Path = Path(args.config).expanduser().resolve()
     cfg = yaml.safe_load(open(config_path, "r", encoding="utf-8"))
     log_dir = _setup_logging(cfg.get("logging", {}))
+    records_cfg = resolve_records_config(cfg)
+    if records_cfg.get("enabled"):
+        _logger.info(
+            "JSONL evaluation records enabled: %s",
+            records_cfg.get("path"),
+        )
     _logger.info("Workflow 1 starting")
     _logger.info("Config: %s", config_path)
     _logger.info("Python: %s", sys.executable)
@@ -295,11 +385,18 @@ def main() -> None:
     ckpt = CheckpointManager(ckpt_path)
 
     _wf_ref: list = []
+    _eval_counter: list[int] = [0]
 
     def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
+        iteration = int(_eval_counter[0])
+        _eval_counter[0] += 1
         _record_checkpoint_evaluation(
             ckpt, _wf_ref, x_phys, raw_values, penalties,
             solver_ok, error,
+        )
+        _record_jsonl_sidecar_evaluation(
+            records_cfg, _wf_ref, iteration,
+            x_phys, raw_values, penalties, solver_ok, error,
         )
 
     from workflows.rfgun_sao.workflow import build_workflow_1  # noqa: F811

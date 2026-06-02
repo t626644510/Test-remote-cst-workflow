@@ -182,8 +182,8 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
 - ``evaluation_records.jsonl`` runtime sidecar writer (helper module exists,
-  ``make_json_safe``/``build_evaluation_record``/``append_jsonl_record``
-  available; runtime writing **disabled by default**; C1 skeleton only)
+  runtime writing **opt-in only** via ``logging.evaluation_records.enabled: true``;
+  default disabled; C2 runtime wiring done; diagnostics/gate_results enrichment deferred)
 - Production-scale validation (full parameter ranges, enabled gates, retry,
   warm-start from single-pass checkpoint)
 - Root shim repointing (``run_workflow_1.py`` still points to

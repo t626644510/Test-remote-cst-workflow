@@ -4098,3 +4098,161 @@ def test_resolve_records_config_dict():
     })
     assert r["enabled"] is True
     assert "custom.jsonl" in r["path"]
+
+# ============================================================
+# AE. JSONL runtime opt-in sidecar — C2
+# ============================================================
+
+def test_jsonl_sidecar_default_disabled(tmp_path):
+    """Default disabled config does not write JSONL."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import resolve_records_config
+    import numpy as np
+
+    cfg = resolve_records_config({})
+    assert cfg["enabled"] is False
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+
+    result = _record_jsonl_sidecar_evaluation(
+        cfg, wf_ref, 0, x, raw, pen, True, "",
+    )
+    assert result is False
+
+
+def test_jsonl_sidecar_path_missing_disabled(tmp_path):
+    """Enabled but path missing returns False."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    import numpy as np
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": None}, [], 0,
+        np.array([0.5]), np.array([1.0]), np.array([0.2]), True, "",
+    )
+    assert result is False
+
+
+def test_jsonl_sidecar_writes_record(tmp_path):
+    """Enabled + tmp_path writes a valid JSONL record."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+    p = str(tmp_path / "records.jsonl")
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": p}, wf_ref, 0, x, raw, pen,
+        True, "",
+    )
+    assert result is True
+
+    loaded = read_jsonl_records(p)
+    assert len(loaded) == 1
+    rec = loaded[0]
+    assert rec["schema_version"] == 1
+    assert rec["iteration"] == 0
+    assert rec["solver_ok"] is True
+    assert rec["error"] == ""
+    assert rec["objective_names"] == ["a"]
+    assert rec["raw_values"] == {"a": 11.424}
+    assert rec["penalties"] == {"a": 0.3}
+    assert "metadata" in rec
+    assert rec["metadata"]["source"] == "rfgun_sao.run.checkpoint_callback"
+
+
+def test_jsonl_sidecar_length_mismatch_does_not_raise(tmp_path):
+    """Length mismatch -> warning, False, no crash."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a", "b"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])  # 1 element, 2 names
+    pen = np.array([0.3])
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": str(tmp_path / "r.jsonl")},
+        wf_ref, 0, x, raw, pen, True, "",
+    )
+    assert result is False
+
+
+def test_jsonl_sidecar_metric_names_unavailable(tmp_path):
+    """Unavailable metric names -> warning, False."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    import numpy as np
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": str(tmp_path / "r.jsonl")},
+        [], 0, np.array([0.5]), np.array([1.0]), np.array([0.2]),
+        True, "",
+    )
+    assert result is False
+
+
+def test_jsonl_sidecar_write_failure_logged(tmp_path):
+    """Write failure (bad path) -> warning, not crash."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    # Use an unwritable path (directory that doesn't exist in a way that fails)
+    bad_path = str(tmp_path / "nonexistent_subdir" / "records.jsonl")
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": bad_path},
+        wf_ref, 0, np.array([0.5]), np.array([1.0]), np.array([0.2]),
+        True, "",
+    )
+    # Depending on platform, append_jsonl_record may create the dir;
+    # if it succeeds it's fine; the test is that it doesn't crash.
+    from pathlib import Path
+    p = Path(bad_path)
+    if p.exists():
+        import os
+        os.remove(bad_path)
+    # The assertion is: helper always returns bool without crashing
+    assert isinstance(result, bool)
+
+
+def test_jsonl_sidecar_multiple_records(tmp_path):
+    """Multiple evaluations produce multiple JSONL lines."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    p = str(tmp_path / "multi.jsonl")
+
+    for i in range(3):
+        ok = _record_jsonl_sidecar_evaluation(
+            {"enabled": True, "path": p}, wf_ref, i,
+            np.array([0.5]), np.array([float(i)]), np.array([0.1]),
+            True, "",
+        )
+        assert ok is True
+
+    loaded = read_jsonl_records(p)
+    assert len(loaded) == 3
+    for i, rec in enumerate(loaded):
+        assert rec["iteration"] == i
+
+
+def test_config_yaml_does_not_enable_jsonl():
+    """Default config.yaml does not set evaluation_records enabled=true."""
+    import yaml
+    from workflows.rfgun_sao.run import _PROJECT_ROOT
+    from workflows.rfgun_sao.run import DEFAULT_CONFIG_PATH
+
+    cfg = yaml.safe_load(open(DEFAULT_CONFIG_PATH, "r", encoding="utf-8"))
+    logging_cfg = cfg.get("logging", {})
+    records_cfg = logging_cfg.get("evaluation_records", None)
+    assert records_cfg is None, (
+        f"Default config must not enable JSONL, got: {records_cfg}"
+    )

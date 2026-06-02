@@ -49,7 +49,8 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| C1 | JSONL diagnostics sidecar skeleton — ``records.py``, ``make_json_safe``, ``build_evaluation_record``, ``append_jsonl_record``, ``read_jsonl_records``, ``resolve_records_config`` | Accepted |
+| C1 | JSONL diagnostics sidecar skeleton — ``records.py`` helpers | Accepted |
+| C2 | JSONL runtime opt-in wiring — ``_record_jsonl_sidecar_evaluation``, ``_on_evaluation`` integration, no-CST tests | Pending review |
 
 ### Authoritative behaviour
 
@@ -59,12 +60,13 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 ### Known caveats
 
-- Runtime JSONL writing not yet wired (disabled by default).
-- ``.ckpt`` is the only persisted evaluation record at runtime.
+- ``.ckpt`` is the authoritative persisted evaluation record at runtime.
+- JSONL sidecar is opt-in-only via ``logging.evaluation_records.enabled``.
+- Diagnostics/gate_results enrichment in JSONL sidecar deferred to future phase.
 
 ### Next possible directions
 
-a) Wire JSONL runtime records with explicit opt-in.
+a) JSONL diagnostics/gate_results sidecar enrichment.
 b) Ctrl+C hard-exit cleanup hardening.
 c) Production-scale live CST regression (only when explicitly requested).
 

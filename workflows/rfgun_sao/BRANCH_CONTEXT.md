@@ -157,7 +157,8 @@ b) Move on to other non-live hardening or documentation work.
 | N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Accepted at 9dcbadf |
 | O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Accepted at c1d7347 |
 | O1 | Retry runtime no-CST progress hardening — `_normalize_retry_record` helper, internal `attempts_consumed` guard, progress guard activations diagnostic, 23 new O1 regression tests (83 total) | Accepted at c1d7347 |
-| P | Live CST smoke for retry/recovery — minimal single_pass validation (n_initial=1, n_iter=0), Best F=-15392.38, cleanup revealed orphan DE hang issue; retry runtime not yet wired to CST runner | Partial / pending review |
+| P | Live CST smoke for retry/recovery — minimal single_pass validation (n_initial=1, n_iter=0), Best F=-15392.38, cleanup revealed orphan DE hang issue; retry runtime not yet wired to CST runner | Accepted at 38d3d86 |
+| P1 | CST cleanup reliability gap analysis / hardening plan — no-CST `cst_cleanup_diagnostics.py` helper (classify_cst_process, should_force_kill_orphan_de, summarize_cleanup_observation), 24 no-CST tests | Completed / pending review |
 
 ### Migration constraints
 
@@ -181,20 +182,21 @@ b) Move on to other non-live hardening or documentation work.
 - Inter-pass/post-eval recovery are callback-only skeletons — no real CST cleanup invoked.
 - Phase C JSONL diagnostic sidecar is not referenced or used.
 
-### Phase P caveats
+### Phase P / P1 caveats
 
-- Live CST smoke was partial — evaluation succeeded but cleanup left an orphan DE window (PID 30808) requiring manual `taskkill /F`.
+- Phase P live CST smoke was partial — evaluation succeeded but cleanup left an orphan DE window (PID 30808) requiring manual `taskkill /F`.
 - The `DesignEnvironment.close()` hang is a pre-existing issue (documented B5.1).
 - The new retry runtime (`retry_runtime.py`) was **not exercised** — it is not yet wired into the CST runner.
 - All retry-related activity came from the legacy `cst_optimization.core.retry` module.
+- Phase P1 added a no-CST diagnostic helper (`cst_cleanup_diagnostics.py`) for classifying CST processes and identifying orphan DE candidates. This is a planning/diagnostic tool, not a runtime fix.
+- The cleanup reliability gap remains **open** — no runtime cleanup code was modified.
 - No production-scale validation was performed.
-- The environment is ready for future retry/CST integration but cleanup reliability needs attention.
 - No durable DB, no failure reuse, no probably-infeasible skip, no root shim repoint.
 
 ### Next possible directions
 
-- **Phase P1** — Address cleanup reliability gap (orphan DE on close hang) if operator requests
-- **Phase Q+** — Production-scale validation / root shim repoint last
+- **Phase P2** — Cleanup live smoke or hardening implementation, only if operator explicitly requests
+- **Phase Q+** — Production-scale validation / root shim repoint last (only after cleanup reliability is accepted)
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

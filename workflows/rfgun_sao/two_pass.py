@@ -339,6 +339,13 @@ def make_two_pass_runtime_evaluator(
             param_dict, decision.measurement_plan, iteration,
         )
 
+        # Log report-only diagnostics (if any) without persisting to checkpoint
+        if result.diagnostics is not None and result.diagnostics:
+            _logger.info(
+                "Two-pass measurement diagnostics: %s",
+                _safe_meta_str(result.diagnostics),
+            )
+
         if (
             result.status == EvaluationStatus.SUCCESS
             and result.penalty_values is not None

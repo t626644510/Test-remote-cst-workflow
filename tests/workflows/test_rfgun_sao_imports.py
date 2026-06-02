@@ -79,6 +79,7 @@ class _FakeMeasurementRunner:
         status=None,
         objective_values=_OBJ_SENTINEL,
         error: str = "",
+        diagnostics: dict | None = None,
     ):
         from workflows.rfgun_sao.types import EvaluationStatus
         self._penalty_values = penalty_values or {"resonant_freq": 0.0}
@@ -91,6 +92,7 @@ class _FakeMeasurementRunner:
         else:
             self._objective_values = objective_values
         self._error = error
+        self._diagnostics = diagnostics
         self.call_count = 0
         self.last_params: dict | None = None
         self.last_plan = None
@@ -109,6 +111,7 @@ class _FakeMeasurementRunner:
             raw_metrics=self._raw_values,
             objective_values=self._objective_values,
             penalty_values=self._penalty_values,
+            diagnostics=self._diagnostics,
         )
 
 
@@ -3195,3 +3198,126 @@ def test_b4_1_core_b3_b4_imports_work():
     names = report_only_output_names(specs)
     assert "rep" in names
     assert "opt" not in names
+
+# ============================================================
+# Z. Role-based metrics diagnostics logging — B5
+# ============================================================
+
+def test_two_pass_logs_diagnostics_when_present(caplog):
+    """make_two_pass_runtime_evaluator logs diagnostics when present."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import logging, numpy as np
+
+    caplog.set_level(logging.INFO, logger="workflows.rfgun_sao.two_pass")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+        diagnostics={"q0_diag": 18630.0},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.3) < 1e-12
+
+    log_text = caplog.text
+    assert "Two-pass measurement diagnostics" in log_text
+    assert "q0_diag" in log_text
+    assert "18630" in log_text
+
+
+def test_two_pass_logs_diagnostics_empty_dict(caplog):
+    """make_two_pass_runtime_evaluator does not fail on empty diagnostics."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import logging, numpy as np
+
+    caplog.set_level(logging.INFO, logger="workflows.rfgun_sao.two_pass")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+        diagnostics={},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.3) < 1e-12
+
+    log_text = caplog.text
+    # Empty diagnostics should not produce a log line
+    assert "Two-pass measurement diagnostics" not in log_text
+
+
+def test_two_pass_logs_diagnostics_none(caplog):
+    """make_two_pass_runtime_evaluator does not fail on diagnostics=None."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import logging, numpy as np
+
+    caplog.set_level(logging.INFO, logger="workflows.rfgun_sao.two_pass")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+        diagnostics=None,
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.3) < 1e-12
+
+    log_text = caplog.text
+    # None diagnostics should not produce a log line
+    assert "Two-pass measurement diagnostics" not in log_text
+
+
+def test_b5_b4_1_regression():
+    """B4.1 tests for stale reset and diagnostics preservation still work."""
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+
+    r = EvaluationResult()
+    assert r.diagnostics is None
+
+    r2 = EvaluationResult(
+        status=EvaluationStatus.SUCCESS,
+        diagnostics={"q0": 1.0},
+    )
+    assert r2.diagnostics == {"q0": 1.0}

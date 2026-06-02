@@ -334,16 +334,61 @@ def suggest_next_retry_tier(
 # ---------------------------------------------------------------------------
 
 
+def _record_parameter_key(record: EvaluationDatabaseRecord) -> str | None:
+    """Extract the parameter key from a record, or ``None`` if unavailable."""
+    pid = record.parameter_identity
+    if pid is None:
+        return None
+    return pid.parameter_key()
+
+
+def _is_stable_permanent_candidate_class(
+    failure_class: RetryFailureClass,
+    policy: RetryPolicy,
+) -> bool:
+    """Check if a failure class can contribute to permanent infeasibility
+    classification.
+
+    Only non-transient, non-diagnostic, structurally valid failure classes
+    are allowed to escalate.
+    """
+    allowed = {
+        RetryFailureClass.CALIBRATION_FAILED,
+        RetryFailureClass.SOLVER_FAILED,
+    }
+    if policy.allow_unknown_retry:
+        allowed.add(RetryFailureClass.UNKNOWN_FAILED)
+
+    return failure_class in allowed
+
+
 def should_escalate_to_probably_infeasible(
     failure_history: list[EvaluationDatabaseRecord],
     *,
     policy: RetryPolicy | None = None,
 ) -> bool:
-    """Check if a failure history qualifies for permanent infeasibility.
+    """Check if a failure history qualifies for permanent infeasibility
+    classification.
 
-    Default (``enable_permanent_infeasible=False``) always returns
-    ``False``.  When enabled, requires …,
-    repeated stable failures.
+    Conservative guard — returns ``False`` for most inputs.
+
+    Requirements for ``True``:
+    1. Policy must explicitly enable permanent classification
+       (``enable_permanent_infeasible=True``).
+    2. ``permanent_failure_threshold`` must be set and at least 2.
+    3. All records must have:
+       - compatible schema
+       - non-missing parameter identity
+       - same parameter key
+    4. All records must classify as a stable permanent candidate class
+       (``CALIBRATION_FAILED``, ``SOLVER_FAILED``, or ``UNKNOWN_FAILED``
+       only if ``allow_unknown_retry=True``).
+    5. History length must meet or exceed the threshold.
+
+    Any record classified as ``TRANSIENT_FAILED``, ``GATE_REJECTED``,
+    ``SUCCESS``, ``DIAGNOSTIC_ONLY``, ``INCOMPATIBLE_SCHEMA``,
+    ``MISSING_PARAMETER_IDENTITY``, or ``UNSUPPORTED_STATUS`` forces
+    a ``False`` return.
     """
     if policy is None:
         policy = RetryPolicy()
@@ -354,17 +399,35 @@ def should_escalate_to_probably_infeasible(
     if policy.permanent_failure_threshold is None:
         return False
 
-    if len(failure_history) < policy.permanent_failure_threshold:
+    threshold = max(int(policy.permanent_failure_threshold), 2)
+
+    if len(failure_history) < threshold:
         return False
 
-    # All failures must be non-transient, non-gate
+    # Track parameter key consistency
+    first_key: str | None = None
     for rec in failure_history:
+        # Schema compatibility
         fc = classify_failure_record(rec)
         if fc in (
-            RetryFailureClass.TRANSIENT_FAILED,
-            RetryFailureClass.GATE_REJECTED,
-            RetryFailureClass.SUCCESS,
+            RetryFailureClass.INCOMPATIBLE_SCHEMA,
+            RetryFailureClass.MISSING_PARAMETER_IDENTITY,
+            RetryFailureClass.DIAGNOSTIC_ONLY,
+            RetryFailureClass.UNSUPPORTED_STATUS,
         ):
+            return False
+
+        # Parameter identity consistency
+        key = _record_parameter_key(rec)
+        if key is None:
+            return False
+        if first_key is None:
+            first_key = key
+        elif key != first_key:
+            return False
+
+        # Stable permanent candidate class check
+        if not _is_stable_permanent_candidate_class(fc, policy):
             return False
 
     return True

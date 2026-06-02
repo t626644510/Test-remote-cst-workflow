@@ -261,3 +261,131 @@ class TestNoIO:
         r = _rec([1.0], status="solver_failed")
         cl = classify_retry_eligibility(r)
         assert isinstance(cl, RetryClassification)
+
+# ---------------------------------------------------------------------------
+# N1 ¡ª Semantics hardening
+# ---------------------------------------------------------------------------
+
+
+class TestN1ProbablyInfeasible:
+    def mk(self, values, status, schema=1):
+        return _rec(values, status=status, schema=schema)
+
+    def test_default_returns_false(self):
+        assert should_escalate_to_probably_infeasible([]) is False
+
+    def test_threshold_met_positive(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=3)
+        history = [self.mk([1.0], "calibration_failed") for _ in range(3)]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is True
+
+    def test_default_policy_still_false(self):
+        """Default policy returns False even with repeated failures."""
+        history = [self.mk([1.0], "calibration_failed") for _ in range(5)]
+        assert should_escalate_to_probably_infeasible(history) is False
+
+    def test_threshold_one_does_not_escalate_single_failure(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=1)
+        history = [self.mk([1.0], "calibration_failed")]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_mixed_parameter_keys_return_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([2.0], "calibration_failed"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_mixed_failure_classes_return_false(self):
+        """Mixed cal_fail + solver_fail with same identity are both allowed."""
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "calibration_failed"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is True
+
+    def test_transient_in_history_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "transient_failed"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_gate_rejected_in_history_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "gate_rejected"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_success_in_history_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "success"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_diagnostic_only_status_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "diagnostic_only"),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_diagnostic_only_error_taxonomy_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        r = _rec([1.0], status="unknown_failed", error_tax={"category": "diagnostic_only"})
+        history = [self.mk([1.0], "calibration_failed"), r]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_missing_identity_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        r = EvaluationDatabaseRecord(status="calibration_failed")
+        history = [self.mk([1.0], "calibration_failed"), r]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_incompatible_schema_false(self):
+        policy = RetryPolicy(enable_permanent_infeasible=True, permanent_failure_threshold=2)
+        history = [
+            self.mk([1.0], "calibration_failed"),
+            self.mk([1.0], "calibration_failed", schema=99),
+        ]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is False
+
+    def test_max_tiers_not_probably_infeasible(self):
+        r = _rec([1.0], status="calibration_failed", retries=3)
+        cl = classify_retry_eligibility(r)
+        assert cl.probably_infeasible is False
+
+    def test_unknown_not_diagnostic(self):
+        r = _rec([1.0], status="unknown_failed")
+        assert is_diagnostic_only_record(r) is False
+
+    def test_unknown_escalates_when_enabled(self):
+        """Unknown failures can escalate when allow_unknown_retry=True."""
+        policy = RetryPolicy(
+            enable_permanent_infeasible=True,
+            permanent_failure_threshold=2,
+            allow_unknown_retry=True,
+        )
+        history = [self.mk([1.0], "unknown_failed") for _ in range(2)]
+        assert should_escalate_to_probably_infeasible(history, policy=policy) is True
+
+
+class TestN1JsonlNotReferenced:
+    def test_retry_taxonomy_does_not_reference_jsonl(self):
+        """Retry taxonomy module does not import or reference Phase C JSONL."""
+        import workflows.rfgun_sao.retry_taxonomy as rt
+        src = rt.__file__
+        with open(src, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        forbidden = ["records.py", "resolve_records_config", ".jsonl",
+                     "evaluation_records"]
+        for item in forbidden:
+            assert item not in text, f"retry taxonomy should not reference {item!r}"

@@ -153,7 +153,8 @@ b) Move on to other non-live hardening or documentation work.
 | L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Accepted |
 | L1 | Warm-start/prior semantics hardening — `record_to_prior_candidate` eligibility fix, diagnostic-only classification, missing tests, next-directions cleanup | Accepted |
 | M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Accepted |
-| N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Completed / pending review |
+| N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Needs N1 probably-infeasible hardening |
+| N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Completed / pending review |
 
 ### Migration constraints
 

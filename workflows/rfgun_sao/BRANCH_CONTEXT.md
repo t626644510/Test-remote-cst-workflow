@@ -155,8 +155,9 @@ b) Move on to other non-live hardening or documentation work.
 | M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Accepted |
 | N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Accepted at 9dcbadf |
 | N1 | Retry taxonomy semantics hardening — probably-infeasible guard now requires same identity, stable allowed class, excludes diagnostic-only/transient/gate/success/unsupported/missing/incompatible; comprehensive tests | Accepted at 9dcbadf |
-| O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Needs O1 retry progress hardening |
-| O1 | Retry runtime no-CST progress hardening — `_normalize_retry_record` helper, internal `attempts_consumed` guard, progress guard activations diagnostic, 23 new O1 regression tests (83 total) | Completed / pending review |
+| O | Retry / inter-pass recovery runtime wiring no-CST skeleton — `RetryRuntimeConfig`, `RetryAttemptRecord`, `RetryRuntimeResult`, `resolve_retry_runtime_config`, `should_use_retry_runtime`, `run_retry_loop_no_cst`, `run_inter_pass_recovery_no_cst`, `run_post_eval_recovery_no_cst`, no-CST tests | Accepted at c1d7347 |
+| O1 | Retry runtime no-CST progress hardening — `_normalize_retry_record` helper, internal `attempts_consumed` guard, progress guard activations diagnostic, 23 new O1 regression tests (83 total) | Accepted at c1d7347 |
+| P | Live CST smoke for retry/recovery — minimal single_pass validation (n_initial=1, n_iter=0), Best F=-15392.38, cleanup revealed orphan DE hang issue; retry runtime not yet wired to CST runner | Partial / pending review |
 
 ### Migration constraints
 
@@ -167,9 +168,10 @@ b) Move on to other non-live hardening or documentation work.
 - Do **not** repoint the root shim (``run_workflow_1.py``) until staged/adaptive/retry/database are stable.
 - Subsequent phases use single-letter names F, G, H, I, J, K, ... with decimal sub-phases (F1, F2, ...).
 
-### Phase O caveats
+### Phase O / O1 caveats
 
-- Phase O is no-CST only — no live CST retry validation.
+- Phase O and O1 are no-CST only — no live CST retry validation.
+- O1 added `_normalize_retry_record()` and internal `attempts_consumed` guard to prevent infinite loops.
 - Runtime uses `classify_retry_eligibility()` to decide retry; does **not** use `should_escalate_to_probably_infeasible()` for skip/reuse.
 - `use_probably_infeasible_for_skip` is rejected with diagnostic; not implemented.
 - No durable DB — no append/lookup/load/save.
@@ -179,9 +181,19 @@ b) Move on to other non-live hardening or documentation work.
 - Inter-pass/post-eval recovery are callback-only skeletons — no real CST cleanup invoked.
 - Phase C JSONL diagnostic sidecar is not referenced or used.
 
+### Phase P caveats
+
+- Live CST smoke was partial — evaluation succeeded but cleanup left an orphan DE window (PID 30808) requiring manual `taskkill /F`.
+- The `DesignEnvironment.close()` hang is a pre-existing issue (documented B5.1).
+- The new retry runtime (`retry_runtime.py`) was **not exercised** — it is not yet wired into the CST runner.
+- All retry-related activity came from the legacy `cst_optimization.core.retry` module.
+- No production-scale validation was performed.
+- The environment is ready for future retry/CST integration but cleanup reliability needs attention.
+- No durable DB, no failure reuse, no probably-infeasible skip, no root shim repoint.
+
 ### Next possible directions
 
-- **Phase P** — Live CST smoke for retry/recovery only when explicitly requested
+- **Phase P1** — Address cleanup reliability gap (orphan DE on close hang) if operator requests
 - **Phase Q+** — Production-scale validation / root shim repoint last
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**

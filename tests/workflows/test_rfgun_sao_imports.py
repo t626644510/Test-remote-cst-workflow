@@ -4298,7 +4298,7 @@ def test_jsonl_sidecar_append_failure_caught(monkeypatch, caplog):
 # AG. JSONL diagnostics/gate enrichment — C3
 # ============================================================
 
-def test_jsonl_sidecar_diagnostics_included(tmp_path):
+def test_c3_jsonl_sidecar_diagnostics_included(tmp_path):
     """_record_jsonl_sidecar_evaluation writes diagnostics when provided."""
     from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
     from workflows.rfgun_sao.records import read_jsonl_records
@@ -4546,3 +4546,81 @@ def test_c3_rejected_path_enriches_jsonl():
     cb = captured[0]
     assert cb["solver_ok"] is False
     assert "calibration_failed" in cb["error"]
+
+# ============================================================
+# AH. JSONL mode gating fix — C3.1
+# ============================================================
+
+def test_mode_gating_single_pass_enabled_is_core_only():
+    """single_pass + records enabled -> use_enriched_jsonl is False."""
+    from workflows.rfgun_sao.run import _should_use_enriched_jsonl
+
+    cfg = {"evaluation": {"mode": "single_pass"}}
+    records_cfg = {"enabled": True, "path": "/tmp/x.jsonl"}
+    assert _should_use_enriched_jsonl(cfg, records_cfg) is False
+
+
+def test_mode_gating_two_pass_enabled_is_enriched():
+    """two_pass + records enabled -> use_enriched_jsonl is True."""
+    from workflows.rfgun_sao.run import _should_use_enriched_jsonl
+
+    cfg = {"evaluation": {"mode": "two_pass"}}
+    records_cfg = {"enabled": True, "path": "/tmp/x.jsonl"}
+    assert _should_use_enriched_jsonl(cfg, records_cfg) is True
+
+
+def test_mode_gating_disabled():
+    """two_pass + records disabled -> use_enriched_jsonl is False."""
+    from workflows.rfgun_sao.run import _should_use_enriched_jsonl
+
+    cfg = {"evaluation": {"mode": "two_pass"}}
+    records_cfg = {"enabled": False, "path": None}
+    assert _should_use_enriched_jsonl(cfg, records_cfg) is False
+
+
+def test_mode_gating_single_pass_core_path_writes_jsonl(tmp_path):
+    """single_pass + enabled -> _record_jsonl_sidecar_evaluation is called."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+    p = str(tmp_path / "single_pass.jsonl")
+
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": p}, wf_ref, 0, x, raw, pen, True, "",
+    )
+    assert result is True
+    loaded = read_jsonl_records(p)
+    assert len(loaded) == 1
+    # Core-only: no diagnostics or gate_results
+    assert "diagnostics" not in loaded[0]
+    assert "gate_results" not in loaded[0]
+
+
+def test_mode_gating_two_pass_enriched_no_duplicate(tmp_path):
+    """two_pass enriched callback does not duplicate core-only writes."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records
+    import numpy as np
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+    p = str(tmp_path / "enriched.jsonl")
+
+    # Call enriched sidecar (as the two_pass callback would)
+    result = _record_jsonl_sidecar_evaluation(
+        {"enabled": True, "path": p}, wf_ref, 0, x, raw, pen, True, "",
+        diagnostics={"d1": 1.0},
+        gate_results={"g1": True},
+    )
+    assert result is True
+    loaded = read_jsonl_records(p)
+    assert len(loaded) == 1
+    assert loaded[0]["diagnostics"] == {"d1": 1.0}
+    assert loaded[0]["gate_results"] == {"g1": True}

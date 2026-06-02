@@ -52,7 +52,8 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C1 | JSONL diagnostics sidecar skeleton — ``records.py`` helpers | Accepted |
 | C2 | JSONL runtime opt-in wiring — ``_record_jsonl_sidecar_evaluation``, ``_on_evaluation`` integration, no-CST tests | Accepted |
 | C2.1 | JSONL sidecar polish — write-failure monkeypatch test, doc wording hardening | Accepted |
-| C3 | JSONL diagnostics/gate_results enrichment — extended callback, two-pass runtime enrichment, no-CST tests | Completed / pending review |
+| C3 | JSONL diagnostics/gate_results enrichment — extended callback, two-pass runtime enrichment, no-CST tests | Needs C3.1 fix |
+| C3.1 | JSONL mode gating fix — `_should_use_enriched_jsonl` helper, single_pass core-only path preserved, counter fix | Completed / pending review |
 
 ### Authoritative behaviour
 

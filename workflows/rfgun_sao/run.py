@@ -317,6 +317,22 @@ def _cleanup_workflow_connection(
     return result
 
 
+def _should_use_enriched_jsonl(cfg: dict, records_cfg: dict) -> bool:
+    """Whether to use the two-pass enriched JSONL callback.
+
+    The enriched callback carries diagnostics, gate_results, and contextual
+    metadata.  It is only applicable when:
+    - JSONL records are enabled, and
+    - evaluation mode is ``two_pass``.
+
+    single_pass mode always uses the core-only fallback in ``_on_evaluation``.
+    """
+    if not records_cfg.get("enabled"):
+        return False
+    eval_mode = str(cfg.get("evaluation", {}).get("mode", "single_pass")).strip().lower()
+    return eval_mode == "two_pass"
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the argument parser for Workflow 1 CLI."""
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
@@ -397,6 +413,12 @@ def main() -> None:
     _wf_ref: list = []
     _eval_counter: list[int] = [0]
 
+    # Determine whether the two-pass enriched JSONL callback should be used.
+    # single_pass + enabled -> use core-only fallback in _on_evaluation.
+    # two_pass + enabled -> use enrichment callback from the evaluator,
+    #   and skip core-only fallback to avoid duplicate JSONL writes.
+    use_enriched_jsonl: bool = _should_use_enriched_jsonl(cfg, records_cfg)
+
     def _enrichment_callback(
         *,
         x_phys,
@@ -419,22 +441,20 @@ def main() -> None:
             extra_metadata=metadata,
         )
 
-    _eval_records_callback_active: bool = records_cfg.get("enabled", False)
-
     def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
         _record_checkpoint_evaluation(
             ckpt, _wf_ref, x_phys, raw_values, penalties,
             solver_ok, error,
         )
-        # Core-only JSONL sidecar (enriched callback used for two_pass)
-        if not _eval_records_callback_active:
+        # Core-only JSONL sidecar: used for single_pass or when JSONL disabled.
+        # When use_enriched_jsonl is True, the enriched callback from the
+        # two-pass evaluator handles the JSONL write instead, so we skip here.
+        if not use_enriched_jsonl:
             _record_jsonl_sidecar_evaluation(
                 records_cfg, _wf_ref, int(_eval_counter[0]),
                 x_phys, raw_values, penalties, solver_ok, error,
             )
         _eval_counter[0] += 1
-
-    _eval_records_callback_active: bool = records_cfg.get("enabled", False)
 
     from workflows.rfgun_sao.workflow import build_workflow_1  # noqa: F811
 
@@ -442,7 +462,7 @@ def main() -> None:
         cfg,
         checkpoint_callback=_on_evaluation,
         evaluation_record_callback=(
-            _enrichment_callback if records_cfg.get("enabled") else None
+            _enrichment_callback if use_enriched_jsonl else None
         ),
     )
     _wf_ref.append(workflow)

@@ -145,7 +145,8 @@ b) Move on to other non-live hardening or documentation work.
 | F1 | Stage search helper semantics hardening — min-span using reference_span, database-reused accounting fix, rate clamp, high-fail-recenters regression tests | Accepted |
 | G | Adaptive bounds no-CST helpers — boundary/quality detection, `recommend_adaptive_bounds`, expand/shift helpers | Accepted |
 | G1 | Adaptive bounds semantics hardening — per-parameter clipping, affected-param-only expansion, validation, quality clustering threshold | Accepted |
-| H | Stage + adaptive integration policy — `combine_stage_and_adaptive_decisions`, `build_adaptive_input_from_stage_decision`, `extract_high_quality_points`, no-CST tests | Completed / pending review |
+| H | Stage + adaptive integration policy — `combine_stage_and_adaptive_decisions`, `build_adaptive_input_from_stage_decision`, `extract_high_quality_points`, no-CST tests | Accepted |
+| I | Stage runtime wiring no-CST — `StageRuntimeState`, `record_stage_observation`, `maybe_update_stage_bounds`, config helpers, opt-in only, disabled by default | Completed / pending review |
 
 ### Migration constraints
 
@@ -158,9 +159,9 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase H** — Stage + adaptive integration policy
-- **Phase I** — Stage runtime wiring no-CST
 - **Phase J** — Evaluation database design/schema
+- **Phase K** — Evaluation database dedup no-CST skeleton
+- **Phase L** — Evaluation database warm-start / prior construction
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

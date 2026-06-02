@@ -221,6 +221,7 @@ def build_workflow_1(
             calibration_runner=cal_runner,
             measurement_runner=meas_runner,
             checkpoint_callback=checkpoint_callback,
+            metric_specs=specs,
         )
 
         seed = opt_cfg.get("seed", 42)

@@ -427,6 +427,31 @@ def compute_gate_results(
     return dict(candidates)
 
 
+def summarize_gate_results(
+    gate_results: dict[str, bool],
+) -> tuple[bool, str]:
+    """Summarise gate pass/fail results into a single pass/fail + error string.
+
+    Parameters
+    ----------
+    gate_results : dict[str, bool]
+        Output key → pass (True) / fail (False).
+
+    Returns
+    -------
+    tuple[bool, str]
+        ``(True, "")`` if empty or all pass.
+        ``(False, "gate_reject:<key1,key2>")`` if any fail.
+        Keys are sorted for deterministic order.
+    """
+    if not gate_results:
+        return True, ""
+    failing = sorted(k for k, v in gate_results.items() if not v)
+    if not failing:
+        return True, ""
+    return False, "gate_reject:" + ",".join(failing)
+
+
 # ---------------------------------------------------------------------------
 # Role-based penalty computation
 # ---------------------------------------------------------------------------

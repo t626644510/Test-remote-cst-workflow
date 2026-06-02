@@ -8,6 +8,11 @@ from typing import Any, Callable, Optional
 import numpy as np
 from workflows.rfgun_sao.calibration import CalibrationResult, MeasurementPlan, make_measurement_plan
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
+from workflows.rfgun_sao.metrics import (
+    MetricSpec,
+    compute_gate_results,
+    summarize_gate_results,
+)
 from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
 _logger = logging.getLogger(__name__)
@@ -221,6 +226,7 @@ def make_two_pass_runtime_evaluator(
     checkpoint_callback: Callable[
         [np.ndarray, np.ndarray, np.ndarray, bool, str], None
     ] | None = None,
+    metric_specs: list[MetricSpec] | None = None,
 ) -> Callable[[np.ndarray], float]:
     """Return a two-pass runtime evaluator with injectable runners.
 
@@ -346,6 +352,26 @@ def make_two_pass_runtime_evaluator(
                 _safe_meta_str(result.diagnostics),
             )
 
+        # Gate rejection (only after successful measurement with metric_specs)
+        gate_reject_error: str = ""
+        if (
+            metric_specs is not None
+            and result.status == EvaluationStatus.SUCCESS
+        ):
+            gate_results = compute_gate_results(
+                metric_specs, result.raw_metrics or {},
+            )
+            if gate_results:
+                _logger.info(
+                    "Two-pass gate results: %s",
+                    _safe_meta_str(gate_results),
+                )
+                gate_all_pass, gate_error_str = summarize_gate_results(
+                    gate_results,
+                )
+                if not gate_all_pass:
+                    gate_reject_error = gate_error_str
+
         if (
             result.status == EvaluationStatus.SUCCESS
             and result.penalty_values is not None
@@ -360,9 +386,15 @@ def make_two_pass_runtime_evaluator(
             raw_arr = _extract_raw_array(result, metric_names)
 
         solver_ok = result.status == EvaluationStatus.SUCCESS
+        error_for_ckpt = result.error or ""
+        if gate_reject_error:
+            penalties_arr = np.full(n_metrics, 1.0, dtype=float)
+            raw_arr = _extract_raw_array(result, metric_names)
+            solver_ok = False
+            error_for_ckpt = gate_reject_error
         if checkpoint_callback is not None:
             checkpoint_callback(
-                x_phys, raw_arr, penalties_arr, solver_ok, result.error or "",
+                x_phys, raw_arr, penalties_arr, solver_ok, error_for_ckpt,
             )
 
         return float(np.dot(penalties_arr, weights))

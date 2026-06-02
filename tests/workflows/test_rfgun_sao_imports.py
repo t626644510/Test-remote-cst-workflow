@@ -3654,3 +3654,267 @@ def test_gate_workflow_container():
     wf, opt, ev = build_workflow_1(cfg)
     assert wf.objective_names == ["resonant_freq"]
     assert wf.gate_metric_names == ["q0"]
+
+# ============================================================
+# AC. Gate runtime rejection wiring — B8
+# ============================================================
+
+def test_summarize_gate_empty():
+    """Empty gate results -> pass."""
+    from workflows.rfgun_sao.metrics import summarize_gate_results
+
+    ok, err = summarize_gate_results({})
+    assert ok is True
+    assert err == ""
+
+
+def test_summarize_gate_all_pass():
+    """All True -> pass."""
+    from workflows.rfgun_sao.metrics import summarize_gate_results
+
+    ok, err = summarize_gate_results({"g1": True, "g2": True})
+    assert ok is True
+    assert err == ""
+
+
+def test_summarize_gate_single_fail():
+    """One False -> gate_reject with failing key."""
+    from workflows.rfgun_sao.metrics import summarize_gate_results
+
+    ok, err = summarize_gate_results({"g1": True, "g2": False})
+    assert ok is False
+    assert err == "gate_reject:g2"
+
+
+def test_summarize_gate_multi_fail():
+    """Multiple False -> gate_reject with sorted keys."""
+    from workflows.rfgun_sao.metrics import summarize_gate_results
+
+    ok, err = summarize_gate_results({"g3": False, "g1": False, "g2": True})
+    assert ok is False
+    assert err == "gate_reject:g1,g3"
+
+
+def test_b8_backward_compat_no_metric_specs():
+    """make_two_pass_runtime_evaluator without metric_specs unchanged."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+    )
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.3) < 1e-12
+
+
+def test_b8_gate_pass_measurement_success():
+    """Gate pass: measurement scalar unchanged, solver_ok=True."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+    specs = [MetricSpec(
+        name="f1", role=MetricRole.GATE,
+        threshold=10.0, direction="greater_than",
+    )]
+
+    captured = []
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+        metric_specs=specs,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert abs(val - 0.25) < 1e-12
+    assert len(captured) == 1
+    c_pen, c_ok, c_err = captured[0]
+    assert c_ok is True
+    assert c_err == ""
+    assert np.allclose(c_pen, [0.25])
+
+
+def test_b8_gate_fail_returns_one():
+    """Gate fail: returns 1.0, solver_ok=False, error=gate_reject."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 5.0},
+    )
+    weights = np.array([1.0])
+    specs = [MetricSpec(
+        name="f1", role=MetricRole.GATE,
+        threshold=10.0, direction="greater_than",
+    )]
+
+    captured = []
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((pen.copy(), ok, err, raw.copy()))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+        metric_specs=specs,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert meas_runner.call_count == 1
+    assert val == 1.0
+    assert len(captured) == 1
+    c_pen, c_ok, c_err, c_raw = captured[0]
+    assert c_ok is False
+    assert c_err.startswith("gate_reject:")
+    assert "f1" in c_err
+    assert np.allclose(c_pen, [1.0])
+    assert np.allclose(c_raw, [5.0])  # raw preserved from measurement
+
+
+def test_b8_gate_checkpoint_excludes_gate_metric():
+    """Checkpoint arrays include objective metrics only."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import numpy as np
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"opt": 0.1},
+        raw_values={"opt": 11.424},
+    )
+    weights = np.array([1.0])
+    specs = [
+        MetricSpec(name="opt", role=MetricRole.OPTIMIZE),
+        MetricSpec(name="gate", role=MetricRole.GATE,
+                   threshold=10.0, direction="greater_than"),
+    ]
+
+    captured = []
+    def _ckpt(x, raw, pen, ok, err):
+        captured.append((pen.copy(), ok, err))
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["opt"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        checkpoint_callback=_ckpt,
+        metric_specs=specs,
+    )
+
+    val = evaluator(np.array([0.5]))
+    assert len(captured) == 1
+    c_pen, c_ok, c_err = captured[0]
+    # Gate metrics explicitly excluded — arrays sized to objective_names
+    assert len(c_pen) == 1  # only "opt"
+
+
+def test_b8_gate_results_logged(caplog):
+    """Gate results logged when metric_specs includes gate."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    from workflows.rfgun_sao.metrics import MetricSpec, MetricRole
+    import logging, numpy as np
+
+    caplog.set_level(logging.INFO, logger="workflows.rfgun_sao.two_pass")
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.3},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+    specs = [MetricSpec(
+        name="f1", role=MetricRole.GATE,
+        threshold=10.0, direction="greater_than",
+    )]
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        metric_specs=specs,
+    )
+
+    evaluator(np.array([0.5]))
+    assert "Two-pass gate results" in caplog.text
+    assert "f1" in caplog.text
+
+
+def test_b8_gate_missing_raw_false():
+    """compute_gate_results missing raw -> False."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_gate_results,
+    )
+
+    specs = [MetricSpec(
+        name="g1", role=MetricRole.GATE,
+        threshold=10.0, direction="less_than",
+    )]
+    r = compute_gate_results(metric_specs=specs, raw_metrics={})
+    assert r == {"g1": False}
+
+
+def test_b8_gate_no_raw_mutation():
+    """compute_gate_results does not mutate raw_metrics."""
+    from workflows.rfgun_sao.metrics import (
+        MetricSpec, MetricRole, compute_gate_results,
+    )
+
+    specs = [MetricSpec(
+        name="g1", role=MetricRole.GATE,
+        threshold=10.0, direction="less_than",
+    )]
+    raw = {"g1": 5.0}
+    before = dict(raw)
+    compute_gate_results(metric_specs=specs, raw_metrics=raw)
+    assert raw == before

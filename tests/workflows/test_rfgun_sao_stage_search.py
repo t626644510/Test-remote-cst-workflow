@@ -311,3 +311,123 @@ class TestRecenteredBounds:
         nb = make_shrunk_bounds(obs, b, shrink_factor=1.0)
         assert np.all(nb.low >= b.low)
         assert np.all(nb.high <= b.high)
+
+# ---------------------------------------------------------------------------
+# F1 �� Semantics hardening
+# ---------------------------------------------------------------------------
+
+
+class TestF1DatabaseReused:
+    def test_database_reused_status_counts_as_reused(self):
+        """DATABASE_REUSED status without reused=True flag is counted as reused."""
+        b = _bounds()
+        obs = [
+            _obs([1.0], obj=0.5, reused=True),
+            StageObservation(
+                x=[2.0], status=StageCandidateStatus.DATABASE_REUSED,
+                objective_value=1.0, reused=False,
+            ),
+            _obs([3.0], obj=2.0, reused=False),
+        ]
+        s = summarize_stage_observations(obs, b)
+        assert s.database_reused_count == 2
+        assert s.actual_cst_solves_count == 1
+
+    def test_reused_completed_not_inflate_rate(self):
+        """Multiple reused completed observations do not push valid_completed_rate > 1.0."""
+        b = _bounds()
+        obs = [
+            _obs([1.0], obj=0.5, reused=True),
+            _obs([2.0], obj=1.0, reused=True),
+            _obs([3.0], obj=0.8, reused=True),
+        ]
+        s = summarize_stage_observations(obs, b)
+        # All 3 are reused, so solves = 3-3 = 0, but rate denominator = max(0,1) = 1
+        assert s.actual_cst_solves_count == 0
+        assert s.valid_completed_rate <= 1.0
+
+
+class TestF1MinSpan:
+    def test_min_span_reached_blocks_shrink(self):
+        """Min-span reached: shrink is blocked, not returned."""
+        b = _bounds()
+        # Create a reference span much larger than current bounds
+        ref_span = np.array([100.0, 100.0])
+        obs = [
+            _obs([3.0, 3.0], obj=0.5),
+            _obs([5.0, 5.0], obj=1.0),
+            _obs([7.0, 7.0], obj=1.5),
+            _obs([4.0, 4.0], obj=0.8),
+        ]
+        s = summarize_stage_observations(obs, b)
+        # min_span = 100 * 0.05 = 5, current span = 10, so 10 < 5 is False
+        # But need to make min_span > 10 to block: use min_span_fraction=0.2 or ref_span=200
+        d = decide_stage_transition(
+            s, b, obs,
+            reference_span=np.array([200.0, 200.0]),
+            min_span_fraction=0.1,  # min_span = 20, current span = 10 -> blocked
+            min_completed_fraction=0.2,
+        )
+        # When min span is reached, shrink is blocked. With all 4 completed
+        # and best not near boundary, the policy should still not return SHRINK.
+        assert d.action != StageTransitionAction.SHRINK
+
+    def test_min_span_not_reached_allows_shrink(self):
+        """Min-span not reached + stable evidence -> shrink allowed."""
+        b = _bounds()
+        ref_span = np.array([100.0, 100.0])
+        obs = [
+            _obs([3.0, 3.0], obj=0.5),
+            _obs([5.0, 5.0], obj=1.0),
+            _obs([7.0, 7.0], obj=1.5),
+            _obs([4.0, 4.0], obj=0.8),
+        ]
+        s = summarize_stage_observations(obs, b)
+        # min_span = 100 * 0.01 = 1, current span = 10 > 1 -> shrink allowed
+        d = decide_stage_transition(
+            s, b, obs,
+            reference_span=ref_span,
+            min_span_fraction=0.01,
+            min_completed_fraction=0.2,
+        )
+        assert d.action == StageTransitionAction.SHRINK
+
+
+class TestF1HighFailRate:
+    def test_high_gate_reject_recenters_not_shrink(self):
+        """High gate reject still triggers RECENTER, not SHRINK."""
+        b = _bounds()
+        obs = [
+            _obs([1.0, 1.0], status=StageCandidateStatus.GATE_REJECTED),
+            _obs([2.0, 2.0], status=StageCandidateStatus.GATE_REJECTED),
+            _obs([3.0, 3.0], status=StageCandidateStatus.GATE_REJECTED),
+        ]
+        s = summarize_stage_observations(obs, b)
+        d = decide_stage_transition(s, b, obs, high_fail_rate=0.3)
+        assert d.action in (StageTransitionAction.RECENTER, StageTransitionAction.SHIFT)
+
+    def test_high_cal_solv_fail_recenters_not_shrink(self):
+        """High calibration/solver fail still triggers RECENTER, not SHRINK."""
+        b = _bounds()
+        obs = [
+            _obs([1.0, 1.0], status=StageCandidateStatus.CALIBRATION_FAILED),
+            _obs([2.0, 2.0], status=StageCandidateStatus.CALIBRATION_FAILED),
+            _obs([3.0, 3.0], status=StageCandidateStatus.SOLVER_FAILED),
+        ]
+        s = summarize_stage_observations(obs, b)
+        d = decide_stage_transition(s, b, obs, high_fail_rate=0.3)
+        assert d.action in (StageTransitionAction.RECENTER, StageTransitionAction.SHIFT)
+
+
+class TestF1BoundaryReview:
+    def test_best_near_boundary_requests_review(self):
+        """Best near boundary still returns REQUEST_ADAPTIVE_REVIEW."""
+        b = _bounds()
+        obs = [
+            _obs([0.05, 5.0], obj=0.5),
+            _obs([3.0, 5.0], obj=1.0),
+            _obs([7.0, 5.0], obj=1.5),
+        ]
+        s = summarize_stage_observations(obs, b)
+        d = decide_stage_transition(s, b, obs, min_completed_fraction=0.2)
+        assert d.action == StageTransitionAction.REQUEST_ADAPTIVE_REVIEW

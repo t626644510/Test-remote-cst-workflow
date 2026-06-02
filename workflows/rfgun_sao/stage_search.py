@@ -218,7 +218,7 @@ def summarize_stage_observations(
     StageSummary
     """
     proposed = len(observations)
-    reused = sum(1 for o in observations if o.reused)
+    reused = sum(1 for o in observations if o.reused or o.status == StageCandidateStatus.DATABASE_REUSED)
     solves = proposed - reused
     retries = sum(o.retry_attempts for o in observations)
     completed = [o for o in observations if o.status == StageCandidateStatus.COMPLETED]
@@ -239,8 +239,8 @@ def summarize_stage_observations(
                 best_obj = c.objective_value
                 best_x = list(c.x)
 
-    valid_rate = len(completed) / max(solves, 1)
-    fail_rate = (len(gate_rej) + len(cal_fail) + len(solv_fail)) / max(solves, 1)
+    valid_rate = min(len(completed) / max(solves, 1), 1.0)
+    fail_rate = min((len(gate_rej) + len(cal_fail) + len(solv_fail)) / max(solves, 1), 1.0)
 
     return StageSummary(
         proposed_count=proposed,
@@ -363,6 +363,7 @@ def decide_stage_transition(
     bounds: StageBounds,
     observations: list[StageObservation],
     *,
+    reference_span: np.ndarray | None = None,
     min_span_fraction: float = _DEFAULT_MIN_SPAN_FRACTION,
     min_completed_fraction: float = _DEFAULT_MIN_COMPLETED_FRACTION,
     high_fail_rate: float = _DEFAULT_HIGH_FAIL_RATE,
@@ -412,6 +413,8 @@ def decide_stage_transition(
     -------
     StageTransitionDecision
     """
+    if reference_span is None:
+        reference_span = bounds.span
     diag: dict[str, Any] = {
         "current_stage": current_stage,
         "summary": summary,
@@ -494,7 +497,7 @@ def decide_stage_transition(
             )
 
         # 6. Shrink if feasible and safe
-        min_span = bounds.span * min_span_fraction
+        min_span = reference_span * min_span_fraction
         if np.all(bounds.span >= min_span) and most_feasible is not None:
             new_bounds = make_shrunk_bounds(observations, bounds, center=most_feasible)
             return StageTransitionDecision(

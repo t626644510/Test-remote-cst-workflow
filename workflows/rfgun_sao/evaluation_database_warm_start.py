@@ -106,6 +106,24 @@ class PriorConstructionReport:
 # ---------------------------------------------------------------------------
 
 
+_DIAGNOSTIC_ONLY_MARKER = "diagnostic_only"
+
+
+def _is_diagnostic_only(record: EvaluationDatabaseRecord) -> bool:
+    """Check if a record is explicitly marked diagnostic-only.
+
+    Diagnostic-only records are recognised by having a status string
+    equal to ``"diagnostic_only"`` or via a marker in their error
+    taxonomy.
+    """
+    if str(record.status).strip().lower() == _DIAGNOSTIC_ONLY_MARKER:
+        return True
+    if record.error_taxonomy and isinstance(record.error_taxonomy, dict):
+        if record.error_taxonomy.get("category") == _DIAGNOSTIC_ONLY_MARKER:
+            return True
+    return False
+
+
 def classify_record_for_prior(
     record: EvaluationDatabaseRecord,
     *,
@@ -131,6 +149,11 @@ def classify_record_for_prior(
     if pid is None:
         return PriorCandidateStatus.IGNORED_MISSING_IDENTITY, \
             "missing parameter identity"
+
+    # Diagnostic-only check before generic failure classification
+    if _is_diagnostic_only(record):
+        return PriorCandidateStatus.IGNORED_DIAGNOSTIC_ONLY, \
+            "record is diagnostic-only"
 
     if record.status != EvaluationDatabaseStatus.SUCCESS:
         return PriorCandidateStatus.IGNORED_FAILURE, \
@@ -160,15 +183,24 @@ def record_to_prior_candidate(
     record: EvaluationDatabaseRecord,
     *,
     source_index: int | None = None,
+    current_schema: int | None = None,
+    require_raw_metrics: bool = True,
 ) -> PriorCandidate | None:
     """Convert a compatible SUCCESS record to a ``PriorCandidate``.
 
-    Returns ``None`` if the record is not usable (caller should use
-    ``classify_record_for_prior`` first).
+    Applies the same eligibility checks as ``classify_record_for_prior``;
+    returns ``None`` if the record is not usable.
     """
-    pid = record.parameter_identity
-    if pid is None or record.status != EvaluationDatabaseStatus.SUCCESS:
+    status, _ = classify_record_for_prior(
+        record,
+        current_schema=current_schema,
+        require_raw_metrics=require_raw_metrics,
+    )
+    if status != PriorCandidateStatus.USABLE_SUCCESS:
         return None
+
+    pid = record.parameter_identity
+    # pid is guaranteed non-None here (classify checks it)
 
     raw_metrics = None
     objective_val = None
@@ -236,7 +268,11 @@ def build_prior_candidates_from_records(
             require_raw_metrics=require_raw_metrics,
         )
         if status == PriorCandidateStatus.USABLE_SUCCESS:
-            cand = record_to_prior_candidate(rec, source_index=i)
+            cand = record_to_prior_candidate(
+                rec, source_index=i,
+                current_schema=current_schema,
+                require_raw_metrics=require_raw_metrics,
+            )
             if cand is not None:
                 candidates.append(cand)
             continue

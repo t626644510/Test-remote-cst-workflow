@@ -150,11 +150,12 @@ b) Move on to other non-live hardening or documentation work.
 | I1 | Stage runtime semantics hardening — adaptive config propagation, BLOCK_STAGE_SHRINK non-transition, tightened test assertions | Accepted |
 | J | Evaluation database design/schema — `ParameterIdentity`, `EvaluationDatabaseRecord`, `RawEvaluationPayload`, `record_to_json_dict`, `record_from_json_dict`, schema DDL, no-CST tests | Accepted |
 | K | Evaluation database dedup no-CST skeleton — `InMemoryEvaluationRecordIndex`, `classify_record_for_dedup`, `decide_dedup_for_parameter`, no-CST tests | Accepted |
-| L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Completed / pending review |
+| L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Needs L1 eligibility hardening |
+| L1 | Warm-start/prior semantics hardening — `record_to_prior_candidate` eligibility fix, diagnostic-only classification, missing tests, next-directions cleanup | Completed / pending review |
 
 ### Migration constraints
 
-- Staged search, adaptive bounds, retry, and evaluation database are **planned but not yet implemented.**
+- Staged search (F–I), adaptive bounds (G–I), and evaluation database helpers (J–L) exist as **no-CST helpers and opt-in runtime wiring only**; durable DB, live CST runtime validation, and retry remain future.
 - JSONL diagnostic sidecar (Phase C) remains **diagnostic-only** and must not be promoted to a recovery source.
 - The future evaluation database (Phase J+) is a **separate explicit opt-in concept** and is not equivalent to the JSONL sidecar.
 - Do **not** import ``cst_optimization.workflows.recovery``; do **not** copy legacy ``RecoveryWorkflowEvaluator``.
@@ -163,8 +164,9 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase K** — Evaluation database dedup no-CST skeleton
-- **Phase L** — Evaluation database warm-start / prior construction
+- **Phase M** — Retry / recovery taxonomy design
+- **Phase N** — Retry / inter-pass recovery skeleton
+- **Phase O+** — Live CST smokes / production validation (only when explicitly requested)
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

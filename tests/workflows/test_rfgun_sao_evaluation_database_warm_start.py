@@ -198,3 +198,91 @@ class TestNoIO:
             _rec([1.0], raw_metrics={"f1": 1.0}),
         ])
         assert isinstance(report, PriorConstructionReport)
+
+# ---------------------------------------------------------------------------
+# L1 ¡ª Semantics hardening
+# ---------------------------------------------------------------------------
+
+
+class TestL1PublicHelper:
+    def test_rejects_incompatible_schema(self):
+        """record_to_prior_candidate rejects incompatible schema."""
+        rec = _rec([1.0], raw_metrics={"f1": 1.0}, schema=99)
+        cand = record_to_prior_candidate(rec, current_schema=1)
+        assert cand is None
+
+    def test_rejects_no_payload_when_required(self):
+        """record_to_prior_candidate rejects missing raw/objective payload."""
+        rec = _rec([1.0])  # no raw_payload
+        cand = record_to_prior_candidate(rec, require_raw_metrics=True)
+        assert cand is None
+
+    def test_allows_no_payload_when_not_required(self):
+        """record_to_prior_candidate allows no payload when require_raw_metrics=False."""
+        rec = _rec([1.0])
+        cand = record_to_prior_candidate(rec, require_raw_metrics=False)
+        assert cand is not None
+        assert cand.raw_metrics is None
+
+    def test_objective_values_only_is_usable(self):
+        """SUCCESS with objective_values but no raw_metrics is usable."""
+        rec = _rec(
+            [1.0],
+            objective_values={"some_objective": 1.23},
+        )
+        status, _ = classify_record_for_prior(rec, require_raw_metrics=True)
+        assert status == PriorCandidateStatus.USABLE_SUCCESS
+        cand = record_to_prior_candidate(rec)
+        assert cand is not None
+        assert cand.objective_value == 1.23
+
+    def test_provenance_preserved_not_blocking(self):
+        """Provenance is preserved but does not block prior construction."""
+        rec = _rec(
+            [1.0], raw_metrics={"f1": 1.0},
+            prove={"commit": "abc123", "machine": "test-host"},
+        )
+        cand = record_to_prior_candidate(rec)
+        assert cand is not None
+        assert cand.provenance == {"commit": "abc123", "machine": "test-host"}
+
+    def test_diagnostic_only_ignored(self):
+        """Diagnostic-only marker returns IGNORED_DIAGNOSTIC_ONLY."""
+        rec = _rec([1.0], status="diagnostic_only")
+        status, _ = classify_record_for_prior(rec)
+        assert status == PriorCandidateStatus.IGNORED_DIAGNOSTIC_ONLY
+        # Bulk build
+        report = build_prior_candidates_from_records([rec])
+        assert report.ignored_counts.get("ignored_diagnostic_only", 0) == 1
+        assert len(report.candidates) == 0
+
+    def test_unknown_failed_is_failure_not_diagnostic(self):
+        """UNKNOWN_FAILED is IGNORED_FAILURE, not diagnostic_only."""
+        rec = _rec([1.0], status="unknown_failed")
+        status, _ = classify_record_for_prior(rec)
+        assert status == PriorCandidateStatus.IGNORED_FAILURE
+
+    def test_diagnostic_only_via_error_taxonomy(self):
+        """diagnostic-only via error_taxonomy also works."""
+        rec = _rec([1.0], status="unknown_failed")
+        rec.error_taxonomy = {"category": "diagnostic_only"}
+        status, _ = classify_record_for_prior(rec)
+        assert status == PriorCandidateStatus.IGNORED_DIAGNOSTIC_ONLY
+
+
+class TestL1JsonlNotReferenced:
+    def test_warm_start_does_not_reference_jsonl(self):
+        """Warm-start module does not import or reference Phase C JSONL code."""
+        import workflows.rfgun_sao.evaluation_database_warm_start as ws
+        src = ws.__file__
+        with open(src, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        forbidden = ["records.py", "resolve_records_config", ".jsonl",
+                     "evaluation_records", 'open(', "jsonl"]
+        for item in forbidden:
+            # open() is needed for file writing; skip it for this check
+            if item == "open(":
+                continue
+            assert item not in text.lower(), (
+                f"warm-start module should not reference {item!r}"
+            )

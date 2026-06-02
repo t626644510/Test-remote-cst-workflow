@@ -88,7 +88,7 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** D1 no-CST cleanup milestone accepted through D1.3; D2 live CST cleanup validation pending review.
+**Status:** Normal live CST cleanup validated; hard-exit live Ctrl+C validation remains blocked by non-interactive tool environment.
 
 ### Completed
 
@@ -98,7 +98,9 @@ b) Phase C docs/report consolidation (if needed).
 | D1.1 | D1 helper polish — return-after-exit guard, cleanup failure warning fallback, BRANCH_CONTEXT cleanup | Accepted |
 | D1.2 | Phase C/D BRANCH_CONTEXT table structure cleanup — removed stray D1 from Phase C table | Accepted |
 | D1.3 | D1 milestone closeout — status alignment | Accepted |
-| D2 | Live CST validation of D1 hard-exit cleanup | Completed / pending review |
+| D2 | Live CST validation of D1 hard-exit cleanup | Partial / normal cleanup passed; hard-exit blocked |
+| D2.1 | Hard-exit live validation retry — attempted but blocked by non-interactive Windows signal delivery | Attempted / blocked |
+| D2.2 | Blocked closeout — honest status correction, future validation deferred to interactive terminal | Completed / pending review |
 
 ### Authoritative behaviour
 
@@ -108,18 +110,22 @@ b) Phase C docs/report consolidation (if needed).
   `_cleanup_workflow_connection(force=True)` best-effort before
   `_os._exit(130)`.  If cleanup raises, a warning is logged and
   hard-exit proceeds.
-- Live CST validation of D1 cleanup pending.
+- Normal cleanup live CST validated (D2).
+- Hard-exit live Ctrl+C validation remains blocked — requires true
+  interactive operator-controlled terminal outside local-agent tool context.
 
 ### Known caveats
 
 - If the Python runtime or OS-level kill (``taskkill /F``, SIGKILL) is used,
   cleanup is bypassed entirely.
-- Live CST validation of D1 cleanup remains future.
+- Hard-exit live Ctrl+C validation remains future; blocked by non-interactive
+  execution environment (see D2.2 report).
 
 ### Next possible directions
 
-a) Live CST validation of D1 hard-exit cleanup.
-b) Additional hardening (e.g. second SIGINT cleanup for single-pass path).
+a) True manual interactive live CST Ctrl+C validation outside local-agent
+   tool context.
+b) Move on to other non-live hardening or documentation work.
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

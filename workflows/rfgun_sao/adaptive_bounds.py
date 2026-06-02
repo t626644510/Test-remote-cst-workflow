@@ -103,6 +103,28 @@ class AdaptiveBoundsInput:
         if len(self.min_step) != n:
             raise ValueError("min_step length mismatch")
 
+        if self.best_x is not None and len(self.best_x) != n:
+            raise ValueError(
+                f"best_x length {len(self.best_x)} != param_names length {n}",
+            )
+        if self.high_quality_points is not None:
+            for i, pt in enumerate(self.high_quality_points):
+                if len(pt) != n:
+                    raise ValueError(
+                        f"high_quality_points[{i}] length {len(pt)} "
+                        f"!= param_names length {n}",
+                    )
+
+        # Validate value ordering
+        if np.any(self.hard_low >= self.hard_high):
+            raise ValueError("hard_low must be strictly less than hard_high for all parameters")
+        if np.any(self.current_low >= self.current_high):
+            raise ValueError("current_low must be strictly less than current_high")
+        if np.any(self.min_step <= 0):
+            raise ValueError("min_step must be positive for all parameters")
+        if np.any(self.current_low < self.hard_low) or np.any(self.current_high > self.hard_high):
+            raise ValueError("current bounds exceed hard bounds")
+
     def validate_proposed(self) -> None:
         """Validate that proposed bounds are within current bounds."""
         if np.any(self.proposed_low < self.current_low) or np.any(self.proposed_high > self.current_high):
@@ -127,7 +149,7 @@ def _normalize_input(input_data: AdaptiveBoundsInput) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Boundary / quality detection
+# Per-parameter boundary / quality detection
 # ---------------------------------------------------------------------------
 
 
@@ -135,48 +157,60 @@ def detect_best_boundary_clipping(
     input_data: AdaptiveBoundsInput,
     proximity_fraction: float = 0.05,
 ) -> dict[str, Any]:
-    """Check if the best candidate is near the current bounds.
+    """Check per-parameter whether the best candidate is clipped by proposed shrink.
 
-    Returns a dict with keys ``near_boundary`` (bool),
-    ``params_near_boundary_lo`` / ``params_near_boundary_hi`` (lists),
-    ``proximity_fraction``, ``is_clipped`` (bool — near boundary +
-    proposed is shrinking).
+    Returns a dict with:
+    - ``near_boundary`` (bool)
+    - ``params_near_boundary_lo`` / ``params_near_boundary_hi``
+    - ``params_clipped_lo`` / ``params_clipped_hi`` (per-param: best near
+      bound AND that side's proposed bound moves inward)
+    - ``is_clipped`` (bool — any param has a clipped side)
     """
     if input_data.best_x is None:
         return {
             "near_boundary": False,
             "params_near_boundary_lo": [],
             "params_near_boundary_hi": [],
+            "params_clipped_lo": [],
+            "params_clipped_hi": [],
             "is_clipped": False,
             "proximity_fraction": proximity_fraction,
         }
 
     near_lo: list[str] = []
     near_hi: list[str] = []
+    clipped_lo: list[str] = []
+    clipped_hi: list[str] = []
+
     for i, name in enumerate(input_data.param_names):
         span = input_data.current_high[i] - input_data.current_low[i]
         if span <= 0:
             continue
         dist_lo = abs(input_data.best_x[i] - input_data.current_low[i]) / span
         dist_hi = abs(input_data.best_x[i] - input_data.current_high[i]) / span
-        if dist_lo < proximity_fraction:
-            near_lo.append(name)
-        if dist_hi < proximity_fraction:
-            near_hi.append(name)
+        near_low = dist_lo < proximity_fraction
+        near_high = dist_hi < proximity_fraction
 
-    near = bool(near_lo or near_hi)
-    # Clipped = near boundary AND proposed is narrower than current
-    is_shrinking = bool(
-        np.any(input_data.proposed_low > input_data.current_low)
-        or np.any(input_data.proposed_high < input_data.current_high)
-    )
-    is_clipped = near and is_shrinking
+        # Per-parameter shrink detection
+        low_moves_in = bool(input_data.proposed_low[i] > input_data.current_low[i])
+        high_moves_in = bool(input_data.proposed_high[i] < input_data.current_high[i])
+
+        if near_low:
+            near_lo.append(name)
+            if low_moves_in:
+                clipped_lo.append(name)
+        if near_high:
+            near_hi.append(name)
+            if high_moves_in:
+                clipped_hi.append(name)
 
     return {
-        "near_boundary": near,
+        "near_boundary": bool(near_lo or near_hi),
         "params_near_boundary_lo": near_lo,
         "params_near_boundary_hi": near_hi,
-        "is_clipped": is_clipped,
+        "params_clipped_lo": clipped_lo,
+        "params_clipped_hi": clipped_hi,
+        "is_clipped": bool(clipped_lo or clipped_hi),
         "proximity_fraction": proximity_fraction,
     }
 
@@ -184,21 +218,25 @@ def detect_best_boundary_clipping(
 def detect_quality_boundary_clustering(
     input_data: AdaptiveBoundsInput,
     cluster_fraction: float = 0.1,
+    min_cluster_count: int = 2,
 ) -> dict[str, Any]:
-    """Check if multiple high-quality points cluster near a boundary.
+    """Check if at least *min_cluster_count* high-quality points cluster near a boundary.
 
     Returns a dict with keys ``clustered_near_boundary`` (bool),
-    ``clustered_params_lo`` / ``clustered_params_hi`` (lists).
+    ``clustered_params_lo`` / ``clustered_params_hi`` (sorted lists).
+    A parameter boundary is considered clustered only if at least
+    *min_cluster_count* distinct points (not observations) fall within
+    ``cluster_fraction`` of that boundary.
     """
-    if not input_data.high_quality_points or len(input_data.high_quality_points) < 2:
+    if not input_data.high_quality_points or len(input_data.high_quality_points) < min_cluster_count:
         return {
             "clustered_near_boundary": False,
             "clustered_params_lo": [],
             "clustered_params_hi": [],
         }
 
-    clust_lo: set[str] = set()
-    clust_hi: set[str] = set()
+    count_lo: dict[str, int] = {}
+    count_hi: dict[str, int] = {}
     for pt in input_data.high_quality_points:
         for i, name in enumerate(input_data.param_names):
             span = input_data.current_high[i] - input_data.current_low[i]
@@ -207,14 +245,17 @@ def detect_quality_boundary_clustering(
             dist_lo = abs(pt[i] - input_data.current_low[i]) / span
             dist_hi = abs(pt[i] - input_data.current_high[i]) / span
             if dist_lo < cluster_fraction:
-                clust_lo.add(name)
+                count_lo[name] = count_lo.get(name, 0) + 1
             if dist_hi < cluster_fraction:
-                clust_hi.add(name)
+                count_hi[name] = count_hi.get(name, 0) + 1
+
+    clust_lo = sorted(n for n, c in count_lo.items() if c >= min_cluster_count)
+    clust_hi = sorted(n for n, c in count_hi.items() if c >= min_cluster_count)
 
     return {
         "clustered_near_boundary": bool(clust_lo or clust_hi),
-        "clustered_params_lo": sorted(clust_lo),
-        "clustered_params_hi": sorted(clust_hi),
+        "clustered_params_lo": clust_lo,
+        "clustered_params_hi": clust_hi,
     }
 
 
@@ -237,7 +278,6 @@ def clamp_to_hard_bounds_and_min_step(
     clamped_low = np.maximum(low, hard_low)
     clamped_high = np.minimum(high, hard_high)
 
-    # Enforce min_step: if span < min_step, recenter around the midpoint
     span = clamped_high - clamped_low
     for i in range(len(low)):
         if span[i] < min_step[i]:
@@ -245,7 +285,6 @@ def clamp_to_hard_bounds_and_min_step(
             half = min_step[i] / 2.0
             clamped_low[i] = max(hard_low[i], mid - half)
             clamped_high[i] = min(hard_high[i], mid + half)
-            # If still < min_step after clamping to hard bounds, set to hard bounds
             if clamped_high[i] - clamped_low[i] < min_step[i]:
                 clamped_low[i] = hard_low[i]
                 clamped_high[i] = min(hard_low[i] + min_step[i], hard_high[i])
@@ -253,20 +292,63 @@ def clamp_to_hard_bounds_and_min_step(
     return clamped_low, clamped_high
 
 
-def apply_symmetric_expand(
+def _has_room_to_expand_low(
+    param_idx: int,
     input_data: AdaptiveBoundsInput,
-    expand_fraction: float = 0.1,
+    expand_amount: float,
+) -> bool:
+    """Check if there is room to expand a parameter's low side."""
+    current_low = input_data.proposed_low[param_idx]
+    new_low = current_low - expand_amount
+    clamped = max(new_low, input_data.hard_low[param_idx])
+    return clamped < current_low
+
+
+def _has_room_to_expand_high(
+    param_idx: int,
+    input_data: AdaptiveBoundsInput,
+    expand_amount: float,
+) -> bool:
+    """Check if there is room to expand a parameter's high side."""
+    current_high = input_data.proposed_high[param_idx]
+    new_high = current_high + expand_amount
+    clamped = min(new_high, input_data.hard_high[param_idx])
+    return clamped > current_high
+
+
+def apply_asymmetric_expand_for_params(
+    input_data: AdaptiveBoundsInput,
+    *,
+    expand_low_params: list[str] | None = None,
+    expand_high_params: list[str] | None = None,
+    expand_fraction: float = 0.05,
 ) -> StageBounds:
-    """Expand proposed bounds symmetrically on both sides.
+    """Expand proposed bounds **only** for the specified params/sides.
 
-    Expansion is clamped to ``[hard_low, hard_high]`` and respects
-    ``min_step``.
+    Parameters not listed retain their proposed (or current) bounds.
     """
-    span = input_data.proposed_high - input_data.proposed_low
-    expand = span * expand_fraction / 2.0
+    n = len(input_data.param_names)
+    expand_low_arr = np.zeros(n)
+    expand_high_arr = np.zeros(n)
 
-    new_low = input_data.proposed_low - expand
-    new_high = input_data.proposed_high + expand
+    name_to_idx = {name: i for i, name in enumerate(input_data.param_names)}
+
+    span = input_data.proposed_high - input_data.proposed_low
+
+    if expand_low_params:
+        for name in expand_low_params:
+            i = name_to_idx.get(name)
+            if i is not None:
+                expand_low_arr[i] = span[i] * expand_fraction
+
+    if expand_high_params:
+        for name in expand_high_params:
+            i = name_to_idx.get(name)
+            if i is not None:
+                expand_high_arr[i] = span[i] * expand_fraction
+
+    new_low = input_data.proposed_low - expand_low_arr
+    new_high = input_data.proposed_high + expand_high_arr
 
     clamped_low, clamped_high = clamp_to_hard_bounds_and_min_step(
         new_low, new_high,
@@ -282,33 +364,51 @@ def apply_symmetric_expand(
     )
 
 
+def apply_symmetric_expand(
+    input_data: AdaptiveBoundsInput,
+    expand_fraction: float = 0.1,
+) -> StageBounds:
+    """Expand proposed bounds symmetrically on both sides.
+
+    Each side is expanded by ``span * expand_fraction / 2``.
+    """
+    n = len(input_data.param_names)
+    span = input_data.proposed_high - input_data.proposed_low
+    expand = span * expand_fraction / 2.0
+    new_low = input_data.proposed_low - expand
+    new_high = input_data.proposed_high + expand
+    clamped_low, clamped_high = clamp_to_hard_bounds_and_min_step(
+        new_low, new_high,
+        input_data.hard_low, input_data.hard_high,
+        input_data.min_step,
+    )
+    return StageBounds(
+        param_names=list(input_data.param_names),
+        low=clamped_low, high=clamped_high,
+        hard_low=input_data.hard_low.copy(),
+        hard_high=input_data.hard_high.copy(),
+    )
+
+
 def apply_asymmetric_expand(
     input_data: AdaptiveBoundsInput,
     expand_low: np.ndarray | None = None,
     expand_high: np.ndarray | None = None,
     expand_fraction: float = 0.05,
 ) -> StageBounds:
-    """Expand proposed bounds asymmetrically.
-
-    *expand_low* and *expand_high* are per-parameter expansion amounts
-    (positive = expand outward).  If None, uses ``span * expand_fraction``.
-    """
+    """Expand proposed bounds asymmetrically (legacy API — expands all params)."""
     span = input_data.proposed_high - input_data.proposed_low
-
     if expand_low is None:
         expand_low = span * expand_fraction
     if expand_high is None:
         expand_high = span * expand_fraction
-
     new_low = input_data.proposed_low - expand_low
     new_high = input_data.proposed_high + expand_high
-
     clamped_low, clamped_high = clamp_to_hard_bounds_and_min_step(
         new_low, new_high,
         input_data.hard_low, input_data.hard_high,
         input_data.min_step,
     )
-
     return StageBounds(
         param_names=list(input_data.param_names),
         low=clamped_low, high=clamped_high,
@@ -359,26 +459,15 @@ def recommend_adaptive_bounds(
     """Review proposed stage bounds and recommend an adaptive action.
 
     Policy priority:
-    1. Insufficient evidence (no best_x, no high-quality points)
-       → ``STOP_INSUFFICIENT_EVIDENCE``.
-    2. Best point near boundary AND proposed is shrinking → anti-clipping:
-       - If ONLY one side is clipped → ``ASYMMETRIC_EXPAND`` (expand clipped side).
-       - If both sides or symmetric clustering → ``SYMMETRIC_EXPAND``.
-       - If no room to expand (hard bounds hit and min_step reached) →
-         ``BLOCK_SHRINK``.
-    3. High-quality points cluster near boundary → ``ASYMMETRIC_EXPAND`` or
-       ``SYMMETRIC_EXPAND`` (depending on clustering pattern).
-    4. Proposed is shrinking, no clipping, centered evidence,
-       sufficient span → ``PERMIT_SHRINK``.
-    5. Proposed is expanding or unchanged → ``NO_CHANGE``.
-    6. Catch-all → ``NO_CHANGE``.
-
-    Returns
-    -------
-    AdaptiveBoundsRecommendation
+    1. Insufficient evidence → ``STOP_INSUFFICIENT_EVIDENCE``.
+    2. Per-parameter anti-clipping: if a param's best is near boundary **and**
+       that side's proposed bound moves inward → expand the clipped side.
+       If no room → ``BLOCK_SHRINK`` for that side.
+    3. Quality clustering: ≥2 high-quality points near same param boundary →
+       expand.
+    4. Shrinking with no clipping, centered evidence → ``PERMIT_SHRINK``.
+    5. Not shrinking, no clipping → ``NO_CHANGE``.
     """
-    import copy
-
     _normalize_input(input_data)
 
     n = len(input_data.param_names)
@@ -404,25 +493,26 @@ def recommend_adaptive_bounds(
     diag["clipping"] = clipping
     diag["clustering"] = clustering
 
-    is_shrinking = bool(
-        np.any(input_data.proposed_low > input_data.current_low)
-        or np.any(input_data.proposed_high < input_data.current_high)
-    )
-
-    # 2. Anti-clipping: best near boundary + proposed is shrinking
-    if clipping["is_clipped"]:
-        return _recommend_anti_clipping(
-            input_data, clipping, expand_fraction, diag,
+    # 2. Anti-clipping (per-parameter)
+    clipped_lo: list[str] = clipping.get("params_clipped_lo", [])
+    clipped_hi: list[str] = clipping.get("params_clipped_hi", [])
+    if clipped_lo or clipped_hi:
+        return _recommend_anti_clipping_by_param(
+            input_data, clipped_lo, clipped_hi, clipping, expand_fraction, diag,
         )
 
-    # 3. Quality clustering near boundary
+    # 3. Quality clustering
     if clustering["clustered_near_boundary"]:
         return _recommend_clustering_response(
             input_data, clustering, expand_fraction, diag,
         )
 
-    # 4. Safe shrink
-    if is_shrinking:
+    # 4. Per-parameter shrink detection for safe-shrink check
+    any_shrinking = bool(
+        np.any(input_data.proposed_low > input_data.current_low)
+        or np.any(input_data.proposed_high < input_data.current_high)
+    )
+    if any_shrinking:
         return AdaptiveBoundsRecommendation(
             action=AdaptiveBoundsAction.PERMIT_SHRINK,
             reason="Proposed shrink is safe: best point centered, no clipping.",
@@ -442,91 +532,80 @@ def recommend_adaptive_bounds(
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers for recommendation logic
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 
-def _recommend_anti_clipping(
+def _recommend_anti_clipping_by_param(
     input_data: AdaptiveBoundsInput,
+    clipped_lo: list[str],
+    clipped_hi: list[str],
     clipping: dict[str, Any],
     expand_fraction: float,
     diag: dict[str, Any],
 ) -> AdaptiveBoundsRecommendation:
-    """Respond to boundary clipping — expand the clipped side."""
-    lo_clipped = bool(clipping["params_near_boundary_lo"])
-    hi_clipped = bool(clipping["params_near_boundary_hi"])
+    """Per-parameter anti-clipping: only expand clipped params, on clipped sides."""
+    # Check room
+    name_to_idx = {name: i for i, name in enumerate(input_data.param_names)}
+    span = input_data.proposed_high - input_data.proposed_low
 
-    if lo_clipped and not hi_clipped:
-        # Expand only the low side
-        expand_low = (input_data.proposed_high - input_data.proposed_low) * expand_fraction
-        expand_high = np.zeros(len(input_data.param_names))
-        new_bounds = apply_asymmetric_expand(
-            input_data, expand_low=expand_low, expand_high=expand_high,
-        )
-        return AdaptiveBoundsRecommendation(
-            action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
-            reason=f"Clipped on low side ({clipping['params_near_boundary_lo']}); "
-                   "expanding low bounds.",
-            recommended_low=new_bounds.low,
-            recommended_high=new_bounds.high,
-            params_expanded=list(clipping["params_near_boundary_lo"]),
-            diagnostics=diag,
-        )
+    no_room_lo: list[str] = []
+    no_room_hi: list[str] = []
+    can_expand_lo: list[str] = []
+    can_expand_hi: list[str] = []
 
-    if hi_clipped and not lo_clipped:
-        # Expand only the high side
-        expand_low = np.zeros(len(input_data.param_names))
-        expand_high = (input_data.proposed_high - input_data.proposed_low) * expand_fraction
-        new_bounds = apply_asymmetric_expand(
-            input_data, expand_low=expand_low, expand_high=expand_high,
-        )
-        return AdaptiveBoundsRecommendation(
-            action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
-            reason=f"Clipped on high side ({clipping['params_near_boundary_hi']}); "
-                   "expanding high bounds.",
-            recommended_low=new_bounds.low,
-            recommended_high=new_bounds.high,
-            params_expanded=list(clipping["params_near_boundary_hi"]),
-            diagnostics=diag,
-        )
+    for name in clipped_lo:
+        i = name_to_idx[name]
+        amt = span[i] * expand_fraction
+        if _has_room_to_expand_low(i, input_data, amt):
+            can_expand_lo.append(name)
+        else:
+            no_room_lo.append(name)
 
-    # Both sides clipped → symmetric expand
-    try:
-        new_bounds = apply_symmetric_expand(input_data, expand_fraction=expand_fraction)
-        # Check if expansion actually changed bounds
-        if np.allclose(new_bounds.low, input_data.proposed_low) and np.allclose(
-            new_bounds.high, input_data.proposed_high
-        ):
-            return AdaptiveBoundsRecommendation(
-                action=AdaptiveBoundsAction.BLOCK_SHRINK,
-                reason="Both sides clipped but no room to expand (hard bounds / min step).",
-                recommended_low=input_data.current_low.copy(),
-                recommended_high=input_data.current_high.copy(),
-                params_expanded=list(
-                    clipping["params_near_boundary_lo"]
-                    + clipping["params_near_boundary_hi"]
-                ),
-                diagnostics=diag,
-            )
-        return AdaptiveBoundsRecommendation(
-            action=AdaptiveBoundsAction.SYMMETRIC_EXPAND,
-            reason="Both sides clipped; symmetrically expanding.",
-            recommended_low=new_bounds.low,
-            recommended_high=new_bounds.high,
-            params_expanded=list(
-                clipping["params_near_boundary_lo"]
-                + clipping["params_near_boundary_hi"]
-            ),
-            diagnostics=diag,
-        )
-    except ValueError:
+    for name in clipped_hi:
+        i = name_to_idx[name]
+        amt = span[i] * expand_fraction
+        if _has_room_to_expand_high(i, input_data, amt):
+            can_expand_hi.append(name)
+        else:
+            no_room_hi.append(name)
+
+    # If no room on any clipped side → block shrink
+    if not can_expand_lo and not can_expand_hi:
         return AdaptiveBoundsRecommendation(
             action=AdaptiveBoundsAction.BLOCK_SHRINK,
-            reason="Both sides clipped but cannot compute expanded bounds.",
+            reason=f"Clipped but no room to expand: low=({no_room_lo}), high=({no_room_hi}).",
             recommended_low=input_data.current_low.copy(),
             recommended_high=input_data.current_high.copy(),
+            params_expanded=list(clipped_lo + clipped_hi),
             diagnostics=diag,
         )
+
+    # Partial room: expand what we can
+    new_bounds = apply_asymmetric_expand_for_params(
+        input_data,
+        expand_low_params=can_expand_lo if can_expand_lo else None,
+        expand_high_params=can_expand_hi if can_expand_hi else None,
+        expand_fraction=expand_fraction,
+    )
+
+    all_expanded = sorted(set(can_expand_lo + can_expand_hi))
+    reason_parts = []
+    if can_expand_lo:
+        reason_parts.append(f"low ({can_expand_lo})")
+    if can_expand_hi:
+        reason_parts.append(f"high ({can_expand_hi})")
+    if no_room_lo or no_room_hi:
+        reason_parts.append(f"blocked-no-room low=({no_room_lo}) high=({no_room_hi})")
+
+    return AdaptiveBoundsRecommendation(
+        action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
+        reason=f"Clipped; expanding {'; '.join(reason_parts)}.",
+        recommended_low=new_bounds.low,
+        recommended_high=new_bounds.high,
+        params_expanded=all_expanded,
+        diagnostics=diag,
+    )
 
 
 def _recommend_clustering_response(
@@ -536,47 +615,54 @@ def _recommend_clustering_response(
     diag: dict[str, Any],
 ) -> AdaptiveBoundsRecommendation:
     """Respond to quality-point boundary clustering."""
-    lo_clustered = bool(clustering["clustered_params_lo"])
-    hi_clustered = bool(clustering["clustered_params_hi"])
+    clust_lo: list[str] = clustering.get("clustered_params_lo", [])
+    clust_hi: list[str] = clustering.get("clustered_params_hi", [])
 
-    if lo_clustered and not hi_clustered:
-        expand_low = (input_data.proposed_high - input_data.proposed_low) * expand_fraction
-        expand_high = np.zeros(len(input_data.param_names))
-        new_bounds = apply_asymmetric_expand(
-            input_data, expand_low=expand_low, expand_high=expand_high,
+    if clust_lo and not clust_hi:
+        new_bounds = apply_asymmetric_expand_for_params(
+            input_data,
+            expand_low_params=clust_lo,
+            expand_high_params=None,
+            expand_fraction=expand_fraction,
         )
         return AdaptiveBoundsRecommendation(
             action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
-            reason="High-quality points clustered on low side; expanding low.",
+            reason=f"High-quality points clustered low ({clust_lo}); expanding low.",
             recommended_low=new_bounds.low,
             recommended_high=new_bounds.high,
-            params_expanded=clustering["clustered_params_lo"],
+            params_expanded=clust_lo,
             diagnostics=diag,
         )
 
-    if hi_clustered and not lo_clustered:
-        expand_low = np.zeros(len(input_data.param_names))
-        expand_high = (input_data.proposed_high - input_data.proposed_low) * expand_fraction
-        new_bounds = apply_asymmetric_expand(
-            input_data, expand_low=expand_low, expand_high=expand_high,
+    if clust_hi and not clust_lo:
+        new_bounds = apply_asymmetric_expand_for_params(
+            input_data,
+            expand_low_params=None,
+            expand_high_params=clust_hi,
+            expand_fraction=expand_fraction,
         )
         return AdaptiveBoundsRecommendation(
             action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
-            reason="High-quality points clustered on high side; expanding high.",
+            reason=f"High-quality points clustered high ({clust_hi}); expanding high.",
             recommended_low=new_bounds.low,
             recommended_high=new_bounds.high,
-            params_expanded=clustering["clustered_params_hi"],
+            params_expanded=clust_hi,
             diagnostics=diag,
         )
 
-    new_bounds = apply_symmetric_expand(input_data, expand_fraction=expand_fraction)
+    # Both sides
+    new_bounds = apply_asymmetric_expand_for_params(
+        input_data,
+        expand_low_params=clust_lo,
+        expand_high_params=clust_hi,
+        expand_fraction=expand_fraction,
+    )
     return AdaptiveBoundsRecommendation(
-        action=AdaptiveBoundsAction.SYMMETRIC_EXPAND,
-        reason="High-quality points clustered near bounds; symmetrically expanding.",
+        action=AdaptiveBoundsAction.ASYMMETRIC_EXPAND,
+        reason=f"Points clustered low ({clust_lo}) and high ({clust_hi}); expanding.",
         recommended_low=new_bounds.low,
         recommended_high=new_bounds.high,
-        params_expanded=clustering["clustered_params_lo"]
-        + clustering["clustered_params_hi"],
+        params_expanded=sorted(set(clust_lo + clust_hi)),
         diagnostics=diag,
     )
 

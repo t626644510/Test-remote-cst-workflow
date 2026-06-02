@@ -50,18 +50,20 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | Phase | Scope | Status |
 |-------|-------|--------|
 | C1 | JSONL diagnostics sidecar skeleton — ``records.py`` helpers | Accepted |
-| C2 | JSONL runtime opt-in wiring — ``_record_jsonl_sidecar_evaluation``, ``_on_evaluation`` integration, no-CST tests | Pending review |
+| C2 | JSONL runtime opt-in wiring — ``_record_jsonl_sidecar_evaluation``, ``_on_evaluation`` integration, no-CST tests | Accepted |
+| C2.1 | JSONL sidecar polish — write-failure monkeypatch test, doc wording hardening | Completed / pending review |
 
 ### Authoritative behaviour
 
-- ``.ckpt`` / ``CheckpointManager`` remains authoritative.
-- JSONL sidecar is helper-only; runtime writing **disabled by default**.
+- ``.ckpt`` / ``CheckpointManager`` remains the authoritative persisted
+  evaluation record.
+- JSONL sidecar helpers exist and runtime writing is wired **only as
+  explicit opt-in** via ``logging.evaluation_records.enabled: true``.
 - ``resolve_records_config`` reads ``logging.evaluation_records`` config key.
+- Default config keeps JSONL **disabled**; JSONL is **not** a recovery source.
 
 ### Known caveats
 
-- ``.ckpt`` is the authoritative persisted evaluation record at runtime.
-- JSONL sidecar is opt-in-only via ``logging.evaluation_records.enabled``.
 - Diagnostics/gate_results enrichment in JSONL sidecar deferred to future phase.
 
 ### Next possible directions

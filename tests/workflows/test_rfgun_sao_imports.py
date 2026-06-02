@@ -4256,3 +4256,40 @@ def test_config_yaml_does_not_enable_jsonl():
     assert records_cfg is None, (
         f"Default config must not enable JSONL, got: {records_cfg}"
     )
+
+# ============================================================
+# AF. JSONL sidecar polish — C2.1
+# ============================================================
+
+def test_jsonl_sidecar_append_failure_caught(monkeypatch, caplog):
+    """append_jsonl_record raises -> helper returns False, logs warning."""
+    from workflows.rfgun_sao.run import _record_jsonl_sidecar_evaluation
+    from workflows.rfgun_sao.records import read_jsonl_records, append_jsonl_record
+    import logging, numpy as np
+    import tempfile, os
+
+    def _failing_append(path, record):
+        raise OSError("forced jsonl failure")
+
+    monkeypatch.setattr(
+        "workflows.rfgun_sao.run.append_jsonl_record",
+        _failing_append,
+    )
+
+    caplog.set_level(logging.WARNING, logger="workflow_1")
+
+    wf_ref = [_FakeObjectiveNamesContainer(["a"])]
+    x = np.array([0.5])
+    raw = np.array([11.424])
+    pen = np.array([0.3])
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        p = os.path.join(tmpdir, "records.jsonl")
+        result = _record_jsonl_sidecar_evaluation(
+            {"enabled": True, "path": p},
+            wf_ref, 0, x, raw, pen, True, "",
+        )
+        assert result is False
+
+    assert "JSONL sidecar write failed" in caplog.text
+    assert "forced jsonl failure" in caplog.text

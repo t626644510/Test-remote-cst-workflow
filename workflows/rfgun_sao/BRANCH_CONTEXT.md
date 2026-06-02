@@ -102,7 +102,6 @@ b) Phase C docs/report consolidation (if needed).
 | D2.1 | Hard-exit live validation retry — attempted but blocked by non-interactive Windows signal delivery | Attempted / blocked |
 | D2.2 | Blocked closeout — honest status correction, future validation deferred to interactive terminal | Accepted |
 | D2.3 | Blocked closeout status polish | Completed / pending review |
-| D2.2 | Blocked closeout — honest status correction, future validation deferred to interactive terminal | Completed / pending review |
 
 ### Authoritative behaviour
 

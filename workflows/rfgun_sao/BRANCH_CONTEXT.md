@@ -88,7 +88,7 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** D1 no-CST cleanup milestone accepted through D1.2; D1.3 closeout pending review; live CST validation pending.
+**Status:** D1 no-CST cleanup milestone accepted through D1.3; D2 live CST cleanup validation pending review.
 
 ### Completed
 
@@ -97,7 +97,8 @@ b) Phase C docs/report consolidation (if needed).
 | D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup before `_os._exit`, no-CST tests | Accepted |
 | D1.1 | D1 helper polish — return-after-exit guard, cleanup failure warning fallback, BRANCH_CONTEXT cleanup | Accepted |
 | D1.2 | Phase C/D BRANCH_CONTEXT table structure cleanup — removed stray D1 from Phase C table | Accepted |
-| D1.3 | D1 milestone closeout — status alignment | Completed / pending review |
+| D1.3 | D1 milestone closeout — status alignment | Accepted |
+| D2 | Live CST validation of D1 hard-exit cleanup | Completed / pending review |
 
 ### Authoritative behaviour
 

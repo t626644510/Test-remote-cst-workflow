@@ -88,7 +88,7 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** D2 blocked closeout accepted through D2.4; D2.5 final status polish pending review. Normal live CST cleanup validated; hard-exit live Ctrl+C validation deferred to future true interactive terminal.
+**Status:** D2 blocked closeout accepted through D2.5; D2.6 final acceptance polish pending review. Normal live CST cleanup validated; hard-exit live Ctrl+C validation deferred to future true interactive terminal.
 
 ### Completed
 
@@ -103,7 +103,8 @@ b) Phase C docs/report consolidation (if needed).
 | D2.2 | Blocked closeout — honest status correction, future validation deferred to interactive terminal | Accepted |
 | D2.3 | Blocked closeout status polish | Accepted |
 | D2.4 | Duplicate D2.2 row cleanup | Accepted |
-| D2.5 | Blocked closeout final status polish | Completed / pending review |
+| D2.5 | Blocked closeout final status polish | Accepted |
+| D2.6 | Final acceptance polish | Completed / pending review |
 
 ### Authoritative behaviour
 

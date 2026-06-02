@@ -130,7 +130,7 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Metric name validation: rejects ``str``/``bytes``, empty, duplicate, or
   invalid-member ``objective_names`` (A21, A22)
 - Persistent record: ``CheckpointManager`` writes ``.ckpt`` file;
-  ``evaluation_records.jsonl`` is **not** currently written (A23 policy)
+  ``evaluation_records.jsonl`` is opt-in only — see JSONL sidecar section.
 - Live evidence: successful two-pass measurement produces ``status=completed``,
   ``solver_ok=True``, ``error=''``, all 7 objective raw/penalty entries (A24)
 
@@ -150,7 +150,7 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - ``report_only_diagnostics`` extracts report-only values from ``raw_metrics`` into
   ``EvaluationResult.diagnostics`` (B4)
 - Diagnostics surfaced in two-pass measurement path via INFO log when non-empty (B5)
-- ``evaluation_records.jsonl`` is **not** written; ``.ckpt`` is authoritative (A23)
+- ``.ckpt`` is authoritative; JSONL sidecar is opt-in only (see JSONL section)
 - **Gate role (B7, B8, B9)**:
   - Parsed as ``MetricRole.GATE``; direction validated (B7)
   - Exposed as ``gate_metric_names`` on workflow containers (B7)

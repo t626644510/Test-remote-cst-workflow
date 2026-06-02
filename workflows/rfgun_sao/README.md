@@ -181,8 +181,9 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
   calibration solve; currently stores only compact summaries)
-- ``evaluation_records.jsonl`` sidecar writer (``.ckpt`` / ``CheckpointManager``
-  is current authoritative record; ``workflow.record_path`` set but unused)
+- ``evaluation_records.jsonl`` runtime sidecar writer (helper module exists,
+  ``make_json_safe``/``build_evaluation_record``/``append_jsonl_record``
+  available; runtime writing **disabled by default**; C1 skeleton only)
 - Production-scale validation (full parameter ranges, enabled gates, retry,
   warm-start from single-pass checkpoint)
 - Root shim repointing (``run_workflow_1.py`` still points to

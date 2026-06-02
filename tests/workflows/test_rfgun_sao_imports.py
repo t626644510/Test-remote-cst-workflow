@@ -3919,3 +3919,182 @@ def test_b8_gate_no_raw_mutation():
     before = dict(raw)
     compute_gate_results(metric_specs=specs, raw_metrics=raw)
     assert raw == before
+
+# ============================================================
+# AD. JSONL diagnostics sidecar skeleton — C1
+# ============================================================
+
+def test_make_json_safe_primitives():
+    """Python primitives pass through unchanged."""
+    from workflows.rfgun_sao.records import make_json_safe
+    assert make_json_safe(True) is True
+    assert make_json_safe(42) == 42
+    assert make_json_safe(3.14) == 3.14
+    assert make_json_safe("hello") == "hello"
+    assert make_json_safe(None) is None
+
+
+def test_make_json_safe_numpy():
+    """numpy scalars convert to Python scalars."""
+    from workflows.rfgun_sao.records import make_json_safe
+    import numpy as np
+    assert make_json_safe(np.float64(1.5)) == 1.5
+    assert make_json_safe(np.int32(7)) == 7
+    assert make_json_safe(np.bool_(True)) is True
+
+
+def test_make_json_safe_nan():
+    """nan/inf convert to None."""
+    from workflows.rfgun_sao.records import make_json_safe
+    import numpy as np
+    assert make_json_safe(np.nan) is None
+    assert make_json_safe(np.inf) is None
+    assert make_json_safe(-np.inf) is None
+
+
+def test_make_json_safe_array():
+    """ndarray converts to list."""
+    from workflows.rfgun_sao.records import make_json_safe
+    import numpy as np
+    result = make_json_safe(np.array([1.0, 2.0, np.nan]))
+    assert result == [1.0, 2.0, None]
+
+
+def test_make_json_safe_nested():
+    """Nested dict/list convert recursively."""
+    from workflows.rfgun_sao.records import make_json_safe
+    import numpy as np
+    data = {"a": np.float64(1.0), "b": [np.int32(2), {"c": np.nan}]}
+    result = make_json_safe(data)
+    assert result == {"a": 1.0, "b": [2, {"c": None}]}
+
+
+def test_build_evaluation_record_basic():
+    """build_evaluation_record returns JSON-safe dict."""
+    from workflows.rfgun_sao.records import build_evaluation_record
+    import numpy as np
+
+    rec = build_evaluation_record(
+        iteration=0,
+        x_phys=np.array([0.5]),
+        objective_names=["a", "b"],
+        raw_values=np.array([11.424, 0.5]),
+        penalties=np.array([0.3, 0.7]),
+        solver_ok=True,
+        error="",
+    )
+    assert rec["schema_version"] == 1
+    assert rec["iteration"] == 0
+    assert rec["solver_ok"] is True
+    assert rec["error"] == ""
+    assert rec["objective_names"] == ["a", "b"]
+    assert rec["raw_values"] == {"a": 11.424, "b": 0.5}
+    assert rec["penalties"] == {"a": 0.3, "b": 0.7}
+    assert "diagnostics" not in rec
+    assert "gate_results" not in rec
+    # Must be serializable
+    import json
+    json.dumps(rec)
+
+
+def test_build_evaluation_record_with_diagnostics():
+    """diagnostics and gate_results included when non-empty."""
+    from workflows.rfgun_sao.records import build_evaluation_record
+    import numpy as np
+
+    rec = build_evaluation_record(
+        iteration=1,
+        x_phys=[0.5],
+        objective_names=["a"],
+        raw_values=[1.0],
+        penalties=[0.2],
+        solver_ok=True,
+        error="",
+        diagnostics={"q0_diag": 18630.0},
+        gate_results={"g1": True},
+    )
+    assert rec["diagnostics"] == {"q0_diag": 18630.0}
+    assert rec["gate_results"] == {"g1": True}
+
+
+def test_build_evaluation_record_length_mismatch():
+    """Length mismatch raises ValueError."""
+    from workflows.rfgun_sao.records import build_evaluation_record
+    import pytest
+
+    with pytest.raises(ValueError, match="Length mismatch"):
+        build_evaluation_record(
+            iteration=0, x_phys=[0.5],
+            objective_names=["a", "b"],
+            raw_values=[1.0],
+            penalties=[0.2],
+            solver_ok=True, error="",
+        )
+
+
+def test_append_read_jsonl(tmp_path):
+    """append_jsonl_record writes and read_jsonl_records reads."""
+    from workflows.rfgun_sao.records import append_jsonl_record, read_jsonl_records
+    import json
+
+    p = tmp_path / "records.jsonl"
+    rec1 = {"a": 1}
+    rec2 = {"b": 2}
+
+    append_jsonl_record(p, rec1)
+    append_jsonl_record(p, rec2)
+
+    loaded = read_jsonl_records(p)
+    assert loaded == [rec1, rec2]
+
+    # Verify line structure
+    with open(p, "r") as fh:
+        lines = fh.readlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0]) == rec1
+
+
+def test_read_jsonl_missing_file(tmp_path):
+    """read_jsonl_records returns [] for missing file."""
+    from workflows.rfgun_sao.records import read_jsonl_records
+    assert read_jsonl_records(tmp_path / "nope.jsonl") == []
+
+
+def test_append_jsonl_creates_parent_dir(tmp_path):
+    """append_jsonl_record creates parent directories."""
+    from workflows.rfgun_sao.records import append_jsonl_record, read_jsonl_records
+    p = tmp_path / "sub" / "deep" / "records.jsonl"
+    append_jsonl_record(p, {"x": 1})
+    assert read_jsonl_records(p) == [{"x": 1}]
+
+
+def test_resolve_records_config_default():
+    """Missing config -> disabled."""
+    from workflows.rfgun_sao.records import resolve_records_config
+    r = resolve_records_config({})
+    assert r["enabled"] is False
+    assert r["path"] is None
+
+
+def test_resolve_records_config_bool():
+    """bool true/false config."""
+    from workflows.rfgun_sao.records import resolve_records_config
+    r1 = resolve_records_config({"logging": {"evaluation_records": True}})
+    assert r1["enabled"] is True
+    assert r1["path"] is not None
+
+    r2 = resolve_records_config({"logging": {"evaluation_records": False}})
+    assert r2["enabled"] is False
+
+
+def test_resolve_records_config_dict():
+    """dict enabled/path config."""
+    from workflows.rfgun_sao.records import resolve_records_config
+
+    r = resolve_records_config({
+        "logging": {
+            "evaluation_records": {"enabled": True, "path": "/tmp/custom.jsonl"},
+        },
+    })
+    assert r["enabled"] is True
+    assert "custom.jsonl" in r["path"]

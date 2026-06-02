@@ -43,6 +43,31 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 **Status:** Closed.  Checkpoint milestone accepted through A25.1.
 
+## Phase C — Diagnostics sidecar
+
+### Completed
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| C1 | JSONL diagnostics sidecar skeleton — ``records.py``, ``make_json_safe``, ``build_evaluation_record``, ``append_jsonl_record``, ``read_jsonl_records``, ``resolve_records_config`` | Accepted |
+
+### Authoritative behaviour
+
+- ``.ckpt`` / ``CheckpointManager`` remains authoritative.
+- JSONL sidecar is helper-only; runtime writing **disabled by default**.
+- ``resolve_records_config`` reads ``logging.evaluation_records`` config key.
+
+### Known caveats
+
+- Runtime JSONL writing not yet wired (disabled by default).
+- ``.ckpt`` is the only persisted evaluation record at runtime.
+
+### Next possible directions
+
+a) Wire JSONL runtime records with explicit opt-in.
+b) Ctrl+C hard-exit cleanup hardening.
+c) Production-scale live CST regression (only when explicitly requested).
+
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 
 ### Completed

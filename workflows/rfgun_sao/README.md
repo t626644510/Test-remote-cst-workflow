@@ -32,14 +32,16 @@ explicitly via ``python -m workflows.rfgun_sao.run``.
 ### no-CST tests
 
 ```powershell
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 107/107 as of A22
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 158/158 as of B5.1
 ```
 
 The no-CST test suite covers imports, gate utilities, calibration primitives,
 orchestration skeleton, injectable runners, CST adapter unit tests (with fake
 CST objects), calibration diagnostics, accepted/rejected path logging, mixed
 gate precedence, multi-dip diagnostic status, checkpoint semantics audit,
-checkpoint persistence hardening, and metric invariant hardening.
+checkpoint persistence hardening, metric invariant hardening, metric roles
+skeleton, threshold penalty computation, report-only diagnostic extraction,
+and CST cleanup helper.
 
 ### Live CST smokes (opt-in ``runtime=cst``)
 
@@ -49,6 +51,7 @@ checkpoint persistence hardening, and metric invariant hardening.
 | A14 | Live CST | Frequency gate rejection — ``target_ghz=0.0``, ``max_abs_offset_mhz=1.0`` | ``frequency_gate_reject``, measurement skipped, Best F = 1.0 |
 | A15 | Live CST | S11 depth gate rejection — ``threshold_db=-100.0`` | ``s11_depth_gate_reject``, measurement skipped, Best F = 1.0 |
 | A24 | Live CST | Successful measurement checkpoint evidence — ``solver_ok=True``, 7 metrics | **Best F = -15185.95**, ``status=completed`` |
+| B5 | Live CST | Role-based metrics: optimize + threshold in objective vector, report_only excluded, diagnostics logged | **Best F = -17534.24**, threshold penalty verified, diagnostics INFO log confirmed |
 
 Each live smoke used a valid local CST project (``D:/workflow_elgun/PickupDesign_2026.cst``)
 with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
@@ -65,6 +68,12 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 | A22 | no-CST hardening | Checkpoint metric invariant hardening | String/duplicate/invalid name rejection, raw/penalty length check, 5 new tests (107→107) |
 | A23 | policy / docs | Report hash cleanup and evaluation_records policy | ``.ckpt`` authoritative, ``evaluation_records.jsonl`` not written, policy documented |
 | A24.1 | shutdown correction | CST shutdown correction | Lingering DE process force-closed; background licensing service (no window) normal |
+| B1 | no-CST skeleton | Metric roles skeleton — optimize / threshold / report_only | ``MetricSpec``, ``build_metric_specs``, ``objective_metric_names``, ``report_metric_names`` |
+| B2 | no-CST skeleton | Threshold penalty formula — ``compute_threshold_penalty`` | ``direction="less_than"/"greater_than"``, non-finite → 1.0 |
+| B3 | no-CST wiring | Threshold penalty runtime wiring — ``compute_role_penalties`` | ``Workflow1Evaluator`` penalty loop uses role-aware helper |
+| B4 | no-CST skeleton | Report-only diagnostic extraction — ``report_only_diagnostics`` | ``EvaluationResult.diagnostics``, ``report_as`` alias, duplicate-key detection |
+| B4.1 | no-CST hardening | Diagnostics preservation — stale reset, measurement runner wiring | ``_last_diagnostics`` reset on each eval, ``last_diagnostics()`` accessor |
+| B5.1 | no-CST fix + live | Runner-level CST cleanup — ``_cleanup_workflow_connection`` | ``CST cleanup: attempted=True closed=True pid=<PID>``; live verified |
 
 ---
 
@@ -122,6 +131,24 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 - Live evidence: successful two-pass measurement produces ``status=completed``,
   ``solver_ok=True``, ``error=''``, all 7 objective raw/penalty entries (A24)
 
+### Metric roles (optimize / threshold / report_only)
+- ``MetricRole`` enum and ``MetricSpec`` dataclass with ``threshold``/``sigma``/
+  ``direction``/``report_as`` fields (B1, B2)
+- ``build_metric_specs`` parses config entries into specs (B1)
+- ``objective_metric_names`` = optimize + threshold; ``report_metric_names`` =
+  report_only (source names); ``report_only_output_names`` = report_as aliases (B1, B4)
+- Missing role defaults to ``optimize``; unknown role raises ``ValueError`` (B1)
+- Direction validated only for threshold role (B3)
+- ``compute_threshold_penalty(spec, value)`` — less_than / greater_than formula (B2)
+- ``compute_role_penalties`` integrates role-based penalties into ``Workflow1Evaluator`` (B3)
+  - optimize: uses ``objective.mode.compute(value)``
+  - threshold: uses ``compute_threshold_penalty(spec, value)``
+  - report_only: excluded from penalty dict
+- ``report_only_diagnostics`` extracts report-only values from ``raw_metrics`` into
+  ``EvaluationResult.diagnostics`` (B4)
+- Diagnostics surfaced in two-pass measurement path via INFO log when non-empty (B5)
+- ``evaluation_records.jsonl`` is **not** written; ``.ckpt`` is authoritative (A23)
+
 ### Multi-dip detection
 - MultiDipDetector utility: detects close dips when S11 arrays are explicitly
   supplied (A7)
@@ -138,7 +165,6 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 
 - Retry integration for CST two-pass
 - Inter-pass recovery for CST two-pass (currently warn-and-ignore if enabled)
-- Metric roles (optimize / threshold / report_only)
 - Adaptive bounds
 - Staged search
 - Live/runtime multi-dip detection (needs S11 array plumbing from
@@ -197,9 +223,13 @@ For ``runtime=cst`` operation you need a local ``config.local.yaml``
 ``evaluation.mode: single_pass`` after live smokes that change it to
 ``two_pass``.
 
-**Live CST shutdown note:** After any live smoke, explicitly verify that
-the CST Design Environment window is closed (e.g. via ``Get-Process`` /
-``MainWindowTitle`` inspection).  Python script exit may **not** terminate
-the ``cstd`` DE process.  A background ``cstd`` licensing service with no
-window is normal and should not be confused with an open DE.  See A24.1
-report for details.
+**Live CST shutdown note:** The explicit runner (``run.py``) now runs
+``_cleanup_workflow_connection`` in a ``finally`` block after every
+``opt.optimize()`` call, closing the CST Design Environment connection
+on both normal completion and ``KeyboardInterrupt``.  The final output
+includes ``CST cleanup: attempted=True closed=True pid=<PID>``.
+If a second ``Ctrl+C`` is pressed or ``_os._exit`` is invoked, cleanup may
+be bypassed.  After any live run, verify via ``Get-Process`` /
+``MainWindowTitle`` that no DE window remains.  A background ``cstd``
+licensing service with no window is normal and should not be confused
+with an open DE.  See B5.1 report for implementation details.

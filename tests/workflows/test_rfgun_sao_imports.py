@@ -1798,15 +1798,15 @@ def test_readme_states_multidip_live_plumbing_future_work():
 # P. README milestone status — A18
 # ============================================================
 
-def test_rfgun_sao_readme_status_current_after_a25():
-    """README captures current milestone test count and checkpoint phases."""
+def test_rfgun_sao_readme_status_current_after_b6():
+    """README captures current milestone test count and Phase B status."""
     import pathlib
     readme_path = (
         pathlib.Path(__file__).resolve().parent.parent.parent
         / "workflows" / "rfgun_sao" / "README.md"
     )
     text = readme_path.read_text("utf-8")
-    assert "107/107" in text
+    assert "158/158" in text
     assert "A13.4" in text
     assert "A14" in text
     assert "A15" in text
@@ -1819,6 +1819,13 @@ def test_rfgun_sao_readme_status_current_after_a25():
     assert "A23" in text
     assert "A24" in text
     assert "A24.1" in text
+    assert "B1" in text
+    assert "B2" in text
+    assert "B3" in text
+    assert "B4" in text
+    assert "B4.1" in text
+    assert "B5" in text
+    assert "B5.1" in text
     assert "runtime=cst" in text or "evaluation.two_pass.runtime: cst" in text
     assert "config.local.yaml" in text
     assert "run_workflow_1.py" in text

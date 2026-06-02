@@ -333,6 +333,46 @@ def _should_use_enriched_jsonl(cfg: dict, records_cfg: dict) -> bool:
     return eval_mode == "two_pass"
 
 
+def _handle_sigint_event(
+    *,
+    ctrl_c_count: list[int],
+    cleanup_func,
+    exit_func,
+    print_func=print,
+    logger=None,
+) -> None:
+    """Handle a SIGINT event with best-effort cleanup on second Ctrl+C.
+
+    Parameters
+    ----------
+    ctrl_c_count : list[int]
+        Mutable counter (``[0]`` for first call).
+    cleanup_func : callable
+        Called with ``cleanup_func(force=True)`` on second Ctrl+C.
+    exit_func : callable
+        Called with ``exit_func(130)`` after cleanup attempt.
+    print_func : callable
+        Output function (default ``print``).
+    logger : logger or None
+        Logger for cleanup failure warnings.
+    """
+    ctrl_c_count[0] += 1
+    if ctrl_c_count[0] >= 2:
+        print_func("\nForce exit.", flush=True)
+        try:
+            cleanup_func(force=True)
+        except Exception as exc:
+            msg = str(exc)[:200]
+            if logger is not None:
+                logger.warning("Force-exit cleanup failed: %s", msg)
+        exit_func(130)
+    print_func(
+        "\nWaiting for current evaluation to finish "
+        "(Ctrl+C again to force quit)...",
+        flush=True,
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the argument parser for Workflow 1 CLI."""
     parser = argparse.ArgumentParser(description="Workflow 1 SAO optimisation")
@@ -495,14 +535,13 @@ def main() -> None:
     ctrl_c_count = [0]
 
     def _sigint_handler(signum, frame):
-        ctrl_c_count[0] += 1
-        if ctrl_c_count[0] >= 2:
-            print("\nForce exit.", flush=True)
-            _os._exit(130)
-        print(
-            "\nWaiting for current evaluation to finish "
-            "(Ctrl+C again to force quit)...",
-            flush=True,
+        _handle_sigint_event(
+            ctrl_c_count=ctrl_c_count,
+            cleanup_func=lambda force: _cleanup_workflow_connection(
+                workflow, force=force,
+            ),
+            exit_func=_os._exit,
+            logger=_logger,
         )
 
     try:

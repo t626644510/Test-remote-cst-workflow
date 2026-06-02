@@ -255,8 +255,10 @@ For ``runtime=cst`` operation you need a local ``config.local.yaml``
 ``opt.optimize()`` call, closing the CST Design Environment connection
 on both normal completion and ``KeyboardInterrupt``.  The final output
 includes ``CST cleanup: attempted=True closed=True pid=<PID>``.
-If a second ``Ctrl+C`` is pressed or ``_os._exit`` is invoked, cleanup may
-be bypassed.  After any live run, verify via ``Get-Process`` /
+If a second ``Ctrl+C`` is pressed, ``_handle_sigint_event`` runs a
+best-effort ``_cleanup_workflow_connection(force=True)`` before
+``_os._exit(130)``.  If cleanup fails, a warning is logged and
+hard-exit proceeds.  After any live run, verify via ``Get-Process`` /
 ``MainWindowTitle`` that no DE window remains.  A background ``cstd``
 licensing service with no window is normal and should not be confused
-with an open DE.  See B5.1 report for implementation details.
+with an open DE.  See B5.1 and D1 reports for implementation details.

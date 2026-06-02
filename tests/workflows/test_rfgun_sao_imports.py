@@ -4717,3 +4717,136 @@ def test_c3_2_two_pass_evaluator_callback_invoked_twice():
     evaluator(np.array([0.5]))
     evaluator(np.array([0.6]))
     assert call_count[0] == 2
+
+# ============================================================
+# AJ. Ctrl+C hard-exit cleanup — D1
+# ============================================================
+
+def test_ctrl_c_first_event_no_cleanup():
+    """First Ctrl+C does not call cleanup or exit."""
+    from workflows.rfgun_sao.run import _handle_sigint_event
+
+    count = [0]
+    cleanup_called = []
+    exit_called = []
+    captured_msgs = []
+
+    def _cleanup(force=False):
+        cleanup_called.append(force)
+
+    def _exit(code):
+        exit_called.append(code)
+
+    def _print(msg, **kw):
+        captured_msgs.append(msg)
+
+    _handle_sigint_event(
+        ctrl_c_count=count,
+        cleanup_func=_cleanup,
+        exit_func=_exit,
+        print_func=_print,
+    )
+
+    assert count[0] == 1
+    assert cleanup_called == []
+    assert exit_called == []
+    assert any("Waiting" in m for m in captured_msgs)
+
+
+def test_ctrl_c_second_event_cleanup_and_exit():
+    """Second Ctrl+C calls cleanup(force=True) and exits with 130."""
+    from workflows.rfgun_sao.run import _handle_sigint_event
+
+    count = [0]
+    cleanup_called = []
+    exit_called = []
+    captured_msgs = []
+
+    def _cleanup(force=False):
+        cleanup_called.append(force)
+
+    def _exit(code):
+        exit_called.append(code)
+
+    def _print(msg, **kw):
+        captured_msgs.append(msg)
+
+    # First event
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_cleanup,
+        exit_func=_exit, print_func=_print,
+    )
+    # Second event
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_cleanup,
+        exit_func=_exit, print_func=_print,
+    )
+
+    assert count[0] == 2
+    assert cleanup_called == [True]
+    assert exit_called == [130]
+    assert any("Force exit" in m for m in captured_msgs)
+
+
+def test_ctrl_c_cleanup_raises_exit_still_called():
+    """Cleanup exception does not prevent exit."""
+    from workflows.rfgun_sao.run import _handle_sigint_event
+
+    count = [0]
+    exit_called = []
+
+    def _failing_cleanup(force=False):
+        raise RuntimeError("cleanup failed")
+
+    def _exit(code):
+        exit_called.append(code)
+
+    # Two events to trigger second Ctrl+C
+    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_failing_cleanup, exit_func=_exit)
+    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_failing_cleanup, exit_func=_exit)
+
+    assert exit_called == [130]
+
+
+def test_ctrl_c_first_then_third_force_exit():
+    """Third+ Ctrl+C also triggers cleanup and exit."""
+    from workflows.rfgun_sao.run import _handle_sigint_event
+
+    count = [0]
+    cleanup_count = [0]
+
+    def _cleanup(force=False):
+        cleanup_count[0] += 1
+
+    def _exit(code):
+        pass
+
+    # First
+    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_cleanup, exit_func=_exit)
+    # Second
+    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_cleanup, exit_func=_exit)
+    # Third
+    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_cleanup, exit_func=_exit)
+
+    assert cleanup_count[0] == 2  # second and third
+
+
+def test_ctrl_c_cleanup_workflow_force_true():
+    """_cleanup_workflow_connection called with force=True from cleanup_func."""
+    from workflows.rfgun_sao.run import _cleanup_workflow_connection
+
+    close_kwargs = {}
+
+    class _FakeConn:
+        pid = 999
+        def close(self, force=False):
+            close_kwargs["force"] = force
+
+    class _WF:
+        _conn = _FakeConn()
+
+    r = _cleanup_workflow_connection(_WF(), force=True)
+    assert r["attempted"] is True
+    assert r["force"] is True
+    assert r["closed"] is True
+    assert close_kwargs.get("force") is True

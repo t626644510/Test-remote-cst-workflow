@@ -59,7 +59,8 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C3.2 | JSONL counter ordering fix — enriched path no longer double-increments; each path increments once per eval | Accepted |
 | C3.3 | JSONL docs/status polish — final Phase C docs alignment | Accepted |
 | C3.4 | README JSONL policy cleanup — removed stale `not written` wording | Accepted |
-| C3.5 | JSONL milestone closeout — status alignment | Completed / pending review |
+| C3.5 | JSONL milestone closeout — status alignment | Accepted |
+| D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup on second Ctrl+C | Completed / pending review |
 
 ### Authoritative behaviour
 
@@ -78,13 +79,44 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 - JSONL diagnostics/gate_results enrichment is wired for two-pass; single_pass gets core-only fallback.
 - No live CST validation of JSONL sidecar output yet.
 - JSONL is diagnostic only; not a recovery or warm-start source.
-- Ctrl+C hard-exit cleanup hardening remains future.
+- Second Ctrl+C now performs best-effort cleanup before hard exit (D1);
+  live CST validation of D1 cleanup pending.
 
 ### Next possible directions
 
-a) Ctrl+C hard-exit cleanup hardening.
-b) Live CST JSONL sidecar smoke (only when explicitly requested).
-c) Phase C docs/report consolidation (if needed).
+a) Live CST JSONL sidecar smoke (only when explicitly requested).
+b) Phase C docs/report consolidation (if needed).
+
+## Phase D — Ctrl+C hard-exit cleanup (D1)
+
+**Status:** D1 skeleton accepted; live CST validation pending.
+
+### Completed
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup before `_os._exit`, no-CST tests | Completed / pending review |
+
+### Authoritative behaviour
+
+- Normal completion and first Ctrl+C → `finally` block runs
+  `_cleanup_workflow_connection` as before.
+- Second Ctrl+C → `_handle_sigint_event` runs
+  `_cleanup_workflow_connection(force=True)` best-effort before
+  `_os._exit(130)`.  If cleanup raises, a warning is logged and
+  hard-exit proceeds.
+- Live CST validation of D1 cleanup pending.
+
+### Known caveats
+
+- If the Python runtime or OS-level kill (``taskkill /F``, SIGKILL) is used,
+  cleanup is bypassed entirely.
+- Live CST validation of D1 cleanup remains future.
+
+### Next possible directions
+
+a) Live CST validation of D1 hard-exit cleanup.
+b) Additional hardening (e.g. second SIGINT cleanup for single-pass path).
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

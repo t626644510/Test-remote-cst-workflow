@@ -1827,6 +1827,7 @@ def test_rfgun_sao_readme_status_current_after_b6():
     assert "B5" in text
     assert "B5.1" in text
     assert "B7" in text
+    assert "B8" in text
     assert "runtime=cst" in text or "evaluation.two_pass.runtime: cst" in text
     assert "config.local.yaml" in text
     assert "run_workflow_1.py" in text

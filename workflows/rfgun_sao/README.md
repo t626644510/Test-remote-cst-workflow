@@ -74,6 +74,8 @@ with ``n_initial_samples=1``, ``n_iterations=0``, ``retry.enabled=false``.
 | B4 | no-CST skeleton | Report-only diagnostic extraction — ``report_only_diagnostics`` | ``EvaluationResult.diagnostics``, ``report_as`` alias, duplicate-key detection |
 | B4.1 | no-CST hardening | Diagnostics preservation — stale reset, measurement runner wiring | ``_last_diagnostics`` reset on each eval, ``last_diagnostics()`` accessor |
 | B5.1 | no-CST fix + live | Runner-level CST cleanup — ``_cleanup_workflow_connection`` | ``CST cleanup: attempted=True closed=True pid=<PID>``; live verified |
+| B7 | no-CST skeleton | Gate metric role — ``compute_gate_pass``, ``compute_gate_results`` | ``gate_metric_names`` exposed; direction validated; excluded from objective/penalty |
+| B8 | no-CST wiring | Gate runtime rejection — ``summarize_gate_results``, two-pass evaluator override | Gate fail → all-ones penalties, ``solver_ok=False``, ``error="gate_reject:..."`` |
 
 ---
 

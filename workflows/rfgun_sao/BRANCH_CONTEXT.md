@@ -149,7 +149,8 @@ b) Move on to other non-live hardening or documentation work.
 | I | Stage runtime wiring no-CST — `StageRuntimeState`, `record_stage_observation`, `maybe_update_stage_bounds`, config helpers, opt-in only, disabled by default | Accepted |
 | I1 | Stage runtime semantics hardening — adaptive config propagation, BLOCK_STAGE_SHRINK non-transition, tightened test assertions | Accepted |
 | J | Evaluation database design/schema — `ParameterIdentity`, `EvaluationDatabaseRecord`, `RawEvaluationPayload`, `record_to_json_dict`, `record_from_json_dict`, schema DDL, no-CST tests | Accepted |
-| K | Evaluation database dedup no-CST skeleton — `InMemoryEvaluationRecordIndex`, `classify_record_for_dedup`, `decide_dedup_for_parameter`, no-CST tests | Completed / pending review |
+| K | Evaluation database dedup no-CST skeleton — `InMemoryEvaluationRecordIndex`, `classify_record_for_dedup`, `decide_dedup_for_parameter`, no-CST tests | Accepted |
+| L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 

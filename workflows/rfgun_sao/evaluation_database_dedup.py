@@ -199,7 +199,8 @@ def find_records_by_parameter_identity(
 ) -> list[EvaluationDatabaseRecord]:
     """Find records matching *pid* in the index.
 
-    Returns an empty list if *pid* is ``None`` or no match.
+    *pid* must not be ``None`` — callers must check before calling.
+    Returns an empty list if no match.
     """
     key = pid.parameter_key()
     return index.records_by_key.get(key, [])

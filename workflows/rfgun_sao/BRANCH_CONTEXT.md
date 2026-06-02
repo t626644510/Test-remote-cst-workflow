@@ -152,7 +152,8 @@ b) Move on to other non-live hardening or documentation work.
 | K | Evaluation database dedup no-CST skeleton — `InMemoryEvaluationRecordIndex`, `classify_record_for_dedup`, `decide_dedup_for_parameter`, no-CST tests | Accepted |
 | L | Evaluation database warm-start/prior construction — `PriorCandidate`, `PriorConstructionReport`, `classify_record_for_prior`, `build_prior_candidates_from_records`, `select_prior_candidates`, `derive_stage_observations_from_prior_candidates`, no-CST tests | Accepted |
 | L1 | Warm-start/prior semantics hardening — `record_to_prior_candidate` eligibility fix, diagnostic-only classification, missing tests, next-directions cleanup | Accepted |
-| M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Completed / pending review |
+| M | Retry / recovery taxonomy design — failure taxonomy, retry eligibility, recovery mechanism separation, evaluation database interaction, future phase order | Accepted |
+| N | Retry taxonomy no-CST helper skeleton — `RetryFailureClass`, `RetryEligibilityAction`, `RetryPolicy`, `classify_failure_record`, `classify_retry_eligibility`, `suggest_next_retry_tier`, `should_escalate_to_probably_infeasible`, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 
@@ -165,8 +166,8 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase M** — Retry / recovery taxonomy design
-- **Phase N** — Retry / inter-pass recovery skeleton
+- **Phase N1** — Retry taxonomy helper semantics hardening (if needed)
+- **Phase O** — Retry / inter-pass recovery runtime wiring no-CST only, opt-in disabled by default
 - **Phase O+** — Live CST smokes / production validation (only when explicitly requested)
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**

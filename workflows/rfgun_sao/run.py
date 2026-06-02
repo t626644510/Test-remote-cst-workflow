@@ -365,7 +365,13 @@ def _handle_sigint_event(
             msg = str(exc)[:200]
             if logger is not None:
                 logger.warning("Force-exit cleanup failed: %s", msg)
+            else:
+                print_func(
+                    "\nForce-exit cleanup failed: %s" % msg,
+                    flush=True,
+                )
         exit_func(130)
+        return  # only reached by test fakes; _os._exit does not return
     print_func(
         "\nWaiting for current evaluation to finish "
         "(Ctrl+C again to force quit)...",

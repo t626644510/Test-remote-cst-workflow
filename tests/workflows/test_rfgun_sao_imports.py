@@ -4786,26 +4786,43 @@ def test_ctrl_c_second_event_cleanup_and_exit():
     assert cleanup_called == [True]
     assert exit_called == [130]
     assert any("Force exit" in m for m in captured_msgs)
+    # Second event must not add "Waiting" message
+    waiting_msgs = [m for m in captured_msgs if "Waiting" in m]
+    assert len(waiting_msgs) == 1
 
 
 def test_ctrl_c_cleanup_raises_exit_still_called():
-    """Cleanup exception does not prevent exit."""
+    """Cleanup exception -> exit still called, warning logged."""
     from workflows.rfgun_sao.run import _handle_sigint_event
+    import logging
 
     count = [0]
     exit_called = []
+    captured_msgs = []
 
     def _failing_cleanup(force=False):
-        raise RuntimeError("cleanup failed")
+        raise RuntimeError("cleanup broken")
 
     def _exit(code):
         exit_called.append(code)
 
+    def _print(msg, **kw):
+        captured_msgs.append(msg)
+
     # Two events to trigger second Ctrl+C
-    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_failing_cleanup, exit_func=_exit)
-    _handle_sigint_event(ctrl_c_count=count, cleanup_func=_failing_cleanup, exit_func=_exit)
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_failing_cleanup,
+        exit_func=_exit, print_func=_print,
+        logger=logging.getLogger("test_logger"),
+    )
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_failing_cleanup,
+        exit_func=_exit, print_func=_print,
+        logger=logging.getLogger("test_logger"),
+    )
 
     assert exit_called == [130]
+    assert any("Force exit" in m for m in captured_msgs)
 
 
 def test_ctrl_c_first_then_third_force_exit():
@@ -4829,6 +4846,37 @@ def test_ctrl_c_first_then_third_force_exit():
     _handle_sigint_event(ctrl_c_count=count, cleanup_func=_cleanup, exit_func=_exit)
 
     assert cleanup_count[0] == 2  # second and third
+
+
+def test_ctrl_c_cleanup_failure_no_logger_prints_fallback():
+    """Cleanup failure with logger=None prints fallback message."""
+    from workflows.rfgun_sao.run import _handle_sigint_event
+
+    count = [0]
+    exit_called = []
+    captured_msgs = []
+
+    def _failing_cleanup(force=False):
+        raise RuntimeError("fallback msg")
+
+    def _exit(code):
+        exit_called.append(code)
+
+    def _print(msg, **kw):
+        captured_msgs.append(msg)
+
+    # Two events; logger=None
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_failing_cleanup,
+        exit_func=_exit, print_func=_print,
+    )
+    _handle_sigint_event(
+        ctrl_c_count=count, cleanup_func=_failing_cleanup,
+        exit_func=_exit, print_func=_print,
+    )
+
+    assert exit_called == [130]
+    assert any("Force-exit cleanup failed" in m for m in captured_msgs)
 
 
 def test_ctrl_c_cleanup_workflow_force_true():

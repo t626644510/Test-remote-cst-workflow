@@ -45,7 +45,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 
 ## Phase C — Diagnostics sidecar
 
-**Status:** JSONL diagnostics sidecar milestone accepted through C3.4; C3.5 closeout pending review.
+**Status:** JSONL diagnostics sidecar milestone closed through C3.5.
 
 ### Completed
 
@@ -89,13 +89,14 @@ b) Phase C docs/report consolidation (if needed).
 
 ## Phase D — Ctrl+C hard-exit cleanup (D1)
 
-**Status:** D1 skeleton accepted; live CST validation pending.
+**Status:** D1 accepted; D1.1 helper/docs polish pending review; live CST validation pending.
 
 ### Completed
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup before `_os._exit`, no-CST tests | Completed / pending review |
+| D1 | Ctrl+C hard-exit cleanup skeleton — `_handle_sigint_event` helper, best-effort cleanup before `_os._exit`, no-CST tests | Accepted |
+| D1.1 | D1 helper polish — return-after-exit guard, cleanup failure warning fallback, BRANCH_CONTEXT cleanup | Completed / pending review |
 
 ### Authoritative behaviour
 

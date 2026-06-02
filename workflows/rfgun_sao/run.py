@@ -448,13 +448,16 @@ def main() -> None:
         )
         # Core-only JSONL sidecar: used for single_pass or when JSONL disabled.
         # When use_enriched_jsonl is True, the enriched callback from the
-        # two-pass evaluator handles the JSONL write instead, so we skip here.
+        # two-pass evaluator handles the JSONL write and counter increment
+        # instead, so we skip both here.
         if not use_enriched_jsonl:
             _record_jsonl_sidecar_evaluation(
                 records_cfg, _wf_ref, int(_eval_counter[0]),
                 x_phys, raw_values, penalties, solver_ok, error,
             )
-        _eval_counter[0] += 1
+            _eval_counter[0] += 1
+        # When use_enriched_jsonl is True, counter is advanced in
+        # _enrichment_callback to avoid double-increment.
 
     from workflows.rfgun_sao.workflow import build_workflow_1  # noqa: F811
 

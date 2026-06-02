@@ -4624,3 +4624,96 @@ def test_mode_gating_two_pass_enriched_no_duplicate(tmp_path):
     assert len(loaded) == 1
     assert loaded[0]["diagnostics"] == {"d1": 1.0}
     assert loaded[0]["gate_results"] == {"g1": True}
+
+# ============================================================
+# AI. JSONL counter ordering fix — C3.2
+# ============================================================
+
+def test_c3_2_mode_gating_preserved():
+    """_should_use_enriched_jsonl semantics unchanged from C3.1."""
+    from workflows.rfgun_sao.run import _should_use_enriched_jsonl
+
+    assert _should_use_enriched_jsonl(
+        {"evaluation": {"mode": "single_pass"}},
+        {"enabled": True, "path": "/tmp/x.jsonl"},
+    ) is False
+
+    assert _should_use_enriched_jsonl(
+        {"evaluation": {"mode": "two_pass"}},
+        {"enabled": True, "path": "/tmp/x.jsonl"},
+    ) is True
+
+    assert _should_use_enriched_jsonl(
+        {"evaluation": {"mode": "two_pass"}},
+        {"enabled": False, "path": None},
+    ) is False
+
+
+def test_c3_2_single_pass_core_counter():
+    """simulated single_pass path: core write then increment each eval."""
+    counter = [0]
+    records = []
+
+    def _on_eval():
+        records.append(counter[0])
+        counter[0] += 1
+
+    _on_eval()
+    _on_eval()
+    assert records == [0, 1]
+    assert counter[0] == 2
+
+
+def test_c3_2_enriched_counter():
+    """simulated two_pass enriched path: no inc in on_eval, inc in callback."""
+    counter = [0]
+    records = []
+
+    def _on_eval():
+        pass  # no inc when use_enriched_jsonl=True
+
+    def _enrich_cb():
+        records.append(counter[0])
+        counter[0] += 1
+
+    # Simulate two evaluations
+    _on_eval()
+    _enrich_cb()
+    _on_eval()
+    _enrich_cb()
+    assert records == [0, 1]
+    assert counter[0] == 2
+
+
+def test_c3_2_two_pass_evaluator_callback_invoked_twice():
+    """Two-pass enriched callback invoked once per evaluation, no duplicate."""
+    from workflows.rfgun_sao.two_pass import make_two_pass_runtime_evaluator
+    import numpy as np
+
+    call_count = [0]
+
+    def _jsonl_cb(**kw):
+        call_count[0] += 1
+
+    cal_runner = _FakeCalibrationRunner(
+        success=True, f0_ghz=11.424, s11_min_db=-10.0,
+    )
+    meas_runner = _FakeMeasurementRunner(
+        penalty_values={"f1": 0.25},
+        raw_values={"f1": 11.424},
+    )
+    weights = np.array([1.0])
+
+    evaluator = make_two_pass_runtime_evaluator(
+        param_names=["p1"],
+        metric_names=["f1"],
+        objectives=[],
+        weights=weights,
+        calibration_runner=cal_runner,
+        measurement_runner=meas_runner,
+        evaluation_record_callback=_jsonl_cb,
+    )
+
+    evaluator(np.array([0.5]))
+    evaluator(np.array([0.6]))
+    assert call_count[0] == 2

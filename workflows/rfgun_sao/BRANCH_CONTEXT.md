@@ -143,8 +143,9 @@ b) Move on to other non-live hardening or documentation work.
 | E | Workflow3 capability migration design — staged search, adaptive bounds, retry/recovery, evaluation database, future phase order | Accepted |
 | F | Stage search no-CST helpers — `StageCandidateStatus`, `StageBounds`, `StageSummary`, `summarize_stage_observations`, `decide_stage_transition`, `make_recentered_bounds`, no-CST tests | Accepted |
 | F1 | Stage search helper semantics hardening — min-span using reference_span, database-reused accounting fix, rate clamp, high-fail-recenters regression tests | Accepted |
-| G | Adaptive bounds no-CST helpers — boundary/quality detection, `recommend_adaptive_bounds`, expand/shift helpers | Reviewed / needs G1 polish |
-| G1 | Adaptive bounds semantics hardening — per-parameter clipping, affected-param-only expansion, validation, quality clustering threshold | Completed / pending review |
+| G | Adaptive bounds no-CST helpers — boundary/quality detection, `recommend_adaptive_bounds`, expand/shift helpers | Accepted |
+| G1 | Adaptive bounds semantics hardening — per-parameter clipping, affected-param-only expansion, validation, quality clustering threshold | Accepted |
+| H | Stage + adaptive integration policy — `combine_stage_and_adaptive_decisions`, `build_adaptive_input_from_stage_decision`, `extract_high_quality_points`, no-CST tests | Completed / pending review |
 
 ### Migration constraints
 

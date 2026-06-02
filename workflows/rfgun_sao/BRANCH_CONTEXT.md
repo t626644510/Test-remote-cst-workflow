@@ -161,7 +161,8 @@ b) Move on to other non-live hardening or documentation work.
 | P1 | CST cleanup reliability gap analysis / hardening plan — no-CST `cst_cleanup_diagnostics.py` helper (classify_cst_process, should_force_kill_orphan_de, summarize_cleanup_observation), 24 no-CST tests | Accepted at 07d9133 |
 | P2 | CST cleanup observation live smoke / hardening decision — two-phase live CST confirmed identical orphan DE pattern (PID 36496); P1 helper validated; cleanup gap still open; cleanup runtime hardening recommended before retry runtime CST wiring | Accepted at d3b6668 |
 | P3 | CST cleanup runtime hardening — `_retry_handler` stored on workflow; `_cleanup_workflow_connection` calls `close_all()` to close all connections including replacement DE; live validated: orphan eliminated (both PID 18252 and 57924 terminated, only cstd.exe remains) | Accepted at 0251aee |
-| Q | Production-scale validation readiness plan — validation matrix (T1/T2/T3), success/failure criteria, artifact policy, root shim gating, rollback plan; docs-only | Completed / pending review |
+| Q | Production-scale validation readiness plan — validation matrix (T1/T2/T3), success/failure criteria, artifact policy, root shim gating, rollback plan; docs-only | Accepted at e052cba |
+| Q1 | Minimal multi-evaluation live validation — n_initial=3, n_iter=2 (5 evals), Best F -18002.12 (17% improvement), P3 cleanup verified across multiple evals: 6 close hangs handled, no orphan DE, no manual cleanup | Completed / pending review |
 
 ### Migration constraints
 
@@ -201,9 +202,9 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase Q1** — Production-scale live validation (multi-evaluation SAO run), only if operator explicitly requests
-- **Phase R** — Root shim repoint readiness / rollback plan, only after Q1 acceptance
-- Root shim repoint remains last; must not be attempted before Q1 acceptance
+- **Phase Q2** — Repeated-run cleanup stability validation, only if operator explicitly requests
+- **Phase R** — Root shim repoint readiness / rollback plan, only after Q1/Q2 acceptance
+- Root shim repoint remains last; must not be attempted before Q1/Q2 acceptance
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

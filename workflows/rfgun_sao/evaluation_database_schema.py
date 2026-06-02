@@ -146,7 +146,8 @@ class RawEvaluationPayload:
     gate_results : dict[str, bool] or None
         Gate pass/fail results keyed by output name.
     diagnostics : dict[str, Any] or None
-        Report-only diagnostics from C-phase sidecar.
+        Report-only / diagnostics-shaped metadata.
+        This schema does **not** read the Phase C JSONL diagnostic sidecar.
     artifact_refs : dict[str, str] or None
         References to external artifacts (paths, file names).
         String-only — no artifact writes.

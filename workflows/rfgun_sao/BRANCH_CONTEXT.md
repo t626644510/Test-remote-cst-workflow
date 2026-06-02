@@ -160,7 +160,8 @@ b) Move on to other non-live hardening or documentation work.
 | P | Live CST smoke for retry/recovery — minimal single_pass validation (n_initial=1, n_iter=0), Best F=-15392.38, cleanup revealed orphan DE hang issue; retry runtime not yet wired to CST runner | Accepted at 38d3d86 |
 | P1 | CST cleanup reliability gap analysis / hardening plan — no-CST `cst_cleanup_diagnostics.py` helper (classify_cst_process, should_force_kill_orphan_de, summarize_cleanup_observation), 24 no-CST tests | Accepted at 07d9133 |
 | P2 | CST cleanup observation live smoke / hardening decision — two-phase live CST confirmed identical orphan DE pattern (PID 36496); P1 helper validated; cleanup gap still open; cleanup runtime hardening recommended before retry runtime CST wiring | Accepted at d3b6668 |
-| P3 | CST cleanup runtime hardening — `_retry_handler` stored on workflow; `_cleanup_workflow_connection` calls `close_all()` to close all connections including replacement DE; live validated: orphan eliminated (both PID 18252 and 57924 terminated, only cstd.exe remains) | Completed / pending review |
+| P3 | CST cleanup runtime hardening — `_retry_handler` stored on workflow; `_cleanup_workflow_connection` calls `close_all()` to close all connections including replacement DE; live validated: orphan eliminated (both PID 18252 and 57924 terminated, only cstd.exe remains) | Accepted at 0251aee |
+| Q | Production-scale validation readiness plan — validation matrix (T1/T2/T3), success/failure criteria, artifact policy, root shim gating, rollback plan; docs-only | Completed / pending review |
 
 ### Migration constraints
 
@@ -200,7 +201,9 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase Q+** — Production-scale validation / root shim repoint last
+- **Phase Q1** — Production-scale live validation (multi-evaluation SAO run), only if operator explicitly requests
+- **Phase R** — Root shim repoint readiness / rollback plan, only after Q1 acceptance
+- Root shim repoint remains last; must not be attempted before Q1 acceptance
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

@@ -42,31 +42,31 @@ Cross-implied enable remains prevented:
 
 ### Data flow
 
-```
-build_workflow_1(config, ...)
-  |
-  +-- Resolve evaluation_database config (DDB)
-  +-- Open SQLiteEvaluationDatabase if enabled
-  +-- Resolve success_reuse config (SR)
-  +-- Resolve warm_start config (WS3)
-  |     if ws_cfg.enabled and _evaluation_db is not None:
-  |       rows = _evaluation_db.get_all_records()
-  |       ws_report = load_warm_start_priors(rows, ws_cfg, ...)
-  |       workflow._db_warm_start_report = ws_report
-  +-- Build optimizer, evaluator, workflow container
-  +-- Return (workflow, optimizer, evaluator)
+WS3.1 moved DB prior loading from ``build_workflow_1()`` into ``run.py``
+after checkpoint load.  WS3.2 refactored the merge to use pure helpers.
 
-run_workflow_1.py / run.py main()
-  |
-  +-- ckpt.load() -> warm_xy (checkpoint priors)
-  +-- workflow._db_warm_start_report -> DB warm-start priors
-  +-- Merge: convert DbWarmStartPrior -> (X, F) arrays
-  |     ws_x = [[p.v1, p.v2, ...], ...]
-  |     ws_f = [p.scalar, ...]
-  +-- Merge with checkpoint priors (vstack, concatenate)
-  +-- prior_data = (merged_X, merged_F)
-  +-- opt.optimize(evaluator=ev, prior_data=prior_data)
 ```
+ckpt.load() -> warm_xy
+    |
+    v
+prior_data = warm_xy           # checkpoint prior_data
+ckpt_keys = parameter_keys_from_prior_data(prior_data[0], param_names)
+    |
+    v
+all_rows = _evaluation_db.get_all_records()
+ws_report = load_warm_start_priors(all_rows, ws_cfg,
+                checkpoint_parameter_keys=ckpt_keys, ...)
+    |
+    v
+if ws_report.accepted_priors > 0:
+    ws_priors = ws_report.diagnostics["priors"]
+    merged, merge_diag = merge_checkpoint_and_db_priors(
+                            prior_data, ws_priors, param_names)
+    if merged is not None:
+        prior_data = merged
+    |
+    v
+opt.optimize(evaluator=..., prior_data=prior_data)
 
 ### DB row source
 
@@ -95,15 +95,14 @@ run_workflow_1.py / run.py main()
 
 ---
 
-## Test coverage (16 tests)
+## Test coverage
 
-| Class | Tests | Coverage |
-|-------|-------|----------|
-| `TestWS3Config` | 5 | Default disabled, DB alone, SR alone, WS without DB raises, WS needs explicit enable |
-| `TestPriorLoading` | 6 | Loads SUCCESS rows, converts to X/F arrays, no evaluator call, counts in report, rejection counts, duplicate counts |
-| `TestWSandSRIndependence` | 2 | WS without SR does not skip eval, SR without WS does not load priors |
-| `TestMalformedRows` | 1 | Malformed param_values rejected |
-| `TestSafety` | 2 | No JSONL, no CST imports |
+The WS3.1 phase reorganized the WS3 test suite.  The file
+``test_rfgun_sao_db_warm_start_ws3.py`` now contains **42 tests**
+across 10 test classes (see WS3.1 section below).  The original 16-test
+WS3 suite was replaced with broader coverage including checkpoint dedup,
+fake optimizer harness, disabled semantics, malformed rows, pure helpers,
+and full diagnostics coverage.
 
 ---
 
@@ -331,7 +330,7 @@ implemented.
 | ``workflows/rfgun_sao/run.py`` | **Modified** | Moved DB prior loading after checkpoint with ``checkpoint_parameter_keys`` dedup; compute ``ckpt_keys`` from workflow param names; detailed logging with dedup counts |
 | ``workflows/rfgun_sao/evaluation_database_storage.py`` | **Modified** | Fixed stale "No warm-start" header comment and class docstring |
 | ``workflows/rfgun_sao/evaluation_database_warm_start.py`` | **Modified** | Added ``parameter_keys_from_prior_data``, ``db_priors_to_prior_data``, ``merge_checkpoint_and_db_priors`` helpers |
-| ``tests/workflows/test_rfgun_sao_db_warm_start_ws3.py`` | **Modified** | Added 43 no-CST tests: checkpoint dedup, fake optimizer harness, disabled semantics, malformed rows, helpers, full diagnostics |
+| ``tests/workflows/test_rfgun_sao_db_warm_start_ws3.py`` | **Modified** | 40 no-CST tests: checkpoint dedup, fake optimizer harness, disabled semantics, malformed rows, helpers, full diagnostics |
 | ``workflows/rfgun_sao/BRANCH_CONTEXT.md`` | **Updated** | WS3.1 phase status |
 | ``reports/restructure_plan/wf1_db_warm_start_ws3_optimizer_wiring.md`` | **Updated** | This WS3.1 report section |
 
@@ -341,7 +340,50 @@ implemented.
 
 ---
 
-## Commit message proposal
+## WS3.2 — runtime helper alignment and report polish
+
+### Changes
+
+1. **``run.py`` aligned with pure helpers** — the hand-written
+   ``ParameterIdentity`` loop for checkpoint key computation was
+   replaced with ``parameter_keys_from_prior_data()``, and the
+   manual ``vstack``/``concatenate`` merge was replaced with
+   ``merge_checkpoint_and_db_priors()``.  The same pure no-CST
+   helpers that are unit-tested in ``TestHelpers`` now drive the
+   actual runtime merge path.
+
+2. **Diagnostics logging updated** — ``skipped_duplicates`` is now
+   included in all three log messages (merged, no-eligible, and
+   no-DB-priors), so the operator sees the full per-key dedup count
+   alongside ``found_rows``, ``rejected_rows``, and
+   ``skipped_checkpoint_duplicates``.
+
+3. **Tests strengthened** — the fake optimizer harness now receives
+   its prior_data via ``merge_checkpoint_and_db_priors()`` (the same
+   helper ``run.py`` uses) instead of a hand-rolled ``vstack``.
+   Added a DB-only merge test and a diagnostics-keys-required test.
+   All merge-path tests assert that ``merge_checkpoint_and_db_priors``
+   diagnostics contain ``ckpt_count``, ``db_input_count``,
+   ``db_checkpoint_duplicates``, and ``db_accepted``.
+
+### Validation
+
+Test count grew from 40 (WS3.1) to **42** (WS3.2).  Same command suite
+as WS3.1; no regressions across the full test matrix.
+
+### Explicit statements
+
+| Statement | Status |
+|-----------|--------|
+| Live CST run | **No** |
+| Default config changed | **Not changed** |
+| ``run.py`` uses the tested helper path | **Yes** |
+| Checkpoint dedup active in runtime | **Yes** |
+| DB priors call evaluator | **No** |
+| DB priors invoke retry runtime | **No** |
+| Warm-start implies success reuse | **No** |
+| Failure reuse / probably-infeasible skip | **Not implemented** |
+| WS4 live smoke | **Future, requires explicit approval** |
 
 ```
 feat(wf1): harden DB warm-start optimizer wiring WS3.1

@@ -184,7 +184,7 @@ class TestCheckpointDedup:
         assert pid2.parameter_key() in keys
 
     def test_ckpt_plus_unique_db_merge_row_count(self, tmp_path):
-        """Checkpoint 2 rows + 2 unique DB rows = 4 merged rows."""
+        """Checkpoint 2 rows + 2 unique DB rows = 4 merged rows via helper."""
         # Seed DB with two rows whose keys differ from checkpoint keys
         db_path = _seed_db(tmp_path, [
             {"values": [10.0], "scalar": 0.1},
@@ -205,15 +205,21 @@ class TestCheckpointDedup:
         assert report.accepted_priors == 2, "both DB rows should be accepted"
         assert report.skipped_checkpoint_duplicates == 0
 
-        # Build merged prior_data: checkpoint (2 rows) + DB (2 rows) = 4
-        ckpt_x = np.array([[1.0], [2.0]], dtype=float)
-        ckpt_f = np.array([5.0, 6.0], dtype=float)
+        # Use same merge helper as run.py
+        ckpt_data = (
+            np.array([[1.0], [2.0]], dtype=float),
+            np.array([5.0, 6.0], dtype=float),
+        )
         ws_priors = (report.diagnostics or {}).get("priors", [])
-        ws_x, ws_f = db_priors_to_prior_data(ws_priors)
-        merged_x = np.vstack([ckpt_x, ws_x])
-        merged_f = np.concatenate([ckpt_f, ws_f])
-        assert len(merged_x) == 4
-        assert len(merged_f) == 4
+        merged, merge_diag = merge_checkpoint_and_db_priors(
+            ckpt_data, ws_priors, ["p0"],
+        )
+        assert merged is not None
+        assert len(merged[0]) == 4
+        assert len(merged[1]) == 4
+        assert merge_diag["ckpt_count"] == 2
+        assert merge_diag["db_accepted"] == 2
+        assert merge_diag["db_checkpoint_duplicates"] == 0
 
     def test_no_duplicate_checkpoint_db_keys_in_final(self, tmp_path):
         """Duplicate checkpoint/DB parameter_key does not appear twice."""
@@ -236,17 +242,20 @@ class TestCheckpointDedup:
         assert report.accepted_priors == 1  # only [99.0]
         assert report.skipped_checkpoint_duplicates == 1
 
-        # Simulate merge: 1 checkpoint row + 1 accepted DB row
-        ckpt_x = np.array([[0.5]], dtype=float)
-        ckpt_f = np.array([1.0], dtype=float)
+        # Use merge helper: 1 checkpoint row + 1 accepted DB row
+        ckpt_data = (np.array([[0.5]], dtype=float), np.array([1.0], dtype=float))
         ws_priors = (report.diagnostics or {}).get("priors", [])
-        ws_x, ws_f = db_priors_to_prior_data(ws_priors)
+        merged, merge_diag = merge_checkpoint_and_db_priors(
+            ckpt_data, ws_priors, ["p0"],
+        )
+        assert merged is not None
+        assert len(merged[0]) == 2
+        assert merge_diag["ckpt_count"] == 1
+        assert merge_diag["db_accepted"] == 1
+        assert merge_diag["db_checkpoint_duplicates"] == 0
 
         # Verify no overlapping keys in merged X
-        all_keys = _ckpt_keys_from_prior_data(
-            (np.vstack([ckpt_x, ws_x]), np.concatenate([ckpt_f, ws_f])),
-            ["p0"],
-        )
+        all_keys = _ckpt_keys_from_prior_data(merged, ["p0"])
         assert len(all_keys) == 2  # two distinct keys
 
 
@@ -341,7 +350,7 @@ class TestFakeOptimizerHarness:
         assert result.f_opt is not None
 
     def test_fake_optimizer_receives_merged_prior_data(self, tmp_path):
-        """Fake optimizer receives merged checkpoint+DB prior_data."""
+        """Fake optimizer receives merged data from the same helper run.py uses."""
         from collections import namedtuple
         FakeResult = namedtuple("FakeResult", ["x_opt", "f_opt"])
 
@@ -362,12 +371,13 @@ class TestFakeOptimizerHarness:
         # Build checkpoint with 2 rows
         ckpt_x = np.array([[1.0], [2.0]], dtype=float)
         ckpt_f = np.array([5.0, 6.0], dtype=float)
+        prior_data = (ckpt_x, ckpt_f)
 
-        # Convert DB priors and merge
+        # Use the same merge helper that run.py uses
         ws_priors = (report.diagnostics or {}).get("priors", [])
-        ws_x, ws_f = db_priors_to_prior_data(ws_priors)
-        merged_x = np.vstack([ckpt_x, ws_x])
-        merged_f = np.concatenate([ckpt_f, ws_f])
+        merged, merge_diag = merge_checkpoint_and_db_priors(
+            prior_data, ws_priors, ["p0"],
+        )
 
         # Fake optimizer receives merged data
         class FakeOptimizer:
@@ -378,11 +388,52 @@ class TestFakeOptimizerHarness:
                 return FakeResult(x_opt=np.array([0.5]), f_opt=np.array([1.0]))
 
         opt = FakeOptimizer()
-        opt.optimize(evaluator=lambda x: 0.0, prior_data=(merged_x, merged_f))
+        opt.optimize(evaluator=lambda x: 0.0, prior_data=merged)
         received = opt.prior_data_received
         assert received is not None
         assert len(received[0]) == 4
         assert len(received[1]) == 4
+        assert merge_diag["ckpt_count"] == 2
+        assert merge_diag["db_accepted"] == 2
+        assert merge_diag["db_input_count"] == 2
+        assert merge_diag["db_checkpoint_duplicates"] == 0
+
+    def test_fake_optimizer_receives_db_only_via_helper(self, tmp_path):
+        """Fake optimizer receives DB-only prior_data via merge helper (no checkpoint)."""
+        from collections import namedtuple
+        FakeResult = namedtuple("FakeResult", ["x_opt", "f_opt"])
+
+        db_path = _seed_db(tmp_path, [
+            {"values": [10.0], "scalar": 0.1},
+            {"values": [20.0], "scalar": 0.2},
+        ])
+        db_cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(db_cfg) as db:
+            all_rows = db.get_all_records()
+        ws_cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors(
+            all_rows, ws_cfg, metric_names=["m1"], param_names=["p0"],
+        )
+        assert report.accepted_priors == 2
+        ws_priors = (report.diagnostics or {}).get("priors", [])
+        merged, merge_diag = merge_checkpoint_and_db_priors(
+            None, ws_priors, ["p0"],
+        )
+
+        class FakeOptimizer:
+            def __init__(self):
+                self.prior_data_received = None
+            def optimize(self, *, evaluator=None, prior_data=None, **kw):
+                self.prior_data_received = prior_data
+                return FakeResult(x_opt=np.array([0.5]), f_opt=np.array([1.0]))
+
+        opt = FakeOptimizer()
+        opt.optimize(evaluator=lambda x: 0.0, prior_data=merged)
+        received = opt.prior_data_received
+        assert received is not None
+        assert len(received[0]) == 2
+        assert merge_diag["ckpt_count"] == 0
+        assert merge_diag["db_accepted"] == 2
 
     def test_fake_optimizer_prior_data_none_when_disabled(self):
         """Fake optimizer receives None prior_data when WS disabled."""
@@ -766,6 +817,29 @@ class TestHelpers:
         assert len(merged[0]) == 1
         np.testing.assert_array_almost_equal(merged[0], [[0.5]])
         assert diag["db_accepted"] == 0
+
+    def test_merge_diagnostics_all_keys_present(self):
+        """merge_checkpoint_and_db_priors diagnostics include all required keys."""
+        ckpt = (
+            np.array([[1.0], [2.0]], dtype=float),
+            np.array([5.0, 6.0], dtype=float),
+        )
+        db_priors = [
+            _make_db_prior([0.5], scalar=0.3),
+            _make_db_prior([1.0], scalar=0.5),  # checkpoint dup
+        ]
+        merged, diag = merge_checkpoint_and_db_priors(ckpt, db_priors, ["p0"])
+        assert merged is not None
+        # Diagnostics must include all required keys
+        for key in ("ckpt_count", "db_input_count", "db_checkpoint_duplicates", "db_accepted"):
+            assert key in diag, f"missing key: {key}"
+            assert diag[key] >= 0, f"{key} should be >= 0, got {diag[key]}"
+        # Verify actual values
+        assert diag["ckpt_count"] == 2
+        assert diag["db_input_count"] == 2
+        assert diag["db_checkpoint_duplicates"] == 1
+        assert diag["db_accepted"] == 1
+        assert len(merged[0]) == 3  # 2 ckpt + 1 accepted DB
 
 
 # ===================================================================

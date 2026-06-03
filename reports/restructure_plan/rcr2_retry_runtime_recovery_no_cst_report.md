@@ -197,3 +197,16 @@ RCR2 rfgun_sao retry-runtime recovery callback + dedicated registry
 No live CST, no real COM disconnect, no legacy handler dependency,
 no default config change.
 ```
+
+
+## RCR2.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Track initial connection | `workflow.py` now calls `_retry_runtime_registry.track(conn)` after registry creation, so the initial CST connection is tracked for cleanup. Tier-2 recovery `close_all` closes it before creating the replacement. |
+| 2. `on_reconnect` safety | Recovery callback now tracks new connection via `registry.track(new_conn)` **before** calling `evaluator.on_reconnect(new_conn)`. If `on_reconnect` fails, `registry.close_all(force=True)` closes the new connection. No untracked replacement remains. |
+| 3. Cleanup no early-return | `_cleanup_workflow_connection` no longer returns early when `workflow._conn is None`. Registry and retry_handler cleanup run regardless of `_conn` state. |
+| 4. Cleanup integration tests | Added `TestOnReconnectSafety` (2 tests) and `TestCleanupWorkflowConnection` (6 tests) covering: on_reconnect closes new connection, tier 2 closes initial connection, registry cleanup even when `_conn is None`, both handler+registry, idempotent, workflow=None early return, registry exception caught |
+| Test count | 28 recovery tests (was 20: +8 new). Total: 465 (437 existing + 28 new). |
+
+No live CST, no default config change, no generated artifacts.

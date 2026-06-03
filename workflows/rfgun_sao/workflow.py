@@ -410,6 +410,10 @@ def build_workflow_1(
             return new_conn
 
         _retry_runtime_registry = CstConnectionRegistry()
+        # Track the initial CST connection so it is closed via
+        # registry.close_all(force) on tier-2 recovery or final cleanup.
+        if conn is not None:
+            _retry_runtime_registry.track(conn)
         _retry_runtime_recovery = make_cst_recovery_callback(
             connection_factory=_retry_connection_factory,
             evaluator=wf1_evaluator,

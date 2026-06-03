@@ -298,30 +298,33 @@ def _cleanup_workflow_connection(
     }
     if workflow is None:
         return result
-    conn = getattr(workflow, "_conn", None)
-    if conn is None:
-        return result
-    result["attempted"] = True
-    try:
-        pid = getattr(conn, "pid", None)
-        result["pid"] = pid
-    except Exception:
-        pass
-    try:
-        conn.close(force=force)
-        result["closed"] = True
-    except Exception as exc:
-        msg = str(exc)[:200]
-        result["error"] = msg
-        _logger.warning("CST cleanup (force=%s, pid=%s): %s", force, result["pid"], msg)
 
-    # Close ALL retry handler connections (orphan DE protection).
+    # Phase 1 — close workflow._conn if present
+    conn = getattr(workflow, "_conn", None)
+    if conn is not None:
+        result["attempted"] = True
+        try:
+            pid = getattr(conn, "pid", None)
+            result["pid"] = pid
+        except Exception:
+            pass
+        try:
+            conn.close(force=force)
+            result["closed"] = True
+        except Exception as exc:
+            msg = str(exc)[:200]
+            result["error"] = msg
+            _logger.warning("CST cleanup (force=%s, pid=%s): %s", force, result["pid"], msg)
+
+    # Phase 2 — close ALL retry handler connections (orphan DE protection).
     # After force_reset() the retry handler creates a new CST DE but
     # workflow._conn still references the old nulled connection.  Closing
     # only workflow._conn misses the replacement DE, leaving an orphan
     # window.  close_all() iterates every connection the handler created.
+    # This runs even if workflow._conn is None (e.g. already closed).
     rh = getattr(workflow, "_retry_handler", None)
     if rh is not None:
+        result["attempted"] = True
         try:
             rh.close_all(force=force)
             _logger.debug(
@@ -333,11 +336,13 @@ def _cleanup_workflow_connection(
                 force, str(exc)[:200],
             )
 
-    # Close retry runtime connection registry (RCR2).
+    # Phase 3 — close retry runtime connection registry (RCR2).
     # Tracks replacement connections created by the recovery callback.
     # Works independently of legacy retry handler.
+    # This runs even if workflow._conn is None and retry_handler is None.
     reg = getattr(workflow, "_retry_connection_registry", None)
     if reg is not None:
+        result["attempted"] = True
         try:
             diag = reg.close_all(force=force)
             _logger.debug(

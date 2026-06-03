@@ -359,8 +359,17 @@ def make_cst_recovery_callback(
         try:
             registry.close_all(force=True)
             new_conn = connection_factory()
-            evaluator.on_reconnect(new_conn)
+            # Track immediately after factory so there is never an
+            # untracked replacement.  If on_reconnect fails, we close
+            # the tracked new connection via close_all.
             registry.track(new_conn)
+            try:
+                evaluator.on_reconnect(new_conn)
+            except Exception:
+                # on_reconnect failed — close the tracked new connection
+                # and propagate the exception upward.
+                registry.close_all(force=True)
+                raise
             if logger is not None:
                 pid = getattr(new_conn, "pid", "?")
                 logger.info("RCR recovery: reconnected (tier=%d, PID=%s)", tier, pid)

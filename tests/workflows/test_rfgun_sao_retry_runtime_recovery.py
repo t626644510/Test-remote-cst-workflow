@@ -31,6 +31,7 @@ from workflows.rfgun_sao.retry_runtime_cst import (
     make_cst_retry_evaluate_once,
 )
 from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+from workflows.rfgun_sao.run import _cleanup_workflow_connection
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +410,141 @@ class TestCleanupIntegration:
         if reg is not None:
             reg.close_all(force=True)  # should not execute
         assert True  # reached without error
+
+
+# ===================================================================
+# on_reconnect safety: no untracked replacement
+# ===================================================================
+
+
+class TestOnReconnectSafety:
+    def test_on_reconnect_exception_closes_new_connection(self) -> None:
+        """on_reconnect failure: new connection is closed via registry."""
+        reg = CstConnectionRegistry()
+        old = FakeConnection(pid=100)
+        reg.track(old)
+
+        class EvalWithFailReconnect:
+            def on_reconnect(self, new_conn):
+                raise RuntimeError("reconnect failed")
+
+        ev = EvalWithFailReconnect()
+
+        new_conn_obj = FakeConnection(pid=200)
+
+        def factory():
+            return new_conn_obj
+
+        cb = make_cst_recovery_callback(factory, ev, reg)
+        result = cb(2, None)
+        assert result is False
+        # Old connection was closed (close_all before factory)
+        assert old._closed is True
+        # New connection was tracked then closed by close_all after on_reconnect failed
+        assert new_conn_obj._closed is True
+        # Registry is empty (both connections closed and cleared)
+        assert reg.tracked_count == 0
+
+    def test_tier2_closes_initial_tracked_connection(self) -> None:
+        """Tier 2 recovery closes the initial tracked connection."""
+        reg = CstConnectionRegistry()
+        initial = FakeConnection(pid=100)
+        reg.track(initial)
+        ev = FakeEvaluatorWithSpy()
+
+        def factory():
+            return FakeConnection(pid=200)
+
+        cb = make_cst_recovery_callback(factory, ev, reg)
+        result = cb(2, None)
+        assert result is True
+        # Initial connection was closed by close_all at start of tier 2
+        assert initial._closed is True
+        # New connection is tracked
+        assert reg.tracked_count == 1
+        assert ev.reconnect_calls[0].pid == 200
+
+
+# ===================================================================
+# _cleanup_workflow_connection integration
+# ===================================================================
+
+
+class _FakeWorkflow:
+    """Minimal workflow container for cleanup tests."""
+    def __init__(self, conn=None, retry_handler=None, registry=None):
+        self._conn = conn
+        self._retry_handler = retry_handler
+        self._retry_connection_registry = registry
+
+
+class TestCleanupWorkflowConnection:
+    def test_cleanup_closes_registry(self) -> None:
+        """_cleanup_workflow_connection closes retry connection registry."""
+        reg = CstConnectionRegistry()
+        c1 = FakeConnection(pid=100)
+        reg.track(c1)
+        wf = _FakeWorkflow(conn=FakeConnection(pid=50), registry=reg)
+        result = _cleanup_workflow_connection(wf)
+        assert c1._closed is True
+        assert result.get("attempted") is True
+
+    def test_cleanup_closes_registry_even_when_conn_is_none(self) -> None:
+        """Registry cleanup runs even when workflow._conn is None."""
+        reg = CstConnectionRegistry()
+        c1 = FakeConnection(pid=100)
+        reg.track(c1)
+        wf = _FakeWorkflow(conn=None, registry=reg)
+        result = _cleanup_workflow_connection(wf)
+        assert c1._closed is True
+        assert result.get("attempted") is True
+
+    def test_cleanup_both_handler_and_registry(self) -> None:
+        """Both legacy retry handler and registry are closed."""
+        reg = CstConnectionRegistry()
+        reg.track(FakeConnection(pid=100))
+
+        class FakeHandler:
+            def __init__(self):
+                self.closed = False
+            def close_all(self, force=False):
+                self.closed = True
+
+        handler = FakeHandler()
+        wf = _FakeWorkflow(conn=FakeConnection(pid=50), retry_handler=handler, registry=reg)
+        result = _cleanup_workflow_connection(wf)
+        assert handler.closed is True
+        assert reg.tracked_count == 0  # cleared by close_all
+
+    def test_cleanup_idempotent(self) -> None:
+        """Calling cleanup twice is safe."""
+        reg = CstConnectionRegistry()
+        c1 = FakeConnection(pid=100)
+        reg.track(c1)
+        wf = _FakeWorkflow(conn=FakeConnection(pid=50), registry=reg)
+        # First call
+        r1 = _cleanup_workflow_connection(wf)
+        assert c1._closed is True
+        assert reg.tracked_count == 0
+        # Second call — should not raise
+        r2 = _cleanup_workflow_connection(wf)
+        # Result for second call: _conn is now None (already closed),
+        # registry is None (already cleared)
+        assert r2 is not None
+
+    def test_workflow_none_returns_early(self) -> None:
+        """workflow is None returns immediately."""
+        result = _cleanup_workflow_connection(None)
+        assert result.get("attempted") is False
+
+    def test_cleanup_exception_in_registry_caught(self) -> None:
+        """Registry close_all exception is caught and logged."""
+        reg = CstConnectionRegistry()
+        reg.track(FakeRaisingConnection())
+        wf = _FakeWorkflow(conn=FakeConnection(pid=50), registry=reg)
+        # Should not raise despite registry close_all raising
+        result = _cleanup_workflow_connection(wf)
+        assert result is not None
 
 
 # ===================================================================

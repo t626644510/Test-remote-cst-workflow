@@ -1,13 +1,7 @@
 # Branch Context -- `rfgun_sao` (Experimental Consolidation)
 
 
-
-
-
 ## Status
-
-
-
 
 
 This package is the experimental consolidation target for RF gun SAO
@@ -19,13 +13,7 @@ capabilities.  It is derived from the validated
 `workflows/rfgun_single_pass/` package.
 
 
-
-
-
 ## Core rules
-
-
-
 
 
 1. **Do not modify `workflows/rfgun_single_pass/`**.  The validated
@@ -43,7 +31,7 @@ capabilities.  It is derived from the validated
    `workflows.rfgun_sao.types` for evaluation types.
 
 
-4. **Do not change `run_workflow_1.py`** until live single-pass
+4. **`run_workflow_1.py` is already repointed to `workflows.rfgun_sao.run` and is protected; do not modify it unless a phase explicitly scopes root-shim work.**
 
 
    regression passes on this package.
@@ -70,13 +58,7 @@ capabilities.  It is derived from the validated
    confused with a CST Design Environment window.**
 
 
-
-
-
 ## Minimum validation before any commit
-
-
-
 
 
 ```powershell
@@ -94,19 +76,10 @@ pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 ```
 
 
-
-
-
 ## Phase A --?Two-pass orchestration and checkpoint (A1-----?5.1)
 
 
-
-
-
 See `reports/restructure_plan/` for detail.  Milestone summary:
-
-
-
 
 
 - Two-pass runtime skeleton with injectable calibration/measurement runners
@@ -124,31 +97,16 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 - README validation taxonomy cleanup
 
 
-
-
-
 **Status:** Closed.  Checkpoint milestone accepted through A25.1.
-
-
-
 
 
 ## Phase C --?Diagnostics sidecar
 
 
-
-
-
 **Status:** JSONL diagnostics sidecar milestone closed through C3.5.
 
 
-
-
-
 ### Completed
-
-
-
 
 
 | Phase | Scope | Status |
@@ -184,13 +142,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 | C3.5 | JSONL milestone closeout --?status alignment | Accepted |
 
 
-
-
-
 ### Authoritative behaviour
-
-
-
 
 
 - ``.ckpt`` / ``CheckpointManager`` remains the authoritative persisted
@@ -220,13 +172,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
 - Each evaluation increments exactly once; iteration starts at 0.
 
 
-
-
-
 ### Known caveats
-
-
-
 
 
 - JSONL diagnostics/gate_results enrichment is wired for two-pass; single_pass gets core-only fallback.
@@ -244,13 +190,7 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
   live CST validation of D1 cleanup pending.
 
 
-
-
-
 ### Next possible directions
-
-
-
 
 
 a) Live CST JSONL sidecar smoke (only when explicitly requested).
@@ -259,25 +199,13 @@ a) Live CST JSONL sidecar smoke (only when explicitly requested).
 b) Phase C docs/report consolidation (if needed).
 
 
-
-
-
 ## Phase D --?Ctrl+C hard-exit cleanup (D1)
-
-
-
 
 
 **Status:** Phase D blocked cleanup milestone closed through D2.7. Normal live CST cleanup validated; hard-exit live Ctrl+C validation deferred to future true interactive terminal.
 
 
-
-
-
 ### Completed
-
-
-
 
 
 | Phase | Scope | Status |
@@ -322,13 +250,7 @@ b) Phase C docs/report consolidation (if needed).
 | D2.7 | Blocked cleanup milestone closeout | Accepted |
 
 
-
-
-
 ### Authoritative behaviour
-
-
-
 
 
 - Normal completion and first Ctrl+C -?`finally` block runs
@@ -358,13 +280,7 @@ b) Phase C docs/report consolidation (if needed).
   interactive operator-controlled terminal outside local-agent tool context.
 
 
-
-
-
 ### Known caveats
-
-
-
 
 
 - If the Python runtime or OS-level kill (``taskkill /F``, SIGKILL) is used,
@@ -379,13 +295,7 @@ b) Phase C docs/report consolidation (if needed).
   execution environment (see D2.2 report).
 
 
-
-
-
 ### Next possible directions
-
-
-
 
 
 a) True manual interactive live CST Ctrl+C validation outside local-agent
@@ -397,25 +307,13 @@ a) True manual interactive live CST Ctrl+C validation outside local-agent
 b) Move on to other non-live hardening or documentation work.
 
 
-
-
-
 ## Phase E --?Workflow3 capability migration design
-
-
-
 
 
 **Status:** Design document accepted; implementation deferred to future phases (F, G, H, ...).
 
 
-
-
-
 ### Completed
-
-
-
 
 
 | Phase | Scope | Status |
@@ -514,13 +412,7 @@ b) Move on to other non-live hardening or documentation work.
 | V | Merge handoff / docs polish / future tracks technical plan --?docs polish (stale wording fixes); future feature tracks technical document created; merge handoff recommendation | Completed / pending review |
 
 
-
-
-
 ### Migration constraints
-
-
-
 
 
 - Staged search (F-----?, adaptive bounds (G-----?, and evaluation database helpers (J-----? exist as **no-CST helpers and opt-in runtime wiring only**; durable DB, live CST runtime validation, and retry remain future.
@@ -541,13 +433,7 @@ b) Move on to other non-live hardening or documentation work.
 - Subsequent phases use single-letter names F, G, H, I, J, K, ... with decimal sub-phases (F1, F2, ...).
 
 
-
-
-
 ### Phase O / O1 caveats
-
-
-
 
 
 - Phase O and O1 are no-CST only --?no live CST retry validation.
@@ -580,13 +466,7 @@ b) Move on to other non-live hardening or documentation work.
 - Phase C JSONL diagnostic sidecar is not referenced or used.
 
 
-
-
-
 ### Phase P / P1 / P2 caveats
-
-
-
 
 
 - Phase P live CST smoke was partial --?evaluation succeeded but cleanup left an orphan DE window (PID 30808) requiring manual `taskkill /F`.
@@ -622,25 +502,13 @@ b) Move on to other non-live hardening or documentation work.
 - No durable DB, no failure reuse, no probably-infeasible skip. Root shim later repointed at Phase S.
 
 
-
-
-
 ### Future work --?separate branches only
-
-
-
 
 
 **This consolidation branch is complete after Phase V acceptance.** Future feature tracks must be independently planned on separate branches. Do not continue adding new feature phases to this branch.
 
 
-
-
-
 The following tracks have been **accepted on separate branches** and are now merge/archive only:
-
-
-
 
 
 | Track | Branch | Final phase | Accepted HEAD |
@@ -655,19 +523,13 @@ The following tracks have been **accepted on separate branches** and are now mer
 | DB-backed success reuse / dedup | `feature/wf1-db-success-reuse` | SR4.1 | `b532856232c7f4b8d320c52c83f8f1b25e61e89e` |
 
 
-
-
-
 The following capabilities remain **not implemented** and are separately gated future work on new branches:
-
-
-
 
 
 - Phase O/O1 retry runtime CST wiring --?currently no-CST callback-only skeleton
 
 
-- DB warm-start / optimizer runtime warm-start injection --?design phase WS1 underway
+- WS1 -- DB warm-start design -- Completed / pending review (docs-only; next: WS2 prior loader, WS3 optimizer injection, WS4 live smoke conditional)
 
 
 - Failure reuse --?last track, start advisory-only
@@ -676,25 +538,13 @@ The following capabilities remain **not implemented** and are separately gated f
 - Broader production campaigns (beyond 9 evaluations)
 
 
-
-
-
 These are explicitly **not part of this consolidation** and should be planned as independent future phases.
-
-
-
 
 
 ## Phase B --?Metric roles and gate (B1-----?) --?**CLOSED**
 
 
-
-
-
 ### Completed
-
-
-
 
 
 | Phase | Scope | Status |
@@ -733,13 +583,7 @@ These are explicitly **not part of this consolidation** and should be planned as
 | B9 | Gate runtime rejection live CST smoke --?q0 gate fail confirmed, Best F=1.0, `gate_reject:q0_gate` | Accepted |
 
 
-
-
-
 ### Authoritative behaviour
-
-
-
 
 
 - **optimize**: in `objective_names`, checkpoint arrays; penalty via
@@ -793,13 +637,7 @@ These are explicitly **not part of this consolidation** and should be planned as
   `error="gate_reject:q0_gate"`, Best F=1.0, cleanup closed=True.
 
 
-
-
-
 ### Live evidence
-
-
-
 
 
 | Smoke | Best F | Key confirmation |
@@ -817,22 +655,13 @@ These are explicitly **not part of this consolidation** and should be planned as
 | B9 (gate rejection) | 1.0 | q0 raw=18630.8 vs threshold=999999999 greater_than -?`q0_gate=False`; `error="gate_reject:q0_gate"`; objective/checkpoint arrays exclude gate; cleanup closed=True pid=59364 |
 
 
-
-
-
 ### Known caveats
-
-
-
 
 
 - Production-scale validation remains future.
 
 
 - Report-only diagnostics not persisted to checkpoint.
-
-
-
 
 
 > **Historical Phase B caveats (superseded by later phases):**
@@ -847,25 +676,9 @@ These are explicitly **not part of this consolidation** and should be planned as
 > remains blocked by non-interactive tool environment).
 
 
-
-
-
 ### Next possible directions
 
 
-
-
-
 a) Additional live CST regression smoke (only when explicitly requested).
-
-
-
-
-
-
-
-
-
-
 
 

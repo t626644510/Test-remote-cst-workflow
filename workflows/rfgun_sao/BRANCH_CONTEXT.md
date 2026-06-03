@@ -168,7 +168,8 @@ b) Move on to other non-live hardening or documentation work.
 | S | Root shim repoint — `run_workflow_1.py` import changed from `rfgun_single_pass.run` to `rfgun_sao.run`; CLI verified; 399 tests pass; minimal import-only change with explicit operator approval | Accepted at 76ac3bf |
 | S1 | Post-repoint root shim live sanity / rollback drill — first live CST through repointed root shim (run_workflow_1.py), Best F -15392.37, cleanup no orphan DE, rollback drill documented | Accepted at c1f2232 |
 | T | Production-scale campaign — first production-scale run through root shim (run_workflow_1.py, n_initial=3, n_iter=6, 9 evals), Best F -18002.12, zero orphan DE, no manual cleanup | Accepted at 5929027 |
-| U | WF1 SAO consolidation closeout / merge readiness — docs-only closeout: 31 live evals since P3 fix, zero orphan DE, zero manual cleanup; all merge readiness criteria satisfied; future work separately gated | Completed / pending review |
+| U | WF1 SAO consolidation closeout / merge readiness — docs-only closeout: 31 live evals since P3 fix, zero orphan DE, zero manual cleanup; all merge readiness criteria satisfied; future work separately gated | Accepted at c82e809 |
+| V | Merge handoff / docs polish / future tracks technical plan — docs polish (stale wording fixes); future feature tracks technical document created; merge handoff recommendation | Completed / pending review |
 
 ### Migration constraints
 
@@ -188,7 +189,7 @@ b) Move on to other non-live hardening or documentation work.
 - No durable DB — no append/lookup/load/save.
 - No failure reuse implementation.
 - No optimizer/runtime warm-start injection.
-- No root shim repoint.
+- At O/O1 time the root shim had not yet been repointed; root shim was later repointed at Phase S and live-validated at S1/T.
 - Inter-pass/post-eval recovery are callback-only skeletons — no real CST cleanup invoked.
 - Phase C JSONL diagnostic sidecar is not referenced or used.
 
@@ -203,16 +204,20 @@ b) Move on to other non-live hardening or documentation work.
 - Phase P3 implemented cleanup runtime hardening: `_retry_handler` stored on workflow; `_cleanup_workflow_connection` now calls `retry_handler.close_all(force)` to close ALL connections including the replacement DE created by `force_reset()`.
 - Live CST validation confirmed the fix: both original DE (PID 18252) and replacement DE (PID 57924) properly terminated; only `cstd.exe` licensing service remained.
 - No manual `taskkill` was needed after the fix (Phase P and P2 both required manual cleanup).
-- No production-scale validation was performed.
-- No durable DB, no failure reuse, no probably-infeasible skip, no root shim repoint.
+- Production-scale validation was performed at Phase T (9 evals, no orphan DE).
+- No durable DB, no failure reuse, no probably-infeasible skip. Root shim later repointed at Phase S.
 
-### Future work (separately gated)
+### Future work — separate branches only
 
-The following capabilities remain **not implemented** and would require separate phase planning:
+**This consolidation branch is complete after Phase V acceptance.** Future feature tracks must be independently planned on separate branches. Do not continue adding new feature phases to this branch.
+
+The following capabilities remain **not implemented** and are separately gated future work (see `reports/restructure_plan/wf1_sao_future_feature_tracks_technical_plan.md` for detailed technical plan):
 
 - Phase O/O1 retry runtime CST wiring — currently no-CST callback-only skeleton
 - Durable evaluation DB (J–L) — schema/helpers exist; runtime DB not implemented
-- Failure reuse — design only
+- DB-backed success reuse / dedup
+- DB warm-start / optimizer runtime warm-start injection
+- Failure reuse — last track, start advisory-only
 - DB warm-start / optimizer runtime warm-start injection
 - Broader production campaigns (beyond 9 evaluations)
 

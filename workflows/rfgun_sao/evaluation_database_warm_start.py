@@ -714,14 +714,20 @@ def load_warm_start_priors(
                 _count(rejection_reasons, "objective_values_keys_mismatch")
                 report.rejected_rows += 1
                 continue
-            # All objective values must be finite numeric
-            all_finite = True
+            # All objective values must be numeric and finite
+            obj_valid = True
             for val in ov.values():
-                if not _is_finite_numeric(val):
-                    all_finite = False
+                if not isinstance(val, (int, float)):
+                    _count(rejection_reasons, "invalid_objective_values")
+                    obj_valid = False
                     break
-            if not all_finite:
-                _count(rejection_reasons, "nonfinite_objective_values")
+            if obj_valid:
+                for val in ov.values():
+                    if not _is_finite_numeric(val):
+                        _count(rejection_reasons, "nonfinite_objective_values")
+                        obj_valid = False
+                        break
+            if not obj_valid:
                 report.rejected_rows += 1
                 continue
 

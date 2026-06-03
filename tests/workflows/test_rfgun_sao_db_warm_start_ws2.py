@@ -485,7 +485,7 @@ class TestObjectiveHardening:
         row["objective_values"] = json.dumps({"m1": "not_numeric"})
         cfg = DbWarmStartConfig(enabled=True)
         report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
-        assert "nonfinite_objective_values" in report.rejection_reasons
+        assert "invalid_objective_values" in report.rejection_reasons
 
     def test_nan_objective_rejected(self):
         import json

@@ -81,13 +81,18 @@ Accepts a list of DB row dicts (pre-fetched), applies eligibility checks, dedup,
 
 ### Duplicate / capping policy
 
+Duplicate parameter_key is resolved **per key before final capping**, not first-occurrence:
+
 | Aspect | Policy |
 |--------|--------|
-| Duplicate parameter_key | First occurrence kept; subsequent skipped (counted in `skipped_duplicates`) |
-| `order_by="best_objective"` | Sort by ascending scalar, then newest `created_at`, then highest `id` |
-| `order_by="newest"` | Sort by descending `created_at`, then highest `id` |
-| `max_priors` cap | Capped after ordering; `capped=True` in report |
+| `order_by="best_objective"` | Keep lowest scalar, tie-break newer `created_at`, then higher row `id` |
+| `order_by="newest"` | Keep newest `created_at`, tie-break higher row `id` |
+| `skipped_duplicates` | Counts discarded same-key rows during per-key dedup |
+| `max_priors=0` | Means **no priors accepted** (not unlimited). Loader returns empty report. |
+| `config.enabled=False` | Means no priors loaded regardless of rows. |
+| `max_priors` cap | Applied after ordering; `capped=True` in report |
 | Checkpoint dedup | Optional `checkpoint_parameter_keys` set; matching keys skipped and counted |
+| `allow_raw_recompute=True` | Raises `ValueError` in WS2 (raw recompute not implemented) |
 
 ### Scalar computation
 
@@ -95,13 +100,30 @@ The scalar for ordering is derived from `__retry_penalty__` in diagnostics (if p
 
 ---
 
-## Test coverage (29 tests)
+## Test coverage (45 tests)
 
 | Class | Tests | Coverage |
 |-------|-------|----------|
-| `TestResolveConfig` | 12 | None/missing/disabled config, DB required, invalid order_by, negative max_priors, zero max_priors, custom values, no cross-implied enable |
+| `TestResolveConfig` | 12 | None/missing/disabled config, DB required, invalid order_by, negative/zero max_priors, custom values, no cross-implied enable, allow_raw_recompute rejection |
 | `TestLoadPriors` | 15 | Empty rows, SUCCESS row, failure/gate/schema/param/objective rejection, missing key, missing objective_values, empty objective_values, duplicate dedup, capping, checkpoint dedup, ordering (newest, best_objective) |
+| `TestDisabledConfig` | 1 | Disabled config returns empty report |
+| `TestMaxPriorsZero` | 2 | Resolver accepts 0; loader returns no priors |
+| `TestDuplicateHardening` | 4 | Worse-first best-wins, same scalar newer wins, same timestamp higher id wins, newest mode keeps newest |
+| `TestParamIdentityHardening` | 4 | Missing values, wrong length, non-numeric, key mismatch |
+| `TestObjectiveHardening` | 4 | Missing keys, non-numeric values, NaN, inf |
+| `TestAllowRawRecompute` | 1 | `allow_raw_recompute=True` raises ValueError |
 | `TestSafety` | 2 | No CST imports, no JSONL reference |
+
+### WS2.1 hardening additions (16 tests)
+
+| Area | Tests | What it validates |
+|------|-------|-------------------|
+| Disabled config | 1 | Empty report when `config.enabled=False` |
+| `max_priors=0` | 2 | Resolver accepts; loader returns empty |
+| Duplicate tie-break | 4 | Per-key best selection with correct scalar/created_at/id ordering |
+| Param identity | 4 | Missing/wrong-length/non-numeric param_values, key mismatch |
+| Objective payload | 4 | Missing keys, non-numeric values, NaN, inf rejection |
+| `allow_raw_recompute` | 1 | Raises `ValueError` in WS2 |
 
 ---
 
@@ -112,7 +134,7 @@ python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.
 -- Compiles OK.
 
 pytest tests/workflows/test_rfgun_sao_db_warm_start_ws2.py --tb=short -v
--- 29 passed
+-- 45 passed
 
 # Full regression (507 existing tests)
 pytest tests/workflows/test_rfgun_sao_imports.py --tb=short -- 230 passed
@@ -125,7 +147,7 @@ pytest tests/workflows/test_rfgun_sao_evaluation_success_reuse.py --tb=short -- 
 pytest tests/workflows/test_rfgun_sao_evaluation_database_storage.py --tb=short -- 40 passed
 pytest tests/workflows/test_rfgun_sao_evaluation_database_workflow.py --tb=short -- 10 passed
 
-Total: 536 passed, 1 pre-existing warning.
+Total: 552 passed, 1 pre-existing warning.
 ```
 
 ---

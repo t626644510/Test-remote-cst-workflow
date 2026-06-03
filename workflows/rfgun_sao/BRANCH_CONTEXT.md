@@ -69,10 +69,12 @@ Remote branches archived in MH3.
 
 #### Future planned tracks (post-merge)
 
-- Failure reuse -- last track, advisory-first
-- Probably-infeasible remains advisory only; not used for skip/reuse/runtime discard
-- Destructive OS-level COM kill / fault injection -- separately approved only
-- Broader production campaigns (beyond 9 evals) -- optional, not required by default
+- XR1 -- destructive recovery design / safety plan, docs-only (current track)
+- XR2 -- no-CST process/fault harness and classifier tests
+- XR3 -- bounded destructive live smoke only with explicit approval
+- FS -- failure/probably-infeasible skip, opt-in and fully audited
+- SE -- schema extension hooks if DB v1 becomes insufficient
+- Workflow2 field objectives deferred
 
 ### DB warm-start phases (WS track)
 
@@ -88,6 +90,7 @@ Remote branches archived in MH3.
 | MH1 | Accepted branch merge hygiene audit / plan | No |
 | MH2 | Sequential accepted branch merge execution / local verified merge | No |
 | MH3 | Archive merged branches / final merge-hygiene cleanup | No |
+| XR1 | Destructive recovery design / safety plan | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

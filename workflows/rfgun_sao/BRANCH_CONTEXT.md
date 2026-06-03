@@ -65,7 +65,7 @@ Future feature tracks are independently planned on separate branches.
 
 | Track | Branch | Status |
 |-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review; WS3.2 runtime helper alignment / report polish -- Completed / pending review; WS3.3 report/count cleanup -- Completed / pending review; WS4 bounded live DB warm-start smoke -- Completed / pending review |
+| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review; WS3.2 runtime helper alignment / report polish -- Completed / pending review; WS3.3 report/count cleanup -- Completed / pending review; WS4 bounded live DB warm-start smoke -- Completed / pending review; MH1 accepted branch merge hygiene audit / plan -- Completed / pending review |
 
 #### Planned future tracks
 
@@ -84,6 +84,7 @@ Future feature tracks are independently planned on separate branches.
 | WS3.2 | Runtime helper alignment / report polish | No |
 | WS3.3 | Report/count cleanup only | No |
 | WS4 | Bounded live warm-start smoke (conditional, explicit approval) | **Yes** |
+| MH1 | Accepted branch merge hygiene audit / plan | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

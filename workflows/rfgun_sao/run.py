@@ -6,9 +6,10 @@ Usage from project root::
     .venv\Scripts\python -m workflows.rfgun_sao.run --seed 43
     .venv\Scripts\python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 
-The backwards-compatible root entry point ``run_workflow_1.py`` still
-delegates to ``workflows.rfgun_single_pass.run`` during A-series
-consolidation.  It is intentionally not repointed to this module yet.
+The root entry point ``run_workflow_1.py`` was repointed to
+``workflows.rfgun_sao.run`` at Phase S and is protected.
+Use ``python run_workflow_1.py`` or ``python -m workflows.rfgun_sao.run``
+to run the consolidated workflow.
 """
 
 
@@ -588,8 +589,70 @@ def main() -> None:
             prior_data = warm_xy
             _logger.info(
                 "Warm-start from checkpoint: %d prior evaluations",
-                len(warm_xy[0]),
+                len(prior_data[0]),
             )
+
+    # Merge DB warm-start priors with checkpoint dedup (WS3.1 / WS3.2)
+    ws_cfg = getattr(workflow, "_db_warm_start_cfg", None)
+    ws_db = getattr(workflow, "_evaluation_db", None)
+    if ws_cfg is not None and ws_cfg.enabled and ws_db is not None:
+        from workflows.rfgun_sao.evaluation_database_warm_start import (
+            load_warm_start_priors as _load_ws_priors,
+            parameter_keys_from_prior_data as _ckpt_keys,
+            merge_checkpoint_and_db_priors as _merge_priors,
+        )
+        from workflows.rfgun_sao.evaluation_database_schema import (
+            current_schema_version,
+        )
+        try:
+            # Resolve parameter/metric names from the workflow object
+            _param_names = list(workflow._params.names)
+            _metric_names = list(workflow.objective_names)
+
+            # Compute checkpoint parameter keys via pure helper
+            ckpt_keys = (
+                _ckpt_keys(prior_data[0], _param_names)
+                if prior_data is not None else set()
+            )
+
+            # Load DB rows and run WS2 eligibility with checkpoint dedup
+            all_rows = ws_db.get_all_records()
+            ws_report = _load_ws_priors(
+                all_rows, ws_cfg,
+                metric_names=_metric_names,
+                param_names=_param_names,
+                checkpoint_parameter_keys=ckpt_keys,
+                current_schema=current_schema_version(),
+            )
+
+            if ws_report.accepted_priors > 0:
+                ws_priors = (ws_report.diagnostics or {}).get("priors", [])
+                # Use merge_checkpoint_and_db_priors for final merge
+                merged, merge_diag = _merge_priors(
+                    prior_data, ws_priors, _param_names,
+                )
+                if merged is not None:
+                    prior_data = merged
+
+                _logger.info(
+                    "Warm-start merged: %d checkpoint + %d DB = %d total "
+                    "(found=%d, rejected=%d, skipped_dup=%d, ckpt_dup=%d)",
+                    merge_diag["ckpt_count"], merge_diag["db_accepted"],
+                    len(prior_data[0]) if prior_data else 0,
+                    ws_report.found_rows, ws_report.rejected_rows,
+                    ws_report.skipped_duplicates,
+                    ws_report.skipped_checkpoint_duplicates,
+                )
+            else:
+                _logger.info(
+                    "DB warm-start: no eligible priors "
+                    "(found=%d, rejected=%d, skipped_dup=%d, ckpt_dup=%d)",
+                    ws_report.found_rows, ws_report.rejected_rows,
+                    ws_report.skipped_duplicates,
+                    ws_report.skipped_checkpoint_duplicates,
+                )
+        except Exception as exc:
+            _logger.warning("DB warm-start loading failed (non-fatal): %s", exc)
 
     ctrl_c_count = [0]
 

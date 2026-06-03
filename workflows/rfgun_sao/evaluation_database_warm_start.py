@@ -359,3 +359,613 @@ def derive_stage_observations_from_prior_candidates(
             reused=True,
         ))
     return obs
+
+
+# ===================================================================
+# WS2 -- DB warm-start prior loader (no-CST)
+# ===================================================================
+
+
+@dataclass(frozen=True)
+class DbWarmStartConfig:
+    """Configuration for DB-backed optimizer warm-start.
+
+    Parameters
+    ----------
+    enabled : bool
+        Master switch.  Independent of success_reuse.
+    max_priors : int
+        Maximum number of prior observations to load (default 50).
+    order_by : str
+        Ordering strategy: ``"best_objective"`` (ascending scalar) or
+        ``"newest"`` (descending created_at).
+    require_objective_values : bool
+        Reject rows without objective payload when True.
+    allow_raw_recompute : bool
+        Not implemented in WS2; must remain False.
+    """
+    enabled: bool = False
+    max_priors: int = 50
+    order_by: str = "best_objective"
+    require_objective_values: bool = True
+    allow_raw_recompute: bool = False
+
+
+@dataclass(frozen=True)
+class DbWarmStartPrior:
+    """One prior observation extracted from an eligible DB row.
+
+    Parameters
+    ----------
+    parameter_key : str
+        Deterministic key from the parameter identity.
+    parameter_identity : ParameterIdentity
+        Full parameter identity.
+    objective_values : dict[str, float]
+        Objective values from the DB row.
+    scalar : float
+        Computed objective scalar (sum of objective_values or from penalty).
+    objective_names : tuple[str, ...]
+        Ordered objective/metric names.
+    parameter_names : tuple[str, ...]
+        Ordered parameter names.
+    source_row_id : int or None
+        Row ID from evaluation_records.
+    source_run_id : str or None
+        Run ID from evaluation_records.
+    source_created_at : str or None
+        Creation timestamp from evaluation_records.
+    """
+    parameter_key: str
+    parameter_identity: ParameterIdentity
+    objective_values: dict[str, float]
+    scalar: float
+    objective_names: tuple[str, ...]
+    parameter_names: tuple[str, ...]
+    source_row_id: int | None = None
+    source_run_id: str | None = None
+    source_created_at: str | None = None
+
+
+@dataclass
+class DbWarmStartLoadReport:
+    """Structured report of a warm-start prior loading operation.
+
+    Parameters
+    ----------
+    found_rows : int
+        Total rows in the DB matching queried keys.
+    eligible_rows : int
+        Rows passing basic eligibility (SUCCESS, schema, identity).
+    accepted_priors : int
+        Priors finally accepted after capping and dedup.
+    rejected_rows : int
+        Rows that failed eligibility checks.
+    skipped_duplicates : int
+        Rows skipped because parameter_key already accepted (duplicate).
+    skipped_checkpoint_duplicates : int
+        Rows skipped because parameter_key already in checkpoint.
+    capped : bool
+        Whether max_priors limit was reached.
+    rejection_reasons : dict[str, int]
+        Counts of rejection by reason.
+    """
+    found_rows: int = 0
+    eligible_rows: int = 0
+    accepted_priors: int = 0
+    rejected_rows: int = 0
+    skipped_duplicates: int = 0
+    skipped_checkpoint_duplicates: int = 0
+    capped: bool = False
+    rejection_reasons: dict[str, int] = field(default_factory=dict)
+
+
+def resolve_db_warm_start_config(
+    config: dict | None,
+    *,
+    db_enabled: bool = False,
+) -> DbWarmStartConfig:
+    """Resolve warm-start config from a workflow configuration dict.
+
+    Parameters
+    ----------
+    config : dict or None
+        Full workflow configuration dict.
+    db_enabled : bool
+        Whether the evaluation database is enabled.
+
+    Returns
+    -------
+    DbWarmStartConfig
+        Resolved config.  ``enabled=False`` when section absent/disabled.
+
+    Raises
+    ------
+    ValueError
+        If ``warm_start.enabled=True`` but *db_enabled* is False,
+        or invalid ``order_by``, or negative ``max_priors``.
+    """
+    if config is None:
+        return DbWarmStartConfig()
+
+    raw = config.get("evaluation_database", None)
+    if raw is None:
+        return DbWarmStartConfig()
+
+    ws_raw = raw.get("warm_start", None)
+    if ws_raw is None:
+        return DbWarmStartConfig()
+
+    enabled = bool(ws_raw.get("enabled", False))
+    if not enabled:
+        return DbWarmStartConfig()
+
+    if not db_enabled:
+        raise ValueError(
+            "evaluation_database.warm_start.enabled=True requires "
+            "evaluation_database.enabled=True.",
+        )
+
+    order_by = str(ws_raw.get("order_by", "best_objective")).strip().lower()
+    if order_by not in ("best_objective", "newest"):
+        raise ValueError(
+            f"Invalid order_by={order_by!r}. Allowed: 'best_objective', 'newest'.",
+        )
+
+    max_priors = int(ws_raw.get("max_priors", 50))
+    if max_priors < 0:
+        raise ValueError(
+            f"max_priors={max_priors} is negative. Must be >= 0.",
+        )
+
+    allow_raw = bool(ws_raw.get("allow_raw_recompute", False))
+    if allow_raw:
+        raise ValueError(
+            "allow_raw_recompute=True is not supported in WS2. "
+            "Set allow_raw_recompute to false or remove it.",
+        )
+
+    return DbWarmStartConfig(
+        enabled=True,
+        max_priors=max_priors,
+        order_by=order_by,
+        require_objective_values=bool(ws_raw.get("require_objective_values", True)),
+        allow_raw_recompute=bool(ws_raw.get("allow_raw_recompute", False)),
+    )
+
+
+def _negate_str(s: str) -> str:
+    """Reverse a string for min() tie-breaking preferring larger values."""
+    return s[::-1]
+
+
+def _is_finite_numeric(value: object) -> bool:
+    """Check if value is a finite number."""
+    if not isinstance(value, (int, float)):
+        return False
+    if isinstance(value, float) and (value != value or value == float("inf") or value == -float("inf")):
+        return False
+    return True
+
+
+def _row_scalar(row: dict[str, Any]) -> float:
+    """Compute a scalar from a DB row for ordering."""
+    obj_raw = row.get("objective_values")
+    diag_raw = row.get("diagnostics")
+    if isinstance(obj_raw, str):
+        import json
+        try:
+            obj_raw = json.loads(obj_raw)
+        except (json.JSONDecodeError, TypeError):
+            obj_raw = None
+    if isinstance(diag_raw, str):
+        import json
+        try:
+            diag_raw = json.loads(diag_raw)
+        except (json.JSONDecodeError, TypeError):
+            diag_raw = None
+
+    # Prefer __retry_penalty__ for scalar
+    if isinstance(diag_raw, dict):
+        pen = diag_raw.get("__retry_penalty__")
+        if isinstance(pen, dict) and pen:
+            return sum(float(v) for v in pen.values() if isinstance(v, (int, float)))
+
+    # Fallback: sum objective_values
+    if isinstance(obj_raw, dict) and obj_raw:
+        return sum(float(v) for v in obj_raw.values() if isinstance(v, (int, float)))
+
+    return float("inf")
+
+
+def load_warm_start_priors(
+    rows: list[dict[str, Any]],
+    config: DbWarmStartConfig,
+    *,
+    metric_names: list[str],
+    param_names: list[str],
+    checkpoint_parameter_keys: set[str] | None = None,
+    current_schema: int | None = None,
+) -> DbWarmStartLoadReport:
+    """Build warm-start priors from a list of DB row dicts.
+
+    Parameters
+    ----------
+    rows : list[dict]
+        List of DB rows from ``query_by_parameter_key`` or a full scan.
+    config : DbWarmStartConfig
+        Resolved warm-start configuration.
+    metric_names : list[str]
+        Current ordered metric names.
+    param_names : list[str]
+        Current ordered parameter names.
+    checkpoint_parameter_keys : set[str] or None
+        Parameter keys already in the checkpoint (skip on match).
+    current_schema : int or None
+        Expected schema version.
+
+    Returns
+    -------
+    DbWarmStartLoadReport
+        Loading report with accepted priors and rejection stats.
+    """
+    from workflows.rfgun_sao.evaluation_database_schema import current_schema_version
+    import math
+
+    if current_schema is None:
+        current_schema = current_schema_version()
+
+    report = DbWarmStartLoadReport(found_rows=len(rows))
+
+    # Respect disabled config
+    if not config.enabled:
+        report.accepted_priors = 0
+        report.diagnostics = {"priors": []}
+        return report
+
+    # max_priors=0 means no priors accepted
+    if config.max_priors == 0:
+        report.accepted_priors = 0
+        report.diagnostics = {"priors": []}
+        return report
+
+    accepted: list[DbWarmStartPrior] = []
+    # Per-key tracking for duplicate resolution: key -> list of eligible priors
+    per_key: dict[str, list[DbWarmStartPrior]] = {}
+    rejection_reasons: dict[str, int] = {}
+    if checkpoint_parameter_keys is None:
+        checkpoint_parameter_keys = set()
+
+    for row in rows:
+        # Status must be SUCCESS
+        status = str(row.get("status", "")).strip().lower()
+        if status != "success":
+            _count(rejection_reasons, "status_not_success")
+            report.rejected_rows += 1
+            continue
+
+        # Schema version
+        row_schema = row.get("schema_version")
+        if row_schema is None or int(row_schema) != current_schema:
+            _count(rejection_reasons, "schema_incompatible")
+            report.rejected_rows += 1
+            continue
+
+        # Parameter key
+        param_key = row.get("parameter_key")
+        if not param_key:
+            _count(rejection_reasons, "missing_parameter_key")
+            report.rejected_rows += 1
+            continue
+
+        # Parameter names
+        pn_raw = row.get("param_names")
+        pn = _load_json_list(pn_raw)
+        if pn is None or list(pn) != param_names:
+            _count(rejection_reasons, "param_names_mismatch")
+            report.rejected_rows += 1
+            continue
+
+        # Parameter values
+        pv_raw = row.get("param_values")
+        pv = _load_json_list(pv_raw)
+        if pv is None:
+            _count(rejection_reasons, "missing_param_values")
+            report.rejected_rows += 1
+            continue
+        if len(pv) != len(param_names):
+            _count(rejection_reasons, "param_values_mismatch")
+            report.rejected_rows += 1
+            continue
+        # Validate all values are numeric
+        try:
+            pv_float = [float(v) for v in pv]
+        except (ValueError, TypeError):
+            _count(rejection_reasons, "invalid_param_values")
+            report.rejected_rows += 1
+            continue
+
+        # Parameter key consistency
+        pid_check = ParameterIdentity(param_names=list(pn), values=pv_float)
+        if pid_check.parameter_key() != param_key:
+            _count(rejection_reasons, "parameter_key_mismatch")
+            report.rejected_rows += 1
+            continue
+
+        # Objective names matching
+        on_raw = row.get("objective_names")
+        on = _load_json_list(on_raw)
+        if on is None or list(on) != metric_names:
+            _count(rejection_reasons, "objective_names_mismatch")
+            report.rejected_rows += 1
+            continue
+
+        # Objective values
+        ov_raw = row.get("objective_values")
+        ov = _load_json_dict(ov_raw)
+
+        if config.require_objective_values:
+            if ov is None or not ov:
+                _count(rejection_reasons, "missing_objective_values")
+                report.rejected_rows += 1
+                continue
+            # Objective values keys must match metric_names
+            if set(ov.keys()) != set(metric_names):
+                _count(rejection_reasons, "objective_values_keys_mismatch")
+                report.rejected_rows += 1
+                continue
+            # All objective values must be numeric and finite
+            obj_valid = True
+            for val in ov.values():
+                if not isinstance(val, (int, float)):
+                    _count(rejection_reasons, "invalid_objective_values")
+                    obj_valid = False
+                    break
+            if obj_valid:
+                for val in ov.values():
+                    if not _is_finite_numeric(val):
+                        _count(rejection_reasons, "nonfinite_objective_values")
+                        obj_valid = False
+                        break
+            if not obj_valid:
+                report.rejected_rows += 1
+                continue
+
+        # Checkpoint dedup (before per-key storage)
+        if param_key in checkpoint_parameter_keys:
+            _count(rejection_reasons, "checkpoint_duplicate")
+            report.skipped_checkpoint_duplicates += 1
+            continue
+
+        report.eligible_rows += 1
+
+        # Build prior
+        ov = ov or {}
+        scalar = _row_scalar(row)
+
+        prior = DbWarmStartPrior(
+            parameter_key=param_key,
+            parameter_identity=pid_check,
+            objective_values=dict(ov),
+            scalar=scalar,
+            objective_names=tuple(on) if on else tuple(metric_names),
+            parameter_names=tuple(pn),
+            source_row_id=row.get("id"),
+            source_run_id=row.get("run_id"),
+            source_created_at=row.get("created_at"),
+        )
+
+        # Store per-key for dedup
+        if param_key not in per_key:
+            per_key[param_key] = []
+        per_key[param_key].append(prior)
+
+    # Per-key dedup: keep best row per key
+    for key, candidates in per_key.items():
+        if len(candidates) == 1:
+            accepted.append(candidates[0])
+        else:
+            # Select best per key
+            if config.order_by == "newest":
+                # Keep newest created_at, then highest id
+                best = max(candidates, key=lambda p: (
+                    str(p.source_created_at or ""),
+                    p.source_row_id or 0,
+                ))
+                report.skipped_duplicates += len(candidates) - 1
+                accepted.append(best)
+            else:
+                # Keep lowest scalar (best objective), then newer created_at,
+                # then higher id.  Use max() with negated scalar because
+                # the lowest scalar is the most negative.
+                best = max(candidates, key=lambda p: (
+                    -p.scalar,
+                    str(p.source_created_at or ""),
+                    p.source_row_id or 0,
+                ))
+                report.skipped_duplicates += len(candidates) - 1
+                accepted.append(best)
+
+    # Apply ordering
+    if config.order_by == "best_objective":
+        accepted.sort(key=lambda p: (p.scalar, str(p.source_created_at or ""), p.source_row_id or 0))
+    elif config.order_by == "newest":
+        accepted.sort(
+            key=lambda p: (str(p.source_created_at or ""), p.source_row_id or 0),
+            reverse=True,
+        )
+
+    # Apply capping
+    if len(accepted) > config.max_priors:
+        accepted = accepted[:config.max_priors]
+        report.capped = True
+
+    report.accepted_priors = len(accepted)
+    report.rejection_reasons = dict(rejection_reasons)
+    report.diagnostics = {"priors": accepted}
+
+    return report
+
+
+def _count(d: dict[str, int], key: str) -> None:
+    """Increment a counter in a dict."""
+    d[key] = d.get(key, 0) + 1
+
+
+def _load_json_list(raw: Any) -> list | None:
+    """Parse a JSON string to a list, or return None."""
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        import json
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+def _load_json_dict(raw: Any) -> dict | None:
+    """Parse a JSON string to a dict, or return None."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        import json
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+    return None
+
+
+# ===================================================================
+# WS3.1 — Pure no-CST helpers for checkpoint-dedup merging
+# ===================================================================
+
+
+def parameter_keys_from_prior_data(
+    prior_x: np.ndarray,
+    param_names: list[str],
+) -> set[str]:
+    """Compute checkpoint-style parameter keys from a prior_data X array.
+
+    Each row of *prior_x* is converted to a ``ParameterIdentity`` key
+    using *param_names*.
+
+    Parameters
+    ----------
+    prior_x : np.ndarray
+        2-D array of shape ``(N, D)`` where ``D == len(param_names)``.
+    param_names : list[str]
+        Ordered parameter names for constructing identities.
+
+    Returns
+    -------
+    set[str]
+        One ``parameter_key`` per row.
+    """
+    keys: set[str] = set()
+    for x_vec in prior_x:
+        pid = ParameterIdentity(param_names=param_names, values=list(x_vec))
+        keys.add(pid.parameter_key())
+    return keys
+
+
+def db_priors_to_prior_data(
+    priors: list[DbWarmStartPrior],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convert a list of ``DbWarmStartPrior`` to ``(X, F)`` arrays.
+
+    Parameters
+    ----------
+    priors : list[DbWarmStartPrior]
+        Accepted warm-start priors.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(X, F)`` where ``X.shape == (N, D)`` and ``F.shape == (N,)``.
+    """
+    import numpy as np
+
+    ws_x = np.array(
+        [list(p.parameter_identity.values) for p in priors], dtype=float,
+    )
+    ws_f = np.array([p.scalar for p in priors], dtype=float)
+    return ws_x, ws_f
+
+
+def merge_checkpoint_and_db_priors(
+    checkpoint_prior_data: tuple[np.ndarray, np.ndarray] | None,
+    db_priors: list[DbWarmStartPrior],
+    param_names: list[str],
+) -> tuple[tuple[np.ndarray, np.ndarray] | None, dict[str, int]]:
+    """Merge checkpoint and DB priors, deduplicating by parameter key.
+
+    Checkpoint observations remain authoritative — any DB prior whose
+    ``parameter_key`` already appears in the checkpoint is omitted.
+
+    Parameters
+    ----------
+    checkpoint_prior_data : tuple[np.ndarray, np.ndarray] or None
+        ``(X, F)`` from checkpoint, or ``None``.
+    db_priors : list[DbWarmStartPrior]
+        Accepted DB warm-start priors.
+    param_names : list[str]
+        Ordered parameter names for key computation.
+
+    Returns
+    -------
+    merged : tuple[np.ndarray, np.ndarray] or None
+        Merged ``(X, F)``, or ``None`` when both inputs are empty.
+    diagnostics : dict[str, int]
+        Keys: ``"ckpt_count"``, ``"db_input_count"``,
+        ``"db_checkpoint_duplicates"``, ``"db_accepted"``.
+    """
+    import numpy as np
+
+    ckpt_count = 0
+    ckpt_keys: set[str] = set()
+    if checkpoint_prior_data is not None:
+        ckpt_x = checkpoint_prior_data[0]
+        ckpt_count = len(ckpt_x)
+        ckpt_keys = parameter_keys_from_prior_data(ckpt_x, param_names)
+
+    db_input_count = len(db_priors)
+
+    # Separate DB priors into checkpoint dup vs accepted
+    accepted_db: list[DbWarmStartPrior] = []
+    checkpoint_dups = 0
+    for prior in db_priors:
+        if prior.parameter_key in ckpt_keys:
+            checkpoint_dups += 1
+        else:
+            accepted_db.append(prior)
+
+    if checkpoint_prior_data is None and not accepted_db:
+        return None, {
+            "ckpt_count": ckpt_count,
+            "db_input_count": db_input_count,
+            "db_checkpoint_duplicates": checkpoint_dups,
+            "db_accepted": 0,
+        }
+
+    if checkpoint_prior_data is None:
+        merged_x, merged_f = db_priors_to_prior_data(accepted_db)
+    elif not accepted_db:
+        merged_x, merged_f = checkpoint_prior_data
+    else:
+        db_x, db_f = db_priors_to_prior_data(accepted_db)
+        merged_x = np.vstack([checkpoint_prior_data[0], db_x])
+        merged_f = np.concatenate([checkpoint_prior_data[1], db_f])
+
+    return (merged_x, merged_f), {
+        "ckpt_count": ckpt_count,
+        "db_input_count": db_input_count,
+        "db_checkpoint_duplicates": checkpoint_dups,
+        "db_accepted": len(accepted_db),
+    }

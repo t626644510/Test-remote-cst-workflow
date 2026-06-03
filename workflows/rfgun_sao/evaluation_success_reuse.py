@@ -90,11 +90,18 @@ def resolve_success_reuse_config(config: dict | None, *, db_enabled: bool = Fals
             "Enable the evaluation database first.",
         )
 
+    max_age_days = raw.get("max_age_days", None)
+    if max_age_days is not None:
+        raise ValueError(
+            "max_age_days is not supported in SR2. "
+            "Set max_age_days to null or remove it.",
+        )
+
     return SuccessReuseConfig(
         enabled=True,
         require_objective_values=bool(raw.get("require_objective_values", True)),
         allow_raw_recompute=bool(raw.get("allow_raw_recompute", False)),
-        max_age_days=raw.get("max_age_days", None),
+        max_age_days=None,
         log_decisions=bool(raw.get("log_decisions", True)),
     )
 
@@ -244,40 +251,25 @@ def _is_row_eligible(
     if not _objective_names_match(obj_names, metric_names):
         return False
 
-    # Payload validation
-    raw_metrics = row.get("raw_metrics")
+    # Payload validation: objective_values is always required in SR2.
+    # Raw-only rows are never eligible — no safe recompute helper exists.
     objective_values = row.get("objective_values")
+    if objective_values is None:
+        return False
+    if isinstance(objective_values, str):
+        try:
+            objective_values = json.loads(objective_values)
+        except (json.JSONDecodeError, TypeError):
+            return False
+    if not isinstance(objective_values, dict) or len(objective_values) == 0:
+        return False
 
-    if config.require_objective_values:
-        # objective_values must be present and non-null
-        if objective_values is None:
-            return False
-        if isinstance(objective_values, str):
-            try:
-                objective_values = json.loads(objective_values)
-            except (json.JSONDecodeError, TypeError):
-                return False
-        if not isinstance(objective_values, dict) or len(objective_values) == 0:
-            return False
-    else:
-        # At least one payload must be present
-        if raw_metrics is None and objective_values is None:
-            return False
-
-    # If allow_raw_recompute is False and no objective_values, reject
-    if not config.allow_raw_recompute and config.require_objective_values:
-        # Already checked above — objective_values must be present
-        pass
-    elif not config.allow_raw_recompute and not config.require_objective_values:
-        # require_objective_values=False but allow_raw_recompute=False:
-        # we need at least objective_values or raw_metrics
-        if objective_values is None and raw_metrics is None:
-            return False
-
-    # Max age check
+    # Max age check is not implemented in SR2 — raise if set.
     if config.max_age_days is not None:
-        # Age check is optional; deferred to SR3 if needed
-        pass
+        raise ValueError(
+            "max_age_days is not supported in SR2. "
+            "Set max_age_days to null or remove it.",
+        )
 
     return True
 
@@ -329,6 +321,7 @@ def reconstruct_evaluation_result(
         elif isinstance(raw_metrics_raw, dict):
             raw_metrics = raw_metrics_raw
 
+    # Parse objective_values; if missing or empty, return None (SR2 policy)
     objective_values: dict[str, float] = {}
     if objective_values_raw is not None:
         if isinstance(objective_values_raw, str):
@@ -338,6 +331,9 @@ def reconstruct_evaluation_result(
                 pass
         elif isinstance(objective_values_raw, dict):
             objective_values = objective_values_raw
+    if not objective_values:
+        log.warning("Success reuse reconstruction: objective_values missing or empty, returning None")
+        return None
 
     diagnostics: dict[str, Any] = {}
     if diagnostics_raw is not None:

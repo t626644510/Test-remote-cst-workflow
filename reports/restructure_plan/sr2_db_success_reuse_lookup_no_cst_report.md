@@ -144,6 +144,20 @@ Total: 502 passed, 1 pre-existing warning.
 
 ---
 
+## SR2.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Raw-only eligibility | SR2 now requires `objective_values` for all reusable rows. `require_objective_values=False` still rejects raw-only rows because no safe recompute helper exists. `test_raw_only_accepted_with_require_obj_false` replaced with `test_raw_only_rejected_in_sr2`. |
+| 2. `max_age_days` | Now raises `ValueError` at config resolution time if set (was silently ignored). Lookup also raises from `_is_row_eligible` for safety. Added 2 tests: config-level reject, lookup-level reject. |
+| 3. Reconstruction safety | `reconstruct_evaluation_result` returns `None` when `objective_values` is missing or empty (was returning a result with empty dict). Added 3 tests: missing returns None, empty returns None, present reconstructs. |
+| 4. Tests | 35 total (was 30: +2 max_age_days, +3 reconstruction safety). All existing passing tests retained. |
+| Test count | 507 total (35 reuse + 472 existing). |
+
+No runtime skip, no live CST, no default config change.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

@@ -238,8 +238,8 @@ class TestLookupEligibility:
         result = find_eligible_success_record(db, pid, ["m1"], cfg)
         assert result is None
 
-    def test_raw_only_accepted_with_require_obj_false(self) -> None:
-        """require_objective_values=False: raw-only row is acceptable."""
+    def test_raw_only_rejected_in_sr2(self) -> None:
+        """SR2: raw-only rows are rejected (no safe recompute helper)."""
         pid = _pid([1.0])
         row = _make_row(
             param_names=["p0"], status="success",
@@ -250,7 +250,7 @@ class TestLookupEligibility:
         db = FakeDB([row])
         cfg = SuccessReuseConfig(enabled=True, require_objective_values=False)
         result = find_eligible_success_record(db, pid, ["m1"], cfg)
-        assert result is not None
+        assert result is None
 
     def test_param_names_mismatch_ignored(self) -> None:
         pid = _pid([1.0, 2.0])  # 2 params
@@ -406,6 +406,72 @@ class TestReconstruction:
         cfg = SuccessReuseConfig(enabled=True)
         result = reconstruct_evaluation_result(row, ["resonant_freq"], config=cfg)
         assert result.f0_ghz == 11.424
+
+
+# ===================================================================
+# max_age_days
+# ===================================================================
+
+
+class TestMaxAgeDays:
+    def test_max_age_days_rejected_at_config(self) -> None:
+        """max_age_days is not supported in SR2; raises ValueError."""
+        with pytest.raises(ValueError, match="max_age_days is not supported"):
+            resolve_success_reuse_config(
+                {"success_reuse": {"enabled": True, "max_age_days": 30}},
+                db_enabled=True,
+            )
+
+    def test_max_age_days_raises_from_lookup(self) -> None:
+        """Lookup raises ValueError when max_age_days is set."""
+        pid = _pid([1.0])
+        row = _make_row(
+            param_names=["p0"], objective_values={"m1": 0.5},
+            objective_names=["m1"],
+        )
+        row["parameter_key"] = pid.parameter_key()
+        db = FakeDB([row])
+        cfg = SuccessReuseConfig(enabled=True, max_age_days=30)
+        with pytest.raises(ValueError, match="max_age_days"):
+            find_eligible_success_record(db, pid, ["m1"], cfg)
+
+
+# ===================================================================
+# Reconstruction safety
+# ===================================================================
+
+
+class TestReconstructionSafety:
+    def test_no_objective_values_returns_none(self) -> None:
+        """reconstruct_evaluation_result returns None without objective_values."""
+        row = _make_row(
+            param_names=["p0"], status="success",
+            raw_metrics={"m1": 1.0}, objective_values=None,
+        )
+        cfg = SuccessReuseConfig(enabled=True)
+        result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
+        assert result is None, "should return None when objective_values missing"
+
+    def test_empty_objective_values_returns_none(self) -> None:
+        """Empty objective_values dict returns None."""
+        row = _make_row(
+            param_names=["p0"], status="success",
+            objective_values={}, objective_names=[],
+        )
+        cfg = SuccessReuseConfig(enabled=True)
+        result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
+        assert result is None
+
+    def test_row_with_objective_values_reconstructs(self) -> None:
+        """Row with objective_values reconstructs successfully."""
+        row = _make_row(
+            param_names=["p0"], status="success",
+            objective_values={"m1": 0.5}, objective_names=["m1"],
+        )
+        cfg = SuccessReuseConfig(enabled=True)
+        result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
+        assert result is not None
+        assert result.status == EvaluationStatus.SUCCESS
 
 
 # ===================================================================

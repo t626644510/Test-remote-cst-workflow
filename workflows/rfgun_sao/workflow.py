@@ -518,6 +518,15 @@ def build_workflow_1(
     )
     _ws_cfg = _resolve_ws_cfg(config, db_enabled=_evaluation_db is not None)
 
+    # Resolve failure skip config (FS5.1) -- opt-in exact-key enforce only
+    from workflows.rfgun_sao.failure_skip_candidates import (
+        resolve_failure_skip_config as _resolve_fs_cfg,
+    )
+    _failure_skip_cfg = _resolve_fs_cfg(config)
+    _failure_skip_db_path = None
+    if _failure_skip_cfg.enabled and _evaluation_db_cfg and _evaluation_db_cfg.enabled and _evaluation_db_cfg.path:
+        _failure_skip_db_path = str(_evaluation_db_cfg.path)
+
     def _handle_sr_reuse(reuse_result, x_phys):
         """Process a success reuse hit: compute penalty, checkpoint, DB write."""
         # Compute penalties from reuse result
@@ -563,6 +572,27 @@ def build_workflow_1(
     def evaluator(x_phys: np.ndarray, _it=[0]) -> float:
         iteration = int(_it[0])
         _it[0] += 1
+
+        # FS5.1: failure skip check before any retry/evaluator call
+        if _failure_skip_db_path is not None and _failure_skip_cfg.enabled:
+            from workflows.rfgun_sao.failure_skip_enforce import run_failure_skip_evaluator
+            _fs_pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
+            _fs_key = _fs_pid.parameter_key()
+            _fs_result = run_failure_skip_evaluator(
+                _failure_skip_db_path, _fs_key, _failure_skip_cfg,
+                lambda pk: None,  # dummy evaluator (never called on hit)
+                param_names=list(param_names), param_values=list(x_phys),
+                write_synthetic_row=True,
+            )
+            if _fs_result.enforced_skip:
+                _logger.info(
+                    "Failure skip enforced for key=%s evidence=%d row=%s",
+                    _fs_key[:16], _fs_result.diagnostics.get("evidence_count", 0),
+                    _fs_result.synthetic_row_id,
+                )
+                # Return penalty-based scalar matching fallback behavior
+                penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
+                return float(np.dot(penalties_arr, weights))
 
         if retry_handler is not None:
             # SR3 success reuse check before legacy retry path

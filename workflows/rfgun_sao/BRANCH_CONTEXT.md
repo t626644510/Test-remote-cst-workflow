@@ -85,7 +85,8 @@ Remote branches archived in MH3.
 - SE2 -- synthetic skip row storage support -- accepted at `b9f1b07`
 - SE2.1 -- success-reuse/warm-start protection hardening -- accepted at `8bbab31`
 - SE2.2 -- same-key reuse protection hardening -- accepted at `3b44fc5`
-- FS5 -- bounded live exact-key skip smoke (current track)
+- FS5 -- bounded live exact-key skip smoke -- accepted at `b54445b`
+- FS5.1 -- real WF1 runtime exact-key skip wiring (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -124,6 +125,7 @@ Remote branches archived in MH3.
 | SE2.1 | Success-reuse/warm-start protection hardening | No |
 | SE2.2 | Same-key reuse protection hardening | No |
 | FS5 | Bounded live exact-key skip smoke | **Yes** |
+| FS5.1 | Real WF1 runtime exact-key skip wiring | **Yes** |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

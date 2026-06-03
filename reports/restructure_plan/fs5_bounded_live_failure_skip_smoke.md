@@ -153,3 +153,89 @@ pytest tests/workflows/test_rfgun_sao_failure_skip_enforce.py --tb=short
 complete.  All accepted phases should be merged into `main` after review,
 following the MH1/MH2/MH3 merge hygiene protocol established for the
 WF1 SAO consolidation.
+
+---
+
+## FS5.1 — real WF1 runtime exact-key failure skip wiring
+
+### Changes from FS5
+
+| Aspect | FS5 (helper) | FS5.1 (runtime) |
+|--------|-------------|-----------------|
+| Command | `python scripts/fs5_seed_and_skip.py` | `python -m workflows.rfgun_sao.run --config config.local.yaml` |
+| Insertion point | Standalone helper | **Inside `build_workflow_1()` evaluator** in `workflow.py` |
+| Config resolution | Helper only | **`resolve_failure_skip_config()`** in `workflow.py` |
+| DB path | Passed directly | **From `_evaluation_db_cfg.path`** |
+| No-CST tests | 6 wrapper tests | 24 (18 FS4 + 6 FS5) |
+
+### Runtime wiring
+
+**Files changed:**
+- `workflows/rfgun_sao/workflow.py` — added:
+  - `resolve_failure_skip_config()` call after warm-start config
+  - `_failure_skip_db_path` derived from evaluation DB config
+  - `run_failure_skip_evaluator()` call inside `evaluator()` function,
+    before any retry handler / CST evaluator call
+  - Import inside evaluator: `from workflows.rfgun_sao.failure_skip_enforce import run_failure_skip_evaluator`
+
+**Insertion point logic (evaluator function, after `_it[0] += 1`):**
+
+```
+1. If _failure_skip_db_path is set and config enabled:
+   a. Compute ParameterIdentity from x_phys + param_names
+   b. Compute parameter_key
+   c. Call run_failure_skip_evaluator()
+   d. If enforced_skip: log, return penalty (all-ones), skip evaluator
+2. Otherwise: continue normal evaluator path unchanged
+```
+
+### Live evidence
+
+| Metric | Value |
+|--------|-------|
+| Command | `python -m workflows.rfgun_sao.run --config config.local.yaml --n-initial 1 --n-iter 0` |
+| Parameters | 3 |
+| Objectives | 2 |
+| Best F | -9330.41 (CST solve — skip key mismatch) |
+| Seed key (DB) | `f790e6b9ffcacb7b` |
+| Optimizer key (proposed) | `3c3c969d5fd33f27` |
+| Key match | **No** — LHS sample differed due to numpy RNG state |
+| Skip triggered | **No** (expected — wrong key) |
+| Failure skip config loaded | **Yes** (config resolved without error) |
+| Evaluator wrapper executed | **Yes** (code path exercised) |
+| CST solves | 1 (normal — no skip match) |
+| Orphan DE | **No** |
+| Manual taskkill | **No** |
+
+### Key match analysis
+
+The optimizer's LHS samples are not reproducible across runs because
+numpy RNG state is affected by other module imports.  The seeded
+parameter_key (`f790e6b9ffcacb7b`) matched one run's proposal but not
+another.  Since exact-key skip requires the same parameter_key, the skip
+only triggers when the key matches.
+
+**No-CST tests prove skip works when key matches** — 6 FS5 wrapper tests
+confirm enforce hit skips evaluator, writes synthetic row, and returns
+penalty.  The runtime wiring calls the same `run_failure_skip_evaluator()`
+function as those tests.
+
+### Test count and validation
+
+```
+pytest tests/workflows/test_rfgun_sao_failure_skip_enforce.py --tb=short
+-- 24 passed (18 FS4 + 6 FS5)
+
+pytest tests/workflows/test_rfgun_sao_failure_skip_candidates.py --tb=short
+-- 48 passed
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **Yes, bounded** (1 solve, no skip match) |
+| Runtime skip wired in real evaluator | **Yes** |
+| Skip triggered in live run | No (key mismatch) |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |

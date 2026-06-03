@@ -305,6 +305,10 @@ def classify_failure_skip_evidence(
     if status == "transient_failed":
         return TRANSIENT_ENVIRONMENT_FAULT
 
+    # Synthetic skip statuses — excluded from evidence
+    if status in ("skipped_failure_reuse", "skipped_probably_infeasible"):
+        return status
+
     # Unknown status
     return UNKNOWN_EXCEPTION
 
@@ -614,6 +618,13 @@ def load_failure_skip_candidates(
 
         # SUCCESS / reuse / warm-start → skip
         if cls in (SUCCESS, SUCCESS_REUSE, WARM_START_PRIOR):
+            continue
+
+        # Synthetic skip statuses → excluded from evidence
+        if cls in ("skipped_failure_reuse", "skipped_probably_infeasible"):
+            blocked_by_reason["skip_status_excluded"] = (
+                blocked_by_reason.get("skip_status_excluded", 0) + 1
+            )
             continue
 
         # Schema incompatible → skip

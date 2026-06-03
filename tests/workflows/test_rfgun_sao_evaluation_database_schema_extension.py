@@ -204,17 +204,18 @@ class TestDBFieldMapping:
 
 
 class TestSchemaCapability:
-    def test_v1_requires_migration(self):
+    def test_v1_supports_skip_after_se2(self):
+        """SE2 extends v1 to accept skip statuses; no DDL migration needed."""
         caps = get_schema_capabilities(1)
         assert caps.schema_version == 1
-        assert caps.requires_migration_for_skip_rows is True
-        assert caps.supports_skip_statuses is False
+        assert caps.requires_migration_for_skip_rows is False
+        assert caps.supports_skip_statuses is True
         assert caps.supports_skip_audit_fields is True
         assert caps.supports_extra_json is True
 
-    def test_v1_validation_rejects_skip_status(self):
-        with pytest.raises(ValueError, match="Unknown evaluation status"):
-            EvaluationDatabaseStatus.validate(SKIPPED_FAILURE_REUSE)
+    def test_v1_validation_accepts_skip_after_se2(self):
+        """SE2 extends v1 validation to accept skip statuses."""
+        assert EvaluationDatabaseStatus.validate(SKIPPED_FAILURE_REUSE) == SKIPPED_FAILURE_REUSE
 
     def test_v1_validation_accepts_success(self):
         EvaluationDatabaseStatus.validate("success")  # no error
@@ -223,6 +224,7 @@ class TestSchemaCapability:
         caps = get_schema_capabilities(99)
         assert caps.requires_migration_for_skip_rows is True
         assert caps.supports_skip_statuses is False
+        assert caps.supports_skip_audit_fields is False
         assert caps.supports_skip_audit_fields is False
 
 

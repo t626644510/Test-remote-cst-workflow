@@ -297,13 +297,13 @@ def get_schema_capabilities(schema_version: int) -> EvaluationDatabaseSchemaCapa
         return EvaluationDatabaseSchemaCapabilities(
             schema_version=1,
             # v1 validate() rejects unknown statuses
-            supports_skip_statuses=False,
+            supports_skip_statuses=True,
             # diagnostics and error_taxonomy fields exist in v1
             supports_skip_audit_fields=True,
             # provenance field exists in v1
             supports_extra_json=True,
             # storage's validate_evaluation_record calls validate() -> rejects
-            requires_migration_for_skip_rows=True,
+            requires_migration_for_skip_rows=False,
         )
     # Unknown version — conservative
     return EvaluationDatabaseSchemaCapabilities(

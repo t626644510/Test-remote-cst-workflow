@@ -163,7 +163,8 @@ b) Move on to other non-live hardening or documentation work.
 | P3 | CST cleanup runtime hardening — `_retry_handler` stored on workflow; `_cleanup_workflow_connection` calls `close_all()` to close all connections including replacement DE; live validated: orphan eliminated (both PID 18252 and 57924 terminated, only cstd.exe remains) | Accepted at 0251aee |
 | Q | Production-scale validation readiness plan — validation matrix (T1/T2/T3), success/failure criteria, artifact policy, root shim gating, rollback plan; docs-only | Accepted at e052cba |
 | Q1 | Minimal multi-evaluation live validation — n_initial=3, n_iter=2 (5 evals), Best F -18002.12 (17% improvement), P3 cleanup verified across multiple evals: 6 close hangs handled, no orphan DE, no manual cleanup | Accepted at 9b154a1 |
-| Q2 | Repeated-run cleanup stability validation — 3 consecutive runs (15 total evals), Best F -18002/-18002/-17883, 18 close hangs handled, zero orphan DE accumulation, no manual taskkill across full sequence; cleanup stability sufficient for Phase R readiness | Completed / pending review |
+| Q2 | Repeated-run cleanup stability validation — 3 consecutive runs (15 total evals), Best F -18002/-18002/-17883, 18 close hangs handled, zero orphan DE accumulation, no manual taskkill across full sequence; cleanup stability sufficient for Phase R readiness | Accepted at e2f3b79 |
+| R | Root shim repoint readiness / rollback plan — readiness criteria satisfied (cleanup stable, 399 tests pass, CLI compatible); repoint design, rollback steps, preflight checklist documented; root shim NOT repointed; docs-only | Completed / pending review |
 
 ### Migration constraints
 
@@ -203,9 +204,9 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Next possible directions
 
-- **Phase R** — Root shim repoint readiness / rollback plan, only after Q2 acceptance
-- **Phase R1** — If readiness review finds gaps
-- Root shim repoint remains last; must not be attempted before R/R1 acceptance
+- **Phase R1** — Root shim readiness hardening, only if this review finds gaps
+- **Phase S** — Root shim repoint, only after R/R1 acceptance and explicit operator approval
+- Root shim repoint remains last and must be reversible
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

@@ -54,9 +54,8 @@ No other DB engine is considered for this track. PostgreSQL, DuckDB, or cloud DB
 ```yaml
 evaluation_database:
   enabled: false              # master switch; no DB created when false
-  path: D:/Results/workflow1/evaluation.db  # must point outside repo
+  path: <outside_repo_path>/evaluation.db  # local-only, must point outside repo
   schema_version: 1           # explicit version pin
-  write_mode: final_only      # "final_only" or "all_attempts"
   create_if_missing: true     # auto-create schema on startup
 ```
 
@@ -64,10 +63,18 @@ evaluation_database:
 
 | Rule | Enforcement |
 |------|-------------|
-| `path` must be outside repo | If path is inside repo directory, reject with error |
-| `enabled` defaults to `false` | No DB interaction when disabled or absent |
+| `enabled` defaults to `false` | No DB interaction when disabled or absent; `path` is not required when disabled |
+| `path` is required when `enabled` = true | If `enabled = true` and `path` is missing/empty, reject with clear error |
+| `path` must be outside repo | If resolved path starts inside repo directory, raise `ValueError` |
 | `schema_version` mismatch | Reject open if existing DB has incompatible version |
-| `write_mode` default `final_only` | Only the optimizer-used final result is stored; retry attempts are not stored unless `all_attempts` is set |
+| Only final records stored | DB stores authoritative optimizer-used result only; retry attempts are diagnostic-only (separate table, future) |
+
+### Path policy notes
+
+- The default `config.yaml` keeps `enabled: false` — no DB path is specified in committed config.
+- The `path` value is only provided via **local uncommitted** `config.local.yaml`.
+- When `enabled = false`, the `path` field is **not read or validated** — no DB file is created or opened.
+- The example `<outside_repo_path>/evaluation.db` is a placeholder; replace with a local path like `/tmp/evaluation.db` or `D:/Results/evaluation.db` in your own config.local.yaml.
 
 ---
 
@@ -124,34 +131,57 @@ The existing `schema_ddl_sqlite()` in `evaluation_database_schema.py` provides a
 
 | Principle | Rule |
 |-----------|------|
-| Forward-only | New columns/indexes added; existing rows not migrated in-place |
-| Version table | `schema_version` table records applied version history |
-| Incompatible reject | If existing DB's max schema version > code's expected version, reject open with error |
-| Compatible probe | `is_schema_compatible(record_version, current_version)` already exists in schema module |
+| Exact match required (DDB2 v1) | After schema creation, `record.schema_version == current_schema_version()` is required. This matches the existing `is_schema_compatible()` exact-match behaviour. |
+| Schema version table | `schema_version` table records applied version history |
+| New DB with version mismatch | If DB file exists but has no `schema_version` table → reject unless file is empty and `create_if_missing` applies |
+| Version > expected | Reject open with error; incompatible DB must be manually removed or re-created |
+| Version < expected | Reject open unless explicit migration script is provided (no automatic migration in DDB2) |
 | Rollback | No automatic downgrade; incompatible DB must be manually removed or re-created |
 
 On open:
 1. If DB file does not exist and `create_if_missing` is true: create schema, insert version row.
-2. If DB file exists: check `schema_version` table. If max version > expected, reject.
-3. If max version <= expected: proceed (forward-compatible within same major version).
+2. If DB file exists: check `schema_version` table.
+   - If max version > expected → reject (incompatible).
+   - If max version < expected → reject unless migration exists.
+   - If max version == expected → proceed.
+3. Missing `schema_version` table → reject (unrecognised format).
 
 ---
 
 ## Write semantics
 
-### `final_only` (default)
+### Authoritative table: `evaluation_records` (final only)
+
+The `evaluation_records` table stores **only the authoritative final result** that the optimizer used. This is the single source of truth for cross-run queries and future reuse/warm-start.
 
 - Each evaluation produces exactly one DB row: the **final result used by the optimizer**.
-- Intermediate retry attempts are **not written** to the DB.
+- Intermediate retry attempts are **never inserted** into `evaluation_records`.
 - The checkpoint callback determines which evaluation is "final" — the retry loop's `final_record`.
 - This matches the RW3 checkpoint semantics: checkpoint and DB both record the optimizer-used result.
+- Future reuse/warm-start queries **must only read** `evaluation_records` with `status = 'success'` — never attempt diagnostics.
 
-### `all_attempts` (opt-in)
+### Diagnostic table: `evaluation_attempts` (optional, future)
 
-- Every `evaluate_once` result (including retry attempts) is written to the DB.
-- Each row carries the `retry_count` field to distinguish attempts.
-- `parameter_key` + `retry_count` uniquely identify an attempt within a run.
-- Useful for diagnostics and failure analysis but generates more rows.
+If retry attempt diagnostics are desired, they must be stored in a **separate, clearly non-authoritative** table:
+
+```sql
+CREATE TABLE IF NOT EXISTS evaluation_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT,
+    parameter_key TEXT NOT NULL,
+    attempt_index INTEGER NOT NULL,
+    tier INTEGER NOT NULL,
+    status_before TEXT,
+    status_after TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    diagnostics TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+- The `evaluation_attempts` table is **read-only diagnostic** — never used for reuse/warm-start queries.
+- There is no foreign key from `evaluation_records` to `evaluation_attempts` unless the final authoritative row is explicitly linked.
+- **DDB2 may defer `evaluation_attempts` entirely** and support only `evaluation_records` (final-only). The attempt table is purely an opt-in diagnostic extension for later phases.
 
 ### Atomicity
 
@@ -165,10 +195,9 @@ On open:
 
 | Rule | Enforcement |
 |------|-------------|
-| DB path must be configurable | Via `evaluation_database.path` in config |
-| Default path must be outside repo | Default `D:/Results/workflow1/evaluation.db` |
+| DB path comes from local config only | Committed `config.yaml` never contains a machine-specific DB path; path is only in uncommitted `config.local.yaml` |
+| `path` required only when `enabled=true` | When `enabled=false`, path is ignored and not validated |
 | Path inside repo is rejected | Startup validation: if resolved path starts with repo root, raise `ValueError` |
-| `config.local.yaml` overrides only | Default config.yaml has `enabled: false`; path is irrelevant when disabled |
 | DB files `.db` / `.sqlite` in `.gitignore` | Already covered by existing `.gitignore` patterns |
 
 ---
@@ -196,15 +225,18 @@ On open:
 | # | Test | What it validates |
 |---|------|-------------------|
 | 1 | Create schema from scratch | `sqlite3.connect(temp_db)`, execute DDL, verify tables exist |
-| 2 | Insert SUCCESS record | Build `EvaluationDatabaseRecord`, insert as JSON, read back, verify fields |
+| 2 | Insert SUCCESS record (final table) | Build `EvaluationDatabaseRecord`, insert as JSON, read back, verify fields. Only `evaluation_records` is written — no attempt table row created. |
 | 3 | Insert SOLVER_FAILED record | Same as above with failure status |
 | 4 | Query by parameter_key | Insert two records with different keys, query by key, verify correct record returned |
-| 5 | Schema version mismatch rejection | Create DB with version 2, try to open with expected version 1 → reject |
-| 6 | Disabled config = no DB | `enabled: false` → no file created, no query attempted |
-| 7 | Path outside repo validation | Path inside repo → `ValueError` |
-| 8 | `final_only` vs `all_attempts` | `final_only`: only final record stored; `all_attempts`: retry records also stored |
-| 9 | Double insert idempotent | Same parameter_key inserted twice → both rows retained (append); no silent dedup |
-| 10 | Provenance stored and readable | Provenance dict round-trips through JSON serialization |
+| 5 | Schema version > expected rejects | Create DB with version 2, try to open with expected version 1 → reject |
+| 6 | Schema version < expected rejects | Create DB with version 0, try to open with expected version 1 → reject (no migration script) |
+| 7 | Missing schema_version table rejects | Create DB without `schema_version` table → reject on open |
+| 8 | Disabled config = no DB | `enabled: false` → no file created, no query attempted |
+| 9 | `enabled=true` with missing path rejects | `enabled: true` with `path: ""` or missing → clear error |
+| 10 | Path inside repo validation | Path inside repo → `ValueError` |
+| 11 | Attempt diagnostics use separate table | If `evaluation_attempts` is implemented, verify attempt rows are stored there, never in `evaluation_records` |
+| 12 | No reuse/warm-start query used by workflow | Workflow startup does not query DB for reuse/warm-start (future track) |
+| 13 | Provenance stored and readable | Provenance dict round-trips through JSON serialization |
 
 ### Test infrastructure
 
@@ -255,3 +287,18 @@ Key properties:
 - No success reuse, no warm-start, no failure reuse — those are separate future tracks.
 
 Next actionable phase: **DDB2** — implement the SQLite storage adapter with full no-CST test coverage.
+
+---
+
+## DDB1.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Write semantics | `evaluation_records` is now explicitly **authoritative final-only**. Intermediate retry attempts must never be inserted into it. A separate `evaluation_attempts` table (diagnostic-only, non-authoritative) is defined for DDB2+ if attempt diagnostics are desired. DDB2 may defer `evaluation_attempts`. Future reuse/warm-start must only query `evaluation_records` with `status='success'`. |
+| 2. Schema proposal | Added `evaluation_attempts` table definition with run_id, parameter_key, attempt_index, tier, status_before, status_after, retry_count, diagnostics. Clear role distinction: authoritative vs diagnostic. No foreign key linkage required. |
+| 3. Path policy | Removed hardcoded `D:/Results/workflow1/evaluation.db`. Path is `<outside_repo_path>/evaluation.db` placeholder. Default `config.yaml` (committed) has `enabled: false` with no path. Path is only provided via local uncommitted `config.local.yaml`. Path is not read or validated when `enabled=false`. |
+| 4. Migration wording | Exact schema version match is required for DDB2 v1. Missing `schema_version` table rejects. Version > expected rejects. Version < expected rejects unless migration exists. Documents current `is_schema_compatible()` exact-match behaviour. |
+| 5. DDB2 test strategy | Updated from 10 to 13 scenarios: added schema version < expected rejects, missing `schema_version` table rejects, `enabled=true` with missing path rejects. Clarified final table only stores final record; attempt diagnostics use separate table. Explicitly noted no reuse/warm-start query at workflow startup. |
+| 6. This section | Added DDB1.1 correction note. |
+
+No runtime code changed. No tests changed. No live CST. No generated artifacts.

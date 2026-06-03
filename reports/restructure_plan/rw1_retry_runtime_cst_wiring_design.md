@@ -303,8 +303,8 @@ Test scenarios for RW2:
 1. SUCCESS on first attempt → no retry.
 2. SOLVER_FAILED → retry eligible → retry → SUCCESS.
 3. COM_LOST → retry eligible → retry → SUCCESS.
-4. Repeated SOLVER_FAILED → max_tier exhausted → evaluation skipped.
-5. GATE_REJECTED → not retried by default.
+4. Repeated SOLVER_FAILED → max_tier exhausted → terminal failure result returned; optimizer receives failure penalty (all-ones).
+5. GATE_REJECTED → not retried by default; gate rejection result returned to optimizer.
 6. Recovery callback called on tier 2+ retry.
 7. Recovery callback failure → retry still attempted.
 8. `use_probably_infeasible_for_skip=True` rejected at runtime.
@@ -318,20 +318,36 @@ Each retry attempt within the loop should produce:
 1. **Log messages**: 
    - `"Retry runtime: attempt N at tier T (previous status: X)"`
    - `"Retry runtime: attempt N succeeded (final status: SUCCESS)"`
-   - `"Retry runtime: attempt N failed (status: Y); max_tier reached, skipping"`
+   - `"Retry runtime: attempt N failed (status: Y); max_tier reached, returning failure penalty"`
 
 2. **Diagnostics on `RetryRuntimeResult`**:
    - `attempts` list with per-attempt details (tier, status_before, status_after, recovered, error).
    - `diagnostics["progress_guard_activations"]` if normalisation fires.
    - `diagnostics["retry_count_consumed"]` reflecting total attempts.
 
-3. **Checkpoint interaction**: The retry loop evaluates the same parameter multiple times. The checkpoint callback should:
-   - Record only the FINAL result (last attempt), not intermediate retries.
-   - Or, if retry diagnostics are desired, record the initial failure + final result as separate entries.
+3. **Checkpoint interaction**: The checkpoint records only the final evaluation result — i.e. the one that the optimizer actually uses for its surrogate model. Intermediate retry attempts must NOT create checkpoint entries.
 
-   **Recommended**: The checkpoint records only the initial attempt. If the retry loop succeeds, the optimizer receives the successful penalty value. If the retry loop is exhausted, the optimizer receives the last failure penalty (all-ones or computed from last available metrics). The checkpoint reflects what the optimizer actually used.
+   The policy:
+   - The initial evaluation call from the optimizer produces a result (possibly failed).
+   - If the retry loop succeeds on a later attempt, the checkpoint records that successful result (penalties, raw_metrics, solver_ok=True).
+   - If the retry loop exhausts `max_tier`, the checkpoint records the last-failure penalty (all-ones or computed from last available metrics) with `solver_ok=False`.
+   - Intermediate retry attempts appear only in:
+     - runtime log messages
+     - `RetryRuntimeResult.attempts` diagnostics
+     - optional JSONL sidecar entries (see JSONL note below)
+   - The checkpoint must not contain duplicate or intermediate entries that would confuse the optimizer's warm-start.
 
-4. **JSONL sidecar**: Existing JSONL wiring records one entry per evaluation call. Retry attempts within the loop call `evaluate_once` multiple times for the same `(x_phys, iteration)`. If JSONL is enabled, each retry attempt produces a separate JSONL entry. This is acceptable — JSONL is diagnostic-only and the iteration counter distinguishes attempts.
+4. **JSONL sidecar**: If JSONL is enabled, each retry attempt produces a separate JSONL entry for the same `(x_phys, iteration)`. The iteration counter alone is insufficient to distinguish retry attempts. Each retry-attempt JSONL entry must include explicit retry diagnostics:
+   - `retry_attempt_index`: 0-based index within the retry loop.
+   - `retry_tier`: tier at which this attempt ran.
+   - `status_before`: status that triggered the retry.
+   - `status_after`: status returned by this attempt.
+   - `same_parameter_identity`: `true` (same x_phys is being re-evaluated).
+   - `recovery_label`: whether recovery was attempted and its outcome.
+
+   Without these fields, JSONL consumers cannot distinguish an initial evaluation from a retry attempt. The JSONL record writer (`records.py` / `_record_jsonl_sidecar_evaluation`) must be extended to accept and include these retry diagnostics when present.
+
+   This is acceptable because JSONL is diagnostic-only and not an authoritative recovery source.
 
 ---
 
@@ -345,12 +361,16 @@ However, the retry loop operates **within** a workflow's evaluation, before the 
 
 ### Orphan DE risk during retry loop
 
+Risk is **mitigated** by P3 `close_all(force)`, but **not eliminated**. RW3 live smoke is required before accepting any runtime CST retry wiring.
+
 | Scenario | Risk | Mitigation |
 |----------|------|------------|
 | Retry at tier 1 (same connection) | Low — no new connection created | N/A |
 | Retry at tier 2+ (new connection via recovery callback) | Medium — new DE created before old one fully dies | Recovery callback must call `close_all()` before creating new connection [P3 pattern]; final workflow cleanup calls `close_all()` again as safety net |
 | Retry loop interrupted (Ctrl+C) | Low — P3 `_cleanup_workflow_connection` still runs in finally block | No additional risk beyond normal Ctrl+C |
-| Legacy `EvaluationRetryHandler` fires during retry attempt | Medium — legacy handler's `force_reset()` may create additional DEs | P3 hardening already mitigates; legacy handler's new DE is tracked in `retry_handler._all_connections` |
+| Legacy `EvaluationRetryHandler` fires during retry attempt (if both enabled — not recommended) | Medium — legacy handler's `force_reset()` may create additional DEs | P3 hardening already mitigates; legacy handler's new DE is tracked in `retry_handler._all_connections` |
+
+**RW3 dependency**: The orphan-DE mitigation must be explicitly verified by a live CST smoke that exercises a retry path (engineered failure → retry → success) and confirms no orphan DE remains after the run. Without this evidence, the cleanup claim is a design assumption, not validated behaviour.
 
 ### Recommended approach
 
@@ -408,6 +428,39 @@ Or the resolver can be extended to also recognize `"retry_runtime"` as a valid r
 
 ---
 
+## Legacy retry nesting / mutex strategy
+
+The existing config has `optimization.retry.*` which controls the legacy `EvaluationRetryHandler`. The new retry runtime has `retry_runtime.*`. If both are enabled simultaneously, a single evaluation could be retried TWICE — once by the legacy handler at the evaluation-call level, and once by the new retry runtime at the evaluation-result level.
+
+### Default strategy (RW2)
+
+**Fail-fast**: If `optimization.retry.enabled` is `True`, the new retry runtime must refuse to enable itself with a clear warning:
+
+```python
+if config.get("optimization", {}).get("retry", {}).get("enabled", False):
+    _logger.warning(
+        "retry_runtime.enabled is True but legacy optimization.retry.enabled is also True. "
+        "Disabling retry_runtime to avoid double retry. "
+        "Set optimization.retry.enabled=false to use retry_runtime."
+    )
+    retry_runtime_cfg = RetryRuntimeConfig()  # disabled
+```
+
+This avoids silent double-retry without requiring the user to discover the conflict.
+
+### Future nesting (separate phase, if ever pursued)
+
+If a future phase wants to allow both retry mechanisms to coexist (e.g., legacy handler for COM-level retries at tier 1, new runtime for taxonomy-driven retries at tier 2+), the following must be explicitly designed and live-validated:
+
+- Total max-attempt budget: `legacy_max_tiers + runtime_max_tier` must not silently multiply.
+- Cleanup semantics: both mechanisms must share `close_all()` to avoid orphan DE accumulation.
+- Diagnostics: clear audit trail distinguishing which mechanism fired at each attempt.
+- Live smoke: must verify that double retry does not occur despite both being enabled.
+
+This is explicitly **not planned for RW2–RW3**.
+
+---
+
 ## Explicit non-goals for RW1–RW3
 
 | Capability | Not in scope | Notes |
@@ -444,6 +497,37 @@ This document defines the design for wiring the Phase O/O1 retry runtime into th
 3. **Recovery callback** leveraging P3 `close_all()` for safe CST reconnection.
 4. **No-CST testable** with `FakeCstEvaluator`.
 5. **Disabled by default** — no config default changes.
-6. **No new orphan DE risk** — P3 hardening is the safety net.
+6. **Orphan-DE risk mitigated by P3 `close_all(force)`, but RW3 live smoke required** before accepting runtime CST wiring.
 
 Next actionable phase: **RW2** — implement the adapter with full no-CST test coverage.
+
+---
+
+## RW1.1 correction note
+
+This section documents the changes made in RW1.1 (docs-only semantics correction).
+
+| Item | What changed |
+|------|-------------|
+| Nature | Docs-only — no runtime code changed, no config changed, no live CST, no generated artifacts committed |
+| 1. Checkpoint semantics | Clarified that checkpoint records only the optimizer-used final result; intermediate retry attempts never create checkpoint entries |
+| 2. Legacy retry mutex | Added explicit "fail-fast" strategy: new retry runtime refuses to enable if legacy `optimization.retry.enabled` is True; future nesting would require separate phase |
+| 3. "Skipped" wording | Replaced "evaluation skipped" with "terminal failure result returned; optimizer receives failure penalty" throughout; removed language implying permanent skip |
+| 4. JSONL diagnostics | Removed "iteration counter alone distinguishes attempts"; added explicit required fields: `retry_attempt_index`, `retry_tier`, `status_before`, `status_after`, `same_parameter_identity`, `recovery_label` |
+| 5. Orphan-DE claim | Changed from "no new orphan DE risk" to "risk mitigated by P3 `close_all(force)`, but RW3 live smoke required before accepting runtime CST wiring" |
+| 6. This section | Added RW1.1 correction note |
+
+Validation:
+
+```powershell
+python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.py
+→ Compiles OK.
+
+pytest tests/workflows/test_rfgun_sao_imports.py --tb=short  → 230 passed
+pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short → 12 passed
+Total: 242 passed, 1 pre-existing warning.
+```
+
+No source files were modified. The document on this branch includes all corrections from RW1.1.
+
+Final HEAD SHA: **to be confirmed by reviewer**.

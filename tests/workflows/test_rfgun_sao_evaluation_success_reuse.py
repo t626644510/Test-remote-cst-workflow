@@ -338,7 +338,7 @@ class TestReconstruction:
             raw_metrics={"m1": 1.0, "m2": 2.0},
             objective_values={"m1": 0.5, "m2": 1.0},
             objective_names=["m1", "m2"],
-            diagnostics={"source": "original"},
+            diagnostics={"source": "original", "__retry_penalty__": {"m1": 0.3, "m2": 0.8}},
             row_id=42, run_id="test-run", created_at="2026-06-01 12:00:00",
         )
         cfg = SuccessReuseConfig(enabled=True)
@@ -364,12 +364,13 @@ class TestReconstruction:
         assert result is not None
         assert result.penalty_values == {"m1": 0.3}
 
-    def test_fallback_penalty_from_objective(self) -> None:
+    def test_fallback_penalty_with_raw_recompute(self) -> None:
+        """Row without __retry_penalty__ uses objective_values when allow_raw_recompute=True."""
         row = _make_row(
             param_names=["p0"], status="success",
             objective_values={"m1": 0.5}, objective_names=["m1"],
         )
-        cfg = SuccessReuseConfig(enabled=True)
+        cfg = SuccessReuseConfig(enabled=True, allow_raw_recompute=True)
         result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
         assert result is not None
         assert "m1" in (result.penalty_values or {})
@@ -379,6 +380,7 @@ class TestReconstruction:
         row = _make_row(
             status="success", param_names=["p0"],
             objective_values={"m1": 0.5}, objective_names=["m1"],
+            diagnostics={"__retry_penalty__": {"m1": 0.3}},
         )
         cfg = SuccessReuseConfig(enabled=True)
         result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
@@ -389,6 +391,7 @@ class TestReconstruction:
             row_id=7, run_id="abc", created_at="2026-06-01 12:00:00",
             param_names=["p0"], status="success",
             objective_values={"m1": 0.5}, objective_names=["m1"],
+            diagnostics={"__retry_penalty__": {"m1": 0.3}},
         )
         cfg = SuccessReuseConfig(enabled=True)
         result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
@@ -402,6 +405,7 @@ class TestReconstruction:
             param_names=["p0"], status="success",
             objective_values={"resonant_freq": 11.424}, objective_names=["resonant_freq"],
             raw_metrics={"resonant_freq": 11.424},
+            diagnostics={"__retry_penalty__": {"resonant_freq": 0.3}},
         )
         cfg = SuccessReuseConfig(enabled=True)
         result = reconstruct_evaluation_result(row, ["resonant_freq"], config=cfg)
@@ -462,16 +466,18 @@ class TestReconstructionSafety:
         result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
         assert result is None
 
-    def test_row_with_objective_values_reconstructs(self) -> None:
-        """Row with objective_values reconstructs successfully."""
+    def test_row_with_persisted_penalty_reconstructs(self) -> None:
+        """Row with __retry_penalty__ reconstructs successfully."""
         row = _make_row(
             param_names=["p0"], status="success",
             objective_values={"m1": 0.5}, objective_names=["m1"],
+            diagnostics={"__retry_penalty__": {"m1": 0.3}},
         )
         cfg = SuccessReuseConfig(enabled=True)
         result = reconstruct_evaluation_result(row, ["m1"], config=cfg)
         assert result is not None
         assert result.status == EvaluationStatus.SUCCESS
+        assert result.penalty_values == {"m1": 0.3}
 
 
 # ===================================================================

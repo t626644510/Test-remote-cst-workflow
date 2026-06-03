@@ -541,6 +541,7 @@ def build_workflow_1(
             rec = build_record_from_evaluation_result(
                 pid, reuse_result,
                 source="db_success_reuse",
+                penalty_values=dict(reuse_result.penalty_values) if reuse_result.penalty_values else None,
             )
             _write_eval_db(rec)
 
@@ -607,7 +608,10 @@ def build_workflow_1(
                     objective_values=dict(result.objective_values) if result.objective_values else {},
                     penalty_values=dict(result.penalty_values) if result.penalty_values else {},
                 )
-                _write_eval_db(build_record_from_evaluation_result(_pid_legacy, _ev_legacy))
+                _write_eval_db(build_record_from_evaluation_result(
+                    _pid_legacy, _ev_legacy,
+                    penalty_values=dict(_ev_legacy.penalty_values) if _ev_legacy.penalty_values else None,
+                ))
             return float(np.dot(penalties_arr, weights))
 
         # --- Retry runtime path (RW3) ---
@@ -654,7 +658,10 @@ def build_workflow_1(
                         objective_values={n: raw.get(n, np.nan) for n in metric_names},
                         penalty_values=dict(pen),
                     )
-                    _write_eval_db(build_record_from_evaluation_result(_pid_rec, _ev_res))
+                    _write_eval_db(build_record_from_evaluation_result(
+                        _pid_rec, _ev_res,
+                        penalty_values=dict(pen) if pen else None,
+                    ))
                 return float(np.dot(penalties_arr, weights))
 
             # Initial evaluation failed -- build record and consider retry
@@ -764,7 +771,10 @@ def build_workflow_1(
                 objective_values={n: raw.get(n, np.nan) for n in metric_names},
                 penalty_values=dict(pen),
             )
-            _write_eval_db(build_record_from_evaluation_result(_pid_plain, _ev_plain))
+            _write_eval_db(build_record_from_evaluation_result(
+                _pid_plain, _ev_plain,
+                penalty_values=dict(pen) if pen else None,
+            ))
         return float(np.dot(penalties_arr, weights))
 
     # ---------------------------------------------------------------

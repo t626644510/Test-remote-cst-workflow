@@ -348,12 +348,18 @@ def reconstruct_evaluation_result(
     # Extract penalty values from diagnostics if available
     penalty_values = diagnostics.get("__retry_penalty__", None)
 
-    # If penalty_values is missing, try to derive from objective_values
-    # (future: allow_raw_recompute logic)
-    if penalty_values is None and config is not None and config.require_objective_values:
-        # Use objective_values as penalty_values placeholders;
-        # actual penalty computation is runtime-specific.
-        penalty_values = dict(objective_values)
+    # If penalty_values is missing, fall back to objective_values only
+    # when allow_raw_recompute is explicitly enabled.
+    if penalty_values is None:
+        cfg_allow = config is not None and config.allow_raw_recompute
+        if cfg_allow and objective_values:
+            penalty_values = dict(objective_values)
+        else:
+            log.warning(
+                "Success reuse reconstruction: __retry_penalty__ not found "
+                "and allow_raw_recompute=False, returning None",
+            )
+            return None
 
     # Add reuse provenance to diagnostics
     reuse_info = {

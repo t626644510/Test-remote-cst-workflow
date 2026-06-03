@@ -143,6 +143,7 @@ def _prepopulate_db(tmp_path: Path, param_values: list[float]) -> str:
         payload = RawEvaluationPayload(
             raw_metrics={"resonant_freq": 11.424},
             objective_values={"resonant_freq": 11.424},
+            diagnostics={"__retry_penalty__": {"resonant_freq": 0.3}},
         )
         rec = EvaluationDatabaseRecord(
             parameter_identity=pid,

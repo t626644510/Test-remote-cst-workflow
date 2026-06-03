@@ -257,3 +257,21 @@ SR4 rfgun_sao bounded live success reuse smoke
 
 No runtime code changed, no default config change.
 ```
+
+---
+
+## SR4.1 correction note — scalar equivalence fix
+
+| Item | What changed |
+|------|-------------|
+| **Blocker** | SR4 reuse hit returned Best F = 8.187e+11 instead of -15392.38 because `reconstruct_evaluation_result` used `objective_values` as placeholder `penalty_values`. The lookup/skip/provenance path was correct, but the optimizer received the wrong scalar. |
+| **Code fix** | 1. All three evaluation DB write paths now call `build_record_from_evaluation_result(..., penalty_values=dict(pen))`, persisting the actual penalty values in the row's diagnostics under `__retry_penalty__`. 2. `reconstruct_evaluation_result` now requires `__retry_penalty__` to be present in the source row; if missing and `allow_raw_recompute=False` (default), returns `None`. The objective-values-only fallback is gated behind `allow_raw_recompute=True`. |
+| **Files changed** | `workflows/rfgun_sao/workflow.py` (4 call sites updated: legacy, initial-success, plain, reuse-write), `workflows/rfgun_sao/evaluation_success_reuse.py` (reconstruction policy tightened), `tests/workflows/test_rfgun_sao_evaluation_success_reuse.py` (6 tests updated for new policy) |
+| **SR4.1 live smoke** | Two-step smoke with fresh DB `evaluation_sr41_smoke.db`: |
+| | **Seed**: Best F = **-15392.37650613**, row id=1, key=`c325dffff9315d57`, has `__retry_penalty__`=True |
+| | **Reuse**: Best F = **-15392.37650613** (exact match), row id=2, key=`c325dffff9315d57`, source=`db_success_reuse`, `reused_from_db`=True |
+| | Keys match: ✅, scalar match: ✅ (exact, within 1e-12) |
+| | No CST solve on reuse run, no orphan DE, no manual cleanup |
+| **Test count** | 517 all passing (35 reuse + 10 workflow + 472 existing). |
+
+No live CST beyond the bounded two-step rerun. No default config change. No warm-start/failure reuse/probably-infeasible skip.

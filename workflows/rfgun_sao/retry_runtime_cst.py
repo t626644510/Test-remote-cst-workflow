@@ -272,3 +272,102 @@ def check_legacy_retry_mutex(
         return RetryRuntimeConfig(), msg
 
     return runtime_cfg, None
+
+
+# ---------------------------------------------------------------------------
+# Connection registry (RCR2, no-CST)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CstConnectionRegistry:
+    """Tracks CST connections created by the retry runtime recovery.
+
+    No CST imports at module level.  Connections are duck-typed and
+    must provide ``close(force=False)``.  Fully no-CST testable.
+    """
+    _connections: list[Any] = field(default_factory=list)
+
+    def track(self, conn: Any) -> None:
+        """Add a connection for lifecycle tracking."""
+        self._connections.append(conn)
+
+    @property
+    def tracked_count(self) -> int:
+        return len(self._connections)
+
+    def close_all(self, force: bool = True) -> dict[str, Any]:
+        """Close all tracked connections, best-effort.
+
+        Iterates every tracked connection, calling ``close(force=force)``.
+        Exceptions are captured in the diagnostics.  Registry is cleared
+        after all close attempts.
+
+        Returns dict with keys ``attempted``, ``closed_ok``, ``errors``.
+        """
+        diag: dict[str, Any] = {
+            "attempted": len(self._connections),
+            "closed_ok": 0,
+            "errors": [],
+        }
+        for idx, conn in enumerate(self._connections):
+            try:
+                conn.close(force=force)
+                diag["closed_ok"] += 1
+            except Exception as exc:
+                diag["errors"].append((idx, str(exc)[:200]))
+        self._connections.clear()
+        return diag
+
+
+# ---------------------------------------------------------------------------
+# Recovery callback factory (RCR2, no-CST)
+# ---------------------------------------------------------------------------
+
+
+def make_cst_recovery_callback(
+    connection_factory: Callable[[], Any],
+    evaluator: Any,
+    registry: CstConnectionRegistry,
+    *,
+    logger: Any = None,
+) -> Callable[[int, Any], bool]:
+    """Create a recovery callback compatible with ``run_retry_loop_no_cst``.
+
+    Tier 1: no-op (returns True, no new connection).
+    Tier 2+: close old connections via registry, create new via factory,
+             update evaluator, track in registry.
+
+    Parameters
+    ----------
+    connection_factory : callable
+        Zero-argument callable returning a new connection.
+    evaluator : Workflow1Evaluator-like
+        Must provide ``on_reconnect(new_conn)``.
+    registry : CstConnectionRegistry
+        Dedicated retry-runtime connection registry.
+    logger : logging.Logger or None
+
+    Returns
+    -------
+    callable ``fn(tier, record) -> bool``
+    """
+    def _recovery_callback(tier: int, record: Any) -> bool:
+        if tier < 2:
+            return True
+
+        try:
+            registry.close_all(force=True)
+            new_conn = connection_factory()
+            evaluator.on_reconnect(new_conn)
+            registry.track(new_conn)
+            if logger is not None:
+                pid = getattr(new_conn, "pid", "?")
+                logger.info("RCR recovery: reconnected (tier=%d, PID=%s)", tier, pid)
+            return True
+        except Exception as exc:
+            if logger is not None:
+                logger.warning("RCR recovery failed (tier=%d): %s", tier, exc)
+            return False
+
+    return _recovery_callback

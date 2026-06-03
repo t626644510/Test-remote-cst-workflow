@@ -278,6 +278,7 @@ def build_workflow_1(
         workflow._params = param_set
         workflow._conn = cst_conn
         workflow._retry_handler = None
+        workflow._retry_connection_registry = None
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
         workflow.metric_specs = specs
@@ -385,9 +386,14 @@ def build_workflow_1(
     _retry_runtime_cfg, _rt_diag = _check_mutex(config, logger=_logger)
     if _rt_diag:
         _logger.warning("Retry runtime disabled: %s", _rt_diag)
+    # Retry runtime registry and recovery callback (RCR2)
+    _retry_runtime_recovery: Any = None
+    _retry_runtime_registry: Any = None
     if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
         from workflows.rfgun_sao.retry_runtime_cst import (
+            CstConnectionRegistry,
             build_record_from_evaluation_result,
+            make_cst_recovery_callback,
             make_cst_retry_evaluate_once,
         )
         from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
@@ -395,6 +401,20 @@ def build_workflow_1(
             EvaluationDatabaseStatus as _EDS,
             ParameterIdentity,
             current_schema_version,
+        )
+        def _retry_connection_factory():
+            """Create a new CST connection for retry recovery."""
+            new_conn = CSTConnection(library_path, mode="new")
+            new_conn.connect()
+            new_conn.set_quiet_mode(True)
+            return new_conn
+
+        _retry_runtime_registry = CstConnectionRegistry()
+        _retry_runtime_recovery = make_cst_recovery_callback(
+            connection_factory=_retry_connection_factory,
+            evaluator=wf1_evaluator,
+            registry=_retry_runtime_registry,
+            logger=_logger,
         )
         _logger.info("Workflow 1 retry runtime: enabled (max_tier=%d)", _retry_runtime_cfg.max_tier)
 
@@ -502,7 +522,7 @@ def build_workflow_1(
                 evaluate_once=evaluate_once,
                 config=_retry_runtime_cfg,
                 current_schema=current_schema_version(),
-                recovery_callback=None,
+                recovery_callback=_retry_runtime_recovery,
             )
 
             # Use final result — extract penalty or fall back to all-ones
@@ -551,6 +571,7 @@ def build_workflow_1(
     workflow._params = param_set
     workflow._conn = conn
     workflow._retry_handler = retry_handler
+    workflow._retry_connection_registry = _retry_runtime_registry
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
     workflow.metric_specs = specs

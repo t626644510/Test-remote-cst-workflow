@@ -333,6 +333,25 @@ def _cleanup_workflow_connection(
                 force, str(exc)[:200],
             )
 
+    # Close retry runtime connection registry (RCR2).
+    # Tracks replacement connections created by the recovery callback.
+    # Works independently of legacy retry handler.
+    reg = getattr(workflow, "_retry_connection_registry", None)
+    if reg is not None:
+        try:
+            diag = reg.close_all(force=force)
+            _logger.debug(
+                "Retry runtime connection registry closed "
+                "(attempted=%d, closed_ok=%d, errors=%d)",
+                diag.get("attempted", 0), diag.get("closed_ok", 0),
+                len(diag.get("errors", [])),
+            )
+        except Exception as exc:
+            _logger.warning(
+                "Retry runtime connection registry close_all failed: %s",
+                str(exc)[:200],
+            )
+
     return result
 
 

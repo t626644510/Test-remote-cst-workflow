@@ -79,7 +79,8 @@ Remote branches archived in MH3.
 - FS2.1 -- candidate policy hardening -- accepted at `0829d6c`
 - FS3 -- runtime dry-run diagnostics -- accepted at `ddbbcde`
 - FS3.1 -- dry-run call-count hardening -- accepted at `2be78ea`
-- FS4 -- exact-key enforce skip (current track)
+- FS4 -- exact-key enforce skip -- accepted at `bd68284`
+- SE1 -- schema extension hooks for skip records (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -112,6 +113,7 @@ Remote branches archived in MH3.
 | FS3 | Runtime dry-run diagnostics / no-CST | No |
 | FS3.1 | Dry-run call-count hardening | No |
 | FS4 | Exact-key enforce skip / no-CST | No |
+| SE1 | Schema extension hooks for skip records | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

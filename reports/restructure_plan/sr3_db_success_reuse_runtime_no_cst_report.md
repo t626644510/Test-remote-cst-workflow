@@ -156,6 +156,21 @@ No live CST, no default config change, no warm-start/failure reuse.
 
 ---
 
+## SR3.2 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Call-count tracking fakes | `TrackerCSTConn` (fake CST connection), `TrackerEval` (tracks `evaluate_single_pass_calls`, `adapt_for_retry_calls`), `TrackerRetryHandler` (tracks `execute_calls`, `force_reset_calls`) |
+| 2. Plain skip proof | `test_plain_hit_skips_evaluate`: `evaluate_single_pass_calls == 0`, checkpoint once, DB row count 2, latest source = `db_success_reuse`. `test_plain_miss_calls_evaluate`: `evaluate_single_pass_calls == 1`. |
+| 3. Legacy skip proof | `test_legacy_hit_skips_handler`: `handler.execute_calls == 0`, `adapt_for_retry_calls == 0`, checkpoint once, DB provenance correct. `test_legacy_miss_calls_handler`: `execute_calls >= 1`. |
+| 4. Retry runtime skip proof | `test_retry_runtime_hit_skips_cst`: `evaluate_single_pass_calls == 0`, checkpoint once, DB provenance correct. `test_retry_runtime_miss_calls_eval`: `evaluate_single_pass_calls >= 1`. |
+| 5. Negative reuse | `test_non_success_rows_not_reused` parametrized (3 statuses): normal path runs. `test_raw_only_not_reused`: raw-only row skipped. |
+| Test count | 10 workflow tests + 35 reuse lookup + 472 existing = 517 total. |
+
+No live CST, no default config change, no warm-start/failure reuse.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

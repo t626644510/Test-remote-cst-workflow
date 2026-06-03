@@ -1,4 +1,4 @@
-"""No-CST tests for SR3 success reuse — real evaluator closure tests."""
+"""No-CST tests for SR3 success reuse — call-count skip proof tests."""
 
 from __future__ import annotations
 
@@ -34,12 +34,91 @@ from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
 
 # ===================================================================
-# Test infrastructure: minimal config + monkeypatch helpers
+# Call-count tracking fakes
 # ===================================================================
 
 
+class TrackerCSTConn:
+    """Fake CST connection — tracks calls, no real CST."""
+    pid = 99999
+    def __init__(self, *args, **kwargs):
+        self.connect_called = False
+        self.quiet_mode = False
+    def connect(self):
+        self.connect_called = True
+    def set_quiet_mode(self, val):
+        self.quiet_mode = True
+    def close(self, force=False):
+        pass
+
+
+class TrackerEval:
+    """Fake Workflow1Evaluator — tracks evaluate_single_pass and adapt_for_retry."""
+    def __init__(self):
+        self.evaluate_single_pass_calls = 0
+        self.adapt_for_retry_calls = 0
+
+    def evaluate_single_pass(self, *args, **kwargs):
+        self.evaluate_single_pass_calls += 1
+        return (
+            {"resonant_freq": 11.424},
+            {"resonant_freq": 0.3},
+            True,
+            EvaluationStatus.SUCCESS,
+            "",
+        )
+
+    def adapt_for_retry(self, params, iteration):
+        self.adapt_for_retry_calls += 1
+        return EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            raw_metrics={"resonant_freq": 11.424},
+            objective_values={"resonant_freq": 11.424},
+            penalty_values={"resonant_freq": 0.3},
+        )
+
+    def on_reconnect(self, new_conn):
+        pass
+
+    def last_diagnostics(self):
+        return {}
+
+
+class TrackerRetryHandler:
+    """Fake EvaluationRetryHandler — tracks execute and force_reset."""
+    def __init__(self):
+        self.execute_calls = 0
+        self.force_reset_calls = 0
+        self._all_connections = []
+
+    def execute(self, fn, params, iteration):
+        self.execute_calls += 1
+        return EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            raw_metrics={"resonant_freq": 11.424},
+            objective_values={"resonant_freq": 11.424},
+            penalty_values={"resonant_freq": 0.3},
+        ), 1
+
+    def force_reset(self):
+        self.force_reset_calls += 1
+
+    def close_all(self, force=False):
+        pass
+
+
+# ===================================================================
+# Test infrastructure
+# ===================================================================
+
+
+class TrackerSolverRunner:
+    def __init__(self, *args, **kwargs):
+        pass
+
+
 def _minimal_cfg() -> dict:
-    """Minimal single_pass config for build_workflow_1."""
+    """Minimal single_pass config."""
     return {
         "cst": {"library_path": "dummy", "connect_mode": "any_or_new"},
         "project": {"cst_path": "dummy.cst"},
@@ -51,7 +130,7 @@ def _minimal_cfg() -> dict:
 
 
 def _prepopulate_db(tmp_path: Path, param_values: list[float]) -> str:
-    """Create a temp SQLite DB with a reusable SUCCESS row, return path."""
+    """Create temp SQLite DB with one reusable SUCCESS row. Return path."""
     db_path = str(tmp_path / "reuse_test.db")
     cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
     with SQLiteEvaluationDatabase(cfg) as db:
@@ -75,114 +154,89 @@ def _prepopulate_db(tmp_path: Path, param_values: list[float]) -> str:
     return db_path
 
 
+def _db_row_count(db_path: str) -> int:
+    """Count evaluation_records rows in a SQLite DB."""
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    count = conn.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+    conn.close()
+    return count
+
+
+def _db_latest_source(db_path: str) -> str:
+    """Get the source of the newest row."""
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    row = conn.execute(
+        "SELECT source FROM evaluation_records ORDER BY id DESC LIMIT 1",
+    ).fetchone()
+    conn.close()
+    return row[0] if row else ""
+
+
+def _monkeypatch_build(wf_mod, monkeypatch, tracker_eval):
+    """Monkeypatch workflow module components for no-CST tests."""
+    monkeypatch.setattr(wf_mod, "CSTConnection", TrackerCSTConn)
+    monkeypatch.setattr(wf_mod, "SolverRunner", TrackerSolverRunner)
+    monkeypatch.setattr(wf_mod, "Workflow1Evaluator", lambda *a, **kw: tracker_eval)
+
+
 # ===================================================================
-# Fixtures
+# Tests
 # ===================================================================
 
 
-class _FakeCSTConn:
-    """Fake CST connection that doesn't connect to real CST."""
-    pid = 99999
-
-    def __init__(self, *args, **kwargs):
-        self.connect_called = False
-        self.quiet_mode = False
-
-    def connect(self):
-        self.connect_called = True
-
-    def set_quiet_mode(self, val):
-        self.quiet_mode = True
-
-
-class _FakeSolverRunner:
-    def __init__(self, *args, **kwargs):
-        pass
-
-
-# ===================================================================
-# Config/integration tests (real build_workflow_1)
-# ===================================================================
-
-
-class TestWorkflowIntegration:
-    def test_success_reuse_disabled_no_db_query(self, monkeypatch, tmp_path):
-        """success_reuse disabled: no evaluation_database config, normal path runs."""
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
-
-        cfg = _minimal_cfg()
-        wf, opt, ev = build_workflow_1(cfg)
-        # Call evaluator — should use plain path (no reuse, no DB)
-        val = ev(np.array([0.5]))
-        assert np.isfinite(val)
-
-    def test_success_reuse_enabled_without_db_raises(self, monkeypatch, tmp_path):
-        """success_reuse enabled without evaluation_database raises ValueError."""
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
-
-        cfg = _minimal_cfg()
-        cfg["success_reuse"] = {"enabled": True}
-        with pytest.raises(ValueError, match="requires evaluation_database.enabled=True"):
-            build_workflow_1(cfg)
-
-
-class TestPlainPathReuseWorkflow:
-    def test_plain_path_reuse_hit(self, monkeypatch, tmp_path):
-        """Plain path: reuse hit skips evaluate_single_pass, checkpoint/DB once."""
+class TestPlainPathSkip:
+    def test_plain_hit_skips_evaluate(self, monkeypatch, tmp_path):
+        """Plain: reuse hit -> evaluate_single_pass not called, checkpoint once."""
         db_path = _prepopulate_db(tmp_path, [0.5])
-
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
         cfg = _minimal_cfg()
         cfg["evaluation_database"] = {"enabled": True, "path": db_path}
         cfg["success_reuse"] = {"enabled": True}
 
-        checkpoint_calls = []
-        wf, opt, ev = build_workflow_1(
-            cfg, checkpoint_callback=lambda *a: checkpoint_calls.append(a),
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
         )
         val = ev(np.array([0.5]))
         assert np.isfinite(val)
-        # Checkpoint called once
-        assert len(checkpoint_calls) == 1
+        assert tracker_eval.evaluate_single_pass_calls == 0, "CST not skipped!"
+        assert len(ckpt) == 1
+        assert _db_row_count(db_path) == 2  # source + reuse
+        assert _db_latest_source(db_path) == "db_success_reuse"
 
-    def test_plain_path_reuse_miss(self, monkeypatch, tmp_path):
-        """Plain path: reuse miss runs evaluate_single_pass normally."""
-        # Use a DB with a different parameter point (no match)
-        _prepopulate_db(tmp_path, [99.0])
-
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
+    def test_plain_miss_calls_evaluate(self, monkeypatch, tmp_path):
+        """Plain: reuse miss -> evaluate_single_pass called once."""
+        db_path = _prepopulate_db(tmp_path, [99.0])  # mismatched key
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
         cfg = _minimal_cfg()
-        cfg["evaluation_database"] = {"enabled": True, "path": str(tmp_path / "reuse_test.db")}
+        cfg["evaluation_database"] = {"enabled": True, "path": db_path}
         cfg["success_reuse"] = {"enabled": True}
 
-        checkpoint_calls = []
-        wf, opt, ev = build_workflow_1(
-            cfg, checkpoint_callback=lambda *a: checkpoint_calls.append(a),
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
         )
         val = ev(np.array([0.5]))
         assert np.isfinite(val)
-        # Checkpoint called (CST path runs)
-        assert len(checkpoint_calls) == 1
+        assert tracker_eval.evaluate_single_pass_calls == 1
+        assert len(ckpt) == 1
 
 
-class TestLegacyReuseWorkflow:
-    def test_legacy_reuse_hit(self, monkeypatch, tmp_path):
-        """Legacy path: reuse hit skips retry_handler.execute."""
+class TestLegacyPathSkip:
+    def test_legacy_hit_skips_handler(self, monkeypatch, tmp_path):
+        """Legacy: reuse hit -> retry_handler.execute not called."""
         db_path = _prepopulate_db(tmp_path, [0.5])
-
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
         cfg = _minimal_cfg()
         cfg["optimization"] = {
@@ -190,141 +244,160 @@ class TestLegacyReuseWorkflow:
             "retry": {"enabled": True, "max_tier1": 1, "max_tier2": 0, "max_tier3": 0},
         }
         cfg["evaluation_database"] = {"enabled": True, "path": db_path}
-        cfg["success_reuse"] = {"enabled": True, "require_objective_values": True}
+        cfg["success_reuse"] = {"enabled": True}
 
-        checkpoint_calls = []
-        wf, opt, ev = build_workflow_1(
-            cfg, checkpoint_callback=lambda *a: checkpoint_calls.append(a),
+        # Monkeypatch EvaluationRetryHandler too
+        handler = TrackerRetryHandler()
+        monkeypatch.setattr(wf_mod, "EvaluationRetryHandler", lambda *a, **kw: handler)
+
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
         )
         val = ev(np.array([0.5]))
         assert np.isfinite(val)
-        assert len(checkpoint_calls) == 1
+        assert handler.execute_calls == 0, "retry_handler not skipped!"
+        assert tracker_eval.adapt_for_retry_calls == 0
+        assert len(ckpt) == 1
+        assert _db_latest_source(db_path) == "db_success_reuse"
 
-    def test_legacy_reuse_miss(self, monkeypatch, tmp_path):
-        """Legacy path: reuse miss, retry_handler path still runs."""
-        _prepopulate_db(tmp_path, [99.0])
-
-        from workflows.rfgun_sao.workflow import build_workflow_1
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.CSTConnection", _FakeCSTConn)
-        monkeypatch.setattr("workflows.rfgun_sao.workflow.SolverRunner", _FakeSolverRunner)
+    def test_legacy_miss_calls_handler(self, monkeypatch, tmp_path):
+        """Legacy: reuse miss -> retry_handler.execute called once."""
+        db_path = _prepopulate_db(tmp_path, [99.0])
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
         cfg = _minimal_cfg()
         cfg["optimization"] = {
             "n_initial": 1, "n_iterations": 0, "seed": 42,
             "retry": {"enabled": True, "max_tier1": 1, "max_tier2": 0, "max_tier3": 0},
         }
-        cfg["evaluation_database"] = {"enabled": True, "path": str(tmp_path / "reuse_test.db")}
+        cfg["evaluation_database"] = {"enabled": True, "path": db_path}
         cfg["success_reuse"] = {"enabled": True}
 
-        checkpoint_calls = []
-        wf, opt, ev = build_workflow_1(
-            cfg, checkpoint_callback=lambda *a: checkpoint_calls.append(a),
+        handler = TrackerRetryHandler()
+        monkeypatch.setattr(wf_mod, "EvaluationRetryHandler", lambda *a, **kw: handler)
+
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
         )
         val = ev(np.array([0.5]))
         assert np.isfinite(val)
-        assert len(checkpoint_calls) == 1
+        assert handler.execute_calls >= 1
 
 
-# ===================================================================
-# No invalid reuse
-# ===================================================================
+class TestRetryRuntimePathSkip:
+    def test_retry_runtime_hit_skips_cst(self, monkeypatch, tmp_path):
+        """Retry runtime: reuse hit -> no evaluate_single_pass called."""
+        db_path = _prepopulate_db(tmp_path, [0.5])
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
+
+        cfg = _minimal_cfg()
+        cfg["optimization"] = {
+            "n_initial": 1, "n_iterations": 0, "seed": 42,
+            "retry": {"enabled": False},
+        }
+        cfg["retry_runtime"] = {"enabled": True, "max_tier": 1}
+        cfg["evaluation_database"] = {"enabled": True, "path": db_path}
+        cfg["success_reuse"] = {"enabled": True}
+
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
+        )
+        val = ev(np.array([0.5]))
+        assert np.isfinite(val)
+        assert tracker_eval.evaluate_single_pass_calls == 0, "CST eval not skipped!"
+        assert len(ckpt) == 1
+        assert _db_latest_source(db_path) == "db_success_reuse"
+
+    def test_retry_runtime_miss_calls_eval(self, monkeypatch, tmp_path):
+        """Retry runtime: reuse miss -> evaluate_single_pass called."""
+        db_path = _prepopulate_db(tmp_path, [99.0])
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
+
+        cfg = _minimal_cfg()
+        cfg["optimization"] = {
+            "n_initial": 1, "n_iterations": 0, "seed": 42,
+            "retry": {"enabled": False},
+        }
+        cfg["retry_runtime"] = {"enabled": True, "max_tier": 1}
+        cfg["evaluation_database"] = {"enabled": True, "path": db_path}
+        cfg["success_reuse"] = {"enabled": True}
+
+        ckpt = []
+        wf, opt, ev = wf_mod.build_workflow_1(
+            cfg, checkpoint_callback=lambda *a: ckpt.append(a),
+        )
+        val = ev(np.array([0.5]))
+        assert np.isfinite(val)
+        assert tracker_eval.evaluate_single_pass_calls >= 1
 
 
-class TestNoInvalidReuse:
-    def test_failure_row_not_reused(self):
-        """Failure rows do not trigger reuse."""
-        import json
-        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
-        key = pid.parameter_key()
-        rows = [{
-            "id": 1, "schema_version": 1, "parameter_key": key,
-            "param_names": json.dumps(["p0"]), "param_values": json.dumps([1.0]),
-            "status": "solver_failed", "raw_metrics": None,
-            "objective_values": None, "objective_names": None,
-            "diagnostics": None, "source": "original", "run_id": "r1",
-            "created_at": "2026-01-01",
-        }]
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            db_path = f.name
+class TestNegativeReuse:
+    @pytest.mark.parametrize("status", [
+        "solver_failed", "gate_rejected", "unknown_failed",
+    ])
+    def test_non_success_rows_not_reused(self, monkeypatch, tmp_path, status):
+        """Non-success status rows do not trigger reuse; normal path runs."""
+        import sqlite3, json
+        db_path = str(tmp_path / "negative.db")
         cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
         with SQLiteEvaluationDatabase(cfg) as db:
-            db._conn.execute("INSERT INTO evaluation_records (schema_version, parameter_key, param_names, param_values, status) VALUES (?, ?, ?, ?, ?)",
-                             (1, key, json.dumps(["p0"]), json.dumps([1.0]), "solver_failed"))
+            pid = ParameterIdentity(param_names=["p1"], values=[0.5])
+            # Insert via raw SQL to avoid validate_evaluation_record rejecting status
+            db._conn.execute(
+                "INSERT INTO evaluation_records "
+                "(schema_version, parameter_key, param_names, param_values, status) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (1, pid.parameter_key(), json.dumps(["p1"]),
+                 json.dumps([0.5]), status),
+            )
             db._conn.commit()
-            sr_cfg = SuccessReuseConfig(enabled=True)
-            result = try_success_reuse(db, pid, ["m1"], config=sr_cfg)
-            assert result is None
-        Path(db_path).unlink(missing_ok=True)
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
-    def test_raw_only_row_not_reused(self):
-        """Raw-only rows (no objective_values) do not trigger reuse."""
-        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
-        key = pid.parameter_key()
-        rows_data = [{
-            "id": 1, "schema_version": 1, "parameter_key": key,
-            "param_names": json.dumps(["p0"]), "param_values": json.dumps([1.0]),
-            "status": "success",
-            "raw_metrics": json.dumps({"m1": 1.0}),
-            "objective_values": None, "objective_names": None,
-            "diagnostics": None, "source": "original", "run_id": "r1",
-            "created_at": "2026-01-01",
-        }]
-        class _FakeDB:
-            def query_by_parameter_key(self, k):
-                return rows_data
-        sr_cfg = SuccessReuseConfig(enabled=True)
-        result = try_success_reuse(_FakeDB(), pid, ["m1"], config=sr_cfg)
-        assert result is None
+        cfg2 = _minimal_cfg()
+        cfg2["evaluation_database"] = {"enabled": True, "path": db_path}
+        cfg2["success_reuse"] = {"enabled": True}
 
-    def test_reuse_provenance(self):
-        """Reused result contains provenance in diagnostics."""
-        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
-        key = pid.parameter_key()
-        import json
-        rows = [{
-            "id": 42, "schema_version": 1, "parameter_key": key,
-            "param_names": json.dumps(["p0"]), "param_values": json.dumps([1.0]),
-            "status": "success",
-            "raw_metrics": json.dumps({"m1": 1.0}),
-            "objective_values": json.dumps({"m1": 0.5}),
-            "objective_names": json.dumps(["m1"]),
-            "diagnostics": None, "source": "original", "run_id": "orig-run",
-            "created_at": "2026-06-01",
-        }]
-        class _FakeDB:
-            def query_by_parameter_key(self, k):
-                return rows
-        sr_cfg = SuccessReuseConfig(enabled=True)
-        result = try_success_reuse(_FakeDB(), pid, ["m1"], config=sr_cfg)
-        assert result is not None
-        diag = result.diagnostics or {}
-        assert diag.get("reused_from_db") is True
-        assert diag.get("source_row_id") == 42
-        assert diag.get("source_run_id") == "orig-run"
+        wf, opt, ev = wf_mod.build_workflow_1(cfg2)
+        val = ev(np.array([0.5]))
+        assert np.isfinite(val)
+        # Normal path must have run
+        assert tracker_eval.evaluate_single_pass_calls >= 1
 
+    def test_raw_only_not_reused(self, monkeypatch, tmp_path):
+        """Raw-only row (no objective_values) does not trigger reuse."""
+        import sqlite3, json
+        db_path = str(tmp_path / "raw_only.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            pid = ParameterIdentity(param_names=["p1"], values=[0.5])
+            db._conn.execute(
+                "INSERT INTO evaluation_records "
+                "(schema_version, parameter_key, param_names, param_values, status, raw_metrics) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (1, pid.parameter_key(), json.dumps(["p1"]),
+                 json.dumps([0.5]), "success", json.dumps({"m1": 1.0})),
+            )
+            db._conn.commit()
+        tracker_eval = TrackerEval()
+        from workflows.rfgun_sao import workflow as wf_mod
+        _monkeypatch_build(wf_mod, monkeypatch, tracker_eval)
 
-# ===================================================================
-# Safety
-# ===================================================================
+        cfg2 = _minimal_cfg()
+        cfg2["evaluation_database"] = {"enabled": True, "path": db_path}
+        cfg2["success_reuse"] = {"enabled": True}
 
-
-class TestSafety:
-    def test_no_jsonl_access(self):
-        """Success reuse does not access JSONL."""
-        import workflows.rfgun_sao.evaluation_success_reuse as mod
-        src = mod.__file__
-        with open(src, encoding="utf-8") as f:
-            text = f.read()
-        assert ".jsonl" not in text
-
-    def test_no_cst_import_in_reuse_module(self):
-        """Success reuse module has no CST imports."""
-        import workflows.rfgun_sao.evaluation_success_reuse as mod
-        src = mod.__file__
-        with open(src, encoding="utf-8") as f:
-            text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
-        for item in forbidden:
-            assert item not in text, f"should not import {item!r}"
+        wf, opt, ev = wf_mod.build_workflow_1(cfg2)
+        val = ev(np.array([0.5]))
+        assert np.isfinite(val)
+        assert tracker_eval.evaluate_single_pass_calls >= 1

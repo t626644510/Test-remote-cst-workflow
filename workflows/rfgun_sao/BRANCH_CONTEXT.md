@@ -64,7 +64,7 @@ Future feature tracks are independently planned on separate branches.
 
 | Track | Branch | Status |
 |-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review |
+| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review |
 
 #### Planned future tracks
 
@@ -79,6 +79,7 @@ Future feature tracks are independently planned on separate branches.
 | WS1 | Design docs-only | No |
 | WS2 | DB prior loader / no-CST helper (config resolver, eligibility, dedup, capping, checkpoint dedup) | No |
 | WS3 | Optimizer warm-start runtime wiring / no-CST | No |
+| WS3.1 | Checkpoint dedup runtime fix / pure helpers / no-CST test hardening | No |
 | WS4 | Bounded live warm-start smoke (conditional) | Yes, only with explicit approval |
 
 ## Phase B -- Metric roles and gate (B1-B9) -- CLOSED

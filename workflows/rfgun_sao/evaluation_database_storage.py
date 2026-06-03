@@ -1,6 +1,7 @@
 # Durable evaluation DB storage — no-CST SQLite adapter.
 # Stores authoritative final evaluation records only.
-# No success reuse, no warm-start, no failure reuse.
+# No failure reuse.  Success reuse and warm-start are implemented by
+# higher-level helpers (SR, WS tracks) with explicit opt-in config.
 # Explicit opt-in only; disabled by default.
 #
 # Phase DDB2 — no-CST SQLite storage implementation.
@@ -130,7 +131,8 @@ class SQLiteEvaluationDatabase:
     """SQLite-backed evaluation record storage.
 
     Stores authoritative final evaluation records only (no retry attempts).
-    No success reuse, no warm-start queries, no failure reuse.
+    No failure reuse.  Warm-start and success reuse are implemented by
+    higher-level helpers (WS, SR tracks) with explicit opt-in config.
 
     Parameters
     ----------

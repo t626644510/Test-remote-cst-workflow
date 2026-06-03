@@ -1,4 +1,5 @@
 # WS3 -- optimizer warm-start runtime wiring, no-CST
+# WS3.1 -- checkpoint dedup runtime fix and test hardening
 
 ## Metadata
 
@@ -6,6 +7,7 @@
 |-------|-------|
 | Base commit | `bc85a38529d11d0307b7f0e009677ae8f692f868` |
 | Phase label | `WS3 -- optimizer warm-start runtime wiring / no-CST` |
+| Phase label | `WS3.1 -- checkpoint dedup runtime fix / no-CST test hardening` |
 | Branch | `feature/wf1-db-warm-start` |
 | Live CST | **No** -- pure no-CST implementation |
 | Optimizer wiring | **Implemented** -- DB priors merged into optimizer warm-start |
@@ -186,20 +188,177 @@ Total: 568 passed, 1 pre-existing warning.
 
 ---
 
+## WS3.1 -- checkpoint dedup / runtime no-CST hardening
+
+### Background
+
+In the WS3 implementation, checkpoint observations and DB priors were
+loaded separately — the checkpoint was loaded in ``run.py`` and DB
+priors were loaded inside ``build_workflow_1()`` in ``workflow.py``,
+then merged as two separate ``prior_data`` arrays.  There was no
+deduplication by ``parameter_key``: the same geometrical point could
+appear in both checkpoint and DB lists, resulting in duplicate
+observations being fed to the SAO optimizer.
+
+### Checkpoint dedup bug and fix
+
+**Bug:** When ``build_workflow_1()`` loaded DB priors without access
+to the post-checkpoint ``warm_xy``, duplicate ``parameter_key`` entries
+could appear in the final ``prior_data``.  The checkpoint's
+``parameter_key`` set was never computed and never compared against
+accepted DB priors.
+
+**Fix (Option A):** The DB prior loading was moved from
+``build_workflow_1()`` in ``workflow.py`` into ``run.py``, *after*
+``ckpt.load()`` and checkpoint ``warm_xy`` are available.  The new
+flow:
+
+1. Load checkpoint, extract ``warm_xy`` as ``prior_data``.
+2. Compute ``checkpoint_parameter_keys`` from prior_data's X array
+   using ``ParameterIdentity``.
+3. Call ``load_warm_start_priors(..., checkpoint_parameter_keys=...)``
+   — rows whose key appears in the checkpoint are counted as
+   ``skipped_checkpoint_duplicates`` and omitted.
+4. Merge accepted DB priors with checkpoint priors.
+5. Log accepted, rejected, and checkpoint-duplicate counts.
+
+### Final runtime data flow
+
+```
+ckpt.load() -> warm_xy
+    |
+    v
+prior_data = warm_xy           # checkpoint prior_data
+ckpt_keys = set of parameter_key from prior_data[0]
+    |
+    v
+all_rows = _evaluation_db.get_all_records()
+ws_report = load_warm_start_priors(all_rows, ws_cfg,
+                checkpoint_parameter_keys=ckpt_keys, ...)
+    |
+    v
+if ws_report.accepted_priors > 0:
+    ws_x, ws_f = db_priors_to_prior_data(ws_priors)
+    prior_data = vstack/concatenate with ckpt [+]
+    |
+    v
+opt.optimize(evaluator=..., prior_data=prior_data)
+```
+
+### How checkpoint parameter keys are computed
+
+``parameter_keys_from_prior_data(prior_x, param_names)`` iterates each
+row of the checkpoint X array and builds a ``ParameterIdentity`` using
+the workflow's parameter names, then calls ``parameter_key()`` on each.
+The resulting ``set[str]`` is passed into ``load_warm_start_priors()``
+as ``checkpoint_parameter_keys``.
+
+### Final prior_data merge behavior
+
+| Input | Checkpoint only | DB only | Both |
+|-------|-----------------|---------|------|
+| ``prior_data`` = | checkpoint ``(X,F)`` | ``(ws_x, ws_f)`` | ``vstack + concatenate`` |
+| Checkpoint dup DB rows | N/A | N/A | Skipped, counted in report |
+| Per-key DB dedup | N/A | Best row per key | Best row per key |
+
+### Diagnostics / logging
+
+- ``accepted_priors`` — DB priors that passed all checks.
+- ``rejected_rows`` — rows that failed eligibility (bad status, schema,
+  names mismatch, missing values, etc.).
+- ``skipped_duplicates`` — per-key duplicates within the DB (kept best).
+- ``skipped_checkpoint_duplicates`` — rows whose ``parameter_key``
+  already exists in checkpoint; omitted before per-key dedup.
+- ``found_rows`` — total rows scanned.
+
+### New pure no-CST helpers
+
+Added to ``evaluation_database_warm_start.py``:
+
+- ``parameter_keys_from_prior_data(prior_x, param_names) -> set[str]``
+  — compute checkpoint-style keys from a prior_data X array.
+- ``db_priors_to_prior_data(priors) -> tuple[np.ndarray, np.ndarray]``
+  — convert ``DbWarmStartPrior`` list to ``(X, F)`` arrays.
+- ``merge_checkpoint_and_db_priors(ckpt_data, db_priors, param_names)``
+  — full merge with dedup reporting; returns merged data + diagnostics.
+
+All are pure no-CST, easy to unit test, no runtime side effects, no
+JSONL, no evaluator call.
+
+### New tests and results
+
+Added to ``test_rfgun_sao_db_warm_start_ws3.py``:
+
+| Class | Tests | Coverage |
+|-------|-------|----------|
+| ``TestCheckpointDedup`` | 8 | DB prior matching CKPT skipped; unique accepted; mixed dedup counts; no duplicate keys in final; merge row count; ckpt_keys helper |
+| ``TestWS3Config`` | 3 | Default disabled; WS without DB raises; needs explicit enable |
+| ``TestNoEvaluatorCalls`` | 2 | Priors do not call evaluator; priors do not invoke retry runtime |
+| ``TestFakeOptimizerHarness`` | 3 | Fake optimizer receives ckpt/merged/None prior_data |
+| ``TestDisabledSemantics`` | 5 | WS disabled yields None; disabled keeps checkpoint; WS+SR independence; SR without WS |
+| ``TestMalformedRowsRejected`` | 3 | SOLVER_FAILED rejected; wrong param count rejected; non-numeric param rejected |
+| ``TestWSandSRIndependence`` | 2 | WS without SR injects priors; SR without WS does not |
+| ``TestDiagnostics`` | 4 | Report has accepted, rejected, duplicate, all-required counts |
+| ``TestHelpers`` | 9 | parameter_keys_from_prior_data; db_priors_to_prior_data; merge_checkpoint_and_db_priors (overlap, no overlap, both empty, ckpt-only, DB-only) |
+| ``TestSafety`` | 2 | No JSONL reference; no CST imports |
+
+### Confirmation no live CST
+
+All tests are pure no-CST.  No CST connection is opened, no CST solver
+is invoked, no CST Design Environment window is created.
+
+### Confirmation no default config change
+
+``workflows/rfgun_sao/config.yaml`` is not modified.  DB warm-start
+remains off by default.
+
+### Confirmation no success reuse behavior change
+
+Warm-start and success reuse remain independent configs.  Neither
+implies the other.  Success reuse behavior is unchanged.
+
+### Confirmation no failure reuse / no probably-infeasible skip
+
+Failure rows are rejected by the prior loader (``status_not_success``).
+No failure reuse is implemented.  Probably-infeasible skip is not
+implemented.
+
+### File changes summary
+
+| File | Action | Description |
+|------|--------|-------------|
+| ``workflows/rfgun_sao/workflow.py`` | **Modified** | Removed DB prior loading from ``build_workflow_1()``; store WS config + DB reference on workflow object instead of pre-loaded report |
+| ``workflows/rfgun_sao/run.py`` | **Modified** | Moved DB prior loading after checkpoint with ``checkpoint_parameter_keys`` dedup; compute ``ckpt_keys`` from workflow param names; detailed logging with dedup counts |
+| ``workflows/rfgun_sao/evaluation_database_storage.py`` | **Modified** | Fixed stale "No warm-start" header comment and class docstring |
+| ``workflows/rfgun_sao/evaluation_database_warm_start.py`` | **Modified** | Added ``parameter_keys_from_prior_data``, ``db_priors_to_prior_data``, ``merge_checkpoint_and_db_priors`` helpers |
+| ``tests/workflows/test_rfgun_sao_db_warm_start_ws3.py`` | **Modified** | Added 43 no-CST tests: checkpoint dedup, fake optimizer harness, disabled semantics, malformed rows, helpers, full diagnostics |
+| ``workflows/rfgun_sao/BRANCH_CONTEXT.md`` | **Updated** | WS3.1 phase status |
+| ``reports/restructure_plan/wf1_db_warm_start_ws3_optimizer_wiring.md`` | **Updated** | This WS3.1 report section |
+
+### Final HEAD commit SHA
+
+**To be confirmed by reviewer.**
+
+---
+
 ## Commit message proposal
 
 ```
-feat(wf1): wire DB warm-start optimizer priors WS3
+feat(wf1): harden DB warm-start optimizer wiring WS3.1
 
-- Add get_all_records() to SQLiteEvaluationDatabase
-- Resolve warm-start config in workflow.py; load eligible rows from DB
-  via WS2 load_warm_start_priors(); store report on workflow
-- Merge DB priors with checkpoint priors in run.py before optimizer call
-  (convert DbWarmStartPrior -> (X, F) arrays; vstack if checkpoint exists)
-- DB priors do not call evaluator or consume CST solve budget
-- DB priors do not enable success reuse (independent semantics)
-- 16 no-CST tests: config, prior loading, X/F conversion, rejection, safety
-- 568 total tests pass
+- Move DB prior loading from workflow.py to run.py after checkpoint
+  so checkpoint parameter keys are available for dedup
+- Compute checkpoint_parameter_keys from checkpoint warm_xy and pass
+  into load_warm_start_priors(); skip DB rows matching checkpoint
+- Log accepted, rejected, and checkpoint-duplicate counts per run
+- Add pure no-CST helpers: parameter_keys_from_prior_data,
+  db_priors_to_prior_data, merge_checkpoint_and_db_priors
+- Fix stale documentation in evaluation_database_storage.py
+  (remove stale "No warm-start queries" claim)
+- 43 no-CST tests: checkpoint dedup, fake optimizer harness, disabled
+  semantics, malformed rows, pure helpers, full diagnostics coverage
 
-No live CST, no default config change, no failure reuse.
+No live CST, no default config change, no failure reuse,
+no success reuse behavior change, no probably-infeasible skip.
+WS4 requires explicit approval.
 ```

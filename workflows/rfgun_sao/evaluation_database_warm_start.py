@@ -840,3 +840,132 @@ def _load_json_dict(raw: Any) -> dict | None:
         except (json.JSONDecodeError, TypeError):
             return None
     return None
+
+
+# ===================================================================
+# WS3.1 — Pure no-CST helpers for checkpoint-dedup merging
+# ===================================================================
+
+
+def parameter_keys_from_prior_data(
+    prior_x: np.ndarray,
+    param_names: list[str],
+) -> set[str]:
+    """Compute checkpoint-style parameter keys from a prior_data X array.
+
+    Each row of *prior_x* is converted to a ``ParameterIdentity`` key
+    using *param_names*.
+
+    Parameters
+    ----------
+    prior_x : np.ndarray
+        2-D array of shape ``(N, D)`` where ``D == len(param_names)``.
+    param_names : list[str]
+        Ordered parameter names for constructing identities.
+
+    Returns
+    -------
+    set[str]
+        One ``parameter_key`` per row.
+    """
+    keys: set[str] = set()
+    for x_vec in prior_x:
+        pid = ParameterIdentity(param_names=param_names, values=list(x_vec))
+        keys.add(pid.parameter_key())
+    return keys
+
+
+def db_priors_to_prior_data(
+    priors: list[DbWarmStartPrior],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Convert a list of ``DbWarmStartPrior`` to ``(X, F)`` arrays.
+
+    Parameters
+    ----------
+    priors : list[DbWarmStartPrior]
+        Accepted warm-start priors.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(X, F)`` where ``X.shape == (N, D)`` and ``F.shape == (N,)``.
+    """
+    import numpy as np
+
+    ws_x = np.array(
+        [list(p.parameter_identity.values) for p in priors], dtype=float,
+    )
+    ws_f = np.array([p.scalar for p in priors], dtype=float)
+    return ws_x, ws_f
+
+
+def merge_checkpoint_and_db_priors(
+    checkpoint_prior_data: tuple[np.ndarray, np.ndarray] | None,
+    db_priors: list[DbWarmStartPrior],
+    param_names: list[str],
+) -> tuple[tuple[np.ndarray, np.ndarray] | None, dict[str, int]]:
+    """Merge checkpoint and DB priors, deduplicating by parameter key.
+
+    Checkpoint observations remain authoritative — any DB prior whose
+    ``parameter_key`` already appears in the checkpoint is omitted.
+
+    Parameters
+    ----------
+    checkpoint_prior_data : tuple[np.ndarray, np.ndarray] or None
+        ``(X, F)`` from checkpoint, or ``None``.
+    db_priors : list[DbWarmStartPrior]
+        Accepted DB warm-start priors.
+    param_names : list[str]
+        Ordered parameter names for key computation.
+
+    Returns
+    -------
+    merged : tuple[np.ndarray, np.ndarray] or None
+        Merged ``(X, F)``, or ``None`` when both inputs are empty.
+    diagnostics : dict[str, int]
+        Keys: ``"ckpt_count"``, ``"db_input_count"``,
+        ``"db_checkpoint_duplicates"``, ``"db_accepted"``.
+    """
+    import numpy as np
+
+    ckpt_count = 0
+    ckpt_keys: set[str] = set()
+    if checkpoint_prior_data is not None:
+        ckpt_x = checkpoint_prior_data[0]
+        ckpt_count = len(ckpt_x)
+        ckpt_keys = parameter_keys_from_prior_data(ckpt_x, param_names)
+
+    db_input_count = len(db_priors)
+
+    # Separate DB priors into checkpoint dup vs accepted
+    accepted_db: list[DbWarmStartPrior] = []
+    checkpoint_dups = 0
+    for prior in db_priors:
+        if prior.parameter_key in ckpt_keys:
+            checkpoint_dups += 1
+        else:
+            accepted_db.append(prior)
+
+    if checkpoint_prior_data is None and not accepted_db:
+        return None, {
+            "ckpt_count": ckpt_count,
+            "db_input_count": db_input_count,
+            "db_checkpoint_duplicates": checkpoint_dups,
+            "db_accepted": 0,
+        }
+
+    if checkpoint_prior_data is None:
+        merged_x, merged_f = db_priors_to_prior_data(accepted_db)
+    elif not accepted_db:
+        merged_x, merged_f = checkpoint_prior_data
+    else:
+        db_x, db_f = db_priors_to_prior_data(accepted_db)
+        merged_x = np.vstack([checkpoint_prior_data[0], db_x])
+        merged_f = np.concatenate([checkpoint_prior_data[1], db_f])
+
+    return (merged_x, merged_f), {
+        "ckpt_count": ckpt_count,
+        "db_input_count": db_input_count,
+        "db_checkpoint_duplicates": checkpoint_dups,
+        "db_accepted": len(accepted_db),
+    }

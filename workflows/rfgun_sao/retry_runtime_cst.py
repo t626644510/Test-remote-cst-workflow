@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import numpy as np
+
 from workflows.rfgun_sao.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
@@ -20,6 +22,7 @@ from workflows.rfgun_sao.evaluation_database_schema import (
 )
 from workflows.rfgun_sao.retry_runtime import (
     RetryRuntimeConfig,
+    resolve_retry_runtime_config,
 )
 from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
@@ -132,12 +135,14 @@ def make_cst_retry_evaluate_once(
     evaluator: Any,
     *,
     param_names: list[str] | None = None,
-    recovery_callback: Callable[[int, EvaluationDatabaseRecord], bool] | None = None,
 ) -> Callable[[int, EvaluationDatabaseRecord], EvaluationDatabaseRecord]:
     """Create a CST-backed ``evaluate_once`` callback.
 
     The returned callback is compatible with
-    ``retry_runtime.run_retry_loop_no_cst()``.
+    ``retry_runtime.run_retry_loop_no_cst()``.  It owns only the
+    single-attempt evaluation — recovery callback and retry-loop
+    orchestration are supplied separately to
+    ``run_retry_loop_no_cst()``.
 
     Parameters
     ----------
@@ -149,10 +154,6 @@ def make_cst_retry_evaluate_once(
         Ordered parameter names matching the evaluator's expectations.
         If ``None``, attempts to extract from the ``EvaluationDatabaseRecord``
         passed to each ``evaluate_once`` call.
-    recovery_callback : callable or None
-        ``recovery_callback(tier, record) -> bool``.  Called before each
-        retry evaluation.  If ``None``, the retry loop's own
-        ``recovery_callback`` parameter is used instead.
 
     Returns
     -------
@@ -167,23 +168,17 @@ def make_cst_retry_evaluate_once(
         pid = record.parameter_identity
 
         # Build parameter vector from the record's identity
-        if param_names is not None and pid is not None:
-            param_dict = dict(zip(param_names, pid.values))
+        if pid is not None:
             params = list(pid.values)
-        elif pid is not None:
-            params = list(pid.values)
-            param_dict = dict(zip(pid.param_names, params))
         else:
-            # No identity — use empty params; will likely produce an error
             params = []
-            param_dict = {}
 
-        # Call the evaluator
+        # Call the evaluator.
         # The iteration counter is not meaningful for retry attempts;
         # we use a placeholder (-1) to distinguish retries from
         # initial evaluations.
         result = evaluator.adapt_for_retry(
-            __import__("numpy").asarray(params), -1,
+            np.asarray(params), -1,
         )
 
         # Build the database record from the result
@@ -240,10 +235,7 @@ def check_legacy_retry_mutex(
         # No retry_runtime section at all → disabled by default
         return RetryRuntimeConfig(), None
 
-    runtime_cfg = __import__(
-        "workflows.rfgun_sao.retry_runtime",
-        fromlist=["resolve_retry_runtime_config"],
-    ).resolve_retry_runtime_config({"retry": retry_raw})
+    runtime_cfg = resolve_retry_runtime_config({"retry": retry_raw})
 
     if not runtime_cfg.enabled:
         return runtime_cfg, None

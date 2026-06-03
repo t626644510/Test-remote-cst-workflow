@@ -207,8 +207,21 @@ class TestBuildRecord:
 
 
 class TestCstRetryEvaluateOnce:
-    def test_success_on_first_attempt_no_retry(self) -> None:
-        """SUCCESS on first attempt -> no retry."""
+    def test_initial_success_no_retry(self) -> None:
+        """Initial record SUCCESS -> no retry, evaluate_once never called."""
+        fake = FakeCstEvaluator([
+            EvaluationResult(status=EvaluationStatus.SUCCESS, error=""),
+        ])
+        evaluate_once = make_cst_retry_evaluate_once(fake)
+        initial = _rec([1.0], status="success", retries=0)
+        config = RetryRuntimeConfig(enabled=True, max_tier=3)
+        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
+        assert result.succeeded is True
+        assert len(result.attempts) == 0
+        assert fake.call_count == 0
+
+    def test_failed_initial_retry_succeeds(self) -> None:
+        """Failed initial attempt -> retry loop -> SUCCESS."""
         fake = FakeCstEvaluator([
             EvaluationResult(status=EvaluationStatus.SUCCESS, error=""),
         ])
@@ -311,9 +324,7 @@ class TestCstRetryRecovery:
             EvaluationResult(status=EvaluationStatus.SOLVER_FAILED, error="fail"),
             EvaluationResult(status=EvaluationStatus.SUCCESS, error=""),
         ])
-        evaluate_once = make_cst_retry_evaluate_once(
-            fake, recovery_callback=None,
-        )
+        evaluate_once = make_cst_retry_evaluate_once(fake)
         initial = _rec([1.0], status="solver_failed", retries=0)
         config = RetryRuntimeConfig(enabled=True, max_tier=3)
         result = run_retry_loop_no_cst(

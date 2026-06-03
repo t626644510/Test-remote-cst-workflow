@@ -158,6 +158,21 @@ No regressions. Existing retry runtime (83), taxonomy (50), and import (242) tes
 
 ---
 
+## RW2.1 correction note
+
+This section documents changes made in RW2.1 (docs/code/test no-CST polish).
+
+| Item | What changed |
+|------|-------------|
+| Nature | Docs/code/test no-CST polish — no runtime code changed, no config changed, no live CST |
+| 1. No-retry test semantics | Added `test_initial_success_no_retry`: initial record = SUCCESS, asserts `len(result.attempts) == 0` and `call_count == 0`. Renamed old test to `test_failed_initial_retry_succeeds` |
+| 2. Recovery callback ownership | Removed `recovery_callback` parameter from `make_cst_retry_evaluate_once`. Recovery belongs to `run_retry_loop_no_cst()`; adapter only evaluates one attempt. Updated docstring and all call sites |
+| 3. Import cleanup | Replaced `__import__("numpy")` with top-level `import numpy as np`. Removed unused `param_dict` variable from `_evaluate_once`. Replaced `__import__` in `check_legacy_retry_mutex` with direct `resolve_retry_runtime_config` import |
+| Test count | 35 (was 34) — one new true-initial-SUCCESS test |
+| Total validation | 410 passed (35 CST adapter + 375 existing) |
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

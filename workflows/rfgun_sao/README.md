@@ -33,7 +33,7 @@ no longer targets it.  Rollback is available via ``git revert 76ac3bf``.
 ### no-CST tests
 
 ```powershell
-pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 184/184 as of B9
+pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short  # 230/230
 ```
 
 The no-CST test suite covers imports, gate utilities, calibration primitives,

@@ -53,21 +53,23 @@ The consolidation branch covered phases O through V.  See
 **This consolidation branch is complete after Phase V acceptance.**
 Future feature tracks are independently planned on separate branches.
 
-#### Accepted / merge-archive only
+#### Merged into main (MH2)
 
-| Track | Branch | Final phase | Accepted HEAD |
-|-------|--------|-------------|---------------|
+| Track | Branch | Final phase | Merged HEAD |
+|-------|--------|-------------|-------------|
+| WF1 SAO consolidation | `refactor/wf1-sao-consolidation` | Phase V | `c58b40a` |
+| Real COM recovery runtime | `feature/wf1-real-com-recovery` | RCR3 | `3650752` |
 | Durable evaluation DB | `feature/wf1-durable-evaluation-db` | DDB3.2 | `cf31c2e` |
 | DB-backed success reuse | `feature/wf1-db-success-reuse` | SR4.1 | `b532856` |
-| DB warm-start (WS1-WS3) | `feature/wf1-db-warm-start` | WS3 | `20866e5` |
+| DB warm-start | `feature/wf1-db-warm-start` | WS4 | `b6538f2` |
 
-#### Current track in progress
+All merged into `main` at `0a33148` on 2026-06-04 via sequential no-ff merges.
+`.claude/settings.local.json` removed from tracking as part of hygiene.
 
-| Track | Branch | Status |
-|-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review; WS3.2 runtime helper alignment / report polish -- Completed / pending review; WS3.3 report/count cleanup -- Completed / pending review; WS4 bounded live DB warm-start smoke -- Completed / pending review; MH1 accepted branch merge hygiene audit / plan -- Completed / pending review |
+#### Future planned tracks
 
-#### Planned future tracks
+- Failure reuse -- last track, advisory-first
+- Broader production campaigns (beyond 9 evals)
 
 - Phase O/O1 retry runtime CST wiring -- no-CST callback-only skeleton
 - Failure reuse -- last track, advisory-first
@@ -85,6 +87,7 @@ Future feature tracks are independently planned on separate branches.
 | WS3.3 | Report/count cleanup only | No |
 | WS4 | Bounded live warm-start smoke (conditional, explicit approval) | **Yes** |
 | MH1 | Accepted branch merge hygiene audit / plan | No |
+| MH2 | Sequential accepted branch merge execution / local verified merge | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -25,6 +26,8 @@ from workflows.rfgun_sao.retry_taxonomy import (
     RetryPolicy,
     classify_retry_eligibility,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +244,10 @@ def run_retry_loop_no_cst(
             succeeded=initial_record.status == EvaluationDatabaseStatus.SUCCESS,
             stopped_reason="retry disabled",
         )
+        _logger.debug(
+            "Retry disabled: final_status=%s succeeded=%s",
+            result.final_status, result.succeeded,
+        )
         return result
 
     if config.use_probably_infeasible_for_skip:
@@ -249,6 +256,7 @@ def run_retry_loop_no_cst(
             stopped_reason="probably_infeasible_skip_not_supported",
             diagnostics={"error": "use_probably_infeasible_for_skip is not supported in Phase O"},
         )
+        _logger.debug("Retry: probably_infeasible_skip rejected by design")
         return result
 
     policy = RetryPolicy(
@@ -268,6 +276,12 @@ def run_retry_loop_no_cst(
         result.final_record = current
         result.attempts = attempts
         result.retry_count_consumed = max(current.retry_count, attempts_consumed)
+        _logger.debug(
+            "Retry result: final_status=%s succeeded=%s stopped=%s "
+            "attempts=%d retry_consumed=%d",
+            result.final_status, result.succeeded, result.stopped_reason,
+            len(attempts), result.retry_count_consumed,
+        )
         return result
 
     while True:
@@ -279,6 +293,7 @@ def run_retry_loop_no_cst(
         if eligibility.action == RetryEligibilityAction.NO_RETRY_SUCCESS:
             result.succeeded = True
             result.stopped_reason = "success"
+            _logger.debug("Retry: success after %d attempt(s)", len(attempts))
             return _make_result()
 
         # Non-retryable terminal states
@@ -291,6 +306,7 @@ def run_retry_loop_no_cst(
         ):
             result.succeeded = False
             result.stopped_reason = eligibility.action.value
+            _logger.debug("Retry: terminal (%s) after %d attempt(s)", eligibility.action.value, len(attempts))
             return _make_result()
 
         # Retry-eligible
@@ -301,6 +317,10 @@ def run_retry_loop_no_cst(
                 result.succeeded = False
                 result.stopped_reason = "no_retry_max_tiers_reached"
                 result.diagnostics["internal_max_tier_guard_fired"] = True
+                _logger.debug(
+                    "Retry: max_tier (%d) exhausted, terminal failure",
+                    config.max_tier,
+                )
                 return _make_result()
 
             tier = eligibility.next_tier

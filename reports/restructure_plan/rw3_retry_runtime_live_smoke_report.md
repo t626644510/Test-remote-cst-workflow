@@ -191,6 +191,42 @@ Total: 410 passed, 1 pre-existing warning.
 
 ---
 
+## RW3.1 correction note
+
+This section documents changes made in RW3.1 (no-CST regression tests, diagnostics, live evidence).
+
+| Item | What changed |
+|------|-------------|
+| 1. No-CST regression tests | Added `test_rfgun_sao_retry_runtime_workflow.py` with 24 tests: `final_record` semantics (5), workflow mutex (5), smoke hook gating (5), penalty extraction (4), checkpoint semantics (2), adapter integration (3) |
+| 2. Retry runtime logging | Added `_logger` to `retry_runtime.py`; `_make_result()` now logs `final_status`, `succeeded`, `stopped_reason`, `attempts`, `retry_consumed`. Exit paths log success/terminal/progress-guard diagnostics |
+| 3. Live re-run evidence | Re-ran bounded live CST smoke (3rd run). Key log evidence: |
+| | `Retry runtime smoke: injecting synthetic SOLVER_FAILED for iteration 0` |
+| | `Workflow 1 iter -1 done: coupling_beta=2.08375, ..., resonant_freq=11.4245` |
+| | `Retry: success after 1 attempt(s)` (new diagnostic) |
+| | `Retry result: final_status=success succeeded=True stopped=success attempts=1 retry_consumed=1` (new diagnostic) |
+| | `Best F = -15392.39` (real CST result) |
+| | `CST cleanup: attempted=True closed=True pid=14264` |
+| | Post-run: only `cstd.exe` PID 10184 remaining |
+| 4. Workspace cleanup | `config.local.yaml` restored to pre-smoke state after each run |
+| Test count | 434 (was 410: +24 new workflow tests) |
+
+### Live evidence (raw log snippets)
+
+```
+2026-06-03 13:53:40 [INFO] Workflow 1 retry handler: disabled
+2026-06-03 13:53:40 [INFO] Workflow 1 retry runtime: enabled (max_tier=1)
+2026-06-03 13:53:40 [INFO] Retry runtime smoke: injecting synthetic SOLVER_FAILED for iteration 0
+2026-06-03 13:55:47 [INFO] Workflow 1 iter -1 done: coupling_beta=2.08375, field_flatness=0.0358529, ... resonant_freq=11.4245
+2026-06-03 13:55:49 [DEBUG] Retry: success after 1 attempt(s)
+2026-06-03 13:55:49 [DEBUG] Retry result: final_status=success succeeded=True stopped=success attempts=1 retry_consumed=1
+2026-06-03 13:55:49 [INFO] Workflow 1 completed. Best: OptimizationResult(...)
+2026-06-03 13:55:54 [INFO] CST cleanup: attempted=True closed=True pid=14264
+```
+
+Post-run: only `cstd.exe` PID 10184 (licensing service) remaining. No orphan DE. No manual `taskkill` required.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

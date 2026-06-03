@@ -28,3 +28,4 @@ workflow2_result/
 AGENTS
 CLAUDE
 
+workflows/**/config.local.yaml

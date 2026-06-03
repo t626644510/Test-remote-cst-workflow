@@ -305,6 +305,7 @@ def build_workflow_1(
         workflow._retry_handler = None
         workflow._retry_connection_registry = None
         workflow._evaluation_db = None
+        workflow._db_warm_start_report = None
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
         workflow.metric_specs = specs
@@ -510,6 +511,40 @@ def build_workflow_1(
             _evaluation_db, pid, metric_names,
             config=_sr_cfg, logger=_logger,
         )
+
+    # ---------------------------------------------------------------
+    # DB warm-start config (WS3)
+    # ---------------------------------------------------------------
+    from workflows.rfgun_sao.evaluation_database_warm_start import (
+        DbWarmStartConfig as _WSConfig,
+        load_warm_start_priors as _load_ws_priors,
+        resolve_db_warm_start_config as _resolve_ws_cfg,
+    )
+    _ws_cfg = _resolve_ws_cfg(config, db_enabled=_evaluation_db is not None)
+    _ws_report = None
+    if _ws_cfg.enabled and _evaluation_db is not None:
+        try:
+            all_rows = _evaluation_db.get_all_records()
+            _ws_report = _load_ws_priors(
+                all_rows, _ws_cfg,
+                metric_names=metric_names,
+                param_names=param_names,
+                current_schema=current_schema_version(),
+            )
+            if _ws_report.accepted_priors > 0:
+                _logger.info(
+                    "DB warm-start: loaded %d priors (found=%d, rejected=%d, "
+                    "dup=%d, ckpt_dup=%d)",
+                    _ws_report.accepted_priors,
+                    _ws_report.found_rows,
+                    _ws_report.rejected_rows,
+                    _ws_report.skipped_duplicates,
+                    _ws_report.skipped_checkpoint_duplicates,
+                )
+            else:
+                _logger.info("DB warm-start: no priors loaded")
+        except Exception as exc:
+            _logger.warning("DB warm-start loading failed (non-fatal): %s", exc)
 
     def _handle_sr_reuse(reuse_result, x_phys):
         """Process a success reuse hit: compute penalty, checkpoint, DB write."""
@@ -796,6 +831,7 @@ def build_workflow_1(
     workflow._retry_handler = retry_handler
     workflow._retry_connection_registry = _retry_runtime_registry
     workflow._evaluation_db = _evaluation_db
+    workflow._db_warm_start_report = _ws_report
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
     workflow.metric_specs = specs

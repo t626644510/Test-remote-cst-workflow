@@ -588,8 +588,31 @@ def main() -> None:
             prior_data = warm_xy
             _logger.info(
                 "Warm-start from checkpoint: %d prior evaluations",
-                len(warm_xy[0]),
+                len(prior_data[0]),
             )
+
+    # Merge DB warm-start priors if available (WS3)
+    ws_report = getattr(workflow, "_db_warm_start_report", None)
+    if ws_report is not None and ws_report.accepted_priors > 0:
+        ws_priors = (ws_report.diagnostics or {}).get("priors", [])
+        if ws_priors:
+            ws_x = np.array([list(p.parameter_identity.values) for p in ws_priors], dtype=float)
+            ws_f = np.array([p.scalar for p in ws_priors], dtype=float)
+            if prior_data is None:
+                prior_data = (ws_x, ws_f)
+                _logger.info(
+                    "Warm-start from DB: %d prior evaluations", len(ws_x),
+                )
+            else:
+                prior_data = (
+                    np.vstack([prior_data[0], ws_x]),
+                    np.concatenate([prior_data[1], ws_f]),
+                )
+                _logger.info(
+                    "Warm-start merged: %d checkpoint + %d DB = %d total",
+                    len(prior_data[1]) - len(ws_f),
+                    len(ws_f), len(prior_data[1]),
+                )
 
     ctrl_c_count = [0]
 

@@ -64,7 +64,7 @@ Future feature tracks are independently planned on separate branches.
 
 | Track | Branch | Status |
 |-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1 design accepted; WS2 prior loader completed; WS2.1 semantics hardening; WS2.2 docs/review polish |
+| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review |
 
 #### Planned future tracks
 

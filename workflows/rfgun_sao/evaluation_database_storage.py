@@ -396,6 +396,19 @@ class SQLiteEvaluationDatabase:
         row = cursor.fetchone()
         return int(row[0]) if row else 0
 
+    def get_all_records(self) -> list[dict[str, Any]]:
+        """Return all records, newest first.
+
+        Each row is a dict with JSON columns decoded.
+        """
+        conn = self._conn
+        if conn is None:
+            return []
+        cursor = conn.execute(
+            "SELECT * FROM evaluation_records ORDER BY created_at DESC",
+        )
+        return [self._row_to_dict(row) for row in cursor.fetchall()]
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

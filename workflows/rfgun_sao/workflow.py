@@ -61,6 +61,25 @@ def _is_retry_runtime_smoke_injection_enabled(config, environ=None):
     return bool(cfg_smoke and env_set)
 
 
+def _is_retry_runtime_tier2_smoke_enabled(
+    config: dict | None,
+    environ: dict[str, str] | None = None,
+) -> bool:
+    """Check whether RCR3 synthetic tier-2 recovery smoke should fire.
+
+    Requires BOTH:
+    1. ``config["retry_runtime"]["synthetic_tier2_recovery_smoke"]`` is True.
+    2. Environment ``WF1_SAO_ALLOW_RCR_TIER2_SMOKE=1``.
+    """
+    if config is None:
+        return False
+    if environ is None:
+        environ = os.environ
+    cfg_val = config.get("retry_runtime", {}).get("synthetic_tier2_recovery_smoke", False)
+    env_val = environ.get("WF1_SAO_ALLOW_RCR_TIER2_SMOKE", "") == "1"
+    return bool(cfg_val and env_val)
+
+
 def _extract_retry_penalty_values(final_record, metric_names):
     """Extract penalty values from retry runtime final_record diagnostics."""
     if final_record is None:
@@ -426,6 +445,10 @@ def build_workflow_1(
     _smoke_injection_enabled: bool = _is_retry_runtime_smoke_injection_enabled(config)
     _smoke_already_injected: list[bool] = [False]
 
+    # RCR3 synthetic tier-2 recovery smoke: config + env gated
+    _tier2_smoke_enabled: bool = _is_retry_runtime_tier2_smoke_enabled(config)
+    _tier2_smoke_consumed: list[bool] = [False]
+
     # ---------------------------------------------------------------
     # SAO evaluator wrapper
     # ---------------------------------------------------------------
@@ -521,6 +544,45 @@ def build_workflow_1(
             evaluate_once = make_cst_retry_evaluate_once(
                 wf1_evaluator, param_names=list(param_names),
             )
+
+            # RCR3 synthetic tier-2 recovery smoke: inject a second
+            # synthetic failure on the first retry attempt so that
+            # the recovery callback is exercised at tier 2.  Only
+            # fires once and only when explicitly enabled.
+            if _tier2_smoke_enabled and not _tier2_smoke_consumed[0]:
+                _tier2_smoke_consumed[0] = True
+                _real_evaluate_once = evaluate_once
+
+                def _tier2_smoke_evaluate_once(tier, record):
+                    _logger.info(
+                        "RCR3 tier-2 smoke: injecting synthetic SOLVER_FAILED "
+                        "for retry attempt (tier=%d)", tier,
+                    )
+                    # Return a synthetic SOLVER_FAILED record that preserves
+                    # parameter identity and advances retry_count.
+                    syn_rec = EvaluationDatabaseRecord(
+                        parameter_identity=record.parameter_identity,
+                        status=_EDS.SOLVER_FAILED,
+                        retry_count=record.retry_count + 1,
+                        error_taxonomy={
+                            "original_error": "RCR3 tier-2 synthetic failure",
+                            "original_status": "solver_failed",
+                        },
+                    )
+                    return syn_rec
+
+                # Return the synthetic failure for the first call,
+                # then delegate to the real adapter for all subsequent calls.
+                _tier2_call_count = [0]
+
+                def _wrapped_evaluate_once(tier, record):
+                    if _tier2_call_count[0] == 0:
+                        _tier2_call_count[0] += 1
+                        return _tier2_smoke_evaluate_once(tier, record)
+                    return _real_evaluate_once(tier, record)
+
+                evaluate_once = _wrapped_evaluate_once
+                _logger.info("RCR3 tier-2 recovery smoke: wrapped evaluate_once")
             retry_result = run_retry_loop_no_cst(
                 initial_record=initial_record,
                 evaluate_once=evaluate_once,

@@ -40,6 +40,7 @@ from workflows.rfgun_sao.workflow import (
     _is_retry_runtime_smoke_injection_enabled,
     _extract_retry_penalty_values,
     _build_retry_runtime_checkpoint_payload,
+    _is_retry_runtime_tier2_smoke_enabled,
 )
 
 
@@ -296,6 +297,55 @@ class TestPenaltyExtraction:
         assert _extract_retry_penalty_values(None, ["m1"]) is None
 
     def test_extract_partial_penalty_defaults_to_one(self) -> None:
+        """Missing metric in penalty_values defaults to 1.0."""
+        pid = _pid([1.0])
+        result = EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            penalty_values={"m1": 0.5},
+        )
+        record = build_record_from_evaluation_result(pid, result, penalty_values={"m1": 0.5})
+        pen_arr = _extract_retry_penalty_values(record, ["m1", "m2"])
+        assert pen_arr is not None
+        assert list(pen_arr) == [0.5, 1.0]
+
+
+# ---------------------------------------------------------------------------
+# RCR3 tier-2 smoke hook gating
+# ---------------------------------------------------------------------------
+
+
+class TestTier2SmokeHookGating:
+    def test_no_config_returns_false(self) -> None:
+        assert _is_retry_runtime_tier2_smoke_enabled(None) is False
+
+    def test_config_false_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"synthetic_tier2_recovery_smoke": False}}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg) is False
+
+    def test_env_missing_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"synthetic_tier2_recovery_smoke": True}}
+        env = {}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg, environ=env) is False
+
+    def test_env_wrong_value_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"synthetic_tier2_recovery_smoke": True}}
+        env = {"WF1_SAO_ALLOW_RCR_TIER2_SMOKE": "0"}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg, environ=env) is False
+
+    def test_both_set_returns_true(self) -> None:
+        cfg = {"retry_runtime": {"synthetic_tier2_recovery_smoke": True}}
+        env = {"WF1_SAO_ALLOW_RCR_TIER2_SMOKE": "1"}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg, environ=env) is True
+
+    def test_config_true_env_false_disabled(self) -> None:
+        cfg = {"retry_runtime": {"synthetic_tier2_recovery_smoke": True}}
+        env = {}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg, environ=env) is False
+
+    def test_env_true_config_missing_disabled(self) -> None:
+        cfg = {}
+        env = {"WF1_SAO_ALLOW_RCR_TIER2_SMOKE": "1"}
+        assert _is_retry_runtime_tier2_smoke_enabled(cfg, environ=env) is False
         """Missing metric in penalty_values defaults to 1.0."""
         pid = _pid([1.0])
         result = EvaluationResult(

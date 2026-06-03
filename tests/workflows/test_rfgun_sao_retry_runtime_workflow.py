@@ -36,6 +36,11 @@ from workflows.rfgun_sao.retry_runtime_cst import (
     check_legacy_retry_mutex,
 )
 from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+from workflows.rfgun_sao.workflow import (
+    _is_retry_runtime_smoke_injection_enabled,
+    _extract_retry_penalty_values,
+    _build_retry_runtime_checkpoint_payload,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -232,39 +237,34 @@ class TestWorkflowMutex:
 
 
 class TestSmokeHookGating:
-    def test_hook_requires_both_config_and_env(self) -> None:
-        """Smoke hook fires only when config AND env var are both set."""
-        # Neither set
-        assert not (True and False)  # smoke_injection=False, no env
+    def test_no_config_returns_false(self) -> None:
+        assert _is_retry_runtime_smoke_injection_enabled(None) is False
 
-    def test_hook_config_only_no_env(self) -> None:
-        """Config has smoke_injection=true but no env var -> hook disabled."""
-        cfg_smoke = True
-        env_set = False
-        assert not (cfg_smoke and env_set)
+    def test_config_no_smoke_section_returns_false(self) -> None:
+        assert _is_retry_runtime_smoke_injection_enabled({}) is False
 
-    def test_hook_env_only_no_config(self) -> None:
-        """Env var set but config has no smoke_injection -> hook disabled."""
-        cfg_smoke = False
-        env_set = True
-        assert not (cfg_smoke and env_set)
+    def test_config_smoke_false_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"smoke_injection": False}}
+        assert _is_retry_runtime_smoke_injection_enabled(cfg) is False
 
-    def test_hook_both_set_fires(self) -> None:
-        """Both config and env var set -> hook enabled."""
-        cfg_smoke = True
-        env_set = True
-        assert (cfg_smoke and env_set)
+    def test_env_missing_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"smoke_injection": True}}
+        env = {}  # no env var
+        assert _is_retry_runtime_smoke_injection_enabled(cfg, environ=env) is False
 
-    def test_hook_fires_exactly_once(self) -> None:
-        """Hook fires only on the first evaluation."""
-        injected = [False]
-        # Simulate: first eval fires, second skips
-        evals = [True, False]
-        for i, should_inject in enumerate(evals):
-            if not injected[0] and should_inject:
-                injected[0] = True
-                assert i == 0  # only first eval
-        assert injected[0] is True
+    def test_env_wrong_value_returns_false(self) -> None:
+        cfg = {"retry_runtime": {"smoke_injection": True}}
+        env = {"WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION": "0"}
+        assert _is_retry_runtime_smoke_injection_enabled(cfg, environ=env) is False
+
+    def test_both_set_returns_true(self) -> None:
+        cfg = {"retry_runtime": {"smoke_injection": True}}
+        env = {"WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION": "1"}
+        assert _is_retry_runtime_smoke_injection_enabled(cfg, environ=env) is True
+
+    def test_config_none_with_env_still_false(self) -> None:
+        env = {"WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION": "1"}
+        assert _is_retry_runtime_smoke_injection_enabled(None, environ=env) is False
 
 
 # ---------------------------------------------------------------------------
@@ -273,51 +273,39 @@ class TestSmokeHookGating:
 
 
 class TestPenaltyExtraction:
-    def test_penalty_values_stored_in_record_diagnostics(self) -> None:
-        """penalty_values stored as __retry_penalty__ in record diagnostics."""
-        pid = _pid([1.0])
-        result = EvaluationResult(
-            status=EvaluationStatus.SUCCESS,
-            error="",
-            raw_metrics={"resonant_freq": 11.424},
-            objective_values={"resonant_freq": 11.424},
-            penalty_values={"resonant_freq": 0.3, "q0": 1.0},
-        )
-        record = build_record_from_evaluation_result(pid, result, penalty_values={"resonant_freq": 0.3, "q0": 1.0})
-        assert record.raw_payload is not None
-        assert record.raw_payload.diagnostics is not None
-        assert record.raw_payload.diagnostics["__retry_penalty__"] == {"resonant_freq": 0.3, "q0": 1.0}
-
-    def test_no_penalty_values_empty_diagnostics(self) -> None:
-        """No penalty_values: no __retry_penalty__ key."""
-        pid = _pid([1.0])
-        result = EvaluationResult(status=EvaluationStatus.SUCCESS)
-        record = build_record_from_evaluation_result(pid, result)
-        diag = record.raw_payload.diagnostics if record.raw_payload else {}
-        assert diag is None or "__retry_penalty__" not in diag
-
-    def test_penalty_extraction_in_evaluator_logic(self) -> None:
-        """Simulate evaluator extracting penalty from final_record diagnostics."""
+    def test_extract_from_record_with_penalty(self) -> None:
+        """Helper extracts penalty values from record with __retry_penalty__."""
         pid = _pid([1.0])
         result = EvaluationResult(
             status=EvaluationStatus.SUCCESS,
             penalty_values={"m1": 0.5, "m2": 1.0},
         )
         record = build_record_from_evaluation_result(pid, result, penalty_values={"m1": 0.5, "m2": 1.0})
-        metric_names = ["m1", "m2"]
-        fr_diag = record.raw_payload.diagnostics if record.raw_payload else {}
-        pen_values = (fr_diag or {}).get("__retry_penalty__", None)
-        assert pen_values == {"m1": 0.5, "m2": 1.0}
-        penalties_arr = np.array([pen_values.get(n, 1.0) for n in metric_names], dtype=float)
-        assert list(penalties_arr) == [0.5, 1.0]
+        pen_arr = _extract_retry_penalty_values(record, ["m1", "m2"])
+        assert pen_arr is not None
+        assert list(pen_arr) == [0.5, 1.0]
 
-    def test_missing_penalty_falls_back_to_all_ones(self) -> None:
-        """Missing __retry_penalty__ falls back to all-ones penalty."""
-        metric_names = ["m1", "m2"]
-        pen_values = None  # missing
-        if pen_values is None:
-            penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
-        assert list(penalties_arr) == [1.0, 1.0]
+    def test_extract_from_record_no_penalty_returns_none(self) -> None:
+        """No __retry_penalty__ key -> helper returns None."""
+        pid = _pid([1.0])
+        result = EvaluationResult(status=EvaluationStatus.SUCCESS)
+        record = build_record_from_evaluation_result(pid, result)
+        assert _extract_retry_penalty_values(record, ["m1"]) is None
+
+    def test_extract_from_none_record_returns_none(self) -> None:
+        assert _extract_retry_penalty_values(None, ["m1"]) is None
+
+    def test_extract_partial_penalty_defaults_to_one(self) -> None:
+        """Missing metric in penalty_values defaults to 1.0."""
+        pid = _pid([1.0])
+        result = EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            penalty_values={"m1": 0.5},
+        )
+        record = build_record_from_evaluation_result(pid, result, penalty_values={"m1": 0.5})
+        pen_arr = _extract_retry_penalty_values(record, ["m1", "m2"])
+        assert pen_arr is not None
+        assert list(pen_arr) == [0.5, 1.0]
 
 
 # ---------------------------------------------------------------------------
@@ -326,40 +314,50 @@ class TestPenaltyExtraction:
 
 
 class TestCheckpointSemantics:
-    def test_retry_success_records_one_checkpoint_entry(self) -> None:
-        """Retry success should produce exactly one checkpoint callback."""
-        checkpoint_calls = []
+    def test_build_payload_with_valid_record(self) -> None:
+        """Helper builds checkpoint payload with metrics from final_record."""
+        pid = _pid([1.0])
+        result = EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            raw_metrics={"m1": 11.4, "m2": 0.5},
+        )
+        record = build_record_from_evaluation_result(pid, result)
+        x_phys = np.array([1.0])
+        pen_arr = np.array([0.3, 1.0], dtype=float)
+        x, raw, pen, ok, err = _build_retry_runtime_checkpoint_payload(
+            record, x_phys, ["m1", "m2"], pen_arr, True, "",
+        )
+        assert list(raw) == [11.4, 0.5]
+        assert list(pen) == [0.3, 1.0]
+        assert ok is True
+        assert err == ""
 
-        def checkpoint(x_phys, raw_arr, penalties_arr, ok, err):
-            checkpoint_calls.append((ok, err))
+    def test_build_payload_with_none_record_uses_nan(self) -> None:
+        """None record results in all-NaN raw_arr."""
+        x_phys = np.array([1.0])
+        pen_arr = np.array([1.0, 1.0], dtype=float)
+        x, raw, pen, ok, err = _build_retry_runtime_checkpoint_payload(
+            None, x_phys, ["m1", "m2"], pen_arr, False, "retry exhausted",
+        )
+        assert np.all(np.isnan(raw))
+        assert ok is False
+        assert "retry exhausted" in err
 
-        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
-            return _rec([1.0], status="success", retries=record.retry_count + 1)
-
-        initial = _rec([1.0], status="calibration_failed", retries=0)
-        config = RetryRuntimeConfig(enabled=True, max_tier=3)
-        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
-
-        assert result.succeeded is True
-        # Checkpoint would record the final result only (simulate outside the loop)
-        # The loop itself doesn't call checkpoint — the caller does.
-        # This test verifies the loop returns the correct final_record for checkpointing.
-        assert result.final_record is not None
-        assert result.final_record.status == "success"
-
-    def test_retry_exhausted_terminal_checkpoint(self) -> None:
-        """Retry exhausted: checkpoint records terminal failure."""
-        def evaluate_once(tier: int, record: EvaluationDatabaseRecord) -> EvaluationDatabaseRecord:
-            return _rec([1.0], status="calibration_failed", retries=0)
-
-        initial = _rec([1.0], status="calibration_failed", retries=0)
-        config = RetryRuntimeConfig(enabled=True, max_tier=1)
-        result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
-        assert result.succeeded is False
-        assert result.stopped_reason == "no_retry_max_tiers_reached"
-        # final_record is the last evaluation record (failure)
-        assert result.final_record is not None
-        assert result.final_record.status != "success"
+    def test_build_payload_partial_metrics_defaults_nan(self) -> None:
+        """Missing metric in raw_metrics defaults to NaN."""
+        pid = _pid([1.0])
+        result = EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            raw_metrics={"m1": 11.4},
+        )
+        record = build_record_from_evaluation_result(pid, result)
+        x_phys = np.array([1.0])
+        pen_arr = np.array([0.3], dtype=float)
+        x, raw, pen, ok, err = _build_retry_runtime_checkpoint_payload(
+            record, x_phys, ["m1", "m2"], pen_arr, True, "",
+        )
+        assert raw[0] == 11.4
+        assert np.isnan(raw[1])
 
 
 # ---------------------------------------------------------------------------

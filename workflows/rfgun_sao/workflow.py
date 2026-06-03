@@ -46,6 +46,49 @@ from workflows.rfgun_sao.types import (
     EvaluationStatus as _ES,
 )
 
+# ---- Retry runtime helpers (no-CST pure functions) -----------------------
+
+
+def _is_retry_runtime_smoke_injection_enabled(config, environ=None):
+    """Check RW3 smoke injection hook gating."""
+    if config is None:
+        return False
+    if environ is None:
+        import os
+        environ = os.environ
+    cfg_smoke = config.get("retry_runtime", {}).get("smoke_injection", False)
+    env_set = environ.get("WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION", "") == "1"
+    return bool(cfg_smoke and env_set)
+
+
+def _extract_retry_penalty_values(final_record, metric_names):
+    """Extract penalty values from retry runtime final_record diagnostics."""
+    if final_record is None:
+        return None
+    rp = getattr(final_record, "raw_payload", None)
+    if rp is None:
+        return None
+    diag = getattr(rp, "diagnostics", None) or {}
+    pen_values = diag.get("__retry_penalty__")
+    if pen_values is None:
+        return None
+    import numpy as np
+    return np.array([pen_values.get(n, 1.0) for n in metric_names], dtype=float)
+
+
+def _build_retry_runtime_checkpoint_payload(final_record, x_phys, metric_names, penalties_arr, ok, err):
+    """Build checkpoint callback args from a retry runtime final_record."""
+    if final_record is None:
+        import numpy as np
+        raw_arr = np.full(len(metric_names), np.nan, dtype=float)
+    else:
+        rp = getattr(final_record, "raw_payload", None)
+        raw_metrics = getattr(rp, "raw_metrics", None) or {}
+        import numpy as np
+        raw_arr = np.array([raw_metrics.get(n, np.nan) for n in metric_names], dtype=float)
+    return (x_phys, raw_arr, penalties_arr, ok, err)
+
+
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_sao.evaluator import Workflow1Evaluator
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
@@ -356,10 +399,7 @@ def build_workflow_1(
         _logger.info("Workflow 1 retry runtime: enabled (max_tier=%d)", _retry_runtime_cfg.max_tier)
 
     # RW3 synthetic validation hook: env-var + config gated
-    _smoke_injection_enabled: bool = (
-        os.environ.get("WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION", "") == "1"
-        and config.get("retry_runtime", {}).get("smoke_injection", False)
-    )
+    _smoke_injection_enabled: bool = _is_retry_runtime_smoke_injection_enabled(config)
     _smoke_already_injected: list[bool] = [False]
 
     # ---------------------------------------------------------------
@@ -430,7 +470,7 @@ def build_workflow_1(
                 )
 
             if status == _ES.SUCCESS:
-                # No retry needed — use directly
+                # No retry needed �?use directly
                 penalties_arr = np.array(
                     [pen.get(n, 1.0) for n in metric_names], dtype=float,
                 )
@@ -441,7 +481,7 @@ def build_workflow_1(
                     checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
                 return float(np.dot(penalties_arr, weights))
 
-            # Initial evaluation failed — build record and consider retry
+            # Initial evaluation failed �?build record and consider retry
             pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
             eval_result = EvaluationResult(
                 status=status, error=err,
@@ -465,36 +505,22 @@ def build_workflow_1(
                 recovery_callback=None,
             )
 
-            # Use final result
-            if retry_result.succeeded and retry_result.final_record is not None:
-                fr = retry_result.final_record
-                # Extract penalty values from final record diagnostics
-                fr_diag = fr.raw_payload.diagnostics if fr.raw_payload else {}
-                pen_values = (fr_diag or {}).get("__retry_penalty__", None)
-                if pen_values is not None:
-                    penalties_arr = np.array(
-                        [pen_values.get(n, 1.0) for n in metric_names], dtype=float,
-                    )
-                    ok = True
-                    err = ""
-                else:
-                    # Fallback: use all-ones
-                    penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
-                    ok = False
-                # Checkpoint records final result only
-                if checkpoint_callback is not None:
-                    raw_metrics = fr.raw_payload.raw_metrics if fr.raw_payload else {}
-                    raw_arr = np.array(
-                        [raw_metrics.get(n, np.nan) for n in metric_names], dtype=float,
-                    )
-                    checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+            # Use final result — extract penalty or fall back to all-ones
+            fr = retry_result.final_record
+            pen_arr = _extract_retry_penalty_values(fr, metric_names) if retry_result.succeeded else None
+            if pen_arr is not None:
+                penalties_arr = pen_arr
+                ok = True
+                err = ""
             else:
                 penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
-                if checkpoint_callback is not None:
-                    checkpoint_callback(
-                        x_phys, np.full(len(metric_names), np.nan), penalties_arr,
-                        False, retry_result.stopped_reason,
-                    )
+                ok = False
+            # Checkpoint records final result only (never intermediate attempts)
+            if checkpoint_callback is not None:
+                cp_args = _build_retry_runtime_checkpoint_payload(
+                    fr, x_phys, metric_names, penalties_arr, ok, err,
+                )
+                checkpoint_callback(*cp_args)
 
             return float(np.dot(penalties_arr, weights))
 

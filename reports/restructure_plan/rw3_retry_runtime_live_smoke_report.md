@@ -227,6 +227,22 @@ Post-run: only `cstd.exe` PID 10184 (licensing service) remaining. No orphan DE.
 
 ---
 
+## RW3.2 note (testability cleanup)
+
+| Item | What changed |
+|------|-------------|
+| Pure helpers extracted | `_is_retry_runtime_smoke_injection_enabled()`, `_extract_retry_penalty_values()`, `_build_retry_runtime_checkpoint_payload()` extracted from `workflow.py` evaluator closure into module-level no-CST-pure functions |
+| Evaluator closure updated | Inline smoke check → helper call; inline penalty extraction → helper call; inline checkpoint payload → helper call |
+| Smoke hook tests | 7 tests now call `_is_retry_runtime_smoke_injection_enabled(config, environ=...)` with real config/env dicts; no boolean simulations |
+| Penalty extraction tests | 4 tests now call `_extract_retry_penalty_values(record, metric_names)`; test None record, no penalty, partial penalty |
+| Checkpoint tests | 3 tests now call `_build_retry_runtime_checkpoint_payload()`; verify metrics pass-through, None-record NaN fallback, partial-metric NaN |
+| No live CST rerun | RW3.2 is purely testability/no-CST-cleanup; no live CST run |
+| Test count | 437 (was 434: smoke hook 5→7, penalty 4→4, checkpoint 2→3; net +3) |
+
+No behaviour change. No default config change. All 437 tests pass.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

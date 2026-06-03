@@ -64,7 +64,7 @@ Future feature tracks are independently planned on separate branches.
 
 | Track | Branch | Status |
 |-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1 design completed / pending review |
+| DB warm-start | `feature/wf1-db-warm-start` | WS1 design accepted; WS2 prior loader completed / pending review |
 
 #### Planned future tracks
 
@@ -77,7 +77,7 @@ Future feature tracks are independently planned on separate branches.
 | Phase | Scope | Live CST? |
 |-------|-------|-----------|
 | WS1 | Design docs-only | No |
-| WS2 | DB prior loader / no-CST helper | No |
+| WS2 | DB prior loader / no-CST helper (config resolver, eligibility, dedup, capping, checkpoint dedup) | No |
 | WS3 | Optimizer warm-start runtime wiring / no-CST | No |
 | WS4 | Bounded live warm-start smoke (conditional) | Yes, only with explicit approval |
 

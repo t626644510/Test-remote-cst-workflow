@@ -45,6 +45,9 @@ from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
 )
+from workflows.rfgun_sao.evaluation_database_schema import (
+    ParameterIdentity,
+)
 from workflows.rfgun_sao.retry_runtime_cst import (
     build_record_from_evaluation_result,
 )
@@ -421,7 +424,6 @@ def build_workflow_1(
         from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
         from workflows.rfgun_sao.evaluation_database_schema import (
             EvaluationDatabaseStatus as _EDS,
-            ParameterIdentity,
             current_schema_version,
         )
         def _retry_connection_factory():
@@ -529,6 +531,18 @@ def build_workflow_1(
                         "Post-eval graceful reset failed (non-fatal)", exc_info=True,
                     )
 
+            # Write final DB record for legacy retry path
+            if _evaluation_db is not None:
+                _pid_legacy = ParameterIdentity(
+                    param_names=list(param_names), values=list(x_phys),
+                )
+                _ev_legacy = EvaluationResult(
+                    status=result.status, error=result.error,
+                    raw_metrics=dict(result.raw_metrics) if result.raw_metrics else {},
+                    objective_values=dict(result.objective_values) if result.objective_values else {},
+                    penalty_values=dict(result.penalty_values) if result.penalty_values else {},
+                )
+                _write_eval_db(build_record_from_evaluation_result(_pid_legacy, _ev_legacy))
             return float(np.dot(penalties_arr, weights))
 
         # --- Retry runtime path (RW3) ---
@@ -668,7 +682,6 @@ def build_workflow_1(
             checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
         # Write final DB record for plain single_pass path
         if _evaluation_db is not None:
-            from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
             _pid_plain = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
             _ev_plain = EvaluationResult(
                 status=status, error=err,

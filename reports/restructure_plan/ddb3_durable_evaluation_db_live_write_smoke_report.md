@@ -233,6 +233,17 @@ No live CST beyond one bounded rerun. No default config change. No generated art
 
 ---
 
+## DDB3.2 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Legacy retry path DB write | Added DB final-record write in the legacy `retry_handler is not None` path. Builds `EvaluationDatabaseRecord` from the legacy `EvaluationResult` (status, raw_metrics, objective_values, penalty_values) and writes via `_write_eval_db()`. Non-fatal on write failure. |
+| 2. Import cleanup | Moved `ParameterIdentity` to module-level import. Removed duplicate inline imports from retry-runtime block and plain path. All three DB write paths (legacy, retry-runtime, plain) now share the same pattern. |
+| 3. Legacy + DB tests | Added 2 new tests: legacy-style `EvaluationResult` builds and inserts a DB record; failed legacy result also writes correctly. `legacy_and_db_config_independent` renamed from `no_silent_conflict`. |
+| Test count | 522 total (50 DB + 472 existing). No live CST rerun. |
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

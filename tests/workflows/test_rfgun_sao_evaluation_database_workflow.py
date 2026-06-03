@@ -147,9 +147,8 @@ class TestNoReuseQueries:
 
 
 class TestLegacyRetryAndDB:
-    def test_legacy_and_db_no_silent_conflict(self, tmp_path: Path) -> None:
-        """When legacy retry is enabled and evaluation_db is also enabled,
-        the legacy path still works (DB write is separate, not conflicting)."""
+    def test_legacy_and_db_config_independent(self, tmp_path: Path) -> None:
+        """Legacy retry config is independent of evaluation DB config."""
         outside_path = str(tmp_path.parent / "outside_eval.db")
         config = {
             "optimization": {"retry": {"enabled": True}},
@@ -157,3 +156,53 @@ class TestLegacyRetryAndDB:
         }
         cfg = resolve_evaluation_database_config(config, repo_root=str(tmp_path))
         assert cfg.enabled is True
+
+    def test_legacy_result_writes_db_record(self, tmp_path: Path) -> None:
+        """A legacy-style EvaluationResult can be built into a DB record."""
+        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
+        from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+
+        pid = ParameterIdentity(param_names=["p1"], values=[1.0])
+        ev_result = EvaluationResult(
+            status=EvaluationStatus.SUCCESS,
+            error="",
+            raw_metrics={"m1": 1.5, "m2": 2.0},
+            objective_values={"m1": 1.5, "m2": 2.0},
+            penalty_values={"m1": 0.3, "m2": 0.8},
+        )
+        record = build_record_from_evaluation_result(pid, ev_result)
+
+        # Verify the record can be inserted into the DB
+        db_path = str(tmp_path / "legacy_test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            row_id = db.insert_final_record(record, run_id="legacy_test")
+            assert row_id > 0
+            assert db.count_records() == 1
+            key = pid.parameter_key()
+            rows = db.query_by_parameter_key(key)
+            assert len(rows) == 1
+            assert rows[0]["status"] == "success"
+
+    def test_legacy_result_with_error_writes_db_record(self, tmp_path: Path) -> None:
+        """Failed legacy EvaluationResult builds a valid DB record."""
+        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
+        from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+
+        pid = ParameterIdentity(param_names=["p1"], values=[1.0])
+        ev_result = EvaluationResult(
+            status=EvaluationStatus.SOLVER_FAILED,
+            error="Solver did not converge",
+        )
+        record = build_record_from_evaluation_result(pid, ev_result)
+
+        db_path = str(tmp_path / "legacy_fail.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            row_id = db.insert_final_record(record, run_id="legacy_test")
+            assert row_id > 0
+            assert db.count_records() == 1

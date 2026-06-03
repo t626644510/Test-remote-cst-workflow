@@ -86,38 +86,34 @@ def _retry_recovery_callback(
     tier: int,
     record: EvaluationDatabaseRecord,
     *,
-    library_path: str,
-    evaluator: Workflow1Evaluator,
-    retry_handler: Any | None,  # legacy handler for close_all tracking
+    connection_factory: Callable[[], Any],
+    evaluator: Any,
+    registry: CstConnectionRegistry,
 ) -> bool:
     """Recovery callback for retry runtime.
 
     Called by ``run_retry_loop_no_cst()`` before each retry-attempt
     ``evaluate_once`` call when the record is retry-eligible.
 
-    Tier 1: No action needed (same connection).
-    Tier 2+: Close current DE, create fresh connection, update evaluator.
+    Tier 1: No recovery action needed; return True.
+    Tier 2+: Close old connections, create fresh connection via
+             injected factory, update evaluator, track in registry.
     """
     if tier < 2:
-        return True  # same connection is fine
+        return True  # same connection, no recovery needed
 
     try:
-        # Close ALL tracked connections via P3 pattern
-        if retry_handler is not None:
-            retry_handler.close_all(force=True)
+        # Close ALL tracked connections via dedicated registry
+        registry.close_all(force=True)
 
-        # Create new CST connection
-        from cst_optimization.core.connection import CSTConnection
-        new_conn = CSTConnection(library_path, mode="new")
-        new_conn.connect()
-        new_conn.set_quiet_mode(True)
+        # Create new CST connection via injected factory
+        new_conn = connection_factory()
 
         # Update evaluator reference
         evaluator.on_reconnect(new_conn)
 
-        # Track in legacy handler for final cleanup
-        if retry_handler is not None:
-            retry_handler._all_connections.append(new_conn)
+        # Track in registry for future cleanup
+        registry.track(new_conn)
 
         _logger.info("RCR recovery: reconnected (tier=%d, PID=%s)", tier, new_conn.pid)
         return True
@@ -128,22 +124,48 @@ def _retry_recovery_callback(
 
 ### Connection registry for cleanup
 
-The recovery callback creates new `CSTConnection` instances. These must be tracked for final cleanup. Two approaches:
+The recovery callback creates new `CSTConnection` instances. These must be tracked for final cleanup in a **dedicated registry** — the legacy `retry_handler._all_connections` must not be the default mechanism.
 
-**Approach A: Use legacy `retry_handler._all_connections`** (recommended for minimal change)
-- The recovery callback appends new connections to `retry_handler._all_connections`.
-- The existing `_cleanup_workflow_connection` already calls `retry_handler.close_all(force)`.
-- No new registry needed.
-- Condition: `retry_handler` must exist (even when legacy retry is disabled) for tracking purposes.
+**Recommended: Dedicated retry-runtime connection registry** (RCR2 default)
 
-**Approach B: Dedicated retry-runtime connection registry**
-- Add a module-level `_retry_runtime_connections: list[CSTConnection]` in `retry_runtime_cst.py`.
-- Recovery callback appends to this list.
-- Workflow cleanup iterates this list and calls `close(force)`.
-- More explicit, less coupling to legacy code.
-- Requires new cleanup code in `workflow.py`.
+The registry must satisfy:
+- Works when `optimization.retry.enabled=false` and `retry_handler is None` — i.e. when the new retry runtime is the only active retry mechanism.
+- Tracks both the initial connection and any replacement connections created by the recovery callback.
+- Exposes a `close_all(force=True)` method that workflow cleanup can call.
+- Is owned by the recovery callback / retry runtime module, not by the legacy `EvaluationRetryHandler`.
 
-**Recommended: Approach A** for RCR2, falling back to Approach B if Approach A proves fragile.
+Design sketch:
+
+```python
+# In retry_runtime_cst.py or a dedicated module
+
+@dataclass
+class CstConnectionRegistry:
+    """Tracks all CST connections created by the retry runtime recovery."""
+    _connections: list[Any] = field(default_factory=list)
+
+    def track(self, conn: Any) -> None:
+        self._connections.append(conn)
+
+    def close_all(self, force: bool = True) -> None:
+        for c in self._connections:
+            try:
+                c.close(force=force)
+            except Exception:
+                pass
+        self._connections.clear()
+```
+
+Workflow cleanup integration:
+
+```python
+# In _cleanup_workflow_connection (run.py):
+registry = getattr(workflow, "_retry_connection_registry", None)
+if registry is not None:
+    registry.close_all(force=force)
+```
+
+Legacy `retry_handler._all_connections` is a **compatibility / reference pattern only** — it may be used for the legacy handler's own connections, but the new retry runtime must not depend on it. The new runtime's connection lifecycle is independent.
 
 ---
 
@@ -159,10 +181,10 @@ Initial DE (PID A) — connected, running evaluation
          ▼
     Recovery callback (tier 2+)
          │
-         ├── close_all(force) → kill PID A
-         ├── new CSTConnection (PID B) → connect
+         ├── registry.close_all(force) → kill PID A
+         ├── connection_factory() → new CSTConnection (PID B)
          ├── evaluator.on_reconnect(PID B)
-         └── track PID B in retry_handler._all_connections
+         └── registry.track(PID B)
          │
          ▼
     evaluate_once → CST evaluation on PID B
@@ -178,8 +200,8 @@ Initial DE (PID A) — connected, running evaluation
 | Tier 1 retry (same connection) | Low — no new DE | N/A |
 | Tier 2+ recovery (new DE) | Medium — PID A may survive `close_all()` hang | P3 pattern: `close_all(force)` + force-kill fallback + verify_process_cleanup |
 | Recovery callback exception | Medium — PID A not killed, PID B not created | `_logger.warning`; retry loop continues with old DE (may fail again); max_tier bound prevents infinite loop |
-| Ctrl+C during recovery | Low — `finally` block runs `retry_handler.close_all(force)` | P3 hardening covers this |
-| Multiple retries (max_tier > 1) | Low — each recovery replaces DE; only latest + leftover tracked via `_all_connections` | `close_all(force)` iterates all tracked connections |
+| Ctrl+C during recovery | Low — `finally` block runs `registry.close_all(force)` | Dedicated registry cleanup in workflow finally block |
+| Multiple retries (max_tier > 1) | Low — each recovery replaces DE; all tracked via registry | `registry.close_all(force)` iterates all tracked connections |
 
 ### Required invariants
 
@@ -187,7 +209,7 @@ Initial DE (PID A) — connected, running evaluation
 |-----------|-------------|
 | No silent double retry with legacy `optimization.retry.enabled` | `check_legacy_retry_mutex()` disables new runtime if legacy enabled |
 | No hidden adapter-level recovery | `make_cst_retry_evaluate_once` has no recovery parameters (removed in RW2.1) |
-| No untracked replacement connection | Recovery callback appends to `retry_handler._all_connections` or equivalent registry |
+| No untracked replacement connection | Recovery callback tracks new connection via dedicated `CstConnectionRegistry`; registry has no dependency on legacy retry handler |
 | No retry beyond `max_tier` | `attempts_consumed >= max_tier` guard in `run_retry_loop_no_cst` |
 | No failure reuse | Taxonomy: single failure never permanent; no `should_escalate_to_probably_infeasible` call |
 | No probably-infeasible skip | `use_probably_infeasible_for_skip=True` rejected at runtime |
@@ -234,14 +256,15 @@ class FakeEvaluatorWithReconnect:
 
 | Scenario | What it validates |
 |----------|-------------------|
-| Tier 1 recovery: callback not called | `run_retry_loop_no_cst` with `max_tier=1` does not invoke recovery for single attempt |
-| Tier 2 recovery: callback called | Recovery callback invoked at tier 2; new connection created via factory |
-| Recovery callback: success path | Callback returns True; new connection tracked for cleanup |
-| Recovery callback: exception | Callback returns False (exception caught); retry loop continues but bounded |
-| Recovery callback: close_all after replacement | `close_all(force)` called on all tracked connections; old DE marked closed |
-| Recovery callback: on_reconnect called | Evaluator's `on_reconnect` invoked with new connection |
-| Multiple recoveries: tracking | Each recovery adds to `_all_connections`; `close_all` iterates all |
+| Tier 1: callback called, no new connection | `run_retry_loop_no_cst` invokes recovery callback at tier 1; callback returns True (no-op); no new connection is created; no registry entry added |
+| Tier 2: callback called, reconnect performed | Recovery callback invoked at tier 2; new connection created via factory; tracked via registry |
+| Recovery callback: success path | Callback returns True; new connection tracked in registry for cleanup |
+| Recovery callback: exception | Callback exception caught, returns False; retry loop continues but bounded by max_tier |
+| Registry: close_all after replacement | `registry.close_all(force)` called on all tracked connections; old DE marked closed |
+| Recovery callback: on_reconnect called | Evaluator's `on_reconnect` invoked with new connection after tier-2 recovery |
+| Multiple recoveries: tracking | Each tier-2 recovery adds to registry; `close_all` iterates all |
 | Recovery + max_tier exhaustion | Retries with recovery, hits max_tier, returns terminal failure |
+| Registry works when legacy retry disabled | Registry functions independently when `retry_handler is None`; no dependency on legacy handler |
 
 ### Test structure
 
@@ -263,17 +286,33 @@ Tests for RCR2 should be in `tests/workflows/test_rfgun_sao_retry_runtime_recove
 
 ### What RCR3 should validate
 
-1. Synthetic SOLVER_FAILED → retry loop → tier 1 recovery (no-op) → CST evaluation → SUCCESS or failure.
-2. If `max_tier >= 2`, simulate a scenario where the first retry attempt fails with COM_LOST (via adapter that injects a second synthetic failure on the first real retry) → recovery callback invoked at tier 2 → new CST connection → real CST evaluation → SUCCESS.
-3. No orphan DE after run.
-4. No manual `taskkill` required.
-5. Only `cstd.exe` licensing service remains.
+1. **Synthetic initial SOLVER_FAILED** → retry loop → tier 1 recovery (no-op) → CST evaluation → SUCCESS.
+   - Validates recovery callback is called and correctly returns no-op at tier 1.
+   - Validates no new connection is created at tier 1.
 
-### Risks
+2. **Synthetic tier-2 recovery smoke** (if `max_tier >= 2`): first retry attempt also returns synthetic failure → recovery callback invoked at tier 2 → reconnect performed → real CST evaluation on new connection → SUCCESS.
+   - Validates recovery callback's reconnect path: `close_all(force)`, new connection via factory, `on_reconnect`, registry tracking.
+   - Validates cleanup: `registry.close_all(force)` closes the replacement connection.
 
-- Inducing a real COM disconnect is disruptive and may leave orphan DEs if not handled.
-- The synthetic COM_LOST approach (second injection in the retry adapter) is safer but still requires the CST DE to survive the first real evaluation before the synthetic failure is returned.
-- A safer approach: use the existing synthetic initial failure hook for the first failure, then let the retry adapter return the real CST result on the second attempt. This validates the recovery callback path at tier 2 without needing an actual COM loss.
+3. **No orphan DE** after run. No manual `taskkill`. Only `cstd.exe` licensing service remains.
+
+### What RCR3 does NOT validate
+
+| Capability | Status | Reason |
+|------------|--------|--------|
+| Real OS-level COM disconnect recovery | ❌ Not validated | Requires killing the CST DE process, which may leave orphan DEs; separate approval required |
+| Uncontrolled process termination | ❌ Not validated | Beyond scope of controlled smoke |
+| Production-scale recovery | ❌ Not attempted | Bounded single-eval only |
+
+### Synthetic tier-2 approach vs real COM disconnect
+
+The RCR3 smoke uses a **synthetic failure injection** (in-memory, no side effects) to trigger the retry loop. The recovery callback is real — it closes the old connection and creates a new one — but the trigger is synthetic. This validates:
+- Recovery callback logic (close, factory, reconnect, track).
+- Connection registry lifecycle (track, close_all).
+- Evaluator `on_reconnect` integration.
+- Cleanup of replacement DE.
+
+It does NOT validate the behaviour of the CST `DesignEnvironment` after a real COM loss (hung COM thread, delayed process exit, etc.). That would require a separate phase with explicit operator approval and engineered COM fault injection.
 
 ---
 
@@ -317,6 +356,36 @@ Tests for RCR2 should be in `tests/workflows/test_rfgun_sao_retry_runtime_recove
 
 ## Summary
 
-This document defines the design and planning for wiring real COM recovery into the retry runtime. The key difference from RW3 is the **recovery callback** — RW3 used `recovery_callback=None`; RCR2 will provide a callback that closes the old connection, creates a new one, and tracks it for cleanup. No adapter-level recovery. No silent double retry. No orphan DE risk beyond what P3 hardening already mitigates.
+This document defines the design and planning for wiring real COM recovery into the retry runtime. The key difference from RW3 is the **recovery callback** — RW3 used `recovery_callback=None`; RCR2 will provide a callback that closes the old connection, creates a new one via injected factory, and tracks it in a dedicated connection registry for cleanup. No adapter-level recovery. No silent double retry. No dependency on legacy `retry_handler`. 
 
-Next actionable phase: **RCR2** — implement the recovery callback with full no-CST test coverage.
+Next actionable phase: **RCR2** — implement the recovery callback with dedicated registry and full no-CST test coverage.
+
+---
+
+## RCR1.1 correction note
+
+This section documents changes made in RCR1.1 (docs-only design correction).
+
+| Item | What changed |
+|------|-------------|
+| 1. Connection registry | **Reversed recommendation**: dedicated `CstConnectionRegistry` is now the default RCR2 approach; legacy `retry_handler._all_connections` is a reference pattern only, not a dependency |
+| 2. Recovery callback pseudocode | Replaced `retry_handler.close_all(force)` with `registry.close_all(force)`. Callback now receives `connection_factory`, `evaluator`, and `registry` as injected dependencies. Tier 1 returns True with no-op. No untracked replacement DE when `retry_handler is None` |
+| 3. RCR2 test scenarios | Tier 1: callback called but no new connection created (no-op). Added registry-specific tests (close_all, works without legacy retry handler) |
+| 4. RCR3 wording | Distinguishes **synthetic tier-2 recovery smoke** (validates callback/reconnect/cleanup path) from **real OS-level COM disconnect recovery** (not validated without separate approval) |
+| 5. This section | Added RCR1.1 correction note |
+
+No runtime code changed. No tests changed. No live CST.
+
+Validation:
+```powershell
+python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.py
+→ Compiles OK.
+pytest tests/workflows/test_rfgun_sao_retry_runtime.py --tb=short → 83 passed
+pytest tests/workflows/test_rfgun_sao_retry_runtime_cst.py --tb=short → 35 passed
+pytest tests/workflows/test_rfgun_sao_retry_runtime_workflow.py --tb=short → 24 passed
+pytest tests/workflows/test_rfgun_sao_imports.py --tb=short → 230 passed
+pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short → 12 passed
+Total: 384 passed, 1 pre-existing warning.
+```
+
+Final HEAD SHA: **to be confirmed by reviewer**.

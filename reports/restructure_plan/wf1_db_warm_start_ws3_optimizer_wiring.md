@@ -14,14 +14,18 @@
 
 ---
 
-## Files changed
+## Files changed (WS3 baseline, superseded by WS3.1/WS3.2/WS3.3)
 
-| File | Action | Description |
-|------|--------|-------------|
+The following table describes the original WS3 delta.  Subsequent phases
+(WS3.1, WS3.2, WS3.3) restructured, refactored, and documented over this
+base; see the per-phase sections below for current state.
+
+| File | Initial WS3 Action | Description |
+|------|-------------------|-------------|
 | `workflows/rfgun_sao/evaluation_database_storage.py` | **Modified** | Added `get_all_records()` method returning all rows, newest first |
-| `workflows/rfgun_sao/workflow.py` | **Modified** | Added WS3 warm-start config resolution, `get_all_records()` + `load_warm_start_priors()` call, stored report on `workflow._db_warm_start_report` |
-| `workflows/rfgun_sao/run.py` | **Modified** | After checkpoint warm-start loading, merges DB warm-start priors into `prior_data` (X, F arrays) |
-| `tests/workflows/test_rfgun_sao_db_warm_start_ws3.py` | **Added** | 16 no-CST WS3 optimizer wiring tests |
+| `workflows/rfgun_sao/workflow.py` | **Modified** | Initial WS3 warm-start config resolution and DB prior loading |
+| `workflows/rfgun_sao/run.py` | **Modified** | Initial checkpoint + DB prior merge in `main()` |
+| `tests/workflows/test_rfgun_sao_db_warm_start_ws3.py` | **Added** | Initial 16 no-CST WS3 tests (superseded by 42 tests) |
 | `workflows/rfgun_sao/BRANCH_CONTEXT.md` | **Updated** | WS3 status |
 | `reports/restructure_plan/wf1_db_warm_start_ws3_optimizer_wiring.md` | **Added** | This report |
 
@@ -106,30 +110,23 @@ and full diagnostics coverage.
 
 ---
 
-## Validation results
+## Validation results (WS3.1 / WS3.2 / WS3.3 final)
 
 ```powershell
 python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.py
 -- Compiles OK.
 
-pytest tests/workflows/test_rfgun_sao_db_warm_start_ws3.py --tb=short -v
--- 16 passed
+pytest tests/workflows/test_rfgun_sao_db_warm_start_ws3.py --tb=short
+-- 42 passed
 
 pytest tests/workflows/test_rfgun_sao_db_warm_start_ws2.py --tb=short
 -- 45 passed
 
-# Full regression (552 existing)
-pytest tests/workflows/test_rfgun_sao_imports.py --tb=short -- 230 passed
-pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short -- 12 passed
-pytest tests/workflows/test_rfgun_sao_retry_runtime.py --tb=short -- 83 passed
-pytest tests/workflows/test_rfgun_sao_retry_runtime_cst.py --tb=short -- 35 passed
-pytest tests/workflows/test_rfgun_sao_retry_runtime_workflow.py --tb=short -- 31 passed
-pytest tests/workflows/test_rfgun_sao_retry_runtime_recovery.py --tb=short -- 28 passed
-pytest tests/workflows/test_rfgun_sao_evaluation_success_reuse.py --tb=short -- 35 passed
-pytest tests/workflows/test_rfgun_sao_evaluation_database_storage.py --tb=short -- 40 passed
-pytest tests/workflows/test_rfgun_sao_evaluation_database_workflow.py --tb=short -- 10 passed
+pytest tests/workflows/test_rfgun_sao_imports.py --tb=short
+-- 230 passed, 1 pre-existing warning
 
-Total: 568 passed, 1 pre-existing warning.
+pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short
+-- 12 passed
 ```
 
 ---
@@ -330,7 +327,7 @@ implemented.
 | ``workflows/rfgun_sao/run.py`` | **Modified** | Moved DB prior loading after checkpoint with ``checkpoint_parameter_keys`` dedup; compute ``ckpt_keys`` from workflow param names; detailed logging with dedup counts |
 | ``workflows/rfgun_sao/evaluation_database_storage.py`` | **Modified** | Fixed stale "No warm-start" header comment and class docstring |
 | ``workflows/rfgun_sao/evaluation_database_warm_start.py`` | **Modified** | Added ``parameter_keys_from_prior_data``, ``db_priors_to_prior_data``, ``merge_checkpoint_and_db_priors`` helpers |
-| ``tests/workflows/test_rfgun_sao_db_warm_start_ws3.py`` | **Modified** | 40 no-CST tests: checkpoint dedup, fake optimizer harness, disabled semantics, malformed rows, helpers, full diagnostics |
+| ``tests/workflows/test_rfgun_sao_db_warm_start_ws3.py`` | **Modified** | 40 no-CST tests at WS3.1 (grew to 42 at WS3.2): checkpoint dedup, fake optimizer harness, disabled semantics, malformed rows, helpers, full diagnostics |
 | ``workflows/rfgun_sao/BRANCH_CONTEXT.md`` | **Updated** | WS3.1 phase status |
 | ``reports/restructure_plan/wf1_db_warm_start_ws3_optimizer_wiring.md`` | **Updated** | This WS3.1 report section |
 
@@ -385,22 +382,46 @@ as WS3.1; no regressions across the full test matrix.
 | Failure reuse / probably-infeasible skip | **Not implemented** |
 | WS4 live smoke | **Future, requires explicit approval** |
 
-```
-feat(wf1): harden DB warm-start optimizer wiring WS3.1
+---
 
-- Move DB prior loading from workflow.py to run.py after checkpoint
-  so checkpoint parameter keys are available for dedup
-- Compute checkpoint_parameter_keys from checkpoint warm_xy and pass
-  into load_warm_start_priors(); skip DB rows matching checkpoint
-- Log accepted, rejected, and checkpoint-duplicate counts per run
-- Add pure no-CST helpers: parameter_keys_from_prior_data,
-  db_priors_to_prior_data, merge_checkpoint_and_db_priors
-- Fix stale documentation in evaluation_database_storage.py
-  (remove stale "No warm-start queries" claim)
-- 43 no-CST tests: checkpoint dedup, fake optimizer harness, disabled
-  semantics, malformed rows, pure helpers, full diagnostics coverage
+## WS3.3 — report / count cleanup
 
-No live CST, no default config change, no failure reuse,
-no success reuse behavior change, no probably-infeasible skip.
-WS4 requires explicit approval.
-```
+### Scope
+
+Documentation-only phase.  No runtime code, no config, no tests changed.
+
+### Fixes applied
+
+1. **Validation results** — replaced stale ``-- 16 passed`` with ``-- 42 passed``;
+   removed stale ``552 existing`` / ``568 total`` regression numbers that no
+   longer reflect the current test matrix; kept only the four core command
+   results (compile, WS3, WS2, imports, single-pass imports).
+
+2. **WS3 "Files changed"** — marked as superseded; added note that subsequent
+   phases restructured over this base.
+
+3. **WS3.1 "File changes summary"** — clarified 40 was the WS3.1 count (grew
+   to 42 at WS3.2).
+
+4. **Stray WS3.1 commit message** — removed dangling commit-message block
+   that appeared after the WS3.2 section with no heading.
+
+5. **WS3.2 "Files changed"** — added explicit per-file table.
+
+6. **Test coverage header** — unified on 42 (current actual count).
+
+7. **``BRANCH_CONTEXT.md``** — added WS3.3 entry.
+
+### Explicit statements
+
+| Statement | Status |
+|-----------|--------|
+| Live CST run | **No** |
+| Default config changed | **Not changed** |
+| ``run.py`` uses the tested helper path | **Yes** |
+| Checkpoint dedup active in runtime | **Yes** |
+| DB priors call evaluator | **No** |
+| DB priors invoke retry runtime | **No** |
+| Warm-start implies success reuse | **No** |
+| Failure reuse / probably-infeasible skip | **Not implemented** |
+| WS4 live smoke | **Future, requires explicit approval** |

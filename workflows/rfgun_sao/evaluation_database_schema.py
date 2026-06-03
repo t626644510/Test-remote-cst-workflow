@@ -355,10 +355,16 @@ def record_from_json_dict(d: dict[str, Any]) -> EvaluationDatabaseRecord:
 def schema_ddl_sqlite() -> str:
     """Return a DDL string suitable for creating the evaluation database.
 
-    **Not executed.**  Provided for review and future implementation.
+    Includes schema version tracking table.  The ``schema_version`` table
+    is created first so that ``_initialize_schema`` can insert the
+    initial version row.
     """
     return """
--- Evaluation database schema (design reference, not executed).
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS evaluation_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     schema_version INTEGER NOT NULL DEFAULT 1,
@@ -377,9 +383,11 @@ CREATE TABLE IF NOT EXISTS evaluation_records (
     provenance TEXT,
     retry_count INTEGER NOT NULL DEFAULT 0,
     error_taxonomy TEXT,
+    run_id TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_parameter_key ON evaluation_records(parameter_key);
-CREATE INDEX idx_status ON evaluation_records(status);
+CREATE INDEX IF NOT EXISTS idx_parameter_key ON evaluation_records(parameter_key);
+CREATE INDEX IF NOT EXISTS idx_status ON evaluation_records(status);
+CREATE INDEX IF NOT EXISTS idx_run_id ON evaluation_records(run_id);
 """

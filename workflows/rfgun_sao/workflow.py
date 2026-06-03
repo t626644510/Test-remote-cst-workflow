@@ -336,6 +336,33 @@ def build_workflow_1(
     _post_eval_recovery = (eval_cfg.get("post_eval_recovery", "") or "").strip().lower()
 
     # ---------------------------------------------------------------
+    # Retry runtime config (RW3)
+    # ---------------------------------------------------------------
+    from workflows.rfgun_sao.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
+    _retry_runtime_cfg, _rt_diag = _check_mutex(config, logger=_logger)
+    if _rt_diag:
+        _logger.warning("Retry runtime disabled: %s", _rt_diag)
+    if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
+        from workflows.rfgun_sao.retry_runtime_cst import (
+            build_record_from_evaluation_result,
+            make_cst_retry_evaluate_once,
+        )
+        from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
+        from workflows.rfgun_sao.evaluation_database_schema import (
+            EvaluationDatabaseStatus as _EDS,
+            ParameterIdentity,
+            current_schema_version,
+        )
+        _logger.info("Workflow 1 retry runtime: enabled (max_tier=%d)", _retry_runtime_cfg.max_tier)
+
+    # RW3 synthetic validation hook: env-var + config gated
+    _smoke_injection_enabled: bool = (
+        os.environ.get("WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION", "") == "1"
+        and config.get("retry_runtime", {}).get("smoke_injection", False)
+    )
+    _smoke_already_injected: list[bool] = [False]
+
+    # ---------------------------------------------------------------
     # SAO evaluator wrapper
     # ---------------------------------------------------------------
     opt_cfg = config.get("optimization", {})
@@ -382,6 +409,96 @@ def build_workflow_1(
 
             return float(np.dot(penalties_arr, weights))
 
+        # --- Retry runtime path (RW3) ---
+        if _retry_runtime_cfg is not None and _retry_runtime_cfg.enabled:
+            # RW3 synthetic smoke injection: inject one initial SOLVER_FAILED
+            # to exercise the retry loop without needing an actual CST failure.
+            if _smoke_injection_enabled and not _smoke_already_injected[0]:
+                _smoke_already_injected[0] = True
+                _logger.info(
+                    "Retry runtime smoke: injecting synthetic SOLVER_FAILED "
+                    "for iteration %d", iteration,
+                )
+                raw = {n: np.nan for n in metric_names}
+                pen = {n: 1.0 for n in metric_names}
+                ok = False
+                status = _ES.SOLVER_FAILED
+                err = "Synthetic SOLVER_FAILED for retry runtime smoke test"
+            else:
+                raw, pen, ok, status, err = wf1_evaluator.evaluate_single_pass(
+                    dict(zip(param_names, x_phys)), iteration,
+                )
+
+            if status == _ES.SUCCESS:
+                # No retry needed — use directly
+                penalties_arr = np.array(
+                    [pen.get(n, 1.0) for n in metric_names], dtype=float,
+                )
+                if checkpoint_callback is not None:
+                    raw_arr = np.array(
+                        [raw.get(n, np.nan) for n in metric_names], dtype=float,
+                    )
+                    checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+                return float(np.dot(penalties_arr, weights))
+
+            # Initial evaluation failed — build record and consider retry
+            pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
+            eval_result = EvaluationResult(
+                status=status, error=err,
+                raw_metrics=dict(raw),
+                objective_values={n: raw.get(n, np.nan) for n in metric_names},
+                penalty_values=dict(pen),
+            )
+            initial_record = build_record_from_evaluation_result(
+                pid, eval_result, retry_count=0,
+            )
+
+            # Run retry loop
+            evaluate_once = make_cst_retry_evaluate_once(
+                wf1_evaluator, param_names=list(param_names),
+            )
+            retry_result = run_retry_loop_no_cst(
+                initial_record=initial_record,
+                evaluate_once=evaluate_once,
+                config=_retry_runtime_cfg,
+                current_schema=current_schema_version(),
+                recovery_callback=None,
+            )
+
+            # Use final result
+            if retry_result.succeeded and retry_result.final_record is not None:
+                fr = retry_result.final_record
+                # Extract penalty values from final record diagnostics
+                fr_diag = fr.raw_payload.diagnostics if fr.raw_payload else {}
+                pen_values = (fr_diag or {}).get("__retry_penalty__", None)
+                if pen_values is not None:
+                    penalties_arr = np.array(
+                        [pen_values.get(n, 1.0) for n in metric_names], dtype=float,
+                    )
+                    ok = True
+                    err = ""
+                else:
+                    # Fallback: use all-ones
+                    penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
+                    ok = False
+                # Checkpoint records final result only
+                if checkpoint_callback is not None:
+                    raw_metrics = fr.raw_payload.raw_metrics if fr.raw_payload else {}
+                    raw_arr = np.array(
+                        [raw_metrics.get(n, np.nan) for n in metric_names], dtype=float,
+                    )
+                    checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+            else:
+                penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
+                if checkpoint_callback is not None:
+                    checkpoint_callback(
+                        x_phys, np.full(len(metric_names), np.nan), penalties_arr,
+                        False, retry_result.stopped_reason,
+                    )
+
+            return float(np.dot(penalties_arr, weights))
+
+        # --- Plain single_pass path (no retry) ---
         raw, pen, ok, status, err = wf1_evaluator.evaluate_single_pass(
             dict(zip(param_names, x_phys)), iteration,
         )

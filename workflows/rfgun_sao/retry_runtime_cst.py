@@ -74,6 +74,7 @@ def build_record_from_evaluation_result(
     schema_version: int = 1,
     source: str = "retry_runtime_cst",
     retry_count: int = 0,
+    penalty_values: dict[str, float] | None = None,
 ) -> EvaluationDatabaseRecord:
     """Build an ``EvaluationDatabaseRecord`` from an ``EvaluationResult``.
 
@@ -89,6 +90,10 @@ def build_record_from_evaluation_result(
         Source identifier.
     retry_count : int
         Number of retry attempts already consumed.
+    penalty_values : dict[str, float] or None
+        Per-metric penalty values.  Stored in ``raw_payload.diagnostics``
+        under ``"__retry_penalty__"`` for extraction by the evaluator
+        closure after the retry loop.
 
     Returns
     -------
@@ -101,12 +106,16 @@ def build_record_from_evaluation_result(
 
     db_status = map_evaluation_status_to_database_status(result.status)
 
+    diag = dict(result.diagnostics) if result.diagnostics else {}
+    if penalty_values is not None:
+        diag["__retry_penalty__"] = dict(penalty_values)
+
     payload = RawEvaluationPayload(
         raw_metrics=dict(result.raw_metrics) if result.raw_metrics else None,
         objective_values=(
             dict(result.objective_values) if result.objective_values else None
         ),
-        diagnostics=dict(result.diagnostics) if result.diagnostics else None,
+        diagnostics=diag if diag else None,
     )
 
     return EvaluationDatabaseRecord(
@@ -181,12 +190,18 @@ def make_cst_retry_evaluate_once(
             np.asarray(params), -1,
         )
 
-        # Build the database record from the result
+        # Build the database record from the result,
+        # including penalty_values so the evaluator closure can
+        # extract them from diagnostics after the retry loop.
         next_retry_count = record.retry_count + 1
+        penalty_values = (
+            dict(result.penalty_values) if result.penalty_values else None
+        )
         db_record = build_record_from_evaluation_result(
             parameter_identity=pid,
             result=result,
             retry_count=next_retry_count,
+            penalty_values=penalty_values,
         )
 
         return db_record

@@ -108,6 +108,10 @@ class RetryRuntimeResult:
     ----------
     final_status : str
         Status of the final record in the loop.
+    final_record : EvaluationDatabaseRecord or None
+        The last ``EvaluationDatabaseRecord`` produced by the loop.
+        This is the record the optimizer / checkpoint should use.
+        ``None`` if the loop was disabled or no evaluation was attempted.
     attempts : list[RetryAttemptRecord]
         Records of each retry attempt.
     retry_count_consumed : int
@@ -126,6 +130,7 @@ class RetryRuntimeResult:
         Extra information including progress guard activations.
     """
     final_status: str = ""
+    final_record: EvaluationDatabaseRecord | None = None
     attempts: list[RetryAttemptRecord] = field(default_factory=list)
     retry_count_consumed: int = 0
     succeeded: bool = False
@@ -232,6 +237,7 @@ def run_retry_loop_no_cst(
     if not config.enabled:
         result = RetryRuntimeResult(
             final_status=str(initial_record.status),
+            final_record=initial_record,
             succeeded=initial_record.status == EvaluationDatabaseStatus.SUCCESS,
             stopped_reason="retry disabled",
         )
@@ -239,6 +245,7 @@ def run_retry_loop_no_cst(
 
     if config.use_probably_infeasible_for_skip:
         result = RetryRuntimeResult(
+            final_record=initial_record,
             stopped_reason="probably_infeasible_skip_not_supported",
             diagnostics={"error": "use_probably_infeasible_for_skip is not supported in Phase O"},
         )
@@ -258,6 +265,7 @@ def run_retry_loop_no_cst(
     def _make_result() -> RetryRuntimeResult:
         """Build the final result from current state."""
         result.final_status = str(current.status)
+        result.final_record = current
         result.attempts = attempts
         result.retry_count_consumed = max(current.retry_count, attempts_consumed)
         return result

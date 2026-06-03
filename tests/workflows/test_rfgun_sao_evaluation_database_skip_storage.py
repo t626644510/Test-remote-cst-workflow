@@ -386,7 +386,7 @@ class TestRealSuccessReuseProtection:
     """Call real success_reuse helper against synthetic skip rows."""
 
     def test_skip_row_only_no_reuse(self, tmp_path):
-        """Only skip row in DB -> success_reuse returns None."""
+        """Skip row with same parameter_key -> success_reuse returns None."""
         from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
         from workflows.rfgun_sao.evaluation_success_reuse import (
             SuccessReuseConfig,
@@ -394,25 +394,24 @@ class TestRealSuccessReuseProtection:
         )
 
         db_path = _create_db(tmp_path)
-        # Insert skip row
+        # Insert skip row with the same key that success_reuse will query
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        skip_key = pid.parameter_key()
         skip_payload = EvaluationSkipRecordPayload(
-            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            parameter_key=skip_key, source_row_ids=(1,), evidence_count=1,
             skip_reason="test",
         )
         write_failure_skip_synthetic_row(db_path, skip_payload)
 
-        # Query via success_reuse helper
+        # Query via success_reuse helper with the same key
         cfg = SuccessReuseConfig(enabled=True)
-        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
-        key = pid.parameter_key()
-
         with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
             result = try_success_reuse(db, pid, ["m1"], config=cfg)
 
-        assert result is None, "skip row must not be reusable"
+        assert result is None, "skip row must not be reusable even when key matches"
 
     def test_success_and_skip_row_only_success_reused(self, tmp_path):
-        """Both skip and success rows -> only success row is reused."""
+        """Skip and success rows -> only success row is reused (different keys)."""
         from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
         from workflows.rfgun_sao.evaluation_success_reuse import (
             SuccessReuseConfig,
@@ -437,8 +436,9 @@ class TestRealSuccessReuseProtection:
         conn.close()
 
         # Insert skip row with different key
+        pid_skip = ParameterIdentity(param_names=["p0"], values=[999.0])
         skip_payload = EvaluationSkipRecordPayload(
-            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            parameter_key=pid_skip.parameter_key(), source_row_ids=(1,), evidence_count=1,
             skip_reason="test",
         )
         write_failure_skip_synthetic_row(db_path, skip_payload)
@@ -450,11 +450,53 @@ class TestRealSuccessReuseProtection:
         assert result is not None, "success row must be reusable"
         assert result.status.name == "SUCCESS"
 
-        # Query for skip key
-        pid_skip = ParameterIdentity(param_names=["p0"], values=[999.0])
+        # Query for skip key (same key as skip row)
         with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
             result_skip = try_success_reuse(db, pid_skip, ["m1"], config=cfg)
-        assert result_skip is None, "skip row must not be reusable"
+        assert result_skip is None, "skip row must not be reusable even when key matches"
+
+    def test_success_and_skip_same_key_returns_success_only(self, tmp_path):
+        """Success and skip row with same parameter_key -> returns SUCCESS only."""
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.evaluation_success_reuse import (
+            SuccessReuseConfig,
+            try_success_reuse,
+        )
+
+        db_path = _create_db(tmp_path)
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        same_key = pid.parameter_key()
+
+        # Insert success row
+        conn = __import__("sqlite3").connect(db_path)
+        conn.execute(
+            "INSERT INTO evaluation_records "
+            "(schema_version, parameter_key, param_names, param_values, status, "
+            "raw_metrics, objective_values, objective_names, diagnostics) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (current_schema_version(), same_key,
+             json.dumps(["p0"]), json.dumps([1.0]),
+             "success", json.dumps({"m1": 0.5}), json.dumps({"m1": 0.5}),
+             json.dumps(["m1"]), json.dumps({"__retry_penalty__": {"m1": 0.5}})),
+        )
+        conn.commit()
+        conn.close()
+
+        # Insert skip row with the same key
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key=same_key, source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        # Query for the shared key
+        cfg = SuccessReuseConfig(enabled=True)
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            result = try_success_reuse(db, pid, ["m1"], config=cfg)
+
+        # Must return the SUCCESS row, not the skip row
+        assert result is not None, "must return a result from the success row"
+        assert result.status.name == "SUCCESS"
 
 
 class TestRealWarmStartProtection:

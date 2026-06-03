@@ -183,3 +183,32 @@ pytest tests/workflows/test_rfgun_sao_db_warm_start_ws2.py --tb=short
 | Success_reuse helper ignores skip rows | **Verified** |
 | Warm-start loader ignores skip rows | **Verified** |
 | Candidate loader excludes skip rows | **Verified** |
+
+---
+
+## SE2.2 — same-key success reuse protection hardening
+
+### Changes
+
+1. **Same-key success reuse tests** — `TestRealSuccessReuseProtection` now
+   creates skip rows with real `ParameterIdentity` keys matching the query
+   key.  Previously the skip row used `"skip_key"` which was never found by
+   `try_success_reuse()`.
+
+2. **Same-key mixed scenario** — new test `test_success_and_skip_same_key_returns_success_only`:
+   both a SUCCESS row and a skip row share the same `parameter_key`.
+   `try_success_reuse()` returns the SUCCESS result, not the skip row.
+
+3. **BRANCH_CONTEXT duplicate removed** — duplicate `SE2.1` phase table row
+   deleted.
+
+### Tests
+
+Test count grew from **30** (SE2.1) to **31** (SE2.2).
+
+### Validation
+
+```
+pytest tests/workflows/test_rfgun_sao_evaluation_database_skip_storage.py --tb=short
+-- 31 passed
+```

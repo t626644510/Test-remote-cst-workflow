@@ -83,7 +83,8 @@ Remote branches archived in MH3.
 - SE1 -- schema extension hooks for skip records -- accepted at `ec8b805`
 - SE1.1 -- skip record audit validation hardening -- accepted at `b73ca34`
 - SE2 -- synthetic skip row storage support -- accepted at `b9f1b07`
-- SE2.1 -- success-reuse/warm-start protection hardening (current track)
+- SE2.1 -- success-reuse/warm-start protection hardening -- accepted at `8bbab31`
+- SE2.2 -- same-key reuse protection hardening (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -119,7 +120,6 @@ Remote branches archived in MH3.
 | SE1 | Schema extension hooks for skip records | No |
 | SE1.1 | Skip record audit validation hardening | No |
 | SE2 | Synthetic skip row storage support | No |
-| SE2.1 | Success-reuse/warm-start protection hardening | No |
 | SE2.1 | Success-reuse/warm-start protection hardening | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
@@ -167,3 +167,4 @@ Accepted.  See reports for details.
 - Root shim was repointed at Phase S (commit `76ac3bf`).  Rollback:
   `git revert 76ac3bf`.
 - DDB and SR tracks are merge/archive only.
+| SE2.2 | Same-key reuse protection hardening | No |

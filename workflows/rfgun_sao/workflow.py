@@ -45,6 +45,12 @@ from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
 )
+from workflows.rfgun_sao.evaluation_database_schema import (
+    ParameterIdentity,
+)
+from workflows.rfgun_sao.retry_runtime_cst import (
+    build_record_from_evaluation_result,
+)
 
 # ---- Retry runtime helpers (no-CST pure functions) -----------------------
 
@@ -298,6 +304,7 @@ def build_workflow_1(
         workflow._conn = cst_conn
         workflow._retry_handler = None
         workflow._retry_connection_registry = None
+        workflow._evaluation_db = None
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
         workflow.metric_specs = specs
@@ -411,14 +418,12 @@ def build_workflow_1(
     if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
         from workflows.rfgun_sao.retry_runtime_cst import (
             CstConnectionRegistry,
-            build_record_from_evaluation_result,
             make_cst_recovery_callback,
             make_cst_retry_evaluate_once,
         )
         from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
         from workflows.rfgun_sao.evaluation_database_schema import (
             EvaluationDatabaseStatus as _EDS,
-            ParameterIdentity,
             current_schema_version,
         )
         def _retry_connection_factory():
@@ -448,6 +453,38 @@ def build_workflow_1(
     # RCR3 synthetic tier-2 recovery smoke: config + env gated
     _tier2_smoke_enabled: bool = _is_retry_runtime_tier2_smoke_enabled(config)
     _tier2_smoke_consumed: list[bool] = [False]
+
+    # ---------------------------------------------------------------
+    # Evaluation database config (DDB3)
+    # ---------------------------------------------------------------
+    from workflows.rfgun_sao.evaluation_database_storage import (
+        EvaluationDatabaseConfig as _EDBConfig,
+        SQLiteEvaluationDatabase as _SQDB,
+        resolve_evaluation_database_config as _resolve_db_cfg,
+    )
+    _evaluation_db_cfg = _resolve_db_cfg(config, repo_root=str(_PROJECT_ROOT))
+    _evaluation_db: _SQDB | None = None
+    _db_run_id: str | None = None
+    if _evaluation_db_cfg.enabled:
+        _evaluation_db = _SQDB(_evaluation_db_cfg)
+        _evaluation_db.open()
+        import uuid
+        _db_run_id = str(uuid.uuid4())[:8]
+        _logger.info("Evaluation DB enabled: path=%s run_id=%s", _evaluation_db_cfg.path, _db_run_id)
+
+    def _write_eval_db(record):
+        """Write final_record to evaluation DB (non-fatal on failure)."""
+        if _evaluation_db is None or record is None:
+            return
+        try:
+            row_id = _evaluation_db.insert_final_record(record, run_id=_db_run_id)
+            _logger.debug(
+                "Evaluation DB: written (id=%d, status=%s, key=%s)",
+                row_id, record.status,
+                record.parameter_identity.parameter_key()[:8] if record.parameter_identity else "?",
+            )
+        except Exception as exc:
+            _logger.warning("Evaluation DB write failed (non-fatal): %s", exc)
 
     # ---------------------------------------------------------------
     # SAO evaluator wrapper
@@ -494,6 +531,18 @@ def build_workflow_1(
                         "Post-eval graceful reset failed (non-fatal)", exc_info=True,
                     )
 
+            # Write final DB record for legacy retry path
+            if _evaluation_db is not None:
+                _pid_legacy = ParameterIdentity(
+                    param_names=list(param_names), values=list(x_phys),
+                )
+                _ev_legacy = EvaluationResult(
+                    status=result.status, error=result.error,
+                    raw_metrics=dict(result.raw_metrics) if result.raw_metrics else {},
+                    objective_values=dict(result.objective_values) if result.objective_values else {},
+                    penalty_values=dict(result.penalty_values) if result.penalty_values else {},
+                )
+                _write_eval_db(build_record_from_evaluation_result(_pid_legacy, _ev_legacy))
             return float(np.dot(penalties_arr, weights))
 
         # --- Retry runtime path (RW3) ---
@@ -526,9 +575,19 @@ def build_workflow_1(
                         [raw.get(n, np.nan) for n in metric_names], dtype=float,
                     )
                     checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+                # Write final DB record for initial-success path
+                if _evaluation_db is not None and status == _ES.SUCCESS:
+                    _pid_rec = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
+                    _ev_res = EvaluationResult(
+                        status=status, error=err,
+                        raw_metrics=dict(raw),
+                        objective_values={n: raw.get(n, np.nan) for n in metric_names},
+                        penalty_values=dict(pen),
+                    )
+                    _write_eval_db(build_record_from_evaluation_result(_pid_rec, _ev_res))
                 return float(np.dot(penalties_arr, weights))
 
-            # Initial evaluation failed �?build record and consider retry
+            # Initial evaluation failed -- build record and consider retry
             pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
             eval_result = EvaluationResult(
                 status=status, error=err,
@@ -608,6 +667,9 @@ def build_workflow_1(
                 )
                 checkpoint_callback(*cp_args)
 
+            # Write final DB record from retry runtime final_record
+            if _evaluation_db is not None and fr is not None:
+                _write_eval_db(fr)
             return float(np.dot(penalties_arr, weights))
 
         # --- Plain single_pass path (no retry) ---
@@ -618,6 +680,16 @@ def build_workflow_1(
         if checkpoint_callback is not None:
             raw_arr = np.array([raw.get(n, np.nan) for n in metric_names], dtype=float)
             checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+        # Write final DB record for plain single_pass path
+        if _evaluation_db is not None:
+            _pid_plain = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
+            _ev_plain = EvaluationResult(
+                status=status, error=err,
+                raw_metrics=dict(raw),
+                objective_values={n: raw.get(n, np.nan) for n in metric_names},
+                penalty_values=dict(pen),
+            )
+            _write_eval_db(build_record_from_evaluation_result(_pid_plain, _ev_plain))
         return float(np.dot(penalties_arr, weights))
 
     # ---------------------------------------------------------------
@@ -638,6 +710,7 @@ def build_workflow_1(
     workflow._conn = conn
     workflow._retry_handler = retry_handler
     workflow._retry_connection_registry = _retry_runtime_registry
+    workflow._evaluation_db = _evaluation_db
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
     workflow.metric_specs = specs

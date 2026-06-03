@@ -336,7 +336,17 @@ def _cleanup_workflow_connection(
                 force, str(exc)[:200],
             )
 
-    # Phase 3 — close retry runtime connection registry (RCR2).
+    # Phase 3 — close evaluation database (DDB3).
+    edb = getattr(workflow, "_evaluation_db", None)
+    if edb is not None:
+        result["attempted"] = True
+        try:
+            edb.close()
+            _logger.debug("Evaluation DB closed")
+        except Exception as exc:
+            _logger.warning("Evaluation DB close failed: %s", str(exc)[:200])
+
+    # Phase 4 — close retry runtime connection registry (RCR2).
     # Tracks replacement connections created by the recovery callback.
     # Works independently of legacy retry handler.
     # This runs even if workflow._conn is None and retry_handler is None.

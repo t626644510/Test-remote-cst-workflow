@@ -166,7 +166,8 @@ b) Move on to other non-live hardening or documentation work.
 | Q2 | Repeated-run cleanup stability validation — 3 consecutive runs (15 total evals), Best F -18002/-18002/-17883, 18 close hangs handled, zero orphan DE accumulation, no manual taskkill across full sequence; cleanup stability sufficient for Phase R readiness | Accepted at e2f3b79 |
 | R | Root shim repoint readiness / rollback plan — readiness criteria satisfied (cleanup stable, 399 tests pass, CLI compatible); repoint design, rollback steps, preflight checklist documented; root shim NOT repointed; docs-only | Accepted at 98f8b87 |
 | S | Root shim repoint — `run_workflow_1.py` import changed from `rfgun_single_pass.run` to `rfgun_sao.run`; CLI verified; 399 tests pass; minimal import-only change with explicit operator approval | Accepted at 76ac3bf |
-| S1 | Post-repoint root shim live sanity / rollback drill — first live CST through repointed root shim (run_workflow_1.py), Best F -15392.37, cleanup no orphan DE, rollback drill documented | Completed / pending review |
+| S1 | Post-repoint root shim live sanity / rollback drill — first live CST through repointed root shim (run_workflow_1.py), Best F -15392.37, cleanup no orphan DE, rollback drill documented | Accepted at c1f2232 |
+| T | Production-scale campaign — first production-scale run through root shim (run_workflow_1.py, n_initial=3, n_iter=6, 9 evals), Best F -18002.12, zero orphan DE, no manual cleanup | Completed / pending review |
 
 ### Migration constraints
 

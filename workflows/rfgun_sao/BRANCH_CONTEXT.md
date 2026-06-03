@@ -167,7 +167,8 @@ b) Move on to other non-live hardening or documentation work.
 | R | Root shim repoint readiness / rollback plan — readiness criteria satisfied (cleanup stable, 399 tests pass, CLI compatible); repoint design, rollback steps, preflight checklist documented; root shim NOT repointed; docs-only | Accepted at 98f8b87 |
 | S | Root shim repoint — `run_workflow_1.py` import changed from `rfgun_single_pass.run` to `rfgun_sao.run`; CLI verified; 399 tests pass; minimal import-only change with explicit operator approval | Accepted at 76ac3bf |
 | S1 | Post-repoint root shim live sanity / rollback drill — first live CST through repointed root shim (run_workflow_1.py), Best F -15392.37, cleanup no orphan DE, rollback drill documented | Accepted at c1f2232 |
-| T | Production-scale campaign — first production-scale run through root shim (run_workflow_1.py, n_initial=3, n_iter=6, 9 evals), Best F -18002.12, zero orphan DE, no manual cleanup | Completed / pending review |
+| T | Production-scale campaign — first production-scale run through root shim (run_workflow_1.py, n_initial=3, n_iter=6, 9 evals), Best F -18002.12, zero orphan DE, no manual cleanup | Accepted at 5929027 |
+| U | WF1 SAO consolidation closeout / merge readiness — docs-only closeout: 31 live evals since P3 fix, zero orphan DE, zero manual cleanup; all merge readiness criteria satisfied; future work separately gated | Completed / pending review |
 
 ### Migration constraints
 
@@ -205,10 +206,17 @@ b) Move on to other non-live hardening or documentation work.
 - No production-scale validation was performed.
 - No durable DB, no failure reuse, no probably-infeasible skip, no root shim repoint.
 
-### Next possible directions
+### Future work (separately gated)
 
-- **Phase T** — Production-scale campaign, only after S1 acceptance and explicit operator request
-- Future integration phases (retry runtime CST wiring, durable DB, failure reuse) remain separately gated
+The following capabilities remain **not implemented** and would require separate phase planning:
+
+- Phase O/O1 retry runtime CST wiring — currently no-CST callback-only skeleton
+- Durable evaluation DB (J–L) — schema/helpers exist; runtime DB not implemented
+- Failure reuse — design only
+- DB warm-start / optimizer runtime warm-start injection
+- Broader production campaigns (beyond 9 evaluations)
+
+These are explicitly **not part of this consolidation** and should be planned as independent future phases.
 
 ## Phase B — Metric roles and gate (B1–B9) — **CLOSED**
 

@@ -214,6 +214,25 @@ Total: 512 passed, 1 pre-existing warning.
 
 ---
 
+## DDB3.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Repo-root path enforcement | `resolve_evaluation_database_config` now called with `repo_root=str(_PROJECT_ROOT)` in `workflow.py`, so paths inside the repository are rejected at workflow startup (not only in storage unit tests) |
+| 2. Objective payload | Both initial-success and plain DB write paths now include `objective_values` in the `EvaluationResult`; DB rows for SUCCESS now have `objective_values` populated (confirmed by live test: `has_obj=1`) |
+| 3. Row-count semantics | DDB3 live smoke showed 2 rows for `n_initial=1` due to stale DB state. DDB3.1 reran with a **fresh DB** and confirmed exactly **1 record per evaluator call**: `n_initial=1, n_iter=0` → 1 evaluation → 1 DB row |
+| 4. Workflow DB tests added | `test_rfgun_sao_evaluation_database_workflow.py` (8 tests): disabled/enabled config, inside-repo rejection, disabled no validation, identity requirement, objective_values present, no-reuse on open, legacy+DB independent |
+| 5. Live rerun evidence | Fresh DB at `D:/Results/evaluation_ddb31_smoke.db` — 1 record, `status=success`, `retry_count=0`, `has_obj=1`, clean run_id `1317a464`. Best F = -15392.37. Only `cstd.exe` remained. |
+
+### Updated validation
+```
+520 tests passed (48 DB + 472 existing), no regressions.
+```
+
+No live CST beyond one bounded rerun. No default config change. No generated artifacts committed.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

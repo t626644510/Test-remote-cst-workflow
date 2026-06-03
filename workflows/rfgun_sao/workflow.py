@@ -460,7 +460,7 @@ def build_workflow_1(
         SQLiteEvaluationDatabase as _SQDB,
         resolve_evaluation_database_config as _resolve_db_cfg,
     )
-    _evaluation_db_cfg = _resolve_db_cfg(config)
+    _evaluation_db_cfg = _resolve_db_cfg(config, repo_root=str(_PROJECT_ROOT))
     _evaluation_db: _SQDB | None = None
     _db_run_id: str | None = None
     if _evaluation_db_cfg.enabled:
@@ -567,6 +567,7 @@ def build_workflow_1(
                     _ev_res = EvaluationResult(
                         status=status, error=err,
                         raw_metrics=dict(raw),
+                        objective_values={n: raw.get(n, np.nan) for n in metric_names},
                         penalty_values=dict(pen),
                     )
                     _write_eval_db(build_record_from_evaluation_result(_pid_rec, _ev_res))
@@ -672,6 +673,7 @@ def build_workflow_1(
             _ev_plain = EvaluationResult(
                 status=status, error=err,
                 raw_metrics=dict(raw),
+                objective_values={n: raw.get(n, np.nan) for n in metric_names},
                 penalty_values=dict(pen),
             )
             _write_eval_db(build_record_from_evaluation_result(_pid_plain, _ev_plain))

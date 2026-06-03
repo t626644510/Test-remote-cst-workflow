@@ -72,7 +72,8 @@ Remote branches archived in MH3.
 - XR1 -- destructive recovery design / safety plan -- accepted at `0e5f09a`
 - XR2 -- no-CST process/fault harness and classifier tests -- accepted at `624010d`
 - XR2.1 -- safety harness hardening -- accepted at `b603d90`
-- XR2.2 -- safety/docs cleanup (current track)
+- XR2.2 -- safety/docs cleanup -- accepted at `18dfc2c`
+- XR3 -- bounded destructive live smoke (current track)
 - XR3 -- bounded destructive live smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -98,6 +99,7 @@ Remote branches archived in MH3.
 | XR2 | No-CST process/fault harness and classifier tests | No |
 | XR2.1 | Safety harness hardening | No |
 | XR2.2 | Safety/docs cleanup | No |
+| XR3 | Bounded destructive live smoke | **Yes** |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 
@@ -111,6 +113,23 @@ Remote branches archived in MH3.
 | Best F | -13656.06 | -95592.44 |
 | Orphan DE | No | No |
 | Manual taskkill | No | No |
+
+### XR3 live evidence (bounded destructive smoke, 1 scenario)
+
+| Metric | Value |
+|--------|-------|
+| Scenario | `de_process_killed_before_solve` |
+| Target PID | 5440 |
+| Target process | `CST DESIGN ENVIRONMENT_AMD64` |
+| Kill occurred | Before solver start (confirmed: `Failed to call: run_solver`) |
+| Retry handler detected death | **Yes** (`Proactive graceful reset requested`) |
+| Replacement DE created | **Yes** (new PID 56516) |
+| Final eval status | `solver_failed` |
+| DB row | 1 row, status=solver_failed, retry_count=0 |
+| Best F | 1.0 (fallback) |
+| Orphan DE | No |
+| Manual taskkill | No |
+| cstd.exe protected | Yes |
 
 ## Phase B -- Metric roles and gate (B1-B9) -- CLOSED
 

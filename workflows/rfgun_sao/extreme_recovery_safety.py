@@ -237,7 +237,11 @@ NON_CST_PROCESS = "non_cst_process"
 INVALID_SNAPSHOT = "invalid_snapshot"
 
 _ALLOWED_DE_NAMES = frozenset({
+    # CST 2026 naming (from Get-Process Name property)
+    "CST DESIGN ENVIRONMENT_AMD64",
+    # Common CST name variants (with and without .exe)
     "CSTDesignEnvironment.exe",
+    "CSTDesignEnvironment",
 })
 
 _PROTECTED_PROCESS_NAMES = frozenset({

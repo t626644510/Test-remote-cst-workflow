@@ -518,6 +518,13 @@ def resolve_db_warm_start_config(
             f"max_priors={max_priors} is negative. Must be >= 0.",
         )
 
+    allow_raw = bool(ws_raw.get("allow_raw_recompute", False))
+    if allow_raw:
+        raise ValueError(
+            "allow_raw_recompute=True is not supported in WS2. "
+            "Set allow_raw_recompute to false or remove it.",
+        )
+
     return DbWarmStartConfig(
         enabled=True,
         max_priors=max_priors,
@@ -525,6 +532,20 @@ def resolve_db_warm_start_config(
         require_objective_values=bool(ws_raw.get("require_objective_values", True)),
         allow_raw_recompute=bool(ws_raw.get("allow_raw_recompute", False)),
     )
+
+
+def _negate_str(s: str) -> str:
+    """Reverse a string for min() tie-breaking preferring larger values."""
+    return s[::-1]
+
+
+def _is_finite_numeric(value: object) -> bool:
+    """Check if value is a finite number."""
+    if not isinstance(value, (int, float)):
+        return False
+    if isinstance(value, float) and (value != value or value == float("inf") or value == -float("inf")):
+        return False
+    return True
 
 
 def _row_scalar(row: dict[str, Any]) -> float:
@@ -589,14 +610,28 @@ def load_warm_start_priors(
         Loading report with accepted priors and rejection stats.
     """
     from workflows.rfgun_sao.evaluation_database_schema import current_schema_version
-    import json
+    import math
 
     if current_schema is None:
         current_schema = current_schema_version()
 
     report = DbWarmStartLoadReport(found_rows=len(rows))
+
+    # Respect disabled config
+    if not config.enabled:
+        report.accepted_priors = 0
+        report.diagnostics = {"priors": []}
+        return report
+
+    # max_priors=0 means no priors accepted
+    if config.max_priors == 0:
+        report.accepted_priors = 0
+        report.diagnostics = {"priors": []}
+        return report
+
     accepted: list[DbWarmStartPrior] = []
-    seen_keys: set[str] = set()
+    # Per-key tracking for duplicate resolution: key -> list of eligible priors
+    per_key: dict[str, list[DbWarmStartPrior]] = {}
     rejection_reasons: dict[str, int] = {}
     if checkpoint_parameter_keys is None:
         checkpoint_parameter_keys = set()
@@ -616,7 +651,7 @@ def load_warm_start_priors(
             report.rejected_rows += 1
             continue
 
-        # Parameter identity / key
+        # Parameter key
         param_key = row.get("parameter_key")
         if not param_key:
             _count(rejection_reasons, "missing_parameter_key")
@@ -631,6 +666,32 @@ def load_warm_start_priors(
             report.rejected_rows += 1
             continue
 
+        # Parameter values
+        pv_raw = row.get("param_values")
+        pv = _load_json_list(pv_raw)
+        if pv is None:
+            _count(rejection_reasons, "missing_param_values")
+            report.rejected_rows += 1
+            continue
+        if len(pv) != len(param_names):
+            _count(rejection_reasons, "param_values_mismatch")
+            report.rejected_rows += 1
+            continue
+        # Validate all values are numeric
+        try:
+            pv_float = [float(v) for v in pv]
+        except (ValueError, TypeError):
+            _count(rejection_reasons, "invalid_param_values")
+            report.rejected_rows += 1
+            continue
+
+        # Parameter key consistency
+        pid_check = ParameterIdentity(param_names=list(pn), values=pv_float)
+        if pid_check.parameter_key() != param_key:
+            _count(rejection_reasons, "parameter_key_mismatch")
+            report.rejected_rows += 1
+            continue
+
         # Objective names matching
         on_raw = row.get("objective_names")
         on = _load_json_list(on_raw)
@@ -642,20 +703,29 @@ def load_warm_start_priors(
         # Objective values
         ov_raw = row.get("objective_values")
         ov = _load_json_dict(ov_raw)
-        if ov is None or not ov:
-            if config.require_objective_values:
+
+        if config.require_objective_values:
+            if ov is None or not ov:
                 _count(rejection_reasons, "missing_objective_values")
                 report.rejected_rows += 1
                 continue
+            # Objective values keys must match metric_names
+            if set(ov.keys()) != set(metric_names):
+                _count(rejection_reasons, "objective_values_keys_mismatch")
+                report.rejected_rows += 1
+                continue
+            # All objective values must be finite numeric
+            all_finite = True
+            for val in ov.values():
+                if not _is_finite_numeric(val):
+                    all_finite = False
+                    break
+            if not all_finite:
+                _count(rejection_reasons, "nonfinite_objective_values")
+                report.rejected_rows += 1
+                continue
 
-        # Duplicate check (within loaded rows)
-        if param_key in seen_keys:
-            _count(rejection_reasons, "duplicate_parameter_key")
-            report.skipped_duplicates += 1
-            continue
-        seen_keys.add(param_key)
-
-        # Checkpoint dedup
+        # Checkpoint dedup (before per-key storage)
         if param_key in checkpoint_parameter_keys:
             _count(rejection_reasons, "checkpoint_duplicate")
             report.skipped_checkpoint_duplicates += 1
@@ -666,17 +736,10 @@ def load_warm_start_priors(
         # Build prior
         ov = ov or {}
         scalar = _row_scalar(row)
-        pv_raw = row.get("param_values")
-        pv = _load_json_list(pv_raw) or []
-
-        pid = ParameterIdentity(
-            param_names=list(pn),
-            values=[float(v) for v in pv] if pv else [],
-        )
 
         prior = DbWarmStartPrior(
             parameter_key=param_key,
-            parameter_identity=pid,
+            parameter_identity=pid_check,
             objective_values=dict(ov),
             scalar=scalar,
             objective_names=tuple(on) if on else tuple(metric_names),
@@ -685,29 +748,54 @@ def load_warm_start_priors(
             source_run_id=row.get("run_id"),
             source_created_at=row.get("created_at"),
         )
-        accepted.append(prior)
+
+        # Store per-key for dedup
+        if param_key not in per_key:
+            per_key[param_key] = []
+        per_key[param_key].append(prior)
+
+    # Per-key dedup: keep best row per key
+    for key, candidates in per_key.items():
+        if len(candidates) == 1:
+            accepted.append(candidates[0])
+        else:
+            # Select best per key
+            if config.order_by == "newest":
+                # Keep newest created_at, then highest id
+                best = max(candidates, key=lambda p: (
+                    str(p.source_created_at or ""),
+                    p.source_row_id or 0,
+                ))
+                report.skipped_duplicates += len(candidates) - 1
+                accepted.append(best)
+            else:
+                # Keep lowest scalar (best objective), then newer created_at,
+                # then higher id.  Use max() with negated scalar because
+                # the lowest scalar is the most negative.
+                best = max(candidates, key=lambda p: (
+                    -p.scalar,
+                    str(p.source_created_at or ""),
+                    p.source_row_id or 0,
+                ))
+                report.skipped_duplicates += len(candidates) - 1
+                accepted.append(best)
 
     # Apply ordering
     if config.order_by == "best_objective":
-        accepted.sort(key=lambda p: p.scalar)
+        accepted.sort(key=lambda p: (p.scalar, str(p.source_created_at or ""), p.source_row_id or 0))
     elif config.order_by == "newest":
         accepted.sort(
-            key=lambda p: str(p.source_created_at or ""),
+            key=lambda p: (str(p.source_created_at or ""), p.source_row_id or 0),
             reverse=True,
         )
 
     # Apply capping
-    if config.max_priors > 0 and len(accepted) > config.max_priors:
+    if len(accepted) > config.max_priors:
         accepted = accepted[:config.max_priors]
         report.capped = True
 
-    # Handle duplicates within capped list (best/newest per key already handled)
-    # Duplicate parameter_key within accepted should not occur after dedup above.
-
     report.accepted_priors = len(accepted)
     report.rejection_reasons = dict(rejection_reasons)
-
-    # Store priors in report diagnostics for retrieval
     report.diagnostics = {"priors": accepted}
 
     return report

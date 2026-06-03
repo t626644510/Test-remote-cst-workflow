@@ -323,6 +323,203 @@ class TestLoadPriors:
 
 
 # ===================================================================
+# Hardening: disabled config
+# ===================================================================
+
+
+class TestDisabledConfig:
+    def test_disabled_returns_empty(self):
+        """Disabled config returns empty report with zero priors."""
+        rows = [_make_row(objective_values={"m1": 0.5}, objective_names=["m1"])]
+        cfg = DbWarmStartConfig(enabled=False)
+        report = load_warm_start_priors(rows, cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 0
+        assert len(report.diagnostics.get("priors", [])) == 0
+
+
+# ===================================================================
+# Hardening: max_priors=0
+# ===================================================================
+
+
+class TestMaxPriorsZero:
+    def test_resolver_accepts_zero(self):
+        """Resolver accepts max_priors=0."""
+        cfg = resolve_db_warm_start_config(
+            {"evaluation_database": {"warm_start": {"enabled": True, "max_priors": 0}}},
+            db_enabled=True,
+        )
+        assert cfg.max_priors == 0
+
+    def test_loader_returns_empty(self):
+        """max_priors=0 returns no priors regardless of eligible rows."""
+        rows = [_make_row(objective_values={"m1": 0.5}, objective_names=["m1"])]
+        cfg = DbWarmStartConfig(enabled=True, max_priors=0)
+        report = load_warm_start_priors(rows, cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 0
+        assert report.capped is False
+
+
+# ===================================================================
+# Hardening: duplicate per-key policy
+# ===================================================================
+
+
+class TestDuplicateHardening:
+    def test_worse_first_best_wins(self):
+        """Duplicate key: best (lower scalar) row wins even if later."""
+        key = ParameterIdentity(param_names=["p0"], values=[1.0]).parameter_key()
+        r1 = _make_row(row_id=1, param_values=[1.0], objective_values={"m1": 5.0}, objective_names=["m1"])
+        r2 = _make_row(row_id=2, param_values=[1.0], objective_values={"m1": 1.0}, objective_names=["m1"])
+        r1["parameter_key"] = key
+        r2["parameter_key"] = key
+        cfg = DbWarmStartConfig(enabled=True, order_by="best_objective")
+        report = load_warm_start_priors([r1, r2], cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 1
+        assert report.skipped_duplicates == 1
+        priors = report.diagnostics.get("priors", [])
+        assert priors[0].scalar == 1.0
+
+    def test_same_scalar_newer_wins(self):
+        """Duplicate key with same scalar: newer timestamp wins."""
+        key = ParameterIdentity(param_names=["p0"], values=[1.0]).parameter_key()
+        r_old = _make_row(row_id=1, created_at="2025-01-01", param_values=[1.0],
+                          objective_values={"m1": 0.5}, objective_names=["m1"])
+        r_new = _make_row(row_id=2, created_at="2026-01-01", param_values=[1.0],
+                          objective_values={"m1": 0.5}, objective_names=["m1"])
+        r_old["parameter_key"] = key
+        r_new["parameter_key"] = key
+        cfg = DbWarmStartConfig(enabled=True, order_by="best_objective")
+        report = load_warm_start_priors([r_old, r_new], cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 1
+        priors = report.diagnostics.get("priors", [])
+        assert priors[0].source_created_at == "2026-01-01"
+
+    def test_same_timestamp_higher_id_wins(self):
+        """Duplicate key with same timestamp: higher id wins."""
+        key = ParameterIdentity(param_names=["p0"], values=[1.0]).parameter_key()
+        r1 = _make_row(row_id=1, param_values=[1.0], objective_values={"m1": 0.5}, objective_names=["m1"])
+        r2 = _make_row(row_id=2, param_values=[1.0], objective_values={"m1": 0.5}, objective_names=["m1"])
+        r1["parameter_key"] = key
+        r2["parameter_key"] = key
+        cfg = DbWarmStartConfig(enabled=True, order_by="best_objective")
+        report = load_warm_start_priors([r1, r2], cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 1
+        priors = report.diagnostics.get("priors", [])
+        assert priors[0].source_row_id == 2
+
+    def test_newest_mode_chooses_newest(self):
+        """newest mode: newest timestamp wins even if scalar worse."""
+        key = ParameterIdentity(param_names=["p0"], values=[1.0]).parameter_key()
+        r_old = _make_row(row_id=1, created_at="2025-01-01", param_values=[1.0],
+                          objective_values={"m1": 0.1}, objective_names=["m1"])
+        r_new = _make_row(row_id=2, created_at="2026-01-01", param_values=[1.0],
+                          objective_values={"m1": 0.9}, objective_names=["m1"])
+        r_old["parameter_key"] = key
+        r_new["parameter_key"] = key
+        cfg = DbWarmStartConfig(enabled=True, order_by="newest")
+        report = load_warm_start_priors([r_old, r_new], cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 1
+        priors = report.diagnostics.get("priors", [])
+        assert priors[0].source_created_at == "2026-01-01"
+        assert priors[0].scalar == 0.9
+
+
+# ===================================================================
+# Hardening: param identity validation
+# ===================================================================
+
+
+class TestParamIdentityHardening:
+    def test_missing_param_values_rejected(self):
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["param_values"] = None
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "missing_param_values" in report.rejection_reasons
+
+    def test_wrong_length_param_values_rejected(self):
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        # Manually set param_values to wrong length (doesn't match param_names)
+        row["param_values"] = json.dumps([1.0, 2.0])
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "param_values_mismatch" in report.rejection_reasons
+
+    def test_non_numeric_param_value_rejected(self):
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["param_values"] = json.dumps(["not_a_number"])
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "invalid_param_values" in report.rejection_reasons
+
+    def test_parameter_key_mismatch_rejected(self):
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["parameter_key"] = "bogus_key_that_does_not_match"
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "parameter_key_mismatch" in report.rejection_reasons
+
+
+# ===================================================================
+# Hardening: objective payload validation
+# ===================================================================
+
+
+class TestObjectiveHardening:
+    def test_objective_values_missing_keys_rejected(self):
+        """Missing objective values keys: row rejected."""
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        # objective_values present but with different key
+        row["objective_values"] = json.dumps({"other_key": 0.5})
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert report.accepted_priors == 0
+
+    def test_non_numeric_objective_rejected(self):
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["objective_values"] = json.dumps({"m1": "not_numeric"})
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "nonfinite_objective_values" in report.rejection_reasons
+
+    def test_nan_objective_rejected(self):
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["objective_values"] = json.dumps({"m1": float("nan")})
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "nonfinite_objective_values" in report.rejection_reasons
+
+    def test_inf_objective_rejected(self):
+        import json
+        row = _make_row(objective_values={"m1": 0.5}, objective_names=["m1"])
+        row["objective_values"] = json.dumps({"m1": float("inf")})
+        cfg = DbWarmStartConfig(enabled=True)
+        report = load_warm_start_priors([row], cfg, metric_names=["m1"], param_names=["p0"])
+        assert "nonfinite_objective_values" in report.rejection_reasons
+
+
+# ===================================================================
+# Hardening: allow_raw_recompute
+# ===================================================================
+
+
+class TestAllowRawRecompute:
+    def test_allow_raw_true_raises(self):
+        """allow_raw_recompute=True raises ValueError in WS2."""
+        with pytest.raises(ValueError, match="allow_raw_recompute"):
+            resolve_db_warm_start_config(
+                {"evaluation_database": {"warm_start": {"enabled": True, "allow_raw_recompute": True}}},
+                db_enabled=True,
+            )
+
+
+# ===================================================================
 # Safety
 # ===================================================================
 

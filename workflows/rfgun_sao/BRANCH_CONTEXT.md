@@ -59,12 +59,13 @@ Future feature tracks are independently planned on separate branches.
 |-------|--------|-------------|---------------|
 | Durable evaluation DB | `feature/wf1-durable-evaluation-db` | DDB3.2 | `cf31c2e` |
 | DB-backed success reuse | `feature/wf1-db-success-reuse` | SR4.1 | `b532856` |
+| DB warm-start (WS1-WS3) | `feature/wf1-db-warm-start` | WS3 | `20866e5` |
 
 #### Current track in progress
 
 | Track | Branch | Status |
 |-------|--------|--------|
-| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review; WS3.2 runtime helper alignment / report polish -- Completed / pending review; WS3.3 report/count cleanup -- Completed / pending review |
+| DB warm-start | `feature/wf1-db-warm-start` | WS1-WS2.2 accepted; WS3 optimizer runtime wiring / no-CST -- Completed / pending review; WS3.1 checkpoint dedup / runtime no-CST hardening -- Completed / pending review; WS3.2 runtime helper alignment / report polish -- Completed / pending review; WS3.3 report/count cleanup -- Completed / pending review; WS4 bounded live DB warm-start smoke -- Completed / pending review |
 
 #### Planned future tracks
 
@@ -82,7 +83,20 @@ Future feature tracks are independently planned on separate branches.
 | WS3.1 | Checkpoint dedup runtime fix / pure helpers / no-CST test hardening | No |
 | WS3.2 | Runtime helper alignment / report polish | No |
 | WS3.3 | Report/count cleanup only | No |
-| WS4 | Bounded live warm-start smoke (conditional) | Yes, only with explicit approval |
+| WS4 | Bounded live warm-start smoke (conditional, explicit approval) | **Yes** |
+
+### WS4 live evidence (bounded smoke, 3 total CST solves)
+
+| Metric | Seed run | Warm-start run |
+|--------|----------|----------------|
+| DB warm-start enabled | No | Yes |
+| SUCCESS DB rows | 1 (written) | 3 (2 new from LHS) |
+| accepted_priors | N/A | **1** (from seed row) |
+| DB prior injected before CST eval | N/A | **Yes** (log: `Pre-loaded 1 prior`) |
+| Success reuse observed | No | No |
+| Best F | -13656.06 | -95592.44 |
+| Orphan DE | No | No |
+| Manual taskkill | No | No |
 
 ## Phase B -- Metric roles and gate (B1-B9) -- CLOSED
 

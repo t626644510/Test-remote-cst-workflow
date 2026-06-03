@@ -20,6 +20,7 @@ from workflows.rfgun_sao.evaluation_database_schema import (
     current_schema_version,
     record_to_json_dict,
     schema_ddl_sqlite,
+    validate_evaluation_record,
 )
 
 _logger = logging.getLogger(__name__)
@@ -169,13 +170,24 @@ class SQLiteEvaluationDatabase:
         path = self._config.path
         db_exists = os.path.isfile(path) and os.path.getsize(path) > 0
 
+        # Handle create_if_missing=False with missing or empty DB file
+        if not db_exists and not self._config.create_if_missing:
+            raise ValueError(
+                f"Evaluation DB file does not exist at {path} and "
+                "create_if_missing=False",
+            )
+
         self._conn = sqlite3.connect(path)
         self._conn.row_factory = sqlite3.Row
 
-        if not db_exists and self._config.create_if_missing:
-            self._initialize_schema()
-        elif db_exists:
-            self._verify_schema()
+        try:
+            if not db_exists and self._config.create_if_missing:
+                self._initialize_schema()
+            elif db_exists:
+                self._verify_schema()
+        except Exception:
+            self.close()
+            raise
 
     def close(self) -> None:
         """Close the database connection."""
@@ -279,9 +291,22 @@ class SQLiteEvaluationDatabase:
         RuntimeError
             If the database is not open.
         """
+        # Validate the record before insert
+        try:
+            validate_evaluation_record(record)
+        except ValueError as exc:
+            raise ValueError(f"Invalid evaluation record: {exc}") from exc
+
         if record.parameter_identity is None:
             raise ValueError(
                 "Cannot insert evaluation record without parameter_identity",
+            )
+
+        # Validate record schema version matches DB schema version
+        if record.schema_version != self._config.schema_version:
+            raise ValueError(
+                f"Record schema version {record.schema_version} does not match "
+                f"evaluation DB schema version {self._config.schema_version}",
             )
 
         conn = self._conn
@@ -296,9 +321,9 @@ class SQLiteEvaluationDatabase:
             INSERT INTO evaluation_records (
                 schema_version, parameter_key, param_names, param_values,
                 param_precision, status, raw_metrics, objective_values,
-                objective_names, gate_results, diagnostics, source,
-                provenance, retry_count, error_taxonomy, run_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                objective_names, gate_results, diagnostics, artifact_refs,
+                source, provenance, retry_count, error_taxonomy, run_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 record.schema_version,
@@ -319,6 +344,9 @@ class SQLiteEvaluationDatabase:
                 ),
                 self._json_or_none(
                     record.raw_payload.diagnostics if record.raw_payload else None,
+                ),
+                self._json_or_none(
+                    record.raw_payload.artifact_refs if record.raw_payload else None,
                 ),
                 record.source,
                 self._json_or_none(record.provenance),
@@ -385,8 +413,8 @@ class SQLiteEvaluationDatabase:
         data = dict(row)
         json_cols = {
             "param_names", "param_values", "raw_metrics", "objective_values",
-            "objective_names", "gate_results", "diagnostics", "provenance",
-            "error_taxonomy",
+            "objective_names", "gate_results", "diagnostics", "artifact_refs",
+            "provenance", "error_taxonomy",
         }
         for col in json_cols:
             val = data.get(col)

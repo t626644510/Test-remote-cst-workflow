@@ -157,6 +157,21 @@ Total: 501 passed, 1 pre-existing warning.
 
 ---
 
+## DDB2.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Record validation | `insert_final_record()` now calls `validate_evaluation_record(record)` before insert; invalid status or parameter identity raises `ValueError` |
+| 2. Record schema version validation | `insert_final_record()` validates that `record.schema_version == config.schema_version`; mismatch raises `ValueError` with both versions in message |
+| 3. `create_if_missing=False` | `open()` now raises `ValueError` when DB file does not exist or file is empty; connection is properly closed on failure; `is_open` is `False` after failed open; existing valid DB with `create_if_missing=False` opens correctly |
+| 4. `artifact_refs` persistence | `artifact_refs` column is now populated during insert; JSON round-trip verified in tests; `_row_to_dict` includes `artifact_refs` in JSON column decoding list |
+| 5. New tests | 11 new tests (40 total): record validation (4), `create_if_missing=False` (5), artifact refs round-trip (2) |
+| Test count | 512 total (40 storage + 472 existing) |
+
+No live CST, no workflow integration, no default config change, no generated artifacts.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

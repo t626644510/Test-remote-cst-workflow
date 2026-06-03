@@ -370,6 +370,158 @@ class TestNoReuseSemantics:
 
 
 # ===================================================================
+# Record validation
+# ===================================================================
+
+
+class TestRecordValidation:
+    def test_insert_invalid_status_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            rec = EvaluationDatabaseRecord(
+                parameter_identity=_pid([1.0]),
+                status="bogus_status",
+            )
+            with pytest.raises(ValueError, match="Invalid evaluation record"):
+                db.insert_final_record(rec)
+
+    def test_insert_record_schema_version_greater_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path, schema_version=1)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            rec = _final_rec([1.0], status="success")
+            rec.schema_version = 99
+            with pytest.raises(ValueError, match="Record schema version 99"):
+                db.insert_final_record(rec)
+
+    def test_insert_record_schema_version_less_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path, schema_version=2)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            rec = _final_rec([1.0], status="success")
+            rec.schema_version = 1
+            with pytest.raises(ValueError, match="Record schema version 1"):
+                db.insert_final_record(rec)
+
+    def test_insert_missing_identity_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            rec = EvaluationDatabaseRecord(
+                parameter_identity=None, status="success",
+            )
+            with pytest.raises(ValueError, match="parameter_identity"):
+                db.insert_final_record(rec)
+
+
+# ===================================================================
+# create_if_missing=False
+# ===================================================================
+
+
+class TestCreateIfMissing:
+    def test_missing_file_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "nonexistent" / "test.db")
+        cfg = EvaluationDatabaseConfig(
+            enabled=True, path=db_path, create_if_missing=False,
+        )
+        db = SQLiteEvaluationDatabase(cfg)
+        with pytest.raises(ValueError, match="does not exist"):
+            db.open()
+        assert db.is_open is False
+
+    def test_empty_file_rejects(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "empty.db")
+        Path(db_path).touch()  # empty file
+        cfg = EvaluationDatabaseConfig(
+            enabled=True, path=db_path, create_if_missing=False,
+        )
+        db = SQLiteEvaluationDatabase(cfg)
+        with pytest.raises(ValueError, match="does not exist"):
+            db.open()
+        assert db.is_open is False
+
+    def test_existing_valid_opens_ok(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "existing.db")
+        # Create a valid DB first
+        cfg1 = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        SQLiteEvaluationDatabase(cfg1).open()
+
+        # Now open with create_if_missing=False — should work
+        cfg2 = EvaluationDatabaseConfig(
+            enabled=True, path=db_path, create_if_missing=False,
+        )
+        db2 = SQLiteEvaluationDatabase(cfg2)
+        db2.open()
+        assert db2.is_open is True
+        db2.close()
+
+    def test_empty_file_create_if_missing_true_still_works(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "empty.db")
+        Path(db_path).touch()
+        cfg = EvaluationDatabaseConfig(
+            enabled=True, path=db_path, create_if_missing=True,
+        )
+        db = SQLiteEvaluationDatabase(cfg)
+        db.open()
+        assert db.is_open is True
+        assert db.count_records() == 0
+        db.close()
+
+    def test_empty_db_with_create_true_initializes(self, tmp_path: Path) -> None:
+        """Empty (zero-byte) file with create_if_missing=True initializes schema."""
+        db_path = str(tmp_path / "brand_new.db")
+        cfg = EvaluationDatabaseConfig(
+            enabled=True, path=db_path, create_if_missing=True,
+        )
+        db = SQLiteEvaluationDatabase(cfg)
+        db.open()
+        assert db.is_open is True
+        cursor = db._conn.execute("SELECT MAX(version) FROM schema_version")
+        assert cursor.fetchone()[0] == current_schema_version()
+        db.close()
+
+
+# ===================================================================
+# Artifact refs round-trip
+# ===================================================================
+
+
+class TestArtifactRefs:
+    def test_artifact_refs_round_trip(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            pid = _pid([1.0])
+            payload = RawEvaluationPayload(
+                raw_metrics={"m1": 1.0},
+                artifact_refs={"result_dir": "/tmp/result", "file": "output.h5"},
+            )
+            rec = EvaluationDatabaseRecord(
+                parameter_identity=pid,
+                status="success",
+                raw_payload=payload,
+            )
+            db.insert_final_record(rec, run_id="r1")
+            key = pid.parameter_key()
+            rows = db.query_by_parameter_key(key)
+            assert len(rows) == 1
+            refs = rows[0]["artifact_refs"]
+            assert refs == {"result_dir": "/tmp/result", "file": "output.h5"}
+
+    def test_artifact_refs_none_no_error(self, tmp_path: Path) -> None:
+        db_path = str(tmp_path / "test.db")
+        cfg = EvaluationDatabaseConfig(enabled=True, path=db_path)
+        with SQLiteEvaluationDatabase(cfg) as db:
+            rec = _final_rec([1.0], status="success")
+            db.insert_final_record(rec, run_id="r1")
+            key = rec.parameter_identity.parameter_key()
+            rows = db.query_by_parameter_key(key)
+            assert rows[0]["artifact_refs"] is None
+
+
+# ===================================================================
 # Safety
 # ===================================================================
 

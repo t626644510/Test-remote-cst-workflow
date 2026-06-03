@@ -73,8 +73,9 @@ Remote branches archived in MH3.
 - XR2 -- no-CST process/fault harness and classifier tests -- accepted at `624010d`
 - XR2.1 -- safety harness hardening -- accepted at `b603d90`
 - XR2.2 -- safety/docs cleanup -- accepted at `18dfc2c`
-- XR3 -- bounded destructive live smoke (current track)
-- XR3 -- bounded destructive live smoke only with explicit approval
+- XR3 -- bounded destructive live smoke -- accepted at `5bdf4bc`
+- FS1 -- failure/probably-infeasible skip policy design (current track)
+- XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
   - deterministic/repeated exact-key failures are better skip candidates
@@ -100,6 +101,7 @@ Remote branches archived in MH3.
 | XR2.1 | Safety harness hardening | No |
 | XR2.2 | Safety/docs cleanup | No |
 | XR3 | Bounded destructive live smoke | **Yes** |
+| FS1 | Failure skip policy design | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

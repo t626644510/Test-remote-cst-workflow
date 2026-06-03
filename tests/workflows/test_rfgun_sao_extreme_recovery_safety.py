@@ -148,6 +148,8 @@ python_snap = ProcessSnapshot(pid=202, name="python.exe")
 unknown_snap = ProcessSnapshot(pid=300, name="CSTDesignEnvironment.exe")
 chrome_snap = ProcessSnapshot(pid=400, name="chrome.exe")
 invalid_snap = ProcessSnapshot(pid=0, name="")
+de_amd64_snap = ProcessSnapshot(pid=500, name="CST DESIGN ENVIRONMENT_AMD64")
+de_noext_snap = ProcessSnapshot(pid=501, name="CSTDesignEnvironment")
 de_conn = KnownCstConnection(pid=200, label="workflow._conn")
 
 
@@ -216,8 +218,32 @@ class TestProcessClassification:
         cstd_conn = KnownCstConnection(pid=100, label="cstd_conn")
         cl = classify_cst_process(cstd_snap, [cstd_conn])
         assert cl.classification == LICENSE_DAEMON_PROTECTED
+
+    # ---- XR3: real DE process name caveat ------------------------------
+
+    def test_known_pid_de_amd64_kill_candidate(self):
+        """Known PID + CST DESIGN ENVIRONMENT_AMD64 -> kill candidate."""
+        conn = KnownCstConnection(pid=500, label="amd64_conn")
+        cl = classify_cst_process(de_amd64_snap, [conn])
+        assert cl.classification == KNOWN_DESIGN_ENVIRONMENT
+        assert cl.kill_candidate
+        assert cl.matched_connection_label == "amd64_conn"
+
+    def test_unknown_pid_de_amd64_protected(self):
+        """Unknown CST DESIGN ENVIRONMENT_AMD64 -> protected unknown CST."""
+        cl = classify_cst_process(de_amd64_snap, [])
+        assert cl.classification == UNKNOWN_CST_PROCESS
         assert cl.protected
         assert not cl.kill_candidate
+
+    def test_known_pid_de_noext_kill_candidate(self):
+        """Known PID + CSTDesignEnvironment (no .exe) -> kill candidate."""
+        conn = KnownCstConnection(pid=501, label="noext_conn")
+        cl = classify_cst_process(de_noext_snap, [conn])
+        assert cl.classification == KNOWN_DESIGN_ENVIRONMENT
+        assert cl.kill_candidate
+        assert cl.matched_connection_label == "noext_conn"
+        assert not cl.protected
 
 
 # ===================================================================

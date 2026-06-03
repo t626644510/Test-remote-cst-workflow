@@ -147,3 +147,55 @@ No forbidden artifacts tracked. No generated artifacts committed.
 extension may be needed before FS4 enforce if the current v1 audit fields
 are insufficient for enforcement recording.  If schema is sufficient, FS4 can
 proceed directly.
+
+---
+
+## FS3.1 — dry-run fake-runtime call-count hardening
+
+### Changes
+
+1. **Fake-runtime dry-run harness** — `run_failure_skip_dry_run_fake_evaluation()`
+   added to `failure_skip_dry_run.py`.  Always calls evaluator exactly once,
+   regardless of dry-run would_skip decision.  Optional `retry_wrapper`
+   parameter for retry-path call-count verification.
+
+2. **Unreachable duplicate ValueError removed** — Removed dead code in
+   `resolve_failure_skip_config()` after the `exact_key_only=False` raise.
+
+### Call-count test results
+
+| Scenario | Evaluator called? | Retry wrapper called? | DB written? |
+|----------|-------------------|----------------------|-------------|
+| Candidate hit (`would_skip=True`) | **Yes** (exactly once) | If configured: exactly once | No |
+| Candidate miss | **Yes** (exactly once) | If configured: exactly once | No |
+| XR process-kill blocked | **Yes** (exactly once) | If configured: exactly once | No |
+| Enforce mode (FS3.1) | **Yes** (exactly once) | If configured: exactly once | No |
+
+All tests confirm dry-run is diagnostic-only.
+
+### Tests
+
+Test count grew from **16** (FS3) to **23** (FS3.1).
+
+| Class | Tests | Coverage |
+|-------|-------|----------|
+| `TestFakeRuntimeHarness` | 7 | Candidate hit (direct + retry wrapper), candidate miss, XR blocked, enforce mode, no DB write, diagnostics included |
+
+### Validation
+
+```
+pytest tests/workflows/test_rfgun_sao_failure_skip_dry_run.py --tb=short
+-- 23 passed
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **No** |
+| Runtime skip implemented | **No** |
+| Enforce mode implemented | **No** |
+| Fake evaluator still called in dry-run | **Yes** (exactly once) |
+| DB writes by harness | **No** |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |

@@ -77,7 +77,8 @@ Remote branches archived in MH3.
 - FS1 -- failure/probably-infeasible skip policy design -- accepted at `5f5bcb7`
 - FS2 -- failure skip candidate loader/no-CST -- accepted at `dc0b702`
 - FS2.1 -- candidate policy hardening -- accepted at `0829d6c`
-- FS3 -- runtime dry-run diagnostics (current track)
+- FS3 -- runtime dry-run diagnostics -- accepted at `ddbbcde`
+- FS3.1 -- dry-run call-count hardening (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -108,6 +109,7 @@ Remote branches archived in MH3.
 | FS2 | Failure skip candidate loader / no-CST | No |
 | FS2.1 | Candidate policy hardening | No |
 | FS3 | Runtime dry-run diagnostics / no-CST | No |
+| FS3.1 | Dry-run call-count hardening | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

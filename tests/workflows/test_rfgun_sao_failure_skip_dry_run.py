@@ -35,6 +35,8 @@ from workflows.rfgun_sao.failure_skip_dry_run import (
     FailureSkipDryRunDecision,
     evaluate_failure_skip_dry_run_for_key,
     evaluate_failure_skip_dry_run_for_keys,
+    FakeEvaluationResult,
+    run_failure_skip_dry_run_fake_evaluation,
 )
 
 
@@ -319,3 +321,162 @@ class TestGlobalSafety:
         forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+# ===================================================================
+# Fake-runtime harness call-count tests (FS3.1)
+# ===================================================================
+
+
+class TestFakeRuntimeHarness:
+    """Fake evaluator is always called exactly once, regardless of would_skip."""
+
+    def test_candidate_hit_calls_evaluator_once(self, tmp_path):
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        pk = pid.parameter_key()
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 42.0
+
+        result = run_failure_skip_dry_run_fake_evaluation(db_path, pk, cfg, fake_ev)
+        assert result.would_skip
+        assert result.evaluator_called
+        assert call_count[0] == 1, "evaluator must be called exactly once"
+        assert result.objective_value == 42.0
+
+    def test_candidate_hit_with_retry_wrapper(self, tmp_path):
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        pk = pid.parameter_key()
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        eval_count = [0]
+        retry_count = [0]
+
+        def fake_ev(pk):
+            eval_count[0] += 1
+            return 42.0
+
+        def fake_retry(ev_func, **kw):
+            retry_count[0] += 1
+            return ev_func(kw.get("parameter_key", ""))
+
+        result = run_failure_skip_dry_run_fake_evaluation(
+            db_path, pk, cfg, fake_ev, retry_wrapper=fake_retry,
+        )
+        assert result.would_skip
+        assert result.evaluator_called
+        assert result.retry_called
+        assert eval_count[0] == 1, "evaluator must be called exactly once"
+        assert retry_count[0] == 1, "retry wrapper must be called exactly once"
+        assert result.objective_value == 42.0
+
+    def test_candidate_miss_calls_evaluator_once(self, tmp_path):
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 0.0
+
+        result = run_failure_skip_dry_run_fake_evaluation(
+            db_path, "nonexistent_key", cfg, fake_ev,
+        )
+        assert not result.would_skip
+        assert not result.candidate_found
+        assert result.evaluator_called
+        assert call_count[0] == 1
+
+    def test_xr_blocked_calls_evaluator_once(self, tmp_path):
+        row = {
+            "id": 1,
+            "schema_version": current_schema_version(),
+            "parameter_key": "some_key",
+            "param_names": ["p0"],
+            "param_values": [1.0],
+            "status": "solver_failed",
+            "raw_metrics": {"m1": 1.0},
+            "objective_names": ["m1"],
+            "error_taxonomy": {"original_error": "tree path not found"},
+            "source": None,
+            "run_id": "r1",
+            "created_at": "2026-06-04 00:00:00",
+        }
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 0.0
+
+        result = run_failure_skip_dry_run_fake_evaluation(
+            db_path, "some_key", cfg, fake_ev,
+        )
+        assert not result.would_skip
+        assert result.evaluator_called
+        assert call_count[0] == 1
+
+    def test_enforce_mode_calls_evaluator_once(self, tmp_path):
+        """Enforce mode in FS3.1 still calls evaluator; no skip."""
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        pk = pid.parameter_key()
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=1)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 42.0
+
+        result = run_failure_skip_dry_run_fake_evaluation(db_path, pk, cfg, fake_ev)
+        assert result.evaluator_called
+        assert call_count[0] == 1, "enforce mode must not skip evaluator in FS3.1"
+
+    def test_no_db_write_by_harness(self, tmp_path):
+        """Harness does not write any DB rows."""
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        pk = pid.parameter_key()
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        def fake_ev(pk):
+            return 42.0
+
+        # Count rows before
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        before = conn.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn.close()
+
+        result = run_failure_skip_dry_run_fake_evaluation(db_path, pk, cfg, fake_ev)
+
+        # Count rows after
+        conn2 = sqlite3.connect(db_path)
+        after = conn2.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn2.close()
+
+        assert before == after, "harness must not write DB rows"
+        assert result.evaluator_called
+
+    def test_harness_includes_dry_run_diagnostics(self, tmp_path):
+        """Harness result includes would_skip and diagnostics."""
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        pk = pid.parameter_key()
+        db_path = _seed_db(tmp_path, [_solver_failed_row([1.0], 1)])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+
+        def fake_ev(pk):
+            return 42.0
+
+        result = run_failure_skip_dry_run_fake_evaluation(db_path, pk, cfg, fake_ev)
+        assert result.parameter_key == pk
+        assert result.would_skip
+        assert result.candidate_found
+        assert result.candidate_decision is not None
+        assert result.evidence_count >= 1

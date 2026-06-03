@@ -133,10 +133,6 @@ def resolve_failure_skip_config(config: dict | None) -> FailureSkipCandidateConf
             f"failure_skip.exact_key_only=False is not supported. "
             f"Region-wide or proximity-based skip is not implemented.",
         )
-        raise ValueError(
-            f"Invalid failure_skip.mode={mode!r}. "
-            f"Allowed: {sorted(_VALID_MODES)}",
-        )
 
     return FailureSkipCandidateConfig(
         enabled=True,

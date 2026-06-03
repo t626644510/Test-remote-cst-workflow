@@ -207,3 +207,102 @@ def evaluate_failure_skip_dry_run_for_keys(
         decisions=tuple(decisions),
         by_decision=dict(by_decision),
     )
+
+
+# ===================================================================
+# Fake-runtime dry-run harness (FS3.1)
+# ===================================================================
+
+
+@dataclass(frozen=True)
+class FakeEvaluationResult:
+    """Result of a fake dry-run evaluation.
+
+    Parameters
+    ----------
+    parameter_key : str or None
+    evaluator_called : bool
+        Whether the fake evaluator was called.
+    retry_called : bool
+        Whether a retry wrapper was called (if configured).
+    objective_value : float or None
+        The return value of the fake evaluator.
+    would_skip : bool
+        Dry-run would_skip diagnosis.
+    candidate_found : bool
+    candidate_decision : str or None
+    evidence_count : int
+    diagnostics : Mapping
+    """
+    parameter_key: str | None = None
+    evaluator_called: bool = False
+    retry_called: bool = False
+    objective_value: float | None = None
+    would_skip: bool = False
+    candidate_found: bool = False
+    candidate_decision: str | None = None
+    evidence_count: int = 0
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+
+
+def run_failure_skip_dry_run_fake_evaluation(
+    db_path: str | Path,
+    parameter_key: str,
+    config: FailureSkipCandidateConfig,
+    evaluator: callable,
+    retry_wrapper: callable | None = None,
+) -> FakeEvaluationResult:
+    """Run a fake dry-run evaluation that always calls the evaluator.
+
+    This is a **no-CST test helper only**.  It does not call the real
+    CST-based evaluator, retry runtime, or optimizer.
+
+    Parameters
+    ----------
+    db_path : str or Path
+        Path to the durable evaluation DB.
+    parameter_key : str
+        The proposed parameter key.
+    config : FailureSkipCandidateConfig
+        Resolved skip candidate config.
+    evaluator : callable
+        Fake evaluator ``f(x) -> float``.  Called unconditionally.
+    retry_wrapper : callable or None
+        If provided, ``retry_wrapper(evaluator, **kwargs)`` is called
+        instead of direct ``evaluator()``.
+
+    Returns
+    -------
+    FakeEvaluationResult
+    """
+    # Dry-run decision
+    decision = evaluate_failure_skip_dry_run_for_key(db_path, parameter_key, config)
+
+    # Call evaluator unconditionally
+    evaluator_called = False
+    retry_called = False
+    objective_value = None
+
+    if retry_wrapper is not None:
+        # Call through retry wrapper
+        obj_val = retry_wrapper(evaluator, parameter_key=parameter_key)
+        evaluator_called = True
+        retry_called = True
+        objective_value = float(obj_val) if obj_val is not None else None
+    else:
+        # Call evaluator directly
+        obj_val = evaluator(parameter_key)
+        evaluator_called = True
+        objective_value = float(obj_val) if obj_val is not None else None
+
+    return FakeEvaluationResult(
+        parameter_key=parameter_key,
+        evaluator_called=evaluator_called,
+        retry_called=retry_called,
+        objective_value=objective_value,
+        would_skip=decision.would_skip,
+        candidate_found=decision.candidate_found,
+        candidate_decision=decision.candidate_decision,
+        evidence_count=decision.evidence_count,
+        diagnostics=dict(decision.diagnostics) if decision.diagnostics else {},
+    )

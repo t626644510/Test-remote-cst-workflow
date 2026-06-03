@@ -281,3 +281,83 @@ This document defines the design for DB-backed optimizer warm-start. Key propert
 - **No failure reuse, no probably-infeasible skip, no raw-only default**.
 
 Next phase: **WS2** — implement the DB prior loader with full no-CST test coverage.
+
+---
+
+## Duplicate semantics with success reuse
+
+DB warm-start priors and DB success reuse are separate mechanisms:
+
+- **Warm-start priors** are optimizer observations that seed the surrogate model. They do NOT mark a parameter point as "already evaluated" — the optimizer may still propose the same point during optimization.
+- **Success reuse** skips the CST evaluation when the optimizer proposes a point that already has an eligible SUCCESS row in the DB. This requires `success_reuse.enabled=true`.
+- Future WS3 should avoid duplicate initial samples where the optimizer API supports it (i.e., not re-adding priors as initial candidates). This must not imply runtime DB success reuse.
+- If the optimizer later proposes a point that was used as a warm-start prior, the CST evaluation will still run normally UNLESS `success_reuse.enabled=true` and the point matches an eligible SUCCESS row.
+
+---
+
+## Validation commands and results
+
+```powershell
+python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.py
+→ Compiles OK.
+
+pytest tests/workflows/test_rfgun_sao_imports.py --tb=short
+→ 230 passed
+
+pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short
+→ 12 passed
+
+Total: 242 passed, 1 pre-existing warning.
+```
+
+---
+
+## Protected areas checklist
+
+| Area | Status |
+|------|--------|
+| `workflows/rfgun_single_pass/` | **Not modified** |
+| `run_workflow_1.py` | **Not modified** |
+| `src/cst_optimization/` | **Not modified** |
+| `workflows/rfgun_sao/config.yaml` default behaviour | **Not modified** |
+| `workflows/rfgun_sao/workflow.py` | **Not modified** |
+| `workflows/rfgun_sao/evaluation_success_reuse.py` | **Not modified** |
+| `cst_optimization.factory` | **Not imported** |
+| `cst_optimization.workflows.recovery` | **Not imported** |
+
+---
+
+## Explicit statements
+
+| Statement | Status |
+|-----------|--------|
+| Live CST run | ❌ Not run |
+| Runtime code modified | ❌ Not modified |
+| Default config changed | ❌ Not changed |
+| `config.local.yaml` committed | ❌ Not committed |
+| Generated artifacts committed | ❌ Not committed |
+| DB warm-start implemented | ❌ Design only |
+| Success reuse implied by warm-start | ❌ No cross-implied enable |
+| JSONL sidecar as warm-start source | ❌ Not allowed |
+| Failure reuse | ❌ Not implemented |
+| probably-infeasible skip | ❌ Not used |
+
+---
+
+## Artifacts check
+
+| Artifact | Generated | Committed |
+|----------|-----------|-----------|
+| `config.local.yaml` | Pre-existing | **Not committed** |
+| `*.jsonl` | No | N/A |
+| `*.ckpt` | No | N/A |
+| `*.sqlite` / `*.db` | No | N/A |
+| Logs | No | N/A |
+| CST output dirs | No | N/A |
+| Temporary scripts | **Not created** | N/A |
+
+---
+
+## Final HEAD commit SHA
+
+**To be confirmed by reviewer.**

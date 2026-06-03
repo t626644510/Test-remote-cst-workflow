@@ -7,9 +7,10 @@
 consolidating legacy Workflow 3 SAO capabilities.
 
 **Default runtime remains validated single-pass.**  The root shim
-``run_workflow_1.py`` still points to ``rfgun_single_pass`` and is
-intentionally not repointed during consolidation.  ``rfgun_sao`` only runs
-explicitly via ``python -m workflows.rfgun_sao.run``.
+``run_workflow_1.py`` was repointed to ``workflows.rfgun_sao.run`` at Phase S.
+S1/T live validation confirmed correct operation.  The legacy
+``workflows.rfgun_single_pass`` package remains available but the root shim
+no longer targets it.  Rollback is available via ``git revert 76ac3bf``.
 
 ---
 
@@ -268,12 +269,14 @@ python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.yaml
 python -m workflows.rfgun_sao.run --config workflows/rfgun_sao/config.local.yaml
 ```
 
-### DO NOT use ``run_workflow_1.py`` for rfgun_sao
+### Using ``run_workflow_1.py``
 
-The root entry point ``run_workflow_1.py`` still delegates to
-``workflows.rfgun_single_pass`` and is **intentionally not repointed** during
-consolidation.  Always use ``python -m workflows.rfgun_sao.run`` to run the
-consolidated workflow.
+The root entry point ``run_workflow_1.py`` was repointed from
+``workflows.rfgun_single_pass`` to ``workflows.rfgun_sao.run`` at Phase S
+(commit ``76ac3bf``).  It now runs the consolidated workflow by default.
+Both ``python run_workflow_1.py`` and ``python -m workflows.rfgun_sao.run``
+use the same underlying evaluator and config.  Rollback is available via
+``git revert 76ac3bf``.
 
 ---
 

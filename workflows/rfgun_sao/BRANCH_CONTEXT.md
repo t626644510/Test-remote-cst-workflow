@@ -31,7 +31,7 @@ pytest tests/workflows/test_rfgun_single_pass_imports.py -v --tb=short
 pytest tests/workflows/test_rfgun_sao_imports.py -v --tb=short
 ```
 
-## Phase A 鈥?Two-pass orchestration and checkpoint (A1鈥揂25.1)
+## Phase A 鈥?Two-pass orchestration and checkpoint (A1鈥旀弬25.1)
 
 See `reports/restructure_plan/` for detail.  Milestone summary:
 
@@ -69,8 +69,8 @@ See `reports/restructure_plan/` for detail.  Milestone summary:
   explicit opt-in** via ``logging.evaluation_records.enabled: true``.
 - ``resolve_records_config`` reads ``logging.evaluation_records`` config key.
 - Default config keeps JSONL **disabled**; JSONL is **not** a recovery source.
-- ``single_pass`` + JSONL enabled 鈫?core-only C2 fallback.
-- ``two_pass`` + JSONL enabled 鈫?enriched diagnostics/gate_results callback (C3).
+- ``single_pass`` + JSONL enabled 閳?core-only C2 fallback.
+- ``two_pass`` + JSONL enabled 閳?enriched diagnostics/gate_results callback (C3).
 - Each evaluation increments exactly once; iteration starts at 0.
 
 ### Known caveats
@@ -109,9 +109,9 @@ b) Phase C docs/report consolidation (if needed).
 
 ### Authoritative behaviour
 
-- Normal completion and first Ctrl+C 鈫?`finally` block runs
+- Normal completion and first Ctrl+C 閳?`finally` block runs
   `_cleanup_workflow_connection` as before.
-- Second Ctrl+C 鈫?`_handle_sigint_event` runs
+- Second Ctrl+C 閳?`_handle_sigint_event` runs
   `_cleanup_workflow_connection(force=True)` best-effort before
   `_os._exit(130)`.  If cleanup raises, a warning is logged and
   hard-exit proceeds.
@@ -173,7 +173,7 @@ b) Move on to other non-live hardening or documentation work.
 
 ### Migration constraints
 
-- Staged search (F鈥揑), adaptive bounds (G鈥揑), and evaluation database helpers (J鈥揕) exist as **no-CST helpers and opt-in runtime wiring only**; durable DB, live CST runtime validation, and retry remain future.
+- Staged search (F鈥旀彂), adaptive bounds (G鈥旀彂), and evaluation database helpers (J鈥旀彆) exist as **no-CST helpers and opt-in runtime wiring only**; durable DB, live CST runtime validation, and retry remain future.
 - JSONL diagnostic sidecar (Phase C) remains **diagnostic-only** and must not be promoted to a recovery source.
 - The future evaluation database (Phase J+) is a **separate explicit opt-in concept** and is not equivalent to the JSONL sidecar.
 - Do **not** import ``cst_optimization.workflows.recovery``; do **not** copy legacy ``RecoveryWorkflowEvaluator``.
@@ -227,7 +227,7 @@ The following capabilities remain **not implemented** and are separately gated f
 
 These are explicitly **not part of this consolidation** and should be planned as independent future phases.
 
-## Phase B 鈥?Metric roles and gate (B1鈥揃9) 鈥?**CLOSED**
+## Phase B 鈥?Metric roles and gate (B1鈥旀弮9) 鈥?**CLOSED**
 
 ### Completed
 
@@ -261,7 +261,7 @@ These are explicitly **not part of this consolidation** and should be planned as
   helpers (`compute_gate_pass`, `compute_gate_results`, `summarize_gate_results`);
   excluded from `objective_names`, checkpoint arrays, and `compute_role_penalties`;
   **runtime candidate rejection wired** in two-pass evaluator;
-  **live CST validated** (B9): q0 raw=18630.8 vs threshold=999999999 鈫?fail,
+  **live CST validated** (B9): q0 raw=18630.8 vs threshold=999999999 閳?fail,
   `error="gate_reject:q0_gate"`, Best F=1.0, cleanup closed=True.
 
 ### Live evidence
@@ -270,7 +270,7 @@ These are explicitly **not part of this consolidation** and should be planned as
 |-------|--------|------------------|
 | B5 (role metrics) | -17534.24 | optimize + threshold in objective (5 of 7 metrics); report_only diagnostics logged with `report_as` aliases; threshold penalty formula verified |
 | B5.1 (shutdown) | 鈥?| `CST cleanup: attempted=True closed=True pid=50700`; no DE window left open after run |
-| B9 (gate rejection) | 1.0 | q0 raw=18630.8 vs threshold=999999999 greater_than 鈫?`q0_gate=False`; `error="gate_reject:q0_gate"`; objective/checkpoint arrays exclude gate; cleanup closed=True pid=59364 |
+| B9 (gate rejection) | 1.0 | q0 raw=18630.8 vs threshold=999999999 greater_than 閳?`q0_gate=False`; `error="gate_reject:q0_gate"`; objective/checkpoint arrays exclude gate; cleanup closed=True pid=59364 |
 
 ### Known caveats
 
@@ -285,4 +285,5 @@ These are explicitly **not part of this consolidation** and should be planned as
 ### Next possible directions
 
 a) Additional live CST regression smoke (only when explicitly requested).
+
 

@@ -46,6 +46,68 @@ from workflows.rfgun_sao.types import (
     EvaluationStatus as _ES,
 )
 
+# ---- Retry runtime helpers (no-CST pure functions) -----------------------
+
+
+def _is_retry_runtime_smoke_injection_enabled(config, environ=None):
+    """Check RW3 smoke injection hook gating."""
+    if config is None:
+        return False
+    if environ is None:
+        import os
+        environ = os.environ
+    cfg_smoke = config.get("retry_runtime", {}).get("smoke_injection", False)
+    env_set = environ.get("WF1_SAO_ALLOW_RETRY_RUNTIME_SMOKE_INJECTION", "") == "1"
+    return bool(cfg_smoke and env_set)
+
+
+def _is_retry_runtime_tier2_smoke_enabled(
+    config: dict | None,
+    environ: dict[str, str] | None = None,
+) -> bool:
+    """Check whether RCR3 synthetic tier-2 recovery smoke should fire.
+
+    Requires BOTH:
+    1. ``config["retry_runtime"]["synthetic_tier2_recovery_smoke"]`` is True.
+    2. Environment ``WF1_SAO_ALLOW_RCR_TIER2_SMOKE=1``.
+    """
+    if config is None:
+        return False
+    if environ is None:
+        environ = os.environ
+    cfg_val = config.get("retry_runtime", {}).get("synthetic_tier2_recovery_smoke", False)
+    env_val = environ.get("WF1_SAO_ALLOW_RCR_TIER2_SMOKE", "") == "1"
+    return bool(cfg_val and env_val)
+
+
+def _extract_retry_penalty_values(final_record, metric_names):
+    """Extract penalty values from retry runtime final_record diagnostics."""
+    if final_record is None:
+        return None
+    rp = getattr(final_record, "raw_payload", None)
+    if rp is None:
+        return None
+    diag = getattr(rp, "diagnostics", None) or {}
+    pen_values = diag.get("__retry_penalty__")
+    if pen_values is None:
+        return None
+    import numpy as np
+    return np.array([pen_values.get(n, 1.0) for n in metric_names], dtype=float)
+
+
+def _build_retry_runtime_checkpoint_payload(final_record, x_phys, metric_names, penalties_arr, ok, err):
+    """Build checkpoint callback args from a retry runtime final_record."""
+    if final_record is None:
+        import numpy as np
+        raw_arr = np.full(len(metric_names), np.nan, dtype=float)
+    else:
+        rp = getattr(final_record, "raw_payload", None)
+        raw_metrics = getattr(rp, "raw_metrics", None) or {}
+        import numpy as np
+        raw_arr = np.array([raw_metrics.get(n, np.nan) for n in metric_names], dtype=float)
+    return (x_phys, raw_arr, penalties_arr, ok, err)
+
+
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_sao.evaluator import Workflow1Evaluator
 from workflows.rfgun_sao.gates import FrequencyGate, S11DepthGate, MultiDipDetector
@@ -235,6 +297,7 @@ def build_workflow_1(
         workflow._params = param_set
         workflow._conn = cst_conn
         workflow._retry_handler = None
+        workflow._retry_connection_registry = None
         workflow.objective_names = metric_names
         workflow.report_metric_names = report_names
         workflow.metric_specs = specs
@@ -336,6 +399,57 @@ def build_workflow_1(
     _post_eval_recovery = (eval_cfg.get("post_eval_recovery", "") or "").strip().lower()
 
     # ---------------------------------------------------------------
+    # Retry runtime config (RW3)
+    # ---------------------------------------------------------------
+    from workflows.rfgun_sao.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
+    _retry_runtime_cfg, _rt_diag = _check_mutex(config, logger=_logger)
+    if _rt_diag:
+        _logger.warning("Retry runtime disabled: %s", _rt_diag)
+    # Retry runtime registry and recovery callback (RCR2)
+    _retry_runtime_recovery: Any = None
+    _retry_runtime_registry: Any = None
+    if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
+        from workflows.rfgun_sao.retry_runtime_cst import (
+            CstConnectionRegistry,
+            build_record_from_evaluation_result,
+            make_cst_recovery_callback,
+            make_cst_retry_evaluate_once,
+        )
+        from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
+        from workflows.rfgun_sao.evaluation_database_schema import (
+            EvaluationDatabaseStatus as _EDS,
+            ParameterIdentity,
+            current_schema_version,
+        )
+        def _retry_connection_factory():
+            """Create a new CST connection for retry recovery."""
+            new_conn = CSTConnection(library_path, mode="new")
+            new_conn.connect()
+            new_conn.set_quiet_mode(True)
+            return new_conn
+
+        _retry_runtime_registry = CstConnectionRegistry()
+        # Track the initial CST connection so it is closed via
+        # registry.close_all(force) on tier-2 recovery or final cleanup.
+        if conn is not None:
+            _retry_runtime_registry.track(conn)
+        _retry_runtime_recovery = make_cst_recovery_callback(
+            connection_factory=_retry_connection_factory,
+            evaluator=wf1_evaluator,
+            registry=_retry_runtime_registry,
+            logger=_logger,
+        )
+        _logger.info("Workflow 1 retry runtime: enabled (max_tier=%d)", _retry_runtime_cfg.max_tier)
+
+    # RW3 synthetic validation hook: env-var + config gated
+    _smoke_injection_enabled: bool = _is_retry_runtime_smoke_injection_enabled(config)
+    _smoke_already_injected: list[bool] = [False]
+
+    # RCR3 synthetic tier-2 recovery smoke: config + env gated
+    _tier2_smoke_enabled: bool = _is_retry_runtime_tier2_smoke_enabled(config)
+    _tier2_smoke_consumed: list[bool] = [False]
+
+    # ---------------------------------------------------------------
     # SAO evaluator wrapper
     # ---------------------------------------------------------------
     opt_cfg = config.get("optimization", {})
@@ -382,6 +496,121 @@ def build_workflow_1(
 
             return float(np.dot(penalties_arr, weights))
 
+        # --- Retry runtime path (RW3) ---
+        if _retry_runtime_cfg is not None and _retry_runtime_cfg.enabled:
+            # RW3 synthetic smoke injection: inject one initial SOLVER_FAILED
+            # to exercise the retry loop without needing an actual CST failure.
+            if _smoke_injection_enabled and not _smoke_already_injected[0]:
+                _smoke_already_injected[0] = True
+                _logger.info(
+                    "Retry runtime smoke: injecting synthetic SOLVER_FAILED "
+                    "for iteration %d", iteration,
+                )
+                raw = {n: np.nan for n in metric_names}
+                pen = {n: 1.0 for n in metric_names}
+                ok = False
+                status = _ES.SOLVER_FAILED
+                err = "Synthetic SOLVER_FAILED for retry runtime smoke test"
+            else:
+                raw, pen, ok, status, err = wf1_evaluator.evaluate_single_pass(
+                    dict(zip(param_names, x_phys)), iteration,
+                )
+
+            if status == _ES.SUCCESS:
+                # No retry needed �?use directly
+                penalties_arr = np.array(
+                    [pen.get(n, 1.0) for n in metric_names], dtype=float,
+                )
+                if checkpoint_callback is not None:
+                    raw_arr = np.array(
+                        [raw.get(n, np.nan) for n in metric_names], dtype=float,
+                    )
+                    checkpoint_callback(x_phys, raw_arr, penalties_arr, ok, err)
+                return float(np.dot(penalties_arr, weights))
+
+            # Initial evaluation failed �?build record and consider retry
+            pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
+            eval_result = EvaluationResult(
+                status=status, error=err,
+                raw_metrics=dict(raw),
+                objective_values={n: raw.get(n, np.nan) for n in metric_names},
+                penalty_values=dict(pen),
+            )
+            initial_record = build_record_from_evaluation_result(
+                pid, eval_result, retry_count=0,
+            )
+
+            # Run retry loop
+            evaluate_once = make_cst_retry_evaluate_once(
+                wf1_evaluator, param_names=list(param_names),
+            )
+
+            # RCR3 synthetic tier-2 recovery smoke: inject a second
+            # synthetic failure on the first retry attempt so that
+            # the recovery callback is exercised at tier 2.  Only
+            # fires once and only when explicitly enabled.
+            if _tier2_smoke_enabled and not _tier2_smoke_consumed[0]:
+                _tier2_smoke_consumed[0] = True
+                _real_evaluate_once = evaluate_once
+
+                def _tier2_smoke_evaluate_once(tier, record):
+                    _logger.info(
+                        "RCR3 tier-2 smoke: injecting synthetic SOLVER_FAILED "
+                        "for retry attempt (tier=%d)", tier,
+                    )
+                    # Return a synthetic SOLVER_FAILED record that preserves
+                    # parameter identity and advances retry_count.
+                    syn_rec = EvaluationDatabaseRecord(
+                        parameter_identity=record.parameter_identity,
+                        status=_EDS.SOLVER_FAILED,
+                        retry_count=record.retry_count + 1,
+                        error_taxonomy={
+                            "original_error": "RCR3 tier-2 synthetic failure",
+                            "original_status": "solver_failed",
+                        },
+                    )
+                    return syn_rec
+
+                # Return the synthetic failure for the first call,
+                # then delegate to the real adapter for all subsequent calls.
+                _tier2_call_count = [0]
+
+                def _wrapped_evaluate_once(tier, record):
+                    if _tier2_call_count[0] == 0:
+                        _tier2_call_count[0] += 1
+                        return _tier2_smoke_evaluate_once(tier, record)
+                    return _real_evaluate_once(tier, record)
+
+                evaluate_once = _wrapped_evaluate_once
+                _logger.info("RCR3 tier-2 recovery smoke: wrapped evaluate_once")
+            retry_result = run_retry_loop_no_cst(
+                initial_record=initial_record,
+                evaluate_once=evaluate_once,
+                config=_retry_runtime_cfg,
+                current_schema=current_schema_version(),
+                recovery_callback=_retry_runtime_recovery,
+            )
+
+            # Use final result — extract penalty or fall back to all-ones
+            fr = retry_result.final_record
+            pen_arr = _extract_retry_penalty_values(fr, metric_names) if retry_result.succeeded else None
+            if pen_arr is not None:
+                penalties_arr = pen_arr
+                ok = True
+                err = ""
+            else:
+                penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
+                ok = False
+            # Checkpoint records final result only (never intermediate attempts)
+            if checkpoint_callback is not None:
+                cp_args = _build_retry_runtime_checkpoint_payload(
+                    fr, x_phys, metric_names, penalties_arr, ok, err,
+                )
+                checkpoint_callback(*cp_args)
+
+            return float(np.dot(penalties_arr, weights))
+
+        # --- Plain single_pass path (no retry) ---
         raw, pen, ok, status, err = wf1_evaluator.evaluate_single_pass(
             dict(zip(param_names, x_phys)), iteration,
         )
@@ -408,6 +637,7 @@ def build_workflow_1(
     workflow._params = param_set
     workflow._conn = conn
     workflow._retry_handler = retry_handler
+    workflow._retry_connection_registry = _retry_runtime_registry
     workflow.objective_names = metric_names
     workflow.report_metric_names = report_names
     workflow.metric_specs = specs

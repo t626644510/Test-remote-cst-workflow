@@ -92,10 +92,11 @@ class TestPayloadValidation:
         payload = EvaluationSkipRecordPayload(
             parameter_key="abc123",
             source_row_ids=(1, 2),
+            evidence_count=2,
             skip_reason="2 solver failures at same key",
         )
         valid, reasons = validate_skip_record_payload(payload)
-        assert valid
+        assert valid, reasons
         assert len(reasons) == 0
 
     def test_missing_parameter_key_invalid(self):
@@ -157,7 +158,7 @@ class TestPayloadValidation:
 class TestDBFieldMapping:
     def test_maps_status_and_source(self):
         payload = EvaluationSkipRecordPayload(
-            parameter_key="abc", source_row_ids=(1,), skip_reason="test",
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1, skip_reason="test",
         )
         fields = build_skip_record_db_fields(payload)
         assert fields["status"] == SKIPPED_FAILURE_REUSE
@@ -179,7 +180,7 @@ class TestDBFieldMapping:
 
     def test_maps_error_taxonomy(self):
         payload = EvaluationSkipRecordPayload(
-            parameter_key="abc", source_row_ids=(1,),
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1,
             skip_reason="test", failure_taxonomy_version=1,
             environment_fault_flag=False,
         )
@@ -190,7 +191,7 @@ class TestDBFieldMapping:
 
     def test_no_fabricated_success_metrics(self):
         payload = EvaluationSkipRecordPayload(
-            parameter_key="abc", source_row_ids=(1,), skip_reason="test",
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1, skip_reason="test",
         )
         fields = build_skip_record_db_fields(payload)
         assert fields["raw_metrics"] is None
@@ -262,3 +263,114 @@ class TestGlobalSafety:
         forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+# ===================================================================
+# SE1.1 payload validation hardening
+# ===================================================================
+
+
+class TestSE11Hardening:
+    """Extended validation checks for skip record payload."""
+
+    def test_missing_skip_reason_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1,
+            skip_reason="",
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "skip_reason_required" in reasons
+
+    def test_evidence_count_zero_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1,), evidence_count=0,
+            skip_reason="test",
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "evidence_count_required_for_enforce_skip" in reasons
+
+    def test_evidence_count_mismatch_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1, 2), evidence_count=3,
+            skip_reason="test",
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "evidence_count_source_row_ids_mismatch" in reasons
+
+    def test_budget_consumed_true_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test", budget_consumed=True,
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "budget_consumed_must_be_false_for_enforce_skip" in reasons
+
+    def test_skip_decision_not_enforced_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test", skip_decision="would_skip",
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "skip_decision_must_be_enforced_skip" in reasons
+
+    def test_skip_policy_version_zero_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test", skip_policy_version=0,
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert not valid
+        assert "skip_policy_version_must_be_positive" in reasons
+
+    def test_valid_payload_evidence_count_matches(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1, 2),
+            evidence_count=2, skip_reason="2 failures at same key",
+        )
+        valid, reasons = validate_skip_record_payload(payload)
+        assert valid, reasons
+        assert len(reasons) == 0
+
+    def test_mapper_validates_and_raises_on_invalid(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="",  # missing
+            source_row_ids=(1,), evidence_count=1, skip_reason="test",
+        )
+        with pytest.raises(ValueError, match="Cannot build DB fields from invalid payload"):
+            build_skip_record_db_fields(payload)
+
+    def test_mapper_valid_for_valid_payload(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1, 2),
+            evidence_count=2, skip_reason="test",
+        )
+        fields = build_skip_record_db_fields(payload)
+        assert fields["status"] == SKIPPED_FAILURE_REUSE
+        assert fields["source"] == "failure_skip_enforce"
+
+    def test_mapper_includes_all_audit_fields(self):
+        payload = EvaluationSkipRecordPayload(
+            parameter_key="abc", source_row_ids=(1, 2),
+            source_run_ids=("r1", "r2"),
+            evidence_count=2, skip_reason="test",
+            failure_taxonomy_version=1,
+            operator_override_id="op_1",
+        )
+        fields = build_skip_record_db_fields(payload)
+        diag = fields["diagnostics"]
+        assert diag["skip_reason"] == "test"
+        assert diag["evidence_count"] == 2
+        assert diag["source_row_ids"] == [1, 2]
+        assert diag["source_run_ids"] == ["r1", "r2"]
+        assert diag["evaluator_called"] is False
+        assert diag["retry_called"] is False
+        assert diag["budget_consumed"] is False
+        et = fields["error_taxonomy"]
+        assert et["environment_fault_flag"] is False
+        prov = fields["provenance"]
+        assert prov["operator_override_id"] == "op_1"

@@ -193,3 +193,45 @@ implement `write_failure_skip_synthetic_row()` for the durable DB.
 
 Then **FS5 — bounded live exact-key skip smoke** only after explicit
 operator approval and adequate DB recording.
+
+---
+
+## SE1.1 — skip record payload audit validation hardening
+
+### Changes
+
+1. **`validate_skip_record_payload()`** — added 6 new checks:
+   - `skip_reason` required (non-empty)
+   - `evidence_count` must be positive
+   - `evidence_count` must match `len(source_row_ids)` when source rows present
+   - `budget_consumed` must be `False`
+   - `skip_decision` must be `"enforced_skip"`
+   - `skip_policy_version` must be positive
+
+2. **`build_skip_record_db_fields()`** — now validates payload internally via
+   `validate_skip_record_payload()` and raises `ValueError` if invalid.
+
+### Tests
+
+Test count grew from **29** (SE1) to **39** (SE1.1).
+
+| Class | Tests | New |
+|-------|-------|-----|
+| `TestSE11Hardening` | 10 | Missing skip_reason, evidence_count=0, evidence/source mismatch, budget_consumed=True, wrong decision, policy_version=0, valid match, mapper raises on invalid, mapper valid, mapper includes all audit fields |
+
+### Validation
+
+```
+pytest tests/workflows/test_rfgun_sao_evaluation_database_schema_extension.py --tb=short
+-- 39 passed
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **No** |
+| Real runtime wiring | **No** |
+| Production DB migration | **No** |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |

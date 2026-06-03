@@ -155,6 +155,15 @@ def validate_skip_record_payload(
     if not payload.parameter_key:
         reasons.append("parameter_key_required")
 
+    if not payload.skip_reason or not payload.skip_reason.strip():
+        reasons.append("skip_reason_required")
+
+    if payload.evidence_count <= 0:
+        reasons.append("evidence_count_required_for_enforce_skip")
+
+    if payload.source_row_ids and payload.evidence_count != len(payload.source_row_ids):
+        reasons.append("evidence_count_source_row_ids_mismatch")
+
     if not payload.source_row_ids and payload.skip_decision == "enforced_skip":
         reasons.append("source_row_ids_required_for_enforce_skip")
 
@@ -166,6 +175,15 @@ def validate_skip_record_payload(
 
     if payload.retry_called:
         reasons.append("retry_called_must_be_false_for_enforce_skip")
+
+    if payload.budget_consumed:
+        reasons.append("budget_consumed_must_be_false_for_enforce_skip")
+
+    if payload.skip_decision != "enforced_skip":
+        reasons.append("skip_decision_must_be_enforced_skip")
+
+    if payload.skip_policy_version <= 0:
+        reasons.append("skip_policy_version_must_be_positive")
 
     if payload.skip_mode not in ("enforce",):
         reasons.append(f"skip_mode_must_be_enforce_got_{payload.skip_mode!r}")
@@ -194,7 +212,17 @@ def build_skip_record_db_fields(
     -------
     dict
         Fields matching the evaluation_records table schema.
+
+    Raises
+    ------
+    ValueError
+        If payload validation fails.
     """
+    valid, reasons = validate_skip_record_payload(payload)
+    if not valid:
+        raise ValueError(
+            f"Cannot build DB fields from invalid payload: {', '.join(reasons)}",
+        )
     return {
         "id": None,
         "schema_version": 1,

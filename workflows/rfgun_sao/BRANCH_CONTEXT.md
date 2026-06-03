@@ -63,17 +63,16 @@ Future feature tracks are independently planned on separate branches.
 | DB-backed success reuse | `feature/wf1-db-success-reuse` | SR4.1 | `b532856` |
 | DB warm-start | `feature/wf1-db-warm-start` | WS4 | `b6538f2` |
 
-All merged into `main` at `0a33148` on 2026-06-04 via sequential no-ff merges.
+All merged into `main` (final feature-merge commit `0a33148`, MH2 report commit `02106ea`) on 2026-06-04 via sequential no-ff merges.
 `.claude/settings.local.json` removed from tracking as part of hygiene.
+Remote branches archived in MH3.
 
-#### Future planned tracks
+#### Future planned tracks (post-merge)
 
 - Failure reuse -- last track, advisory-first
-- Broader production campaigns (beyond 9 evals)
-
-- Phase O/O1 retry runtime CST wiring -- no-CST callback-only skeleton
-- Failure reuse -- last track, advisory-first
-- Broader production campaigns (beyond 9 evals)
+- Probably-infeasible remains advisory only; not used for skip/reuse/runtime discard
+- Destructive OS-level COM kill / fault injection -- separately approved only
+- Broader production campaigns (beyond 9 evals) -- optional, not required by default
 
 ### DB warm-start phases (WS track)
 
@@ -88,6 +87,7 @@ All merged into `main` at `0a33148` on 2026-06-04 via sequential no-ff merges.
 | WS4 | Bounded live warm-start smoke (conditional, explicit approval) | **Yes** |
 | MH1 | Accepted branch merge hygiene audit / plan | No |
 | MH2 | Sequential accepted branch merge execution / local verified merge | No |
+| MH3 | Archive merged branches / final merge-hygiene cleanup | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

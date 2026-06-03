@@ -1821,7 +1821,7 @@ def test_rfgun_sao_readme_status_current_after_b6():
         / "workflows" / "rfgun_sao" / "README.md"
     )
     text = readme_path.read_text("utf-8")
-    assert "184/184" in text
+    assert "230/230" in text
     assert "A13.4" in text
     assert "A14" in text
     assert "A15" in text

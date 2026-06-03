@@ -223,3 +223,82 @@ per the XR1 approval gate.
 Or, if operator prefers skip policy before destructive live test:
 
 **FS1 — failure skip policy design** (docs-only, advisory).
+
+---
+
+## XR2.1 / XR2.2 — safety hardening and docs cleanup
+
+### Classification hardening
+
+`classify_cst_process()` now requires **exact** process name matching to
+qualify as a kill candidate.  Previously, any CST-like name with a known
+PID would be classified as `KNOWN_DESIGN_ENVIRONMENT` and marked as a
+kill candidate.  Now:
+
+- Allowed DE process names: `CSTDesignEnvironment.exe` only.
+- Known PID + `CSTSolver.exe` → `KNOWN_PID_UNEXPECTED_PROCESS`, protected,
+  not kill candidate.
+- Known PID + `python.exe` → `NON_CST_PROCESS`, ignored.
+- Known PID + `cstd.exe` → `LICENSE_DAEMON_PROTECTED`, always protected.
+- Unknown CST-like process → `UNKNOWN_CST_PROCESS`, protected.
+- Valid active DE with exact name match → `KNOWN_DESIGN_ENVIRONMENT`,
+  kill candidate (unchanged).
+
+### Target selection hardening
+
+`select_destructive_target()` inherits the stricter classification.
+Requested PID with unexpected process name is blocked.  Auto-select
+ignores known connections with unexpected process names.
+
+### Safety summary hardening
+
+`build_xr_safety_summary()` now returns `safe_to_execute_destructive_action=False`
+when `target_selection` is `None`, even if a valid approval exists.
+A valid approval alone is **not** sufficient.
+
+### Emergency cleanup validation hardening
+
+`validate_emergency_cleanup_record()` now returns invalid when
+`allowed_by_approval=False`, with reason
+`emergency_cleanup_not_allowed_by_approval`.
+
+### Removed executable command strings
+
+All ready-to-copy `Stop-Process -Id ...` strings removed from helper
+docstrings and test code, replaced with redacted descriptions
+(`pid_specific_cleanup_redacted`).
+
+### Tests
+
+Test count grew from **46** (XR2) to **55** (XR2.1/XR2.2).
+
+### Validation
+
+```
+python -m compileall workflows/rfgun_sao tests/workflows/test_rfgun_sao_imports.py
+-- Compiles OK.
+
+pytest tests/workflows/test_rfgun_sao_extreme_recovery_safety.py --tb=short
+-- 55 passed
+
+pytest tests/workflows/test_rfgun_sao_imports.py --tb=short
+-- 230 passed, 1 warning
+
+pytest tests/workflows/test_rfgun_single_pass_imports.py --tb=short
+-- 12 passed
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **No** |
+| Destructive action | **No** |
+| taskkill / Stop-Process executed | **No** |
+| Runtime code changed | **No** (helper docstring/report only) |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |
+
+---
+
+## Recommended next phase

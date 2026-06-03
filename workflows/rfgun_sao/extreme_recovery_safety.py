@@ -702,7 +702,7 @@ class EmergencyCleanupRecord:
     target_pid : int or None
         PID that was killed, if a kill action was taken.
     command_summary : str or None
-        Short description of the command used (e.g. ``"Stop-Process -Id 12345"``).
+        Short description of the command used (e.g. ``"pid_specific_cleanup_redacted"``).
     timestamp : str or None
         ISO-format or similar timestamp of the action.
     residual_process_count : int or None

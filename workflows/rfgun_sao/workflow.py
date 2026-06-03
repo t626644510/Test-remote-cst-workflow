@@ -487,6 +487,66 @@ def build_workflow_1(
             _logger.warning("Evaluation DB write failed (non-fatal): %s", exc)
 
     # ---------------------------------------------------------------
+    # Success reuse config (SR3)
+    # ---------------------------------------------------------------
+    from workflows.rfgun_sao.evaluation_success_reuse import (
+        SuccessReuseConfig as _SRConfig,
+        resolve_success_reuse_config as _resolve_sr_cfg,
+        try_success_reuse as _try_success_reuse,
+    )
+    _sr_cfg = _resolve_sr_cfg(
+        config,
+        db_enabled=_evaluation_db is not None,
+    )
+
+    def _try_sr_reuse(x_phys):
+        """Try to reuse a previous SUCCESS result for the given parameters."""
+        if _evaluation_db is None or not _sr_cfg.enabled:
+            return None
+        pid = ParameterIdentity(
+            param_names=list(param_names), values=list(x_phys),
+        )
+        return _try_success_reuse(
+            _evaluation_db, pid, metric_names,
+            config=_sr_cfg, logger=_logger,
+        )
+
+    def _handle_sr_reuse(reuse_result, x_phys):
+        """Process a success reuse hit: compute penalty, checkpoint, DB write."""
+        # Compute penalties from reuse result
+        if reuse_result.penalty_values:
+            penalties_arr = np.array(
+                [reuse_result.penalty_values.get(n, 1.0) for n in metric_names],
+                dtype=float,
+            )
+        else:
+            penalties_arr = np.full(len(metric_names), 1.0, dtype=float)
+        scalar = float(np.dot(penalties_arr, weights))
+
+        # Checkpoint
+        if checkpoint_callback is not None:
+            raw_arr = np.array(
+                [reuse_result.raw_metrics.get(n, np.nan) if reuse_result.raw_metrics else np.nan
+                 for n in metric_names],
+                dtype=float,
+            )
+            checkpoint_callback(x_phys, raw_arr, penalties_arr, True, "")
+
+        # DB write with reuse provenance
+        if _evaluation_db is not None:
+            pid = ParameterIdentity(
+                param_names=list(param_names), values=list(x_phys),
+            )
+            from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
+            rec = build_record_from_evaluation_result(
+                pid, reuse_result,
+                source="db_success_reuse",
+            )
+            _write_eval_db(rec)
+
+        return scalar
+
+    # ---------------------------------------------------------------
     # SAO evaluator wrapper
     # ---------------------------------------------------------------
     opt_cfg = config.get("optimization", {})
@@ -497,6 +557,14 @@ def build_workflow_1(
         _it[0] += 1
 
         if retry_handler is not None:
+            # SR3 success reuse check before legacy retry path
+            if _sr_cfg.enabled:
+                reuse_result = _try_sr_reuse(x_phys)
+                if reuse_result is not None:
+                    return _process_reuse_result(
+                        reuse_result, x_phys, metric_names,
+                        weights, checkpoint_callback, _write_eval_db, _db_run_id,
+                    )
             result, tier = retry_handler.execute(
                 wf1_evaluator.adapt_for_retry, x_phys, iteration,
             )
@@ -547,6 +615,11 @@ def build_workflow_1(
 
         # --- Retry runtime path (RW3) ---
         if _retry_runtime_cfg is not None and _retry_runtime_cfg.enabled:
+            # SR3 success reuse check before retry runtime path
+            if _sr_cfg.enabled:
+                reuse_result = _try_sr_reuse(x_phys)
+                if reuse_result is not None:
+                    return _handle_sr_reuse(reuse_result, x_phys)
             # RW3 synthetic smoke injection: inject one initial SOLVER_FAILED
             # to exercise the retry loop without needing an actual CST failure.
             if _smoke_injection_enabled and not _smoke_already_injected[0]:
@@ -673,6 +746,11 @@ def build_workflow_1(
             return float(np.dot(penalties_arr, weights))
 
         # --- Plain single_pass path (no retry) ---
+        # SR3 success reuse check before plain CST eval
+        if _sr_cfg.enabled:
+            reuse_result = _try_sr_reuse(x_phys)
+            if reuse_result is not None:
+                return _handle_sr_reuse(reuse_result, x_phys)
         raw, pen, ok, status, err = wf1_evaluator.evaluate_single_pass(
             dict(zip(param_names, x_phys)), iteration,
         )

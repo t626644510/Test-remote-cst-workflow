@@ -377,3 +377,72 @@ def reconstruct_evaluation_result(
         diagnostics=diagnostics,
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# Combined lookup + reconstruction for workflow use
+# ---------------------------------------------------------------------------
+
+
+def try_success_reuse(
+    db: Any,
+    parameter_identity: ParameterIdentity | None,
+    metric_names: list[str],
+    *,
+    config: SuccessReuseConfig | None = None,
+    current_schema: int | None = None,
+    logger: Any = None,
+) -> EvaluationResult | None:
+    """Try to reuse a previous SUCCESS result from the evaluation DB.
+
+    Combines ``find_eligible_success_record`` and
+    ``reconstruct_evaluation_result`` into one call for workflow
+    integration.  Returns ``None`` if no eligible record is found or
+    if reconstruction fails.
+
+    Parameters
+    ----------
+    db :
+        Duck-typed ``SQLiteEvaluationDatabase`` (must provide
+        ``query_by_parameter_key``).
+    parameter_identity : ParameterIdentity or None
+        The identity to look up.
+    metric_names : list[str]
+        Current ordered metric names.
+    config : SuccessReuseConfig or None
+        Resolved reuse configuration.
+    current_schema : int or None
+        Expected schema version.
+    logger : logging.Logger or None
+
+    Returns
+    -------
+    EvaluationResult or None
+    """
+    log = logger or _logger
+
+    if config is None or not config.enabled:
+        return None
+
+    row = find_eligible_success_record(
+        db, parameter_identity, metric_names, config,
+        current_schema=current_schema, logger=log,
+    )
+    if row is None:
+        return None
+
+    result = reconstruct_evaluation_result(
+        row, metric_names, config=config, logger=log,
+    )
+    if result is None:
+        return None
+
+    if config.log_decisions:
+        log.info(
+            "Success reuse: hit (key=%s, row_id=%s, run_id=%s)",
+            (parameter_identity.parameter_key()[:8]
+             if parameter_identity else "?"),
+            row.get("id"), row.get("run_id"),
+        )
+
+    return result

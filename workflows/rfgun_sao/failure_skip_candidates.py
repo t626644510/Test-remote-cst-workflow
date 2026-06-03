@@ -127,6 +127,17 @@ def resolve_failure_skip_config(config: dict | None) -> FailureSkipCandidateConf
             f"Allowed: {sorted(_VALID_MODES)}",
         )
 
+    exact_key_only = fs_raw.get("exact_key_only", True)
+    if not bool(exact_key_only):
+        raise ValueError(
+            f"failure_skip.exact_key_only=False is not supported. "
+            f"Region-wide or proximity-based skip is not implemented.",
+        )
+        raise ValueError(
+            f"Invalid failure_skip.mode={mode!r}. "
+            f"Allowed: {sorted(_VALID_MODES)}",
+        )
+
     return FailureSkipCandidateConfig(
         enabled=True,
         mode=mode,
@@ -178,6 +189,7 @@ UNKNOWN_CST_PROCESS_STATE = "unknown_cst_process_state"
 UNKNOWN_EXCEPTION = "unknown_exception"
 TIMEOUT = "timeout"
 TRANSIENT_ENVIRONMENT_FAULT = "transient_environment_fault"
+TIMEOUT = "timeout"
 SOLVER_TIMEOUT = "solver_timeout"
 SOLVER_FAILED_WITHOUT_TAXONOMY = "solver_failed_without_taxonomy"
 MEASUREMENT_EXTRACTION_FAILED = "measurement_extraction_failed"
@@ -277,6 +289,12 @@ def classify_failure_skip_evidence(
     if status == "calibration_failed":
         return CALIBRATION_FAILED
 
+    # Timeout
+    if status == "timeout":
+        return TIMEOUT
+    if status == "solver_timeout":
+        return SOLVER_TIMEOUT
+
     # Solver failed — need taxonomy check
     if status == "solver_failed":
         cls, _ = _check_error_taxonomy(error_taxonomy)
@@ -325,6 +343,12 @@ def is_candidate_evidence_classification(
         return config.allow_objective_extraction_failed
     if classification == PROBABLY_INFEASIBLE_CANDIDATE:
         return True
+    if classification == TIMEOUT:
+        return config.allow_timeout
+    if classification == SOLVER_TIMEOUT:
+        return config.allow_timeout
+    if classification == UNKNOWN_EXCEPTION:
+        return config.allow_unknown_exception
     # Excluded classes
     return False
 
@@ -539,6 +563,13 @@ def load_failure_skip_candidates(
     -------
     FailureSkipCandidateLoadResult
     """
+    # --- exact_key_only enforcement ---
+    if not config.exact_key_only:
+        raise ValueError(
+            "exact_key_only=False is not supported. "
+            "Region-wide or proximity-based skip is not implemented.",
+        )
+
     # --- Early return for disabled ---
     if not config.enabled or config.mode == "disabled":
         return FailureSkipCandidateLoadResult(
@@ -604,7 +635,14 @@ def load_failure_skip_candidates(
             )
             continue
 
-        # Environment fault → blocked by default
+        # XR process-kill always hard-blocked in FS2
+        if cls == XR_PROCESS_KILL:
+            blocked_by_reason["xr_process_kill_hard_blocked"] = (
+                blocked_by_reason.get("xr_process_kill_hard_blocked", 0) + 1
+            )
+            continue
+
+        # Other environment faults blocked by default
         if is_environment_fault_classification(cls) and not config.allow_environment_faults:
             blocked_by_reason["environment_fault"] = (
                 blocked_by_reason.get("environment_fault", 0) + 1

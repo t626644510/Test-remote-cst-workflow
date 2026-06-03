@@ -163,3 +163,56 @@ be deferred until FS4 enforce mode.
 Or, if the policy requires DB audit fields before any runtime integration:
 
 **SE1 — schema extension hooks** before FS3.
+
+---
+
+## FS2.1 — candidate policy hardening
+
+### Changes
+
+1. **`exact_key_only=False` rejected** — both `resolve_failure_skip_config()` and
+   `load_failure_skip_candidates()` now raise `ValueError` if `exact_key_only=False`.
+   Region-wide/proximity skip is not implemented.
+
+2. **Timeout classification** — `status == "timeout"` → `TIMEOUT`,
+   `status == "solver_timeout"` → `SOLVER_TIMEOUT`. Both blocked by default unless
+   `allow_timeout=True`.
+
+3. **Unknown exception candidate** — `UNKNOWN_EXCEPTION` can become candidate
+   evidence only if `allow_unknown_exception=True`. Still requires `min_failures`
+   threshold and exact-key grouping.
+
+4. **XR process-kill hard-blocked** — `XR_PROCESS_KILL` is always blocked regardless
+   of `allow_environment_faults`. COM connection lost and other environment faults
+   remain blocked by default. `allow_environment_faults` is reserved for future use.
+
+### Tests
+
+Test count grew from **37** (FS2) to **48** (FS2.1).
+
+| Class | Tests | New |
+|-------|-------|-----|
+| `TestFS21Hardening` | 11 | exact_key_only rejection (2), timeout classification (4), unknown exception (3), XR/COM hard-blocked (2) |
+
+### Validation
+
+```
+pytest tests/workflows/test_rfgun_sao_failure_skip_candidates.py --tb=short
+-- 48 passed
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **No** |
+| Runtime skip implemented | **No** |
+| DB writes by loader | **No** |
+| Evaluator/retry calls | **No** |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |
+
+### Recommended next phase
+
+**FS3 — runtime dry-run would-skip diagnostics / no-CST**. v1 schema is sufficient
+for dry-run diagnostics.

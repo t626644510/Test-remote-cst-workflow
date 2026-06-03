@@ -75,7 +75,8 @@ Remote branches archived in MH3.
 - XR2.2 -- safety/docs cleanup -- accepted at `18dfc2c`
 - XR3 -- bounded destructive live smoke -- accepted at `5bdf4bc`
 - FS1 -- failure/probably-infeasible skip policy design -- accepted at `5f5bcb7`
-- FS2 -- failure skip candidate loader/no-CST (current track)
+- FS2 -- failure skip candidate loader/no-CST -- accepted at `dc0b702`
+- FS2.1 -- candidate policy hardening (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -104,6 +105,7 @@ Remote branches archived in MH3.
 | XR3 | Bounded destructive live smoke | **Yes** |
 | FS1 | Failure skip policy design | No |
 | FS2 | Failure skip candidate loader / no-CST | No |
+| FS2.1 | Candidate policy hardening | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

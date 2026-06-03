@@ -32,7 +32,10 @@ from workflows.rfgun_sao.failure_skip_candidates import (
     SCHEMA_INCOMPATIBLE,
     SOLVER_FAILED,
     SOLVER_FAILED_WITHOUT_TAXONOMY,
+    SOLVER_TIMEOUT,
     SUCCESS,
+    SUCCESS_REUSE,
+    TIMEOUT,
     SUCCESS_REUSE,
     TRANSIENT_ENVIRONMENT_FAULT,
     UNKNOWN_EXCEPTION,
@@ -369,9 +372,10 @@ class TestDBLoader:
         cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
         result = load_failure_skip_candidates(db_path, cfg)
         assert result.candidate_rows == 0
-        assert result.blocked_by_reason.get("environment_fault", 0) >= 1
+        assert result.blocked_by_reason.get("xr_process_kill_hard_blocked", 0) >= 1
 
-    def test_environment_fault_allowed_when_configured(self, tmp_path):
+    def test_xr_process_kill_hard_blocked_even_if_configured(self, tmp_path):
+        """XR process-kill blocked even when allow_environment_faults=True."""
         row = _make_row(
             status="solver_failed",
             error_taxonomy={"original_error": "tree path not found"},
@@ -382,7 +386,8 @@ class TestDBLoader:
             allow_environment_faults=True,
         )
         result = load_failure_skip_candidates(db_path, cfg)
-        assert result.candidate_rows >= 1
+        assert result.candidate_rows == 0
+        assert result.blocked_by_reason.get("xr_process_kill_hard_blocked", 0) >= 1
 
     def test_classification_counts_reported(self, tmp_path):
         rows = [
@@ -426,6 +431,108 @@ class TestSingleKeyLookup:
         candidate = find_failure_skip_candidate_for_key(db_path, "some_key", cfg)
         assert candidate is None
 
+
+
+
+# ===================================================================
+# FS2.1 hardening
+# ===================================================================
+
+
+class TestFS21Hardening:
+    """FS2.1 policy hardening tests."""
+
+    # --- exact_key_only ---
+
+    def test_exact_key_only_false_resolver_raises(self):
+        """Resolver rejects exact_key_only=False."""
+        with pytest.raises(ValueError, match="exact_key_only=False is not supported"):
+            resolve_failure_skip_config({
+                "evaluation_database": {
+                    "failure_skip": {"enabled": True, "mode": "dry_run", "exact_key_only": False},
+                },
+            })
+
+    def test_exact_key_only_false_loader_raises(self, tmp_path):
+        """Loader rejects exact_key_only=False dataclass."""
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", exact_key_only=False)
+        with pytest.raises(ValueError, match="exact_key_only=False is not supported"):
+            load_failure_skip_candidates("/nonexistent", cfg)
+
+    # --- Timeout classification ---
+
+    def test_timeout_blocked_by_default(self):
+        row = _make_row(status="timeout")
+        assert classify_failure_skip_evidence(row) == TIMEOUT
+        assert not is_candidate_evidence_classification(TIMEOUT, FailureSkipCandidateConfig())
+
+    def test_timeout_allowed_when_configured(self):
+        row = _make_row(status="timeout")
+        assert classify_failure_skip_evidence(row) == TIMEOUT
+        cfg = FailureSkipCandidateConfig(allow_timeout=True)
+        assert is_candidate_evidence_classification(TIMEOUT, cfg)
+
+    def test_solver_timeout_classified_distinctly(self):
+        row = _make_row(status="solver_timeout")
+        cl = classify_failure_skip_evidence(row)
+        assert cl == SOLVER_TIMEOUT
+        assert cl != TIMEOUT
+
+    def test_solver_timeout_blocked_by_default(self):
+        assert not is_candidate_evidence_classification(SOLVER_TIMEOUT, FailureSkipCandidateConfig())
+
+    # --- Unknown exception ---
+
+    def test_unknown_exception_blocked_by_default(self):
+        row = _make_row(status="unknown_weird_error")
+        assert classify_failure_skip_evidence(row) == UNKNOWN_EXCEPTION
+        assert not is_candidate_evidence_classification(UNKNOWN_EXCEPTION, FailureSkipCandidateConfig())
+
+    def test_unknown_exception_allowed_when_configured(self, tmp_path):
+        """unknown status becomes candidate when allow_unknown_exception=True."""
+        row = _make_row(status="weird_error", row_id=1)
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(
+            enabled=True, mode="dry_run", min_failures=1,
+            allow_unknown_exception=True,
+        )
+        result = load_failure_skip_candidates(db_path, cfg)
+        assert result.candidate_rows >= 1
+
+    def test_unknown_exception_still_requires_min_failures(self, tmp_path):
+        """Unknown exception still needs min_failures threshold."""
+        row = _make_row(status="weird_error", row_id=1)
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(
+            enabled=True, mode="dry_run", min_failures=2,
+            allow_unknown_exception=True,
+        )
+        result = load_failure_skip_candidates(db_path, cfg)
+        assert not result.candidates[0].recommended_skip
+        assert any("insufficient_evidence" in r for r in result.candidates[0].blocked_reasons)
+
+    # --- XR process-kill hard-blocked ---
+
+    def test_xr_process_kill_blocked_by_default(self, tmp_path):
+        row = _make_row(
+            status="solver_failed",
+            error_taxonomy={"original_error": "tree path not found"},
+        )
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+        result = load_failure_skip_candidates(db_path, cfg)
+        assert result.candidate_rows == 0
+        assert result.blocked_by_reason.get("xr_process_kill_hard_blocked", 0) >= 1
+
+    def test_com_connection_lost_blocked_by_default(self, tmp_path):
+        row = _make_row(
+            status="solver_failed",
+            error_taxonomy={"original_error": "COM connection issue"},
+        )
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+        result = load_failure_skip_candidates(db_path, cfg)
+        assert result.candidate_rows == 0
 
 # ===================================================================
 # Global safety

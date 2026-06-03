@@ -231,6 +231,7 @@ class ProcessClassification:
 
 LICENSE_DAEMON_PROTECTED = "license_daemon_protected"
 KNOWN_DESIGN_ENVIRONMENT = "known_design_environment"
+KNOWN_PID_UNEXPECTED_PROCESS = "known_pid_unexpected_process"
 UNKNOWN_CST_PROCESS = "unknown_cst_process"
 NON_CST_PROCESS = "non_cst_process"
 INVALID_SNAPSHOT = "invalid_snapshot"
@@ -315,30 +316,44 @@ def classify_cst_process(
                 reason="process name does not appear to be CST-related",
             )
 
-    # 3. Known design environment
+    # 3. Known PID — check process name matches allowed DE names
     conn = _lookup_connection(process.pid, conn_map)
-    if conn is not None and conn.active:
-        return ProcessClassification(
-            pid=process.pid,
-            name=process.name,
-            classification=KNOWN_DESIGN_ENVIRONMENT,
-            protected=False,
-            kill_candidate=True,
-            reason="PID matches active known CST DE connection",
-            matched_connection_label=conn.label,
-        )
-
-    # 4. Known but inactive DE
-    if conn is not None and not conn.active:
-        return ProcessClassification(
-            pid=process.pid,
-            name=process.name,
-            classification=KNOWN_DESIGN_ENVIRONMENT,
-            protected=False,
-            kill_candidate=False,
-            reason="PID matches inactive known CST DE connection (already closed)",
-            matched_connection_label=conn.label,
-        )
+    if conn is not None:
+        # PID matched a known connection; verify the process name
+        if process.name in _ALLOWED_DE_NAMES:
+            if conn.active:
+                return ProcessClassification(
+                    pid=process.pid,
+                    name=process.name,
+                    classification=KNOWN_DESIGN_ENVIRONMENT,
+                    protected=False,
+                    kill_candidate=True,
+                    reason="PID matches active known CST DE connection with allowed process name",
+                    matched_connection_label=conn.label,
+                )
+            else:
+                return ProcessClassification(
+                    pid=process.pid,
+                    name=process.name,
+                    classification=KNOWN_DESIGN_ENVIRONMENT,
+                    protected=False,
+                    kill_candidate=False,
+                    reason="PID matches inactive known CST DE connection (already closed)",
+                    matched_connection_label=conn.label,
+                )
+        else:
+            return ProcessClassification(
+                pid=process.pid,
+                name=process.name,
+                classification=KNOWN_PID_UNEXPECTED_PROCESS,
+                protected=True,
+                kill_candidate=False,
+                reason=(
+                    f"PID matches known connection but process name {process.name!r} "
+                    f"is not an allowed Design Environment executable"
+                ),
+                matched_connection_label=conn.label,
+            )
 
     # 5. Unknown CST-like process
     return ProcessClassification(
@@ -710,6 +725,8 @@ def validate_emergency_cleanup_record(
     inconsistent fields.
     """
     reasons: list[str] = []
+    if not record.allowed_by_approval:
+        reasons.append("emergency_cleanup_not_allowed_by_approval")
     if not record.reason or not record.reason.strip():
         reasons.append("reason_required")
     if record.command_summary and record.target_pid is None:
@@ -764,7 +781,10 @@ def build_xr_safety_summary(
         safe_to_execute = False
         reasons_not_safe.append("no_approval")
 
-    if target_selection is not None and not target_selection.allowed:
+    if target_selection is None:
+        safe_to_execute = False
+        reasons_not_safe.append("no_target_selection")
+    elif not target_selection.allowed:
         safe_to_execute = False
         reasons_not_safe.append(f"target_blocked: {target_selection.reason}")
 

@@ -19,6 +19,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
 
 from workflows.rfgun_sao.extreme_recovery_safety import (
     KNOWN_DESIGN_ENVIRONMENT,
+    KNOWN_PID_UNEXPECTED_PROCESS,
     LICENSE_DAEMON_PROTECTED,
     NON_CST_PROCESS,
     UNKNOWN_CST_PROCESS,
@@ -142,6 +143,8 @@ class TestProcessSnapshot:
 
 cstd_snap = ProcessSnapshot(pid=100, name="cstd.exe")
 de_snap = ProcessSnapshot(pid=200, name="CSTDesignEnvironment.exe")
+solver_snap = ProcessSnapshot(pid=201, name="CSTSolver.exe")
+python_snap = ProcessSnapshot(pid=202, name="python.exe")
 unknown_snap = ProcessSnapshot(pid=300, name="CSTDesignEnvironment.exe")
 chrome_snap = ProcessSnapshot(pid=400, name="chrome.exe")
 invalid_snap = ProcessSnapshot(pid=0, name="")
@@ -187,6 +190,34 @@ class TestProcessClassification:
         assert cl.classification == KNOWN_DESIGN_ENVIRONMENT
         assert not cl.kill_candidate
         assert cl.matched_connection_label == "workflow._conn"
+
+    # ---- XR2.1: strict name matching ---------------------------------
+
+    def test_known_pid_unexpected_solver_not_kill_candidate(self):
+        """Known PID + CSTSolver.exe -> blocked, not kill candidate."""
+        conn = KnownCstConnection(pid=201, label="solver_conn")
+        cl = classify_cst_process(solver_snap, [conn])
+        assert cl.classification == KNOWN_PID_UNEXPECTED_PROCESS
+        assert cl.protected
+        assert not cl.kill_candidate
+        assert cl.matched_connection_label == "solver_conn"
+
+    def test_known_pid_python_not_kill_candidate(self):
+        """Known PID + python.exe -> non-CST (ignored before PID check)."""
+        conn = KnownCstConnection(pid=202, label="python_conn")
+        cl = classify_cst_process(python_snap, [conn])
+        # python.exe does not contain "cst" in its name, so it is classified
+        # as non-CST before the known-PID check
+        assert cl.classification == NON_CST_PROCESS
+        assert not cl.kill_candidate
+
+    def test_known_pid_cstd_license_daemon_protected(self):
+        """Known PID + cstd.exe -> license daemon protected before name check."""
+        cstd_conn = KnownCstConnection(pid=100, label="cstd_conn")
+        cl = classify_cst_process(cstd_snap, [cstd_conn])
+        assert cl.classification == LICENSE_DAEMON_PROTECTED
+        assert cl.protected
+        assert not cl.kill_candidate
 
 
 # ===================================================================
@@ -356,6 +387,55 @@ class TestTargetSelection:
         assert not result.allowed
         assert "multiple_kill_candidates_ambiguous" in result.blocked_by
 
+    # ---- XR2.1: strict classification in target selection -----------
+
+    def test_requested_pid_unexpected_process_blocks(self):
+        """Known PID with unexpected process name -> not kill candidate."""
+        procs = [ProcessSnapshot(pid=201, name="CSTSolver.exe")]
+        conns = [KnownCstConnection(pid=201, label="solver_conn")]
+        result = select_destructive_target(
+            procs, conns,
+            scenario=ExtremeRecoveryFaultKind.DE_PROCESS_KILLED_BEFORE_SOLVE,
+            approval=_valid_approval,
+            requested_pid=201,
+        )
+        assert not result.allowed
+        assert "requested_pid_not_kill_candidate" in result.blocked_by
+
+    def test_auto_select_ignores_unexpected_process(self):
+        """Auto-select ignores known PID with unexpected process name."""
+        procs = [
+            ProcessSnapshot(pid=200, name="CSTDesignEnvironment.exe"),
+            ProcessSnapshot(pid=201, name="CSTSolver.exe"),
+        ]
+        conns = [
+            KnownCstConnection(pid=200, label="de_conn"),
+            KnownCstConnection(pid=201, label="solver_conn"),
+        ]
+        result = select_destructive_target(
+            procs, conns,
+            scenario=ExtremeRecoveryFaultKind.DE_PROCESS_KILLED_BEFORE_SOLVE,
+            approval=_valid_approval,
+        )
+        # Only PID 200 is a valid kill candidate; PID 201 is unexpected
+        assert result.allowed
+        assert result.target_pid == 200
+
+    def test_auto_select_valid_de_with_cstd(self):
+        """One valid DE + cstd.exe selects the DE only."""
+        procs = [
+            ProcessSnapshot(pid=200, name="CSTDesignEnvironment.exe"),
+            ProcessSnapshot(pid=100, name="cstd.exe"),
+        ]
+        conns = [KnownCstConnection(pid=200, label="de_conn")]
+        result = select_destructive_target(
+            procs, conns,
+            scenario=ExtremeRecoveryFaultKind.DE_PROCESS_KILLED_BEFORE_SOLVE,
+            approval=_valid_approval,
+        )
+        assert result.allowed
+        assert result.target_pid == 200
+
 
 # ===================================================================
 # Inventory diff
@@ -420,7 +500,7 @@ class TestEmergencyCleanup:
         record = EmergencyCleanupRecord(
             allowed_by_approval=True,
             reason="DE unresponsive",
-            command_summary="Stop-Process -Id 12345",
+            command_summary="pid_specific_cleanup_redacted",
             target_pid=None,
             timestamp="2026-06-04T12:00:00",
             residual_process_count=0,
@@ -456,13 +536,36 @@ class TestEmergencyCleanup:
             allowed_by_approval=True,
             reason="DE unresponsive after solve",
             target_pid=200,
-            command_summary="Stop-Process -Id 200",
+            command_summary="pid_specific_cleanup_redacted",
             timestamp="2026-06-04T12:00:00",
             residual_process_count=0,
         )
         valid, reasons = validate_emergency_cleanup_record(record)
         assert valid
         assert len(reasons) == 0
+
+    def test_no_approval_invalid(self):
+        """Complete record but allowed_by_approval=False is invalid."""
+        record = EmergencyCleanupRecord(
+            allowed_by_approval=False,
+            reason="DE unresponsive",
+            timestamp="2026-06-04T12:00:00",
+            residual_process_count=0,
+        )
+        valid, reasons = validate_emergency_cleanup_record(record)
+        assert not valid
+        assert "emergency_cleanup_not_allowed_by_approval" in reasons
+
+    def test_approved_complete_record_valid(self):
+        """Complete record with allowed_by_approval=True is valid."""
+        record = EmergencyCleanupRecord(
+            allowed_by_approval=True,
+            reason="DE unresponsive",
+            timestamp="2026-06-04T12:00:00",
+            residual_process_count=0,
+        )
+        valid, reasons = validate_emergency_cleanup_record(record)
+        assert valid
 
 
 # ===================================================================
@@ -489,6 +592,9 @@ class TestSafetySummary:
         )
         assert not summary["safe_to_execute_destructive_action"]
         assert not summary["approved"]
+        # No approval and no target selection both contribute
+        assert "no_approval" in summary.get("not_safe_reasons", ())
+        assert "no_target_selection" in summary.get("not_safe_reasons", ())
 
     def test_valid_approval_and_target_safe(self):
         ts = select_destructive_target(
@@ -526,6 +632,17 @@ class TestSafetySummary:
             inventory_diff=diff,
         )
         assert summary["orphan_candidate_count"] >= 1
+
+    def test_approval_alone_not_safe_without_target_selection(self):
+        """Valid approval alone is not sufficient; target_selection required."""
+        summary = build_xr_safety_summary(
+            scenario=ExtremeRecoveryFaultKind.DE_PROCESS_KILLED_BEFORE_SOLVE,
+            approval=_valid_approval,
+            # target_selection omitted
+        )
+        assert not summary["safe_to_execute_destructive_action"]
+        assert summary["approved"]
+        assert "no_target_selection" in summary.get("not_safe_reasons", ())
 
 
 # ===================================================================

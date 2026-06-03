@@ -29,3 +29,5 @@ AGENTS
 CLAUDE
 
 workflows/**/config.local.yaml
+# Claude local settings (do not commit)
+.claude/settings.local.json

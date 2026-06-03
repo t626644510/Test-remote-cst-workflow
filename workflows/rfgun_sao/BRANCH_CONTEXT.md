@@ -69,10 +69,12 @@ Remote branches archived in MH3.
 
 #### Future planned tracks (post-merge)
 
-- XR1 -- destructive recovery design / safety plan, docs-only (current track)
-- XR2 -- no-CST process/fault harness and classifier tests
+- XR1 -- destructive recovery design / safety plan -- accepted at `0e5f09a`
+- XR2 -- no-CST process/fault harness and classifier tests (current track)
 - XR3 -- bounded destructive live smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
+  - environment faults should generally be filtered out from skip evidence
+  - deterministic/repeated exact-key failures are better skip candidates
 - SE -- schema extension hooks if DB v1 becomes insufficient
 - Workflow2 field objectives deferred
 
@@ -91,6 +93,7 @@ Remote branches archived in MH3.
 | MH2 | Sequential accepted branch merge execution / local verified merge | No |
 | MH3 | Archive merged branches / final merge-hygiene cleanup | No |
 | XR1 | Destructive recovery design / safety plan | No |
+| XR2 | No-CST process/fault harness and classifier tests | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

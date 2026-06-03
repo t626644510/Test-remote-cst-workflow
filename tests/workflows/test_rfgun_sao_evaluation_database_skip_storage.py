@@ -375,3 +375,176 @@ class TestGlobalSafety:
         forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+# ===================================================================
+# SE2.1: Real success_reuse + warm-start protection
+# ===================================================================
+
+
+class TestRealSuccessReuseProtection:
+    """Call real success_reuse helper against synthetic skip rows."""
+
+    def test_skip_row_only_no_reuse(self, tmp_path):
+        """Only skip row in DB -> success_reuse returns None."""
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.evaluation_success_reuse import (
+            SuccessReuseConfig,
+            try_success_reuse,
+        )
+
+        db_path = _create_db(tmp_path)
+        # Insert skip row
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        # Query via success_reuse helper
+        cfg = SuccessReuseConfig(enabled=True)
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        key = pid.parameter_key()
+
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            result = try_success_reuse(db, pid, ["m1"], config=cfg)
+
+        assert result is None, "skip row must not be reusable"
+
+    def test_success_and_skip_row_only_success_reused(self, tmp_path):
+        """Both skip and success rows -> only success row is reused."""
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.evaluation_success_reuse import (
+            SuccessReuseConfig,
+            try_success_reuse,
+        )
+
+        db_path = _create_db(tmp_path)
+        # Insert success row
+        pid_success = ParameterIdentity(param_names=["p0"], values=[1.0])
+        conn = __import__("sqlite3").connect(db_path)
+        conn.execute(
+            "INSERT INTO evaluation_records "
+            "(schema_version, parameter_key, param_names, param_values, status, "
+            "raw_metrics, objective_values, objective_names, diagnostics) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (current_schema_version(), pid_success.parameter_key(),
+             json.dumps(["p0"]), json.dumps([1.0]),
+             "success", json.dumps({"m1": 0.5}), json.dumps({"m1": 0.5}),
+             json.dumps(["m1"]), json.dumps({"__retry_penalty__": {"m1": 0.5}})),
+        )
+        conn.commit()
+        conn.close()
+
+        # Insert skip row with different key
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        # Query for success key
+        cfg = SuccessReuseConfig(enabled=True)
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            result = try_success_reuse(db, pid_success, ["m1"], config=cfg)
+        assert result is not None, "success row must be reusable"
+        assert result.status.name == "SUCCESS"
+
+        # Query for skip key
+        pid_skip = ParameterIdentity(param_names=["p0"], values=[999.0])
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            result_skip = try_success_reuse(db, pid_skip, ["m1"], config=cfg)
+        assert result_skip is None, "skip row must not be reusable"
+
+
+class TestRealWarmStartProtection:
+    """Call real warm-start prior loader against synthetic skip rows."""
+
+    def test_skip_row_only_no_priors(self, tmp_path):
+        """Only skip row in DB -> warm-start returns zero priors."""
+        from workflows.rfgun_sao.evaluation_database_warm_start import (
+            DbWarmStartConfig,
+            load_warm_start_priors,
+        )
+
+        db_path = _create_db(tmp_path)
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            rows = db.get_all_records()
+
+        ws_cfg = DbWarmStartConfig(enabled=True, max_priors=10)
+        report = load_warm_start_priors(
+            rows, ws_cfg, metric_names=["m1"], param_names=["p0"],
+        )
+        assert report.accepted_priors == 0
+        assert report.found_rows == 1
+
+    def test_success_and_skip_row_only_success_prior(self, tmp_path):
+        """Both skip and success rows -> warm-start returns only success prior."""
+        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from workflows.rfgun_sao.evaluation_database_warm_start import (
+            DbWarmStartConfig,
+            load_warm_start_priors,
+        )
+
+        db_path = _create_db(tmp_path)
+        # Insert success row
+        pid = ParameterIdentity(param_names=["p0"], values=[1.0])
+        conn = __import__("sqlite3").connect(db_path)
+        conn.execute(
+            "INSERT INTO evaluation_records "
+            "(schema_version, parameter_key, param_names, param_values, status, "
+            "raw_metrics, objective_values, objective_names, diagnostics) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (current_schema_version(), pid.parameter_key(),
+             json.dumps(["p0"]), json.dumps([1.0]),
+             "success", json.dumps({"m1": 0.5}), json.dumps({"m1": 0.5}),
+             json.dumps(["m1"]), json.dumps({"__retry_penalty__": {"m1": 0.5}})),
+        )
+        conn.commit()
+        conn.close()
+
+        # Insert skip row
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        # Load warm-start priors
+        with SQLiteEvaluationDatabase(EvaluationDatabaseConfig(enabled=True, path=db_path)) as db:
+            rows = db.get_all_records()
+
+        ws_cfg = DbWarmStartConfig(enabled=True, max_priors=10)
+        report = load_warm_start_priors(
+            rows, ws_cfg, metric_names=["m1"], param_names=["p0"],
+        )
+        # Only the success row should become a prior
+        assert report.accepted_priors == 1
+        assert report.found_rows == 2
+        priors_list = report.diagnostics.get("priors", [])
+        assert len(priors_list) == 1
+
+
+class TestCandidateLoaderExclusionDetail:
+    """Additional candidate loader exclusion evidence."""
+
+    def test_skip_row_excluded_with_blocked_reason(self, tmp_path):
+        """Skip row is excluded from candidate evidence with blocked reason."""
+        db_path = _create_db(tmp_path)
+        skip_payload = EvaluationSkipRecordPayload(
+            parameter_key="skip_key", source_row_ids=(1,), evidence_count=1,
+            skip_reason="test",
+        )
+        write_failure_skip_synthetic_row(db_path, skip_payload)
+
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
+        result = load_failure_skip_candidates(db_path, cfg)
+        assert result.candidate_rows == 0
+        assert result.blocked_by_reason.get("skip_status_excluded", 0) >= 1
+        assert result.by_classification.get("skipped_failure_reuse", 0) == 1

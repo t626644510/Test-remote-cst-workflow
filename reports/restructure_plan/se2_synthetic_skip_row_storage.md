@@ -125,3 +125,61 @@ All regressions pass: 600 total tests across 13 suites.
 
 **FS5 — bounded live exact-key skip smoke** only with explicit operator approval.
 SE2 has made synthetic skip row storage viable without DDL migration.
+
+---
+
+## SE2.1 — success-reuse/warm-start protection hardening
+
+### Changes
+
+1. **Real success_reuse helper tests** — `try_success_reuse()` called against
+   temp DBs with synthetic skip rows.  Skip row alone → `None` (no reuse).
+   Skip + success row → only success row reused.
+
+2. **Real warm-start prior loader tests** — `load_warm_start_priors()` called
+   against temp DBs with skip rows.  Skip row alone → zero priors.
+   Skip + success row → only the success row becomes a prior.
+
+3. **Candidate loader exclusion detailed** — new test confirms
+   `blocked_by_reason["skip_status_excluded"]` and `by_classification`
+   includes `skipped_failure_reuse`.
+
+4. **Writer docstring fixed** — `write_failure_skip_synthetic_row()` now has
+   the docstring as the first statement in the function body, before the
+   `created_at` default assignment.
+
+### Tests
+
+Test count grew from **25** (SE2) to **30** (SE2.1).
+
+| Class | Tests | Coverage |
+|-------|-------|----------|
+| `TestRealSuccessReuseProtection` | 2 | Skip-only no reuse, skip+success only success reused |
+| `TestRealWarmStartProtection` | 2 | Skip-only no prior, skip+success only success prior |
+| `TestCandidateLoaderExclusionDetail` | 1 | Blocked reason + classification count |
+
+### Validation
+
+```
+pytest tests/workflows/test_rfgun_sao_evaluation_database_skip_storage.py --tb=short
+-- 30 passed
+
+pytest tests/workflows/test_rfgun_sao_evaluation_success_reuse.py --tb=short
+-- 35 passed (no regression)
+
+pytest tests/workflows/test_rfgun_sao_db_warm_start_ws2.py --tb=short
+-- 45 passed (no regression)
+```
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live CST | **No** |
+| Real runtime wiring | **No** |
+| Production DB migration | **No** |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |
+| Success_reuse helper ignores skip rows | **Verified** |
+| Warm-start loader ignores skip rows | **Verified** |
+| Candidate loader excludes skip rows | **Verified** |

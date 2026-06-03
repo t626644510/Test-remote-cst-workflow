@@ -82,7 +82,8 @@ Remote branches archived in MH3.
 - FS4 -- exact-key enforce skip -- accepted at `bd68284`
 - SE1 -- schema extension hooks for skip records -- accepted at `ec8b805`
 - SE1.1 -- skip record audit validation hardening -- accepted at `b73ca34`
-- SE2 -- synthetic skip row storage support (current track)
+- SE2 -- synthetic skip row storage support -- accepted at `b9f1b07`
+- SE2.1 -- success-reuse/warm-start protection hardening (current track)
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -118,6 +119,8 @@ Remote branches archived in MH3.
 | SE1 | Schema extension hooks for skip records | No |
 | SE1.1 | Skip record audit validation hardening | No |
 | SE2 | Synthetic skip row storage support | No |
+| SE2.1 | Success-reuse/warm-start protection hardening | No |
+| SE2.1 | Success-reuse/warm-start protection hardening | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

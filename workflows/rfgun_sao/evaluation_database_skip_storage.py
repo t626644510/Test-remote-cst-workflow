@@ -42,8 +42,6 @@ def write_failure_skip_synthetic_row(
     run_id: str | None = None,
     created_at: str | None = None,
 ) -> int:
-    if created_at is None:
-        created_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     """Write one synthetic skip row to the evaluation DB.
 
     Parameters
@@ -71,6 +69,9 @@ def write_failure_skip_synthetic_row(
     ValueError
         If payload validation fails.
     """
+    if created_at is None:
+        created_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
     # Validate payload
     valid, reasons = validate_skip_record_payload(payload)
     if not valid:

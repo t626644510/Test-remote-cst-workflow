@@ -561,10 +561,7 @@ def build_workflow_1(
             if _sr_cfg.enabled:
                 reuse_result = _try_sr_reuse(x_phys)
                 if reuse_result is not None:
-                    return _process_reuse_result(
-                        reuse_result, x_phys, metric_names,
-                        weights, checkpoint_callback, _write_eval_db, _db_run_id,
-                    )
+                    return _handle_sr_reuse(reuse_result, x_phys)
             result, tier = retry_handler.execute(
                 wf1_evaluator.adapt_for_retry, x_phys, iteration,
             )

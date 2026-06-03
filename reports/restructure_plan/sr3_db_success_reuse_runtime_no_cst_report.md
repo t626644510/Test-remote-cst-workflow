@@ -143,6 +143,19 @@ Total: 521 passed, 1 pre-existing warning.
 
 ---
 
+## SR3.1 correction note
+
+| Item | What changed |
+|------|-------------|
+| 1. Legacy reuse bug | Fixed `_process_reuse_result` → `_handle_sr_reuse` (NameError on undefined function). Removed extra positional args from call site; helper uses closure-scoped variables like the other two paths. |
+| 2. Real evaluator closure tests | Rewrote `test_rfgun_sao_evaluation_success_reuse_workflow.py` to call `build_workflow_1()` with monkeypatched `CSTConnection`/`SolverRunner` and real temp SQLite DB. Tests exercise the actual evaluator closure returned by the workflow builder. |
+| 3. New integration tests | 11 tests total: config (2), plain path hit/miss (2), legacy hit/miss (2), no invalid reuse (3), safety (2). All call real `build_workflow_1` and pass real `np.ndarray` inputs. |
+| Test count | 518 total (11 workflow + 35 reuse + 472 existing). |
+
+No live CST, no default config change, no warm-start/failure reuse.
+
+---
+
 ## Final HEAD commit SHA
 
 **To be confirmed by reviewer.**

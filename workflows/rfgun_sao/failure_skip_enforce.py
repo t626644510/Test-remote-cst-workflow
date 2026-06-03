@@ -4,17 +4,13 @@ Evaluates whether a proposed ``parameter_key`` should be *enforced* as a
 skip under the FS policy.  In enforce mode, the evaluator is not called
 and no CST budget is consumed.  This module provides the decision model
 and a fake-runtime harness for no-CST call-count testing.
-
-DB synthetic-row writing is **not implemented** because v1 schema validation
-rejects custom status values.  SE1 schema extension is required before live
-enforce (FS5) can record synthetic skip rows.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from workflows.rfgun_sao.failure_skip_candidates import (
     FailureSkipCandidateConfig,
@@ -258,4 +254,132 @@ def run_failure_skip_enforce_fake_evaluation(
             "mode": decision.mode,
             "reason": decision.diagnostics.get("reason", "no_skip"),
         },
+    )
+
+
+# ===================================================================
+# Runtime evaluator wrapper (FS5)
+# ===================================================================
+
+
+@dataclass(frozen=True)
+class FailureSkipRuntimeResult:
+    """Result from a runtime skip-or-evaluate call.
+
+    Parameters
+    ----------
+    parameter_key : str or None
+    enforced_skip : bool
+    evaluator_called : bool
+    retry_called : bool
+    objective_value : float or None
+    synthetic_status : str or None
+    diagnostics : Mapping
+    synthetic_row_id : int or None
+    """
+    parameter_key: str | None = None
+    enforced_skip: bool = False
+    evaluator_called: bool = False
+    retry_called: bool = False
+    objective_value: float | None = None
+    synthetic_status: str | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
+    synthetic_row_id: int | None = None
+
+
+def run_failure_skip_evaluator(
+    db_path: str | Path,
+    parameter_key: str,
+    config: FailureSkipCandidateConfig,
+    evaluator: callable,
+    *,
+    param_names: Sequence[str] | None = None,
+    param_values: Sequence[float] | None = None,
+    retry_wrapper: callable | None = None,
+    write_synthetic_row: bool = True,
+) -> FailureSkipRuntimeResult:
+    """Wrap an evaluator call with failure skip enforcement.
+
+    If enforce_skip=True, the evaluator is NOT called and a synthetic
+    skip row may be written.  Otherwise the evaluator is called normally.
+
+    Parameters
+    ----------
+    db_path : str or Path
+    parameter_key : str
+    config : FailureSkipCandidateConfig
+    evaluator : callable
+    param_names : sequence of str or None
+    param_values : sequence of float or None
+    retry_wrapper : callable or None
+    write_synthetic_row : bool
+        If True and enforce_skip, writes a synthetic row.
+
+    Returns
+    -------
+    FailureSkipRuntimeResult
+    """
+    from workflows.rfgun_sao.failure_skip_candidates import (
+        FailureSkipCandidateConfig as _FSC,
+    )
+
+    decision = evaluate_failure_skip_enforce_for_key(db_path, parameter_key, config)
+
+    if decision.enforce_skip:
+        # Build payload and optionally write row
+        row_id = None
+        if write_synthetic_row:
+            from workflows.rfgun_sao.evaluation_database_skip_storage import (
+                build_skip_payload_from_enforce_decision as _build_payload,
+                write_failure_skip_synthetic_row as _write_row,
+            )
+            payload = _build_payload(decision)
+            if param_names and param_values:
+                row_id = _write_row(
+                    db_path, payload,
+                    param_names=param_names,
+                    param_values=param_values,
+                )
+            else:
+                row_id = _write_row(db_path, payload)
+
+        return FailureSkipRuntimeResult(
+            parameter_key=parameter_key,
+            enforced_skip=True,
+            evaluator_called=False,
+            retry_called=False,
+            objective_value=None,
+            synthetic_status=decision.synthetic_status,
+            synthetic_row_id=row_id,
+            diagnostics={
+                "skip_policy_version": decision.diagnostics.get("policy_version", 1)
+                    if isinstance(decision.diagnostics, dict) else 1,
+                "skip_mode": decision.mode,
+                "skip_decision": decision.candidate_decision or "enforced_skip",
+                "evidence_count": decision.evidence_count,
+                "source_row_ids": list(decision.source_row_ids),
+            },
+        )
+
+    # Not skipping — call evaluator normally
+    evaluator_called = False
+    retry_called = False
+    objective_value = None
+
+    if retry_wrapper is not None:
+        obj_val = retry_wrapper(evaluator, parameter_key=parameter_key)
+        evaluator_called = True
+        retry_called = True
+        objective_value = float(obj_val) if obj_val is not None else None
+    else:
+        obj_val = evaluator(parameter_key)
+        evaluator_called = True
+        objective_value = float(obj_val) if obj_val is not None else None
+
+    return FailureSkipRuntimeResult(
+        parameter_key=parameter_key,
+        enforced_skip=False,
+        evaluator_called=evaluator_called,
+        retry_called=retry_called,
+        objective_value=objective_value,
     )

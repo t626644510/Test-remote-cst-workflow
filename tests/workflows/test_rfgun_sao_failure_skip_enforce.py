@@ -33,8 +33,10 @@ from workflows.rfgun_sao.failure_skip_candidates import (
 from workflows.rfgun_sao.failure_skip_enforce import (
     FakeEnforceEvaluationResult,
     FailureSkipEnforceDecision,
+    FailureSkipRuntimeResult,
     evaluate_failure_skip_enforce_for_key,
     run_failure_skip_enforce_fake_evaluation,
+    run_failure_skip_evaluator,
 )
 
 
@@ -414,3 +416,181 @@ class TestGlobalSafety:
         forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+# ===================================================================
+# Runtime evaluator wrapper tests (FS5)
+# ===================================================================
+
+
+class TestRuntimeEvaluatorWrapper:
+    """run_failure_skip_evaluator() call-count and synthetic row tests."""
+
+    def _make_pid(self, values):
+        pid = ParameterIdentity(param_names=["p0"], values=values)
+        return pid, pid.parameter_key()
+
+    def _seed_enforce_candidate(self, tmp_path, key, count=2):
+        """Seed *count* solver_failed rows for *key*."""
+        rows = []
+        for i in range(count):
+            rows.append({
+                "id": i + 1,
+                "schema_version": current_schema_version(),
+                "parameter_key": key,
+                "param_names": ["p0"],
+                "param_values": [1.0],
+                "status": "solver_failed",
+                "raw_metrics": {"m1": 1.0},
+                "objective_names": ["m1"],
+                "error_taxonomy": {"original_error": "mesh error", "original_status": "solver_failed"},
+                "source": None,
+                "run_id": "r1",
+                "created_at": "2026-06-04 00:00:00",
+            })
+        return _seed_db(tmp_path, rows)
+
+    def test_enforce_hit_skips_evaluator(self, tmp_path):
+        """Enforce hit -> evaluator NOT called."""
+        pid, pk = self._make_pid([1.0])
+        db_path = self._seed_enforce_candidate(tmp_path, pk, 2)
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=2)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 42.0
+
+        result = run_failure_skip_evaluator(db_path, pk, cfg, fake_ev,
+            param_names=["p0"], param_values=[1.0],
+            write_synthetic_row=True,
+        )
+        assert result.enforced_skip
+        assert not result.evaluator_called
+        assert call_count[0] == 0
+        assert result.synthetic_status == "skipped_failure_reuse"
+
+    def test_enforce_hit_writes_synthetic_row(self, tmp_path):
+        """Enforce hit writes exactly one synthetic skip row."""
+        pid, pk = self._make_pid([1.0])
+        db_path = self._seed_enforce_candidate(tmp_path, pk, 2)
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=2)
+
+        conn = __import__("sqlite3").connect(db_path)
+        before = conn.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn.close()
+
+        result = run_failure_skip_evaluator(db_path, pk, cfg, lambda x: 42.0,
+            param_names=["p0"], param_values=[1.0],
+            write_synthetic_row=True,
+        )
+
+        conn2 = __import__("sqlite3").connect(db_path)
+        after = conn2.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        row = conn2.execute("SELECT status, source FROM evaluation_records WHERE id = ?",
+                          (result.synthetic_row_id,)).fetchone()
+        conn2.close()
+
+        assert after == before + 1, "must write exactly one row"
+        assert row[0] == "skipped_failure_reuse"
+        assert row[1] == "failure_skip_enforce"
+
+    def test_enforce_miss_calls_evaluator(self, tmp_path):
+        """Enforce miss (below threshold) -> evaluator called once."""
+        pid, pk = self._make_pid([1.0])
+        db_path = self._seed_enforce_candidate(tmp_path, pk, 1)
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=2)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 42.0
+
+        result = run_failure_skip_evaluator(db_path, pk, cfg, fake_ev,
+            param_names=["p0"], param_values=[1.0],
+        )
+        assert not result.enforced_skip
+        assert result.evaluator_called
+        assert call_count[0] == 1
+        assert result.objective_value == 42.0
+
+    def test_enforce_hit_no_synthetic_row_when_disabled(self, tmp_path):
+        """Enforce hit with write_synthetic_row=False does not write row."""
+        pid, pk = self._make_pid([1.0])
+        db_path = self._seed_enforce_candidate(tmp_path, pk, 2)
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=2)
+
+        conn = __import__("sqlite3").connect(db_path)
+        before = conn.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn.close()
+
+        result = run_failure_skip_evaluator(db_path, pk, cfg, lambda x: 42.0,
+            param_names=["p0"], param_values=[1.0],
+            write_synthetic_row=False,
+        )
+        assert result.enforced_skip
+        assert result.synthetic_row_id is None
+
+        conn2 = __import__("sqlite3").connect(db_path)
+        after = conn2.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn2.close()
+        assert after == before
+
+    def test_dry_run_calls_evaluator_once(self, tmp_path):
+        """dry_run mode -> evaluator called once, no synthetic row."""
+        pid, pk = self._make_pid([1.0])
+        db_path = self._seed_enforce_candidate(tmp_path, pk, 2)
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=2)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 42.0
+
+        conn = __import__("sqlite3").connect(db_path)
+        before = conn.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn.close()
+
+        result = run_failure_skip_evaluator(db_path, pk, cfg, fake_ev,
+            param_names=["p0"], param_values=[1.0],
+        )
+        assert not result.enforced_skip
+        assert result.evaluator_called
+        assert call_count[0] == 1
+
+        conn2 = __import__("sqlite3").connect(db_path)
+        after = conn2.execute("SELECT COUNT(*) FROM evaluation_records").fetchone()[0]
+        conn2.close()
+        assert after == before
+
+    def test_xr_blocked_calls_evaluator(self, tmp_path):
+        """XR process-kill evidence -> no skip, evaluator called."""
+        from workflows.rfgun_sao.failure_skip_candidates import XR_PROCESS_KILL
+        row = {
+            "id": 1,
+            "schema_version": current_schema_version(),
+            "parameter_key": "xr_key",
+            "param_names": ["p0"],
+            "param_values": [1.0],
+            "status": "solver_failed",
+            "raw_metrics": {"m1": 1.0},
+            "objective_names": ["m1"],
+            "error_taxonomy": {"original_error": "tree path not found"},
+            "source": None,
+            "run_id": "r1",
+            "created_at": "2026-06-04 00:00:00",
+        }
+        db_path = _seed_db(tmp_path, [row])
+        cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=1)
+
+        call_count = [0]
+        def fake_ev(pk):
+            call_count[0] += 1
+            return 0.0
+
+        result = run_failure_skip_evaluator(db_path, "xr_key", cfg, fake_ev,
+            param_names=["p0"], param_values=[1.0],
+        )
+        assert not result.enforced_skip
+        assert result.evaluator_called
+        assert call_count[0] == 1

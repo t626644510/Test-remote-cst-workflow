@@ -87,7 +87,8 @@ Remote branches archived in MH3.
 - SE2.2 -- same-key reuse protection hardening -- accepted at `3b44fc5`
 - FS5 -- helper-level smoke (superseded)
 - FS5.1 -- real WF1 runtime wiring, live miss (superseded)
-- FS5.2 -- deterministic real WF1 exact-key skip-hit live smoke (current track)
+- FS5.2 -- deterministic real WF1 exact-key skip-hit live smoke -- accepted at d9e3527
+- FMH1 -- final WF1 SAO closeout / merge hygiene -- Completed / pending review
 - XR4 -- optional during-solve destructive smoke only with explicit approval
 - FS -- failure/probably-infeasible skip, opt-in and fully audited
   - environment faults should generally be filtered out from skip evidence
@@ -128,6 +129,7 @@ Remote branches archived in MH3.
 | FS5 | Bounded live exact-key skip smoke | **Yes** |
 | FS5.1 | Real WF1 runtime exact-key skip wiring | **Yes** |
 | FS5.2 | Deterministic exact-key skip-hit live smoke | **Yes** |
+| FMH1 | Final WF1 SAO closeout / merge hygiene | No |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 

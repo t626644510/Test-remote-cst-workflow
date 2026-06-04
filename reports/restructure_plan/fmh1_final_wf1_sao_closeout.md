@@ -9,7 +9,7 @@
 | Accepted feature HEAD | `d9e3527b068b4ff0409f24e5b855178bef45ec74` (FS5.2) |
 | Target branch | `main` |
 | Merge performed | **Yes** — sequential no-ff via `fmh1/closeout` integration branch |
-| Final main HEAD | *To be confirmed after push* |
+| FMH1 merge/closeout commit | `5bc09a7fa11d0f6b851f339190f25cb8810c9a41` |
 | Live CST | **No** |
 | Destructive action | **No** |
 | Default config changed | **No** |
@@ -126,10 +126,13 @@
 
 ## Final recommendation
 
-**Ready to merge/archive.**  The `feature/wf1-failure-skip` branch has been
-merged cleanly into `main`.  `main` now represents the completed WF1 SAO
+**Merge completed into main.**  `main` now represents the completed WF1 SAO
 restructuring baseline with all planned feature tracks accepted and
 live-validated.
+
+Ready for maintainer archive/delete decision.
+Future work should branch from `main` on separate gated branches.
+Do not archive/delete in FMH1.1 unless operator explicitly asks.
 
 No blockers.  All no-CST tests pass.  Default config remains safe.
 Future work should branch from `main`.

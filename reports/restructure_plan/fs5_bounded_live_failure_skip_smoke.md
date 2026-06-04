@@ -239,3 +239,71 @@ pytest tests/workflows/test_rfgun_sao_failure_skip_candidates.py --tb=short
 | Skip triggered in live run | No (key mismatch) |
 | Default config changed | **No** |
 | Generated artifacts committed | **No** |
+
+---
+
+## FS5.2 — deterministic real WF1 exact-key skip-hit live smoke
+
+### Key mismatch analysis (FS5.1 root cause)
+
+FS5.1's skip didn't trigger because the seed used **rounded** parameter
+values (8 decimal places from console output), but the runtime
+`ParameterIdentity` uses **full double-precision** values.  The key
+`5e44117b44f67c67` (from rounded) ≠ `7f6d0c654294d7fc` (from full
+precision).
+
+FS5.2 fixes this by:
+1. Running the WF1 command once to capture the full-precision LHS values
+   from the SUCCESS row in the DB.
+2. Seeding the DB with those exact values (same `ParameterIdentity` as
+   runtime computes).
+3. Re-running with the same config (narrow range `0.000001` + seed=42
+   produces the same deterministic LHS sample).
+
+### Deterministic proposal mechanism
+
+| Mechanism | Value |
+|-----------|-------|
+| Parameter ranges | `R_cell_3: [10.782, 10.782001]`, `R_between_cell_3_cutoff: [4.038, 4.038001]`, `PickUpDeep: [0.262, 0.262001]` |
+| LHS seed | 42 |
+| Result | Same LHS sample across runs (same Python process state) |
+| Full precision values | `[10.782000226043952, 4.03800056112156, 0.2620001414020801]` |
+
+### Live evidence
+
+| Metric | Value |
+|--------|-------|
+| Command | `python -m workflows.rfgun_sao.run --config config.local.yaml --n-initial 1 --n-iter 0` |
+| Seed key | `7f6d0c654294d7fc` |
+| Runtime proposed key | `7f6d0c654294d7fc` |
+| Key match | **Yes** |
+| Candidate decision | `enforce_eligible` (evidence_count=2) |
+| Enforce skip | **Yes** |
+| Evaluator called | **No** |
+| Retry called | **No** |
+| CST solves for skip-hit | **0** |
+| Synthetic row ID | 3 |
+| Synthetic status | `skipped_failure_reuse` |
+| Source | `failure_skip_enforce` |
+| Best F | [1.] (fallback penalty) |
+| CST DE launched | **No** (no "interactive mode" line) |
+| Orphan DE | **No** |
+| Manual taskkill | **No** |
+
+### DB state after run
+
+| Row | Status | Key |
+|-----|--------|-----|
+| 1 | `solver_failed` (seed) | `7f6d0c654294d7fc` |
+| 2 | `solver_failed` (seed) | `7f6d0c654294d7fc` |
+| 3 | `skipped_failure_reuse` (synthetic) | `7f6d0c654294d7fc` |
+
+### Explicit statements
+
+| Item | Status |
+|------|--------|
+| Live/config CST | **Yes, bounded** (0 solves — skip prevented all) |
+| Runtime skip verified | **Yes** — skip hit triggered in real WF1 command |
+| Keyword match | **Exact** — full double-precision key match |
+| Default config changed | **No** |
+| Generated artifacts committed | **No** |

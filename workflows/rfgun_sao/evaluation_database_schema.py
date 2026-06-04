@@ -40,6 +40,7 @@ class EvaluationDatabaseStatus(str):
     _VALID_STATUSES = frozenset({
         SUCCESS, GATE_REJECTED, CALIBRATION_FAILED,
         SOLVER_FAILED, TRANSIENT_FAILED, UNKNOWN_FAILED,
+        "skipped_failure_reuse", "skipped_probably_infeasible",
     })
 
     @classmethod

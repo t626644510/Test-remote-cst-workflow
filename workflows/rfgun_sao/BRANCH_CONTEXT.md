@@ -69,10 +69,31 @@ Remote branches archived in MH3.
 
 #### Future planned tracks (post-merge)
 
-- Failure reuse -- last track, advisory-first
-- Probably-infeasible remains advisory only; not used for skip/reuse/runtime discard
-- Destructive OS-level COM kill / fault injection -- separately approved only
-- Broader production campaigns (beyond 9 evals) -- optional, not required by default
+- XR1 -- destructive recovery design / safety plan -- accepted at `0e5f09a`
+- XR2 -- no-CST process/fault harness and classifier tests -- accepted at `624010d`
+- XR2.1 -- safety harness hardening -- accepted at `b603d90`
+- XR2.2 -- safety/docs cleanup -- accepted at `18dfc2c`
+- XR3 -- bounded destructive live smoke -- accepted at `5bdf4bc`
+- FS1 -- failure/probably-infeasible skip policy design -- accepted at `5f5bcb7`
+- FS2 -- failure skip candidate loader/no-CST -- accepted at `dc0b702`
+- FS2.1 -- candidate policy hardening -- accepted at `0829d6c`
+- FS3 -- runtime dry-run diagnostics -- accepted at `ddbbcde`
+- FS3.1 -- dry-run call-count hardening -- accepted at `2be78ea`
+- FS4 -- exact-key enforce skip -- accepted at `bd68284`
+- SE1 -- schema extension hooks for skip records -- accepted at `ec8b805`
+- SE1.1 -- skip record audit validation hardening -- accepted at `b73ca34`
+- SE2 -- synthetic skip row storage support -- accepted at `b9f1b07`
+- SE2.1 -- success-reuse/warm-start protection hardening -- accepted at `8bbab31`
+- SE2.2 -- same-key reuse protection hardening -- accepted at `3b44fc5`
+- FS5 -- helper-level smoke (superseded)
+- FS5.1 -- real WF1 runtime wiring, live miss (superseded)
+- FS5.2 -- deterministic real WF1 exact-key skip-hit live smoke (current track)
+- XR4 -- optional during-solve destructive smoke only with explicit approval
+- FS -- failure/probably-infeasible skip, opt-in and fully audited
+  - environment faults should generally be filtered out from skip evidence
+  - deterministic/repeated exact-key failures are better skip candidates
+- SE -- schema extension hooks if DB v1 becomes insufficient
+- Workflow2 field objectives deferred
 
 ### DB warm-start phases (WS track)
 
@@ -88,6 +109,25 @@ Remote branches archived in MH3.
 | MH1 | Accepted branch merge hygiene audit / plan | No |
 | MH2 | Sequential accepted branch merge execution / local verified merge | No |
 | MH3 | Archive merged branches / final merge-hygiene cleanup | No |
+| XR1 | Destructive recovery design / safety plan | No |
+| XR2 | No-CST process/fault harness and classifier tests | No |
+| XR2.1 | Safety harness hardening | No |
+| XR2.2 | Safety/docs cleanup | No |
+| XR3 | Bounded destructive live smoke | **Yes** |
+| FS1 | Failure skip policy design | No |
+| FS2 | Failure skip candidate loader / no-CST | No |
+| FS2.1 | Candidate policy hardening | No |
+| FS3 | Runtime dry-run diagnostics / no-CST | No |
+| FS3.1 | Dry-run call-count hardening | No |
+| FS4 | Exact-key enforce skip / no-CST | No |
+| SE1 | Schema extension hooks for skip records | No |
+| SE1.1 | Skip record audit validation hardening | No |
+| SE2 | Synthetic skip row storage support | No |
+| SE2.1 | Success-reuse/warm-start protection hardening | No |
+| SE2.2 | Same-key reuse protection hardening | No |
+| FS5 | Bounded live exact-key skip smoke | **Yes** |
+| FS5.1 | Real WF1 runtime exact-key skip wiring | **Yes** |
+| FS5.2 | Deterministic exact-key skip-hit live smoke | **Yes** |
 
 ### WS4 live evidence (bounded smoke, 3 total CST solves)
 
@@ -101,6 +141,40 @@ Remote branches archived in MH3.
 | Best F | -13656.06 | -95592.44 |
 | Orphan DE | No | No |
 | Manual taskkill | No | No |
+
+### XR3 live evidence (bounded destructive smoke, 1 scenario)
+
+| Metric | Value |
+|--------|-------|
+| Scenario | `de_process_killed_before_solve` |
+| Target PID | 5440 |
+| Target process | `CST DESIGN ENVIRONMENT_AMD64` |
+| Kill occurred | Before solver start (confirmed: `Failed to call: run_solver`) |
+| Retry handler detected death | **Yes** (`Proactive graceful reset requested`) |
+| Replacement DE created | **Yes** (new PID 56516) |
+| Final eval status | `solver_failed` |
+| DB row | 1 row, status=solver_failed, retry_count=0 |
+| Best F | 1.0 (fallback) |
+| Orphan DE | No |
+| Manual taskkill | No |
+| cstd.exe protected | Yes |
+
+### FS5 live evidence (bounded exact-key skip smoke)
+
+| Metric | Value |
+|--------|-------|
+| Scenario | Exact-key failure skip enforcement |
+| Target parameter_key | `6a80b862aa1d40cb` |
+| Evidence count | 2 (solver_failed rows) |
+| Candidate decision | `enforce_eligible` |
+| Enforce skip | **Yes** |
+| Evaluator called | **No** |
+| Synthetic skip row written | **Yes** (id=3) |
+| Synthetic status | `skipped_failure_reuse` |
+| Actual CST solves | 0 (skip prevented all) |
+| Orphan DE | No |
+| Manual taskkill | No |
+| cstd.exe protected | Yes |
 
 ## Phase B -- Metric roles and gate (B1-B9) -- CLOSED
 

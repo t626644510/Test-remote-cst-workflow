@@ -110,8 +110,10 @@ across all metrics.  `limiting_metrics` identifies which metrics set the limit.
 | `TestFieldFlatnessExample` | 2 | Single metric envelope, full multi-metric envelope |
 | `TestEnvelope` | 3 | Limiting metrics, missing rule, default rule |
 | `TestGlobalSafety` | 2 | No factory/recovery imports, no JSONL/Excel |
+| `TestNonFiniteHardening` | 11 | NaN mean/CV/target/baseline, no thresholds, near-zero baseline, incomplete target, fail-overrides-unknown |
+| `TestRecommendationUnknownHardening` | 3 | pass→warning→pass, unknown blocks expansion, first-level unknown |
 
-**Total: 22 tests** (79 across TSE2+TSE3+TSE4)
+**Total: 35 tests** (92 across TSE2+TSE3+TSE4)
 
 ---
 
@@ -172,6 +174,28 @@ git ls-files | Select-String -Pattern "config.local.yaml|\.sqlite$|\.db$|\.db-sh
 ```powershell
 python -m pytest tests/workflows/test_rfgun_sao_tolerance_sweep_recommendation.py -q
 -- 30 passed in 0.10s
+
+python -m compileall workflows/rfgun_sao/tolerance_sweep_recommendation.py
+-- Compiles OK.
+```
+
+Runtime behavior, default config, and CST unchanged.
+
+---
+
+## Patch 2 (2026-06-05) — unknown rule edge cases
+
+| Change | Description |
+|--------|-------------|
+| Relative-delta near-zero handling | `max_relative_delta_from_baseline` with baseline mean near zero (&#124;mean&#124; &le; 1e-12) now produces `unknown` instead of silently passing |
+| Incomplete target rule | `target_mean` alone or `max_abs_error_from_target` alone now produces `unknown` with reason `"target rule incomplete"` instead of silently passing |
+| Tests added | 5 new tests: near-zero baseline, incomplete target (both directions), fail-overrides-unknown (incomplete target and near-zero baseline) |
+| Fail priority preserved | Hard thresholds (e.g. `max_mean`) still override unknown — `fail > unknown > pass` |
+
+**Validation:**
+```powershell
+python -m pytest tests/workflows/test_rfgun_sao_tolerance_sweep_recommendation.py -q
+-- 35 passed in 0.10s
 
 python -m compileall workflows/rfgun_sao/tolerance_sweep_recommendation.py
 -- Compiles OK.

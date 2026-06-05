@@ -161,7 +161,7 @@ class TestMetricRecommendation:
         curve = _curve("ff", [3, 10, 30], [0.02, 0.04, 0.07])
         rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08, max_delta_from_baseline=0.03)
         rec = recommend_metric_tolerance(curve, rule)
-        # 3um pass, 10um warning (delta 0.02 > 0.03? no â€?0.02 < 0.03 so pass)
+        # 3um pass, 10um warning (delta 0.02 > 0.03? no ï¿½?0.02 < 0.03 so pass)
         # Actually 0.04-0.02=0.02 < 0.03 so pass; 0.07-0.02=0.05 > 0.03 so warning
         assert rec.first_warning_tolerance_um == 30.0
 
@@ -318,6 +318,48 @@ class TestNonFiniteHardening:
         d = evaluate_metric_level(s, rule)
         assert d.status == "unknown"
         assert any("no evaluable thresholds" in r for r in d.reasons)
+
+    def test_relative_delta_baseline_zero_unknown(self):
+        """max_relative_delta_from_baseline with baseline mean 0 -> unknown."""
+        baseline = _summary("ff", 3.0, mean=0.0)
+        current = _summary("ff", 10.0, mean=0.05)
+        rule = MetricAcceptanceRule(metric_name="ff", max_relative_delta_from_baseline=0.5)
+        d = evaluate_metric_level(current, rule, baseline_summary=baseline)
+        assert d.status == "unknown"
+        assert any("near zero" in r for r in d.reasons)
+
+    def test_target_mean_without_max_abs_error_unknown(self):
+        """target_mean alone -> unknown, not pass."""
+        s = _summary("ff", 3.0, mean=0.05)
+        rule = MetricAcceptanceRule(metric_name="ff", target_mean=0.1)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+        assert any("target rule incomplete" in r for r in d.reasons)
+
+    def test_max_abs_error_without_target_mean_unknown(self):
+        """max_abs_error_from_target alone -> unknown, not pass."""
+        s = _summary("ff", 3.0, mean=0.05)
+        rule = MetricAcceptanceRule(metric_name="ff", max_abs_error_from_target=0.02)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+        assert any("target rule incomplete" in r for r in d.reasons)
+
+    def test_fail_overrides_incomplete_target_unknown(self):
+        """Hard fail (max_mean) overrides incomplete-target unknown."""
+        s = _summary("ff", 3.0, mean=0.15)
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08, target_mean=0.05)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "fail"
+        assert any("max_mean" in r for r in d.reasons)
+
+    def test_fail_overrides_near_zero_baseline_unknown(self):
+        """Hard fail (max_mean) overrides near-zero-baseline unknown."""
+        baseline = _summary("ff", 3.0, mean=0.0)
+        current = _summary("ff", 10.0, mean=0.15)
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08, max_relative_delta_from_baseline=0.5)
+        d = evaluate_metric_level(current, rule, baseline_summary=baseline)
+        assert d.status == "fail"
+        assert any("max_mean" in r for r in d.reasons)
 
 
 class TestRecommendationUnknownHardening:

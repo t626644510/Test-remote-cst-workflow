@@ -155,7 +155,10 @@ def evaluate_metric_level(
     if rule.max_outliers is not None and no > rule.max_outliers:
         _fail(f"outliers {no} > max_outliers {rule.max_outliers}")
 
-    if rule.target_mean is not None and rule.max_abs_error_from_target is not None:
+    # Incomplete target rule: exactly one of target_mean / max_abs_error_from_target set
+    if (rule.target_mean is None) != (rule.max_abs_error_from_target is None):
+        _unknown("target rule incomplete")
+    elif rule.target_mean is not None and rule.max_abs_error_from_target is not None:
         if not _finite(m): _unknown("mean is non-finite for target error")
         else:
             err = abs(m - rule.target_mean)
@@ -169,10 +172,13 @@ def evaluate_metric_level(
             delta = abs(m - bm)
             if rule.max_delta_from_baseline is not None and delta > rule.max_delta_from_baseline:
                 _warn(f"delta from baseline {delta:.4g} > {rule.max_delta_from_baseline}")
-            if rule.max_relative_delta_from_baseline is not None and abs(bm) > 1e-12:
-                rel = delta / abs(bm)
-                if rel > rule.max_relative_delta_from_baseline:
-                    _warn(f"relative delta from baseline {rel:.4g} > {rule.max_relative_delta_from_baseline}")
+            if rule.max_relative_delta_from_baseline is not None:
+                if abs(bm) > 1e-12:
+                    rel = delta / abs(bm)
+                    if rel > rule.max_relative_delta_from_baseline:
+                        _warn(f"relative delta from baseline {rel:.4g} > {rule.max_relative_delta_from_baseline}")
+                else:
+                    _unknown("baseline mean is near zero for relative delta")
         elif (rule.max_delta_from_baseline is not None or rule.max_relative_delta_from_baseline is not None) and not (_finite(m) and _finite(bm)):
             _unknown("baseline or current mean is non-finite for delta rule")
 

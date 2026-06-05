@@ -94,19 +94,7 @@ def evaluate_metric_level(
     rule: MetricAcceptanceRule,
     baseline_summary: SweepMetricLevelSummary | None = None,
 ) -> MetricLevelDecision:
-    """Evaluate one tolerance level against a rule.
-
-    Parameters
-    ----------
-    summary : SweepMetricLevelSummary
-    rule : MetricAcceptanceRule
-    baseline_summary : SweepMetricLevelSummary or None
-        Baseline (lowest level) summary for delta checks.
-
-    Returns
-    -------
-    MetricLevelDecision
-    """
+    """Evaluate one tolerance level against a rule."""
     reasons: list[str] = []
     status = "pass"
 
@@ -121,36 +109,61 @@ def evaluate_metric_level(
             status = "warning"
         reasons.append(reason)
 
+    def _unknown(reason: str) -> None:
+        nonlocal status
+        if status == "pass":
+            status = "unknown"
+        reasons.append(reason)
+
     m = summary.mean
     cv = summary.cv_percent
     ccv = summary.clean_cv_percent
     fr = summary.failure_rate
     no = summary.n_outliers
 
-    # Hard thresholds
-    if rule.max_mean is not None and _finite(m) and m > rule.max_mean:
-        _fail(f"mean {m:.4g} > max_mean {rule.max_mean}")
-    if rule.min_mean is not None and _finite(m) and m < rule.min_mean:
-        _fail(f"mean {m:.4g} < min_mean {rule.min_mean}")
-    if rule.max_cv_percent is not None and _finite(cv) and cv > rule.max_cv_percent:
-        _fail(f"CV {cv:.4g}% > max_cv_percent {rule.max_cv_percent}%")
-    if rule.max_clean_cv_percent is not None and _finite(ccv) and ccv > rule.max_clean_cv_percent:
-        _fail(f"clean CV {ccv:.4g}% > max_clean_cv_percent {rule.max_clean_cv_percent}%")
-    if rule.max_failure_rate is not None and _finite(fr) and fr > rule.max_failure_rate:
-        _fail(f"failure rate {fr:.4g} > max_failure_rate {rule.max_failure_rate}")
+    # Check if any thresholds are configured
+    has_threshold = any(x is not None for x in [
+        rule.max_mean, rule.min_mean, rule.max_cv_percent,
+        rule.max_clean_cv_percent, rule.max_failure_rate,
+        rule.max_outliers, rule.target_mean, rule.max_abs_error_from_target,
+        rule.max_delta_from_baseline, rule.max_relative_delta_from_baseline,
+    ])
+    if not has_threshold:
+        _unknown("no evaluable thresholds configured")
+
+    # Hard thresholds with non-finite checks
+    if rule.max_mean is not None:
+        if not _finite(m): _unknown("mean is non-finite for max_mean")
+        elif m > rule.max_mean: _fail(f"mean {m:.4g} > max_mean {rule.max_mean}")
+
+    if rule.min_mean is not None:
+        if not _finite(m): _unknown("mean is non-finite for min_mean")
+        elif m < rule.min_mean: _fail(f"mean {m:.4g} < min_mean {rule.min_mean}")
+
+    if rule.max_cv_percent is not None:
+        if not _finite(cv): _unknown("cv_percent is non-finite for max_cv_percent")
+        elif cv > rule.max_cv_percent: _fail(f"CV {cv:.4g}% > max_cv_percent {rule.max_cv_percent}%")
+
+    if rule.max_clean_cv_percent is not None:
+        if not _finite(ccv): _unknown("clean_cv_percent is non-finite for max_clean_cv_percent")
+        elif ccv > rule.max_clean_cv_percent: _fail(f"clean CV {ccv:.4g}% > max_clean_cv_percent {rule.max_clean_cv_percent}%")
+
+    if rule.max_failure_rate is not None:
+        if not _finite(fr): _unknown("failure_rate is non-finite for max_failure_rate")
+        elif fr > rule.max_failure_rate: _fail(f"failure rate {fr:.4g} > max_failure_rate {rule.max_failure_rate}")
+
     if rule.max_outliers is not None and no > rule.max_outliers:
         _fail(f"outliers {no} > max_outliers {rule.max_outliers}")
+
     if rule.target_mean is not None and rule.max_abs_error_from_target is not None:
-        if _finite(m):
+        if not _finite(m): _unknown("mean is non-finite for target error")
+        else:
             err = abs(m - rule.target_mean)
             if err > rule.max_abs_error_from_target:
-                _fail(
-                    f"|mean - target| {err:.4g} > max_abs_error "
-                    f"{rule.max_abs_error_from_target}",
-                )
+                _fail(f"|mean - target| {err:.4g} > max_abs_error {rule.max_abs_error_from_target}")
 
-    # Baseline delta (warning only unless already fail)
-    if status == "pass" and baseline_summary is not None:
+    # Baseline delta
+    if status in ("pass", "unknown") and baseline_summary is not None:
         bm = baseline_summary.mean
         if _finite(m) and _finite(bm):
             delta = abs(m - bm)
@@ -159,10 +172,9 @@ def evaluate_metric_level(
             if rule.max_relative_delta_from_baseline is not None and abs(bm) > 1e-12:
                 rel = delta / abs(bm)
                 if rel > rule.max_relative_delta_from_baseline:
-                    _warn(
-                        f"relative delta from baseline {rel:.4g} "
-                        f"> {rule.max_relative_delta_from_baseline}",
-                    )
+                    _warn(f"relative delta from baseline {rel:.4g} > {rule.max_relative_delta_from_baseline}")
+        elif (rule.max_delta_from_baseline is not None or rule.max_relative_delta_from_baseline is not None) and not (_finite(m) and _finite(bm)):
+            _unknown("baseline or current mean is non-finite for delta rule")
 
     return MetricLevelDecision(
         metric_name=summary.metric_name,
@@ -176,10 +188,6 @@ def evaluate_metric_level(
         n_outliers=summary.n_outliers,
     )
 
-
-# ===================================================================
-# Per-metric recommendation
-# ===================================================================
 
 
 def recommend_metric_tolerance(
@@ -208,30 +216,29 @@ def recommend_metric_tolerance(
     for s in curve.summaries:
         decisions.append(evaluate_metric_level(s, rule, baseline_summary=baseline))
 
-    # Determine pass/warning/fail boundaries
+    # Determine boundaries (ascending tolerance order)
     recommended: float | None = None
     first_warning: float | None = None
     first_failure: float | None = None
-    last_pass: float | None = None
+    last_valid_pass: float | None = None
+    expanded_blocked = False
 
     for d in decisions:
         if d.status == "fail":
             if first_failure is None:
                 first_failure = d.tolerance_level_um
-                break  # stop at first fail
-        elif d.status == "warning":
+            expanded_blocked = True
+            break
+        if d.status == "warning":
             if first_warning is None:
                 first_warning = d.tolerance_level_um
-        if d.status == "pass":
-            last_pass = d.tolerance_level_um
+            expanded_blocked = True
+        if d.status == "unknown":
+            expanded_blocked = True
+        if d.status == "pass" and not expanded_blocked:
+            last_valid_pass = d.tolerance_level_um
 
-    # Recommended max: highest pass before first warning/fail
-    if first_failure is not None:
-        recommended = last_pass
-    elif first_warning is not None:
-        recommended = last_pass
-    else:
-        recommended = last_pass  # last_pass = max level if all pass
+    recommended = last_valid_pass
 
     # Knee candidate from curve
     knee: float | None = None

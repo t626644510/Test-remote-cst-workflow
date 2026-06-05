@@ -156,6 +156,31 @@ git ls-files | Select-String -Pattern "config.local.yaml|\.sqlite$|\.db$|\.db-sh
 
 ---
 
+## Patch notes (TSE4 hardening)
+
+| Change | Description |
+|--------|-------------|
+| Non-finite threshold inputs | NaN/inf values now produce `unknown` status instead of incorrectly remaining `pass` |
+| Warning/unknown stops expansion | First warning or unknown blocks further `last_valid_pass` updates; later pass levels no longer expand the recommended max |
+| Reason summaries enhanced | Non-finite value reasons (e.g. `"mean is non-finite for max_mean"`) included in level decisions and recommendation summary |
+| Tests added | 8 new tests covering `evaluate_metric_level` non-finite handling and `recommend_metric_tolerance` warning/unknown blocking (30 total) |
+| `BRANCH_CONTEXT.md` updated | TSE1–TSE5 + TSE-LIVE1 track table added |
+| Baseline delta non-finite | `unknown` returned when baseline or current mean is non-finite for delta rules |
+| No thresholds configured | Returns `unknown` with reason `"no evaluable thresholds configured"` |
+
+**Validation:**
+```powershell
+python -m pytest tests/workflows/test_rfgun_sao_tolerance_sweep_recommendation.py -q
+-- 30 passed in 0.10s
+
+python -m compileall workflows/rfgun_sao/tolerance_sweep_recommendation.py
+-- Compiles OK.
+```
+
+Runtime behavior, default config, and CST unchanged.
+
+---
+
 ## Final recommendation
 
 **Accepted.** TSE4 provides threshold-based recommendation rules for tolerance

@@ -161,7 +161,7 @@ class TestMetricRecommendation:
         curve = _curve("ff", [3, 10, 30], [0.02, 0.04, 0.07])
         rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08, max_delta_from_baseline=0.03)
         rec = recommend_metric_tolerance(curve, rule)
-        # 3um pass, 10um warning (delta 0.02 > 0.03? no â€” 0.02 < 0.03 so pass)
+        # 3um pass, 10um warning (delta 0.02 > 0.03? no â€?0.02 < 0.03 so pass)
         # Actually 0.04-0.02=0.02 < 0.03 so pass; 0.07-0.02=0.05 > 0.03 so warning
         assert rec.first_warning_tolerance_um == 30.0
 
@@ -279,3 +279,92 @@ class TestGlobalSafety:
         assert ".xlsx" not in text
         assert "openpyxl" not in text
         assert "xlrd" not in text
+
+
+# ===================================================================
+# Non-finite / unknown hardening
+# ===================================================================
+
+
+class TestNonFiniteHardening:
+    def test_nan_mean_with_max_mean_unknown(self):
+        s = _summary("ff", 3.0, mean=float("nan"))
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+
+    def test_nan_cv_with_max_cv_unknown(self):
+        s = _summary("ff", 3.0, cv=float("nan"))
+        rule = MetricAcceptanceRule(metric_name="ff", max_cv_percent=50.0)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+
+    def test_nan_mean_for_target_error_unknown(self):
+        s = _summary("ff", 3.0, mean=float("nan"))
+        rule = MetricAcceptanceRule(metric_name="ff", target_mean=0.05, max_abs_error_from_target=0.02)
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+
+    def test_nan_baseline_delta_unknown(self):
+        current = _summary("ff", 10.0, mean=0.05)
+        baseline = _summary("ff", 3.0, mean=float("nan"))
+        rule = MetricAcceptanceRule(metric_name="ff", max_delta_from_baseline=0.03)
+        d = evaluate_metric_level(current, rule, baseline_summary=baseline)
+        assert d.status == "unknown"
+
+    def test_no_thresholds_unknown(self):
+        s = _summary("ff", 3.0)
+        rule = MetricAcceptanceRule(metric_name="ff")
+        d = evaluate_metric_level(s, rule)
+        assert d.status == "unknown"
+        assert any("no evaluable thresholds" in r for r in d.reasons)
+
+
+class TestRecommendationUnknownHardening:
+    def test_pass_warning_pass_recommends_previous_pass(self):
+        """pass -> warning -> pass => recommended = previous pass before warning, not later pass."""
+        # Baseline at 3um mean=0.02. max_delta_from_baseline=0.02 so:
+        # 3 pass, 10 warning (delta 0.05-0.02=0.03 > 0.02), 30 pass (delta 0.04-0.02=0.02 <= 0.02)
+        curve = _curve("ff", [3, 10, 30], [0.02, 0.05, 0.04])
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08, max_delta_from_baseline=0.02)
+        rec = recommend_metric_tolerance(curve, rule)
+        assert rec.recommended_max_tolerance_um == 3.0
+        assert rec.first_warning_tolerance_um == 10.0
+
+    def test_unknown_blocks_expansion(self):
+        summaries = [
+            _summary("ff", 3, mean=0.02),
+            _summary("ff", 10, mean=float("nan")),
+            _summary("ff", 30, mean=0.04),
+        ]
+        curve = SweepMetricCurve(
+            tolerance_parameter="offset1", metric_name="ff",
+            levels_um=(3, 10, 30), summaries=tuple(summaries),
+            mean_values=(0.02, float("nan"), 0.04),
+            cv_values=(5.0, float("nan"), 5.0),
+            clean_cv_values=(5.0, float("nan"), 5.0),
+            failure_rates=(0.0, 0.0, 0.0),
+        )
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08)
+        rec = recommend_metric_tolerance(curve, rule)
+        # 3 pass, 10 unknown, 30 pass (but blocked by unknown)
+        # recommended should be 3 (last_valid_pass before unknown), not 30
+        assert rec.recommended_max_tolerance_um == 3.0
+        # Unknown reason should appear in summary
+        assert any("10um" in r and "non-finite" in r for r in rec.reason_summary)
+
+    def test_first_level_unknown_gives_none(self):
+        s = [_summary("ff", 3, mean=float("nan")), _summary("ff", 10, mean=0.04)]
+        curve = SweepMetricCurve(
+            tolerance_parameter="offset1", metric_name="ff",
+            levels_um=(3, 10), summaries=tuple(s),
+            mean_values=(float("nan"), 0.04),
+            cv_values=(float("nan"), 5.0),
+            clean_cv_values=(float("nan"), 5.0),
+            failure_rates=(0.0, 0.0),
+        )
+        rule = MetricAcceptanceRule(metric_name="ff", max_mean=0.08)
+        rec = recommend_metric_tolerance(curve, rule)
+        assert rec.recommended_max_tolerance_um is None
+        # Unknown reason should appear in summary
+        assert any("3um" in r and "non-finite" in r for r in rec.reason_summary)

@@ -96,6 +96,17 @@ Remote branches archived in MH3.
 - SE -- schema extension hooks if DB v1 becomes insufficient
 - Workflow2 field objectives deferred
 
+### Tolerance sweep envelope (TSE track — feature/wf3-tolerance-sweep-envelope)
+
+| Phase | Scope | Live CST? | Status |
+|-------|-------|-----------|--------|
+| TSE1 | Tolerance sweep / envelope design | No | Accepted at `bf4eaef` |
+| TSE2 | Sweep dataset / group loader / no-CST | No | Accepted at `f3c44b1` |
+| TSE3 | Sweep statistics / envelope tables / no-CST | No | Accepted at `c1f38c2` |
+| TSE4 | Recommendation rules / threshold config / no-CST | No | Completed / pending review |
+| TSE5 | Sweep CLI / markdown / JSON report / no-CST | No | |
+| TSE-LIVE1 | Optional bounded live sweep (requires explicit approval) | **Yes** | Not approved unless separately authorized |
+
 ### DB warm-start phases (WS track)
 
 | Phase | Scope | Live CST? |

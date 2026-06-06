@@ -1,59 +1,69 @@
-# Agent Operating Charter -- Scheme 1.5
+# Agent Operating Charter
 
-This document supersedes older local-agent prompt notes for future planning
-work.  Use it as the fixed governance input for web-agent planning before the
-Workflow 2 refactor.
+This document is the reusable governance baseline for future development in
+this repository. It is intentionally workflow-agnostic. Workflow-specific
+plans, branch strategies, and launch prompts may add temporary context, but
+they should not weaken the principles below.
 
 ## Primary Objective
 
-The refactor exists to reduce long-term context cost and coupling.  Bug fixing
-is necessary, but it is not the primary goal.  Every phase should move the
-project toward:
+Development should reduce long-term context cost, coupling, and recovery
+burden while preserving strict code quality. Bug fixing is necessary, but it
+should not become a substitute for improving the structure of the project.
+
+Every major phase should move the project toward:
 
 - smaller workflow-specific context;
-- clearer boundaries between core and workflow code;
-- fewer repeated full-repository reads by local agents;
-- fewer repeated broad test runs by local agents;
-- safer promotion of truly reusable modules back toward main.
-
-## Scheme 1.5 Direction
-
-Do not immediately perform a large main/core extraction.  Do not start
-Workflow 2 as an unconstrained continuation of the current large branch.
-
-Instead:
-
-1. Establish these governance rules first.
-2. Continue Workflow 2 on a dedicated isolation branch.
-3. Let Workflow 2 expose which pieces are actually reusable.
-4. Mark reusable pieces as core candidates during Workflow 2 work.
-5. Refine main/core after Workflow 2 has produced evidence across workflows.
+- clearer boundaries between shared core code and workflow-specific code;
+- fewer repeated full-repository reads by execution agents;
+- fewer repeated broad test runs when targeted validation is enough;
+- safer promotion of genuinely reusable modules into stable shared surfaces;
+- accurate documentation that reflects current implementation, not intent.
 
 ## Role Boundaries
 
-- Web agent: strict high-context reviewer and planner.  It may inspect the full
-  repository when needed, but should produce concise execution prompts.
-- Local agent: execution worker.  It should receive bounded prompts with a
-  small initial read set, targeted tests, and explicit non-goals.
-- Codex review layer: final high-level reviewer after major refactors.  It may
+- Web agent: high-context reviewer and planner. It may inspect the full
+  repository when needed, challenge reports, and design follow-up prompts.
+- Local agent: bounded execution worker. It should receive concise prompts
+  with a small initial read set, explicit edit scope, and targeted validation.
+- Codex review layer: final broad reviewer after major refactors. It may
   inspect broadly and run broad tests for acceptance.
+
+The web agent may be strict and expensive with context. The local agent should
+be cheap, focused, and repeatable.
 
 ## Source of Truth
 
-Code, tests, and current git diff are authoritative.  Historical reports,
-phase plans, merge notes, and status documents are evidence only.  Do not use
+Code, tests, and current git diff are authoritative. Historical reports,
+phase plans, merge notes, and status documents are evidence only. Do not use
 old reports as conclusions without checking current code.
 
-## Core and Branch Policy
+When documents disagree with code, trust the code first, then either update the
+document or record the discrepancy for the next planning step.
+
+## Architecture Policy
 
 - Workflow-specific logic should remain workflow-specific until reuse is
   demonstrated.
-- Core code may be changed when a workflow genuinely needs a shared contract
-  fix, but such changes require explicit scope and broader validation.
+- Shared core code may be changed when a workflow genuinely needs a stable
+  cross-workflow contract, but such changes require explicit scope and broader
+  validation.
 - A module is a core candidate only after it is useful across workflows or has
-  a stable cross-workflow interface.
-- Main should accept stable core capabilities, not every workflow convenience
-  layer.
+  a stable interface that can be tested independently.
+- Stable branches should accept durable shared capabilities, not every
+  workflow convenience layer.
+
+## Branch and Scope Policy
+
+- Use branch isolation for large workflow refactors, risky architecture work,
+  or experiments that may not belong in stable shared code.
+- Keep each phase small enough that its diff can be reviewed independently.
+- Do not mix governance/documentation cleanup, runtime behavior fixes, and
+  broad architecture changes in one local-agent task unless the connection is
+  explicit.
+- Treat high-blast-radius paths as sensitive, not impossible to change. The
+  prompt must name the file, reason, and validation when such paths are in
+  scope.
 
 ## Local-Agent Prompt Contract
 
@@ -63,23 +73,38 @@ Every local-agent prompt should contain only:
 2. Background: at most five current facts.
 3. Read first: a bounded file list.
 4. Scope: allowed edits and forbidden edits.
-5. Validation: targeted tests first; broader tests only if shared core changes.
+5. Validation: targeted tests first; broader tests only if risk justifies it.
 6. Output: changed files, rationale, tests run, remaining risks.
 
-Avoid asking the local agent to read the whole repository by default.  Avoid
+Avoid asking the local agent to read the whole repository by default. Avoid
 asking it to repeat already-passed broad tests unless touched code justifies it.
+
+## Validation Policy
+
+- Prefer targeted tests for bounded changes.
+- Escalate to broader tests when shared core code, cross-workflow contracts,
+  persistence, recovery behavior, or runtime entrypoints change.
+- For live CST work, separate no-CST validation from live-CST validation and
+  state which one was actually run.
+- Record exact commands and outcomes for major milestones.
 
 ## Reporting Policy
 
-Reports are useful for major milestones and live CST evidence.  They should not
-be produced for every small patch.  Prefer concise summaries for patch-level
-work.
+Reports are useful for major milestones, architecture decisions, and live CST
+evidence. They should not be produced for every small patch. Prefer concise
+summaries for patch-level work.
 
 ## CST API Rule
 
 Any CST Studio Suite code must be based on provided official documentation or
-existing verified wrappers.  Do not invent `cst.interface` or `cst.results`
+existing verified wrappers. Do not invent `cst.interface` or `cst.results`
 APIs.
+
+## Scientific Rigor
+
+When code computes or reports physical quantities, comments and docstrings
+should make units and assumptions explicit, especially for frequency, quality
+factor, accelerating gradient, power, and field-derived metrics.
 
 ## Prompt Template
 
@@ -108,7 +133,7 @@ Forbidden:
 
 Validation:
 - targeted: <commands>
-- broader only if shared core changed: <commands>
+- broader only if risk justifies it: <commands>
 
 Return:
 - changed files

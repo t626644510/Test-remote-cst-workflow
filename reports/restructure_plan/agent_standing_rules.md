@@ -5,7 +5,7 @@ Reusable rules for local-agent prompts in the
 
 ## Current status
 
-For future Workflow 2 planning and local-agent prompt construction, use
+For future planning and local-agent prompt construction, use
 `reports/restructure_plan/agent_operating_charter.md` as the higher-priority
 governance document. This OPS1 file is retained as a safety checklist only.
 Do not use it as the full prompt template, and do not treat its old branch

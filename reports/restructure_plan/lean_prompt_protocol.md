@@ -4,10 +4,10 @@ Guidelines for writing token-efficient prompts for local agents.
 
 ## Current status
 
-For Workflow 2 and later planning, this protocol is subordinate to
+For future planning, this protocol is subordinate to
 `reports/restructure_plan/agent_operating_charter.md`. Use that charter for
-role boundaries, Scheme 1.5 direction, and the default local-agent prompt
-contract. This file remains a compact style guide.
+role boundaries, source-of-truth rules, validation policy, and the default
+local-agent prompt contract. This file remains a compact style guide.
 
 ## Rationale
 

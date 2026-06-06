@@ -1,0 +1,276 @@
+# Workflow 2 — HOM antenna multi-project optimisation configuration.
+#
+# STATUS: staging / snapshot — NOT yet consumed by the runtime.
+#
+#   - The current public entry point (``run_workflow_2.py``) reads the
+#     ``workflow_2`` section from ``config/default.yaml``, not this file.
+#   - The root runner applies legacy fallback merges (top-level ``cst``,
+#     ``solver``, ``logging``) that this snapshot does NOT include.
+#   - This file will become the runtime source of truth once the root shim
+#     is repointed (planned for a later migration phase).
+#
+# This is a RAW ``workflow_2`` subtree snapshot extracted from
+# ``config/default.yaml``.  It exactly matches the ``workflow_2`` section
+# at the time of extraction.  No top-level fallback keys have been merged in.
+#
+# Known W2-1 finding:
+#   ``optimization.solver.stagnation_timeout_s: 7200.0`` represents the
+#   configuration intent for the wakefield solver timeout.  However, the
+#   current builder (``build_workflow_2``) reads solver config from
+#   ``workflow_2.solver`` (which arrives via root-runner fallback merge as
+#   ``300.0``), NOT from ``workflow_2.optimization.solver``.  This snapshot
+#   preserves the intent value; the discrepancy must be resolved at
+#   migration time.
+
+workflow_2:
+  enabled: true
+  result_paths:
+    s11: "1D Results\\S-Parameters\\S1,1"
+    s21: "1D Results\\S-Parameters\\S2,1"
+    s31: "1D Results\\S-Parameters\\S3,1"
+  evaluation:
+    pre_eval_cleanup: false
+    post_eval_recovery: ""
+  pre_filter:
+    enabled: true
+    absorption_threshold_db: -25.0
+  projects:
+    frequency_domain:
+      cst_path: D:/workflow2/F2F.cst
+      is_pre_filter: true
+    wakefield:
+      cst_path: D:/workflow2/F2W.cst
+      condition_trigger: antenna_absorption
+      condition_max_penalty: 0.9
+    wakefield_offset:
+      cst_path: D:/workflow2/F2W_offset.cst
+      condition_trigger: z_longitudinal
+      condition_max_penalty: 0.9
+  message_log:
+    enabled: true
+    output_dir: D:/Results/cst_messages
+  optimization:
+    algorithm: sao
+    n_initial: 10
+    n_iterations: 50
+    seed: 42
+    acquisition_function: ei
+    acquisition_xi: 0.01
+    solver:
+      stagnation_timeout_s: 7200.0
+    retry:
+      enabled: true
+      max_tier1: 0
+      max_tier2: 0
+      max_tier3: 2
+      cooldown_s: 15.0
+      evaluation_timeout_s: 10800.0
+  parameters:
+  - name: selfangle1
+    display_name: Self Angle 1
+    unit: deg
+    low: 0.0
+    high: 180.0
+    log_scale: false
+  - name: selfangle2
+    display_name: Self Angle 2
+    unit: deg
+    low: 0.0
+    high: 180.0
+    log_scale: false
+  - name: inner_angle
+    display_name: Inner Angle
+    unit: deg
+    low: -90
+    high: 0
+    log_scale: false
+  - name: inner_angle3
+    display_name: Inner Angle 3
+    unit: deg
+    low: 0.0
+    high: 90.0
+    log_scale: false
+  - name: FolkHeight
+    display_name: Folk Height
+    unit: mm
+    low: 1.0
+    high: 50.0
+    log_scale: false
+  - name: FolkHeight2
+    display_name: Folk Height 2
+    unit: mm
+    low: 1.0
+    high: 50.0
+    log_scale: false
+  - name: UpperHeight1
+    display_name: Upper Height 1
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: UpperHeight2
+    display_name: Upper Height 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: DownHeight1
+    display_name: Down Height 1
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: DownHeight2
+    display_name: Down Height 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: Lin2
+    display_name: Lin 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: inner_r2
+    display_name: Inner Radius 2
+    unit: mm
+    low: 1.0
+    high: 15.0
+    log_scale: false
+  - name: Lin
+    display_name: Lin
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: inner_r
+    display_name: Inner Radius
+    unit: mm
+    low: -15.0
+    high: -1.0
+    log_scale: false
+  constraints:
+  - type: gt
+    a: Lin
+    b: DownHeight1
+    description: Lin > DownHeight1
+  - type: gt
+    a: Lin2
+    b: DownHeight2
+    description: Lin2 > DownHeight2
+  - type: sin_times_r_lt
+    angle: inner_angle
+    radius: inner_r
+    threshold: 9.785
+    description: (1-cos(inner_angle)) * -inner_r < 9.785
+    formula: 1-cos
+    negate_radius: true
+  - type: sin_times_r_lt
+    angle: inner_angle3
+    radius: inner_r2
+    threshold: 9.785
+    description: (1-cos(inner_angle3)) * inner_r2 < 9.785
+    formula: 1-cos
+  - type: sin_times_r_gt
+    angle: inner_angle
+    radius: inner_r
+    threshold: 2.75
+    description: (1-cos(inner_angle)) * -inner_r > 2.75
+    formula: 1-cos
+    negate_radius: true
+  - type: sin_times_r_gt
+    angle: inner_angle3
+    radius: inner_r2
+    threshold: 2.75
+    description: (1-cos(inner_angle3)) * inner_r2 > 2.75
+    formula: 1-cos
+  - type: gt
+    a: inner_r2
+    b: 5.44
+    description: inner_r2 > 5.44
+  - type: gt
+    a: -5.44
+    b: inner_r
+    description: inner_r < -5.44
+  objectives:
+  - name: z_longitudinal
+    mode: less_than_soft
+    mode_params:
+      threshold: 0.0
+      scale: 0.008
+      power: 1.0
+    obj_params:
+      strategy: threshold_exceedance_integral
+      z_threshold_ohm: 2000.0
+      reference_beam: ParticleBeam1
+      freq_min_hz: 550000000.0
+      project: wakefield
+      normalize: true
+  - name: z_transverse
+    enabled: true
+    mode: less_than_soft
+    mode_params:
+      threshold: 0.0
+      scale: 0.0015
+      power: 1.0
+    obj_params:
+      strategy: threshold_exceedance_integral
+      z_threshold_ohm_per_m: 50000.0
+      aggregation: worst_case
+      reference_beam: ParticleBeam1
+      offset_beams:
+      - name: ParticleBeam2
+        offset_x_mm: 2.0
+        offset_y_mm: 0.0
+      project: wakefield_offset
+      ref_project: wakefield
+      normalize: true
+      square_exceedance: true
+  - name: antenna_absorption
+    mode: less_than
+    mode_params:
+      threshold: -29.0
+      sigma: 2.0
+    obj_params:
+      antenna_port: 2
+      tree_path: "1D Results\\S-Parameters\\S2,1"
+      search_freq_ghz: 0.5
+      search_width_ghz: 0.01
+      project: frequency_domain
+  - name: antenna_absorption_db
+    mode: less_than
+    mode_params:
+      threshold: -29.0
+      sigma: 2.0
+    obj_params:
+      antenna_port: 3
+      tree_path: "1D Results\\S-Parameters\\S3,1"
+      search_freq_ghz: 0.5
+      search_width_ghz: 0.01
+      project: frequency_domain
+
+  # ── Adaptive conditional gate (three-phase + TCP sliding window) ──
+  adaptive_gate:
+    # Phase A: unconditional F2W/F2WO passes for initial GP training data
+    warmup_n_evaluations: 10
+
+    # Phase B: GP-gated
+    gp_skip_threshold: 0.5
+    validate_every_n: 5
+    trust_consecutive: 5
+    max_consecutive_fail: 3
+    prediction_error_epsilon: 0.15
+
+    # TCP sliding window
+    delta_db: 2.0
+    db_initial: -25.0
+    db_min: -31.0
+
+    # Phase transition thresholds
+    pass_rate_threshold: 0.6
+    gp_accuracy_threshold: 0.85
+    pass_rate_critical: 0.3
+
+    # GP model
+    gp_alpha: 0.001

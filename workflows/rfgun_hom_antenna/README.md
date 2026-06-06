@@ -2,13 +2,19 @@
 
 ## Status
 
-**Skeleton only.** No runtime has been migrated yet.
+**Skeleton with staged config.** No runtime has been migrated yet.
 
 The legacy entry point remains at the project root:
 
 ```
 python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
 ```
+
+The local ``config.yaml`` is a **staging / snapshot** of the ``workflow_2``
+section from the global ``config/default.yaml``.  It is **not yet consumed**
+by the runtime.  The root entry point and all scheduler invocations still
+read the legacy config.  See the header comment in ``config.yaml`` for the
+known W2-1 solver-timeout discrepancy and migration constraints.
 
 ## Package structure
 
@@ -28,8 +34,8 @@ plan and current status.
 Phases:
 - W2-0 — Context document
 - W2-1 — No-CST characterization tests
-- **W2-2 — Package skeleton** ← current
-- W2-3 — Config isolation
+- W2-2 — Package skeleton                                                ✅ done
+- **W2-3 — Config isolation** ← current
 - W2-4 — Builder ownership migration
 - W2-5 — Orchestrator ownership assessment
 - W2-6 — Fix documented semantic risks

@@ -10,8 +10,8 @@ Current legacy entry point (not yet repointed)::
 Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-0  — context document                                          ✅ done
     W2-1  — no-CST characterization tests                            ✅ done
-    W2-2  — package skeleton (this file)                             ⬅️ current
-    W2-3  — workflow2 config isolation
+    W2-2  — package skeleton (this file)                             ✅ done
+    W2-3  — workflow2 config isolation                               ⬅️ current
     W2-4  — builder ownership migration
     W2-5  — orchestrator ownership assessment
     W2-6  — fix documented semantic risks

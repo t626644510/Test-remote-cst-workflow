@@ -524,36 +524,83 @@ python -m pytest tests/workflows/test_workflow2_characterization.py -q
 - `config/default.yaml` 未修改
 - `src/cst_optimization/**` 未修改
 
+### 本轮（W2-3：workflow2 config isolation）
+
+**执行时间**：2026-06-06
+
+**分支**：`refactor/workflow2-config-isolation`（基于 `refactor/workflow2-package-skeleton`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `config/default.yaml`
+4. `workflows/rfgun_hom_antenna/README.md`
+5. `workflows/rfgun_hom_antenna/run.py`
+6. `tests/workflows/test_workflow2_characterization.py`
+7. `tests/workflows/test_workflow2_package_skeleton.py`
+8. `run_workflow_2.py`（仅确认 legacy fallback 行为）
+9. `src/cst_optimization/factory.py`（仅确认 builder 当前读取顶层 solver）
+
+**新增文件**：
+- `workflows/rfgun_hom_antenna/config.yaml`
+- `tests/workflows/test_workflow2_config_isolation.py`
+
+**更新文件**：
+- `workflows/rfgun_hom_antenna/__init__.py`（W2-3 phase marker）
+- `workflows/rfgun_hom_antenna/README.md`（config status 说明）
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_config_isolation.py -v --tb=short
+python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+```
+
+**测试结果**：
+- Config isolation tests: 6 / 6 passed
+- W2-2 skeleton tests: 9 / 9 passed (unchanged)
+- W2-1 characterization tests: 21 / 21 passed (unchanged)
+
+**关键事实**：
+- `workflows/rfgun_hom_antenna/config.yaml` 已创建为 raw `workflow_2` subtree snapshot
+- 未合并顶层 `cst` / `solver` / `logging` fallback keys — 明确记录这是 raw snapshot 而非 merged runtime snapshot
+- `optimization.solver.stagnation_timeout_s: 7200.0` 作为 intent 保留，并在 yaml header 中记录 W2-1 确认的离散
+- `config/default.yaml` 未修改
+- `run_workflow_2.py` 未修改
+- `scripts/schedule_workflow2.ps1` 未修改
+- `src/cst_optimization/**` 未修改
+
 ### 整体状态
 
 - W2-0: accepted.
 - W2-1: accepted.
-- **W2-2: pending web review** — package skeleton created, 9 skeleton tests + 21 characterization tests pass.
+- W2-2: accepted.
+- **W2-3: pending web review** — local config snapshot created, 6 config isolation tests + 9 skeleton + 21 characterization pass.
 - 未运行 live workflow。
 - 未运行 CST。
 - 未接受任何 runtime 改动。
-- **W2-2 已完成**（package skeleton），W2-3（config isolation）为下一建议阶段。
+- **W2-3 已完成**（config isolation），W2-4（builder ownership migration）为下一建议阶段。
 
 后续每一轮本地 agent 都应更新本节，记录实际运行的命令和结果。
 
 ## 11. 当前推荐下一步
 
-### W2-2 已完成
+### W2-3 已完成
 
-- ✅ 从 `test/workflow2-characterization` 创建 `refactor/workflow2-package-skeleton` 分支
-- ✅ 创建 `workflows/rfgun_hom_antenna/__init__.py`（含 `__legacy_entry__`、迁移阶段 docstring）
-- ✅ 创建 `workflows/rfgun_hom_antenna/README.md`（状态、结构、计划、约束）
-- ✅ 创建 `workflows/rfgun_hom_antenna/run.py`（placeholder: `describe_legacy_entry()`、`get_legacy_entrypoint()`）
-- ✅ 创建 `tests/workflows/test_workflow2_package_skeleton.py`（9 tests, import + placeholder + presence）
-- ✅ root `run_workflow_2.py` 未修改
-- ✅ `scripts/schedule_workflow2.ps1` 未修改
+- ✅ 从 `refactor/workflow2-package-skeleton` 创建 `refactor/workflow2-config-isolation` 分支
+- ✅ 创建 `workflows/rfgun_hom_antenna/config.yaml`（raw `workflow_2` subtree snapshot，不含 fallback merged keys）
+- ✅ 创建 `tests/workflows/test_workflow2_config_isolation.py`（6 tests: presence, YAML parse, structural equality, solver intent, raw-subtree check）
+- ✅ 更新 `README.md` 和 `__init__.py` 的 phase marker
 - ✅ `config/default.yaml` 未修改
+- ✅ `run_workflow_2.py` 未修改
+- ✅ `scripts/schedule_workflow2.ps1` 未修改
 - ✅ `src/cst_optimization/**` 未修改
 - ✅ 不跑 CST
 - ⏳ 等待 web reviewer 审计通过
 
-### W2-3（通过 W2-2 审计后的建议）：workflow2 config 隔离
+### W2-4（通过 W2-3 审计后的建议）：builder ownership 迁移
 
-通过 W2-2 审计后，建议进入 W2-3 将 `config/default.yaml` 中的 `workflow_2` 语义迁入 `workflows/rfgun_hom_antenna/config.yaml`。
+通过 W2-3 审计后，建议进入 W2-4 将 `build_workflow_2` 的归属从 `src/cst_optimization/factory.py` 向 `workflows/rfgun_hom_antenna/workflow.py` 迁移。
 
-**注意**：W2-3 不做 runtime 迁移、不做 builder 迁移、不做 orchestrator 迁移。root `run_workflow_2.py` 继续保留对 `config/default.yaml` 的 fallback 兼容。
+**注意**：W2-4 开始时必须保有 W2-1 characterization tests 作为回归护网，且 `src/cst_optimization/factory.py::build_workflow_2` 可暂时保留为 compatibility wrapper。

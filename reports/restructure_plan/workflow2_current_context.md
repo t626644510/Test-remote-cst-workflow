@@ -72,7 +72,8 @@
 - Web reviewer 已确认本轮路线：先隔离 workflow2，再观察 core candidate，不先做大规模 core 抽离。
 - Web reviewer 已识别 workflow2 当前主要风险点。
 - **W2-0 done**：基于 origin/main 创建 `plan/workflow2-current-context-v2` 分支，本文档经多轮审核后 accepted。
-- **W2-1 done**：基于 origin/main 创建 `test/workflow2-characterization` 分支，完成 no-CST characterization tests。
+- **W2-1 done**：基于 origin/main 创建 `test/workflow2-characterization` 分支，完成 no-CST characterization tests（21 tests, accepted）。
+- **W2-2 done**：基于 `test/workflow2-characterization` 创建 `refactor/workflow2-package-skeleton` 分支，创建 `workflows/rfgun_hom_antenna/` 骨架包。
 - 本轮本地 agent 已读取以下文件：
   - `reports/restructure_plan/agent_operating_charter.md`
   - `reports/restructure_plan/workflow2_current_context.md`
@@ -477,35 +478,82 @@ python -m pytest tests/workflows/test_workflow2_characterization.py -v --tb=shor
 - P0.1: `_run_merge_like_root` 现在精确匹配 `run_workflow_2.py` 的引用赋值（无 `dict()`、无 `copy.deepcopy`）；新增 `test_root_main_merges_cst_solver_logging` 通过 `run_workflow_2.main()` 实际路径验证 merged config
 - P0.3: 使用 hermetic fake `orch.execute`，不触达 `_execute_phase_1`、cleanup 函数或真实文件系统路径；额外 patch 了 `cst_optimization.core.cleanup` 函数
 
+### 本轮（W2-2：创建 workflow2 隔离包骨架）
+
+**执行时间**：2026-06-06
+
+**分支**：`refactor/workflow2-package-skeleton`（基于 `test/workflow2-characterization`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `tests/workflows/test_workflow2_characterization.py`
+4. `run_workflow_2.py`
+5. `workflows/rfgun_sao/__init__.py`（风格参考）
+6. `workflows/rfgun_sao/run.py`（风格参考）
+7. `workflows/rfgun_single_pass/__init__.py`（风格参考）
+8. `workflows/rfgun_single_pass/run.py`（风格参考）
+9. `tests/workflows/test_rfgun_sao_imports.py`（风格参考）
+10. `tests/workflows/test_rfgun_single_pass_imports.py`（风格参考）
+
+**新增文件**：
+- `workflows/rfgun_hom_antenna/__init__.py`
+- `workflows/rfgun_hom_antenna/README.md`
+- `workflows/rfgun_hom_antenna/run.py`
+- `tests/workflows/test_workflow2_package_skeleton.py`
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+```
+
+**测试结果**：
+- Workflow2 skeleton tests: 9 / 9 passed
+- W2-1 characterization tests: 21 / 21 passed (unchanged)
+
+**关键事实**：
+- `workflows/rfgun_hom_antenna/` 已创建，包含 `__init__.py`、`README.md`、`run.py`
+- `__init__.py` 声明 `__legacy_entry__ = "run_workflow_2.py"`，docstring 记录完整迁移阶段
+- `run.py` 仅含 placeholder 函数（`describe_legacy_entry()`、`get_legacy_entrypoint()`），不导入 CST/builder/orchestrator
+- root `run_workflow_2.py` 未修改
+- `scripts/schedule_workflow2.ps1` 未修改
+- `config/default.yaml` 未修改
+- `src/cst_optimization/**` 未修改
+
 ### 整体状态
 
 - W2-0: accepted.
-- **W2-1: pending web reviewer re-audit** — 21 tests pass, P0.1/P0.3 hermeticity fixes applied.
+- W2-1: accepted.
+- **W2-2: pending web review** — package skeleton created, 9 skeleton tests + 21 characterization tests pass.
 - 未运行 live workflow。
 - 未运行 CST。
 - 未接受任何 runtime 改动。
-- 未完成 workflow2 isolation package（W2-2）。
-- W2-1 覆盖所有 P0 和 P1 目标，无 pending 项。
+- **W2-2 已完成**（package skeleton），W2-3（config isolation）为下一建议阶段。
 
 后续每一轮本地 agent 都应更新本节，记录实际运行的命令和结果。
 
 ## 11. 当前推荐下一步
 
-### W2-1 已完成
+### W2-2 已完成
 
-- ✅ 从 origin/main 创建 `test/workflow2-characterization` 分支
-- ✅ 20 个 no-CST characterization tests，全部通过
-- ✅ P0.1: config fallback merge 行为已钉住
-- ✅ P0.2: solver timeout 来源已钉住（300s fallback，intent 7200s 未被读取）
-- ✅ P0.3: checkpoint callback 双触发已确认（2 calls/evaluation）
-- ✅ P1.4: build_workflow_2 四元返回已确认（类型注解仍承诺 3 项）
-- ✅ P1.5: scheduler 未迁移，仍绑定 root entry
-- ✅ 未修改 runtime
-- ✅ 未跑 CST
+- ✅ 从 `test/workflow2-characterization` 创建 `refactor/workflow2-package-skeleton` 分支
+- ✅ 创建 `workflows/rfgun_hom_antenna/__init__.py`（含 `__legacy_entry__`、迁移阶段 docstring）
+- ✅ 创建 `workflows/rfgun_hom_antenna/README.md`（状态、结构、计划、约束）
+- ✅ 创建 `workflows/rfgun_hom_antenna/run.py`（placeholder: `describe_legacy_entry()`、`get_legacy_entrypoint()`）
+- ✅ 创建 `tests/workflows/test_workflow2_package_skeleton.py`（9 tests, import + placeholder + presence）
+- ✅ root `run_workflow_2.py` 未修改
+- ✅ `scripts/schedule_workflow2.ps1` 未修改
+- ✅ `config/default.yaml` 未修改
+- ✅ `src/cst_optimization/**` 未修改
+- ✅ 不跑 CST
 - ⏳ 等待 web reviewer 审计通过
 
-### W2-2（通过 W2-1 审计后的建议）：创建 workflow2 隔离包骨架
+### W2-3（通过 W2-2 审计后的建议）：workflow2 config 隔离
 
-通过 W2-1 审计后，建议进入 W2-2 创建 `workflows/rfgun_hom_antenna/` 骨架。
+通过 W2-2 审计后，建议进入 W2-3 将 `config/default.yaml` 中的 `workflow_2` 语义迁入 `workflows/rfgun_hom_antenna/config.yaml`。
 
-**注意**：W2-2 不做 runtime 迁移、不做 config 迁移、不做 builder 迁移。只建立隔离位置和 import 骨架。
+**注意**：W2-3 不做 runtime 迁移、不做 builder 迁移、不做 orchestrator 迁移。root `run_workflow_2.py` 继续保留对 `config/default.yaml` 的 fallback 兼容。

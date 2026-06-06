@@ -71,21 +71,27 @@
 - Web reviewer 已基于当前 main 做只读审计。
 - Web reviewer 已确认本轮路线：先隔离 workflow2，再观察 core candidate，不先做大规模 core 抽离。
 - Web reviewer 已识别 workflow2 当前主要风险点。
-- **本轮本地 agent 已执行**：基于 origin/main（commit `5269351`）创建 `plan/workflow2-current-context-v2` 分支，更新本文档。
+- **W2-0 done**：基于 origin/main 创建 `plan/workflow2-current-context-v2` 分支，本文档经多轮审核后 accepted。
+- **W2-1 done**：基于 origin/main 创建 `test/workflow2-characterization` 分支，完成 no-CST characterization tests。
 - 本轮本地 agent 已读取以下文件：
   - `reports/restructure_plan/agent_operating_charter.md`
+  - `reports/restructure_plan/workflow2_current_context.md`
   - `run_workflow_2.py`
   - `config/default.yaml`
   - `src/cst_optimization/factory.py`
   - `src/cst_optimization/core/orchestrator.py`
   - `scripts/schedule_workflow2.ps1`
-- 代码审计发现以下潜在风险，需在 W2-1 通过 no-CST characterization tests 确认实际行为（参见第 8 节）：
-  - **R2（solver timeout 层级不一致）**：代码路径表明 `build_workflow_2` 从 `workflow_2.solver` 读取，但 intent 写入 `workflow_2.optimization.solver.stagnation_timeout_s: 7200.0`；实际生效值需在 W2-1 钉住。
-  - **R4（checkpoint 双触发）**：代码路径显示 `orchestrator.py` 与 `factory.py` 均可能调用同一 `checkpoint_callback`；实际调用次数需在 W2-1 通过 mock callback 测量。
-  - **R5（DualProjectOrchestrator core 归属）**：ownership/architecture 风险 — `core/orchestrator.py` 含大量 workflow2 语义，但当前状态是架构观察，不要求立即迁移。
-- W2-0 web review: pending acceptance.
+  - 少量现有 tests（`test_rfgun_sao_imports.py`, `test_rfgun_single_pass_imports.py`）作为测试风格参考。
+- W2-1 测试覆盖：
+  - **P0.1 config fallback merge**：5 tests via `_run_merge()` 复现 `run_workflow_2.py` 合并逻辑
+  - **P0.2 solver timeout 来源**：4 tests 用 mock CST 构建实际 `build_workflow_2`，钉住 `SolverRunner._timeout_s`
+  - **P0.3 checkpoint callback 双触发**：3 tests 用 mock CST + mock callback，确认 2 次调用 / evaluation（retry 和非 retry 路径均覆盖）
+  - **P1.4 build_workflow_2 返回签名**：4 tests 确认四元组，覆盖 SAO 和 SAEA 路径
+  - **P1.5 scheduler 兼容性**：4 tests 静态文本确认 `scripts/schedule_workflow2.ps1` 仍绑定 root entry
 - 尚未运行 CST。
-- 尚未运行本地测试。
+- 尚未运行 live workflow。
+- W2-0 web review: accepted.
+- W2-1 status: pending web review.
 
 ## 5. 当前禁止误改的边界
 
@@ -421,50 +427,77 @@ git diff origin/main...HEAD -- reports/restructure_plan/workflow2_current_contex
 - ✅ R2/R4 降级为代码审计发现，需 W2-1 确认
 - ⏳ R3：类型注解和 docstring 承诺 3 元返回但实际返回 4 元；需在 W2-1 通过 characterization test 确认四元组在 SAO 和 SAEA 路径下一致
 
+### 本轮（W2-1：no-CST characterization tests）
+
+**执行时间**：2026-06-06
+
+**分支**：`test/workflow2-characterization`（基于 origin/main，commit `5269351`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `run_workflow_2.py`
+4. `config/default.yaml`
+5. `src/cst_optimization/factory.py`
+6. `src/cst_optimization/core/orchestrator.py`
+7. `src/cst_optimization/core/solver.py`
+8. `src/cst_optimization/core/retry.py`
+9. `src/cst_optimization/core/connection.py`
+10. `src/cst_optimization/database.py`
+11. `scripts/schedule_workflow2.ps1`
+12. `tests/workflows/test_rfgun_sao_imports.py`（风格参考）
+13. `tests/workflows/test_rfgun_single_pass_imports.py`（风格参考）
+
+**新增文件**：
+- `tests/workflows/test_workflow2_characterization.py`
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_characterization.py -v --tb=short
+```
+
+**测试结果**：20 / 20 passed
+
+| 覆盖点 | 测试数 | 状态 | 关键发现 |
+|--------|--------|------|----------|
+| P0.1 config fallback merge | 5 | ✅ | `workflow_2.solver` 来自顶层 fallback（300s），NOT `optimization.solver` intent（7200s） |
+| P0.2 solver timeout 来源 | 4 | ✅ | `build_workflow_2` 读 `workflow_2.solver.stagnation_timeout_s`；缺失则 fallback 到 SolverRunner 默认（7200s）；`optimization.solver` 路径完全不读取 |
+| P0.3 checkpoint callback | 3 | ✅ | **Confirmed: 每次 evaluation 调用 2 次**（orchestrator + evaluator wrapper），retry 和非 retry 路径均一致 |
+| P1.4 返回签名 | 4 | ✅ | `build_workflow_2` 始终返回 4 元组（SAO 和 SAEA）；类型注解仅承诺 3 项 |
+| P1.5 scheduler 兼容性 | 4 | ✅ | `scripts/schedule_workflow2.ps1` 仍绑定 root `run_workflow_2.py`，未迁移 |
+
 ### 整体状态
 
-- Web reviewer read-only audit: pending acceptance.
-- W2-0 status: pending final review.
-- 未运行本地测试。
+- W2-0: accepted.
+- **W2-1: pending web review.**
+- 未运行 live workflow。
 - 未运行 CST。
 - 未接受任何 runtime 改动。
 - 未完成 workflow2 isolation package（W2-2）。
-- 未完成 no-CST characterization tests（W2-1）。
+- W2-1 覆盖所有 P0 和 P1 目标，无 pending 项。
 
 后续每一轮本地 agent 都应更新本节，记录实际运行的命令和结果。
 
 ## 11. 当前推荐下一步
 
-### W2-0 状态：pending final review
+### W2-1 已完成
 
-- ✅ 基于 origin/main 创建分支 `plan/workflow2-current-context-v2`
-- ✅ 更新 `reports/restructure_plan/workflow2_current_context.md`
-- ✅ Markdown 结构修复
-- ✅ 不修改 runtime
-- ✅ 不跑 CST
-- ✅ 不跑测试
+- ✅ 从 origin/main 创建 `test/workflow2-characterization` 分支
+- ✅ 20 个 no-CST characterization tests，全部通过
+- ✅ P0.1: config fallback merge 行为已钉住
+- ✅ P0.2: solver timeout 来源已钉住（300s fallback，intent 7200s 未被读取）
+- ✅ P0.3: checkpoint callback 双触发已确认（2 calls/evaluation）
+- ✅ P1.4: build_workflow_2 四元返回已确认（类型注解仍承诺 3 项）
+- ✅ P1.5: scheduler 未迁移，仍绑定 root entry
+- ✅ 未修改 runtime
+- ✅ 未跑 CST
 - ⏳ 等待 web reviewer 审计通过
 
-### W2-1（通过 W2-0 审计后的建议）：no-CST characterization tests
+### W2-2（通过 W2-1 审计后的建议）：创建 workflow2 隔离包骨架
 
-建议下一轮本地 agent：
+通过 W2-1 审计后，建议进入 W2-2 创建 `workflows/rfgun_hom_antenna/` 骨架。
 
-1. **确认分支策略**：
-   - 从当前 `plan/workflow2-current-context-v2` 继续，或基于 origin/main 新开 `test/workflow2-characterization`
-   - 将本文档同样带入新分支
-
-2. **优先测试点**（按风险优先级排序）：
-   - **P0**：`config/default.yaml` 的 `workflow_2` 段合并行为 — 确认 `cst` / `solver` / `logging` fallback 如何写入 `wf2_cfg`
-   - **P0**：`build_workflow_2` solver timeout 实际来源 — 钉住当前 `SolverRunner` 收到的是 300s（全局 fallback）、7200s（intent）、还是 0.0（builder 默认）
-   - **P0**：checkpoint callback 双触发 — 用 mock callback 统计每次 evaluation 的调用次数
-   - **P1**：`build_workflow_2` 返回签名 — 确认四元组在 SAO 和 SAEA 两种算法路径下均一致
-   - **P1**：`run_workflow_2.py` 与 scheduler 的兼容关系 — 确认 root shim 路径
-   - **P2**：`DualProjectOrchestrator` 接口稳定性 — mock CST 连接后的 `execute()` 合约
-
-3. **验证要求**：
-   - 不跑 CST（mock / monkeypatch CSTConnection）
-   - 仅运行新增的 characterization tests
-   - 不跑全量测试
-   - 输出实际测试命令和结果
-
-4. **完成后交给 web reviewer 审计**：审计通过后再进入 W2-2（package skeleton）。
+**注意**：W2-2 不做 runtime 迁移、不做 config 迁移、不做 builder 迁移。只建立隔离位置和 import 骨架。

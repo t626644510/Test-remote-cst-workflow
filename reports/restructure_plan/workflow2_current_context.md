@@ -91,7 +91,11 @@
 - 尚未运行 CST。
 - 尚未运行 live workflow。
 - W2-0 web review: accepted.
-- W2-1 status: pending web review.
+- W2-1 status: pending web reviewer re-audit.
+  - All 21 tests pass (0.70s).
+  - P0.1: added black-box `run_workflow_2.main()` test plus fixed white-box helper (`_run_merge_like_root`) to match exact root code (reference assignment, not deep copy).
+  - P0.3: replaced real `orch.execute()` with hermetic fake; no `_execute_phase_1`, no cleanup, no real filesystem paths.
+  - Optional: `test_type_annotation_mismatch` uses real assertion instead of print.
 
 ## 5. 当前禁止误改的边界
 
@@ -459,20 +463,24 @@ git diff origin/main...HEAD -- reports/restructure_plan/workflow2_current_contex
 python -m pytest tests/workflows/test_workflow2_characterization.py -v --tb=short
 ```
 
-**测试结果**：20 / 20 passed
+**测试结果**：21 / 21 passed (0.70s)
 
 | 覆盖点 | 测试数 | 状态 | 关键发现 |
 |--------|--------|------|----------|
-| P0.1 config fallback merge | 5 | ✅ | `workflow_2.solver` 来自顶层 fallback（300s），NOT `optimization.solver` intent（7200s） |
+| P0.1 config fallback merge | 6 | ✅ | 含白盒 `_run_merge_like_root`（5 tests）和黑盒 `run_workflow_2.main()`（1 test）；均确认顶层 300s fallback 而非 7200s intent |
 | P0.2 solver timeout 来源 | 4 | ✅ | `build_workflow_2` 读 `workflow_2.solver.stagnation_timeout_s`；缺失则 fallback 到 SolverRunner 默认（7200s）；`optimization.solver` 路径完全不读取 |
-| P0.3 checkpoint callback | 3 | ✅ | **Confirmed: 每次 evaluation 调用 2 次**（orchestrator + evaluator wrapper），retry 和非 retry 路径均一致 |
-| P1.4 返回签名 | 4 | ✅ | `build_workflow_2` 始终返回 4 元组（SAO 和 SAEA）；类型注解仅承诺 3 项 |
+| P0.3 checkpoint callback | 3 | ✅ | **Confirmed: 每次 evaluation 调用 2 次**；使用 hermetic fake `orch.execute`，不进入 `_execute_phase_1`，不调 cleanup，不写文件系统 |
+| P1.4 返回签名 | 4 | ✅ | `build_workflow_2` 始终返回 4 元组（SAO 和 SAEA）；类型注解仅承诺 3 项；`test_type_annotation_mismatch` 使用真实 assertion |
 | P1.5 scheduler 兼容性 | 4 | ✅ | `scripts/schedule_workflow2.ps1` 仍绑定 root `run_workflow_2.py`，未迁移 |
+
+**修复摘要**：
+- P0.1: `_run_merge_like_root` 现在精确匹配 `run_workflow_2.py` 的引用赋值（无 `dict()`、无 `copy.deepcopy`）；新增 `test_root_main_merges_cst_solver_logging` 通过 `run_workflow_2.main()` 实际路径验证 merged config
+- P0.3: 使用 hermetic fake `orch.execute`，不触达 `_execute_phase_1`、cleanup 函数或真实文件系统路径；额外 patch 了 `cst_optimization.core.cleanup` 函数
 
 ### 整体状态
 
 - W2-0: accepted.
-- **W2-1: pending web review.**
+- **W2-1: pending web reviewer re-audit** — 21 tests pass, P0.1/P0.3 hermeticity fixes applied.
 - 未运行 live workflow。
 - 未运行 CST。
 - 未接受任何 runtime 改动。

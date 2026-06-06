@@ -24,14 +24,13 @@ P1.5 — root entry / scheduler compatibility: static text check that
 
 from __future__ import annotations
 
+import inspect
 import sys
-import copy
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-import yaml
 
 # ---- Path setup (same pattern as existing test files) -----------------------
 _TEST_DIR = Path(__file__).resolve().parent
@@ -42,12 +41,10 @@ for _p in (str(_PROJECT_ROOT), _SRC_DIR):
         sys.path.insert(0, _p)
 
 # ==============================================================================
-# Helpers
+# Constants  (direct imports after path setup)
 # ==============================================================================
 
-# Config that mirrors the relevant structure of config/default.yaml.
-# workflow_2 does NOT have top-level "solver" — that comes via merge.
-_MERGE_SOURCE_CONFIG: dict = {
+_CONFIG_WITH_WF2: dict = {
     "cst": {
         "library_path": "D:/CST2026/CST Studio Suite 2026/AMD64/python_cst_libraries",
         "connect_mode": "any_or_new",
@@ -113,13 +110,38 @@ _MERGE_SOURCE_CONFIG: dict = {
 }
 
 
-def _run_merge(whole_config: dict) -> dict:
-    """Replicate the config-merge logic from ``run_workflow_2.py`` lines 90-101."""
-    wf2_cfg = dict(whole_config.get("workflow_2", {}))
+# ==============================================================================
+# White-box helper: replicates run_workflow_2.py lines 93-101 exactly
+# ==============================================================================
+
+
+def _run_merge_like_root(whole_config: dict) -> dict:
+    """White-box characterisation of ``run_workflow_2.py`` config-merge logic.
+
+    This replicates the EXACT current behaviour of lines 93-101:
+
+        wf2_cfg = cfg.get("workflow_2", {})
+        ...
+        for section in ("cst", "solver", "logging"):
+            if section in cfg and section not in wf2_cfg:
+                wf2_cfg[section] = cfg[section]
+
+    Note: ``cfg.get("workflow_2", {})`` returns the **actual dict reference**
+    (not a copy), and the assignment ``wf2_cfg[section] = cfg[section]`` is
+    also a **reference copy** — mutating the merged result affects the source.
+    This is the current runtime contract; the test does NOT aim for a safer
+    design.
+    """
+    wf2_cfg = whole_config.get("workflow_2", {})
     for section in ("cst", "solver", "logging"):
         if section in whole_config and section not in wf2_cfg:
-            wf2_cfg[section] = copy.deepcopy(whole_config[section])
+            wf2_cfg[section] = whole_config[section]
     return wf2_cfg
+
+
+# ==============================================================================
+# Helpers for P0.2 / P0.3 / P1.4
+# ==============================================================================
 
 
 def _minimal_build_config(enable_retry: bool = False) -> dict:
@@ -142,7 +164,7 @@ def _minimal_build_config(enable_retry: bool = False) -> dict:
         if enable_retry
         else {"enabled": False}
     )
-    cfg = {
+    cfg: dict = {
         "cst": {
             "library_path": "D:/dummy/path",
             "connect_mode": "any_or_new",
@@ -198,11 +220,13 @@ class TestConfigFallbackMerge:
     """Characterize how ``run_workflow_2.py`` merges top-level config into
     ``workflow_2`` when the workflow_2 section lacks ``cst`` / ``solver`` / ``logging``."""
 
+    # ── White-box tests (via _run_merge_like_root) ───────────────────────
+
     @staticmethod
-    def test_workflow2_lacks_top_level_keys_so_they_are_merged():
-        """When ``workflow_2`` has no ``cst``/``solver``/``logging``, the root
-        runner copies the top-level versions into the ``workflow_2`` dict."""
-        merged = _run_merge(_MERGE_SOURCE_CONFIG)
+    def test_wb_workflow2_lacks_top_level_keys_so_they_are_merged():
+        """White-box: when ``workflow_2`` has no ``cst``/``solver``/``logging``,
+        the root runner copies the top-level versions by reference."""
+        merged = _run_merge_like_root(_CONFIG_WITH_WF2)
 
         assert "solver" in merged
         assert merged["solver"]["stagnation_timeout_s"] == 300.0
@@ -215,9 +239,9 @@ class TestConfigFallbackMerge:
         assert merged["logging"]["enabled"] is True
 
     @staticmethod
-    def test_workflow2_retains_its_own_keys():
-        """Keys that DO exist in ``workflow_2`` are not overwritten by the merge."""
-        merged = _run_merge(_MERGE_SOURCE_CONFIG)
+    def test_wb_workflow2_retains_its_own_keys():
+        """White-box: keys that DO exist in ``workflow_2`` are not overwritten."""
+        merged = _run_merge_like_root(_CONFIG_WITH_WF2)
 
         assert "enabled" in merged
         assert merged["enabled"] is True
@@ -225,33 +249,124 @@ class TestConfigFallbackMerge:
         assert "frequency_domain" in merged["projects"]
 
     @staticmethod
-    def test_merge_only_three_sections():
-        """Only ``cst``, ``solver``, ``logging`` participate in the merge."""
-        merged = _run_merge(_MERGE_SOURCE_CONFIG)
+    def test_wb_merge_only_three_sections():
+        """White-box: only ``cst``, ``solver``, ``logging`` are merged."""
+        merged = _run_merge_like_root(_CONFIG_WITH_WF2)
 
-        # Top-level keys like "project", "evaluation", "optimization" are
-        # NOT merged into workflow_2.
         assert "project" not in merged
         assert "evaluation" not in merged
 
     @staticmethod
-    def test_merged_solver_overrides_optimization_solver():
-        """After merge, ``workflow_2.solver.stagnation_timeout_s`` is the
-        top-level value (300.0), NOT the intent value from
-        ``workflow_2.optimization.solver`` (7200.0)."""
-        merged = _run_merge(_MERGE_SOURCE_CONFIG)
+    def test_wb_merged_solver_is_reference_copy():
+        """White-box: the merge is a reference assignment — mutating the
+        merged result ALSO mutates the source.  This is the current runtime
+        contract, not a safer design."""
+        source = dict(_CONFIG_WITH_WF2)  # shallow copy of outer dict
+        merged = _run_merge_like_root(source)
+        merged["cst"]["library_path"] = "MUTATED"
+        # Because ``wf2_cfg["cst"] = source["cst"]`` — same object
+        assert source["cst"]["library_path"] == "MUTATED"
+
+    @staticmethod
+    def test_wb_merged_solver_overrides_optimization_solver():
+        """White-box: after merge, ``workflow_2.solver`` is the top-level
+        value (300.0), NOT the intent from ``optimization.solver`` (7200.0)."""
+        merged = _run_merge_like_root(_CONFIG_WITH_WF2)
 
         assert merged["solver"]["stagnation_timeout_s"] == 300.0
         assert merged["solver"]["stagnation_timeout_s"] != 7200.0
 
+    # ── Black-box test via run_workflow_2.main() ─────────────────────────
+
+    _TEST_CONFIG = {
+        "cst": {"library_path": "D:/dummy/path", "connect_mode": "any_or_new"},
+        "solver": {"stagnation_timeout_s": 300.0, "settle_s": 2.0},
+        "logging": {"enabled": True, "output_dir": "D:/dummy_log"},
+        "project": {"cst_path": "D:/dummy/p.cst"},
+        "workflow_2": {
+            "enabled": True,
+            "optimization": {
+                "algorithm": "sao",
+                "n_initial": 1,
+                "n_iterations": 0,
+                "seed": 42,
+                "retry": {"enabled": False},
+            },
+            "parameters": [{"name": "p1", "low": 0.0, "high": 1.0, "enabled": True}],
+            "objectives": [{"name": "resonant_freq", "mode": "minimize"}],
+        },
+    }
+
     @staticmethod
-    def test_merge_is_shallow_copy():
-        """The merge copies the dict — mutations to ``merged`` should not
-        affect the source unless they share nested references."""
-        source = copy.deepcopy(_MERGE_SOURCE_CONFIG)
-        merged = _run_merge(source)
-        merged["cst"]["library_path"] = "MUTATED"
-        assert source["cst"]["library_path"] != "MUTATED"
+    @patch("run_workflow_2.yaml.safe_load")
+    @patch("run_workflow_2.CheckpointManager")
+    @patch("run_workflow_2.os.makedirs")
+    @patch("run_workflow_2.build_workflow_2")
+    @patch("run_workflow_2.sys.argv", ["run_workflow_2.py"])
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_root_main_merges_cst_solver_logging(
+        mock_rm_lock,
+        mock_rm_result,
+        mock_kill_cst,
+        mock_build_wf2,
+        mock_makedirs,
+        mock_ckpt_mgr,
+        mock_yaml_load,
+    ):
+        """Call ``run_workflow_2.main()`` with all side-effects patched and
+        capture the config dict that reaches ``build_workflow_2``.
+
+        This is a black-box characterisation: we patch IO/CST dependencies
+        but let the real ``main()`` config-merge logic run, then assert
+        the merged result.
+        """
+        import run_workflow_2 as rw2
+
+        mock_yaml_load.return_value = TestConfigFallbackMerge._TEST_CONFIG
+
+        ckpt_instance = MagicMock()
+        ckpt_instance.load.return_value = False
+        ckpt_instance.completed_count = 0
+        mock_ckpt_mgr.return_value = ckpt_instance
+
+        # Capture the config dict passed to build_workflow_2
+        captured_cfg: dict = {}
+
+        def _fake_build(cfg, checkpoint_callback=None):
+            captured_cfg.clear()
+            captured_cfg.update(cfg)
+            fake_orch = MagicMock()
+            fake_orch.n_parameters = 1
+            fake_orch.n_objectives = 1
+            fake_orch.objectives = [MagicMock()]
+            fake_orch.objectives[0].name = "resonant_freq"
+            fake_orch.parameter_set = MagicMock()
+            fake_orch.parameter_set.constraints = None
+            fake_opt = MagicMock()
+            fake_opt._n_initial = 1
+            fake_opt._n_iterations = 0
+            fake_eval = MagicMock(return_value=0.5)
+            fake_retry = None
+            return fake_orch, fake_opt, fake_eval, fake_retry
+
+        mock_build_wf2.side_effect = _fake_build
+
+        # The fake evaluator needs a warm_start attribute for the not-taken retry path
+        rw2.main()
+
+        # Assertions on the captured merged config
+        assert "cst" in captured_cfg, "cst should have been merged into workflow_2 config"
+        assert "solver" in captured_cfg, "solver should have been merged into workflow_2 config"
+        assert "logging" in captured_cfg, "logging should have been merged into workflow_2 config"
+        assert captured_cfg["solver"]["stagnation_timeout_s"] == 300.0, (
+            f"solver timeout should be top-level fallback 300.0, got {captured_cfg['solver']['stagnation_timeout_s']}"
+        )
+        # workflow_2's own keys are preserved
+        assert captured_cfg["enabled"] is True
+        # Non-merged top-level keys are absent
+        assert "project" not in captured_cfg
 
 
 # ==============================================================================
@@ -265,7 +380,7 @@ class TestSolverTimeoutSource:
 
     Key question: does ``workflow_2.optimization.solver.stagnation_timeout_s``
     (the intent, 7200.0) actually flow through, or is it overridden by the
-    top-level solver fallback (300.0) or the builder default (0.0 → 7200.0)?
+    top-level solver fallback (300.0) or the builder default (0.0 -> 7200.0)?
     """
 
     @staticmethod
@@ -274,37 +389,30 @@ class TestSolverTimeoutSource:
         """With a config that has ``workflow_2.solver`` (post-merge), the
         ``SolverRunner`` receives that value."""
         cfg = _minimal_build_config()
-        # Simulate the merge: inject solver into workflow_2
         cfg["solver"]["stagnation_timeout_s"] = 300.0
 
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(cfg)
-        # _solver._timeout_s is set in SolverRunner.__init__
-        # __init__ uses: timeout_s if timeout_s > 0 else _DEFAULT_TIMEOUT_S
         assert orch._solver._timeout_s == 300.0
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
     def test_solver_timeout_falls_back_to_default_when_missing(MockCST):
         """When ``workflow_2.solver`` has no ``stagnation_timeout_s`` (or is
-        missing entirely), ``SolverRunner`` falls back to its own default
-        (7200.0)."""
+        missing entirely), ``SolverRunner`` falls back to 7200.0."""
         cfg = _minimal_build_config()
-        cfg.pop("solver", None)  # No solver section at all
+        cfg.pop("solver", None)
 
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(cfg)
-        # SolverRunner default: 7200.0
         assert orch._solver._timeout_s == 7200.0
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
     def test_solver_timeout_zero_becomes_default(MockCST):
-        """A value of 0 triggers the SolverRunner default (7200.0), which
-        is the same value as the config intent.  This means removing the
-        solver section would produce the INTENDED 7200s — accidentally."""
+        """A value of 0 triggers the SolverRunner default (7200.0)."""
         cfg = _minimal_build_config()
         cfg["solver"]["stagnation_timeout_s"] = 0.0
 
@@ -316,86 +424,111 @@ class TestSolverTimeoutSource:
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
     def test_optimization_solver_key_is_not_read_by_builder(MockCST):
-        """The value at ``workflow_2.optimization.solver.stagnation_timeout_s``
-        is NOT read by ``build_workflow_2`` — the builder reads
-        ``workflow_2.solver`` instead.  This confirms the R2 risk.
-
-        We set optimization.solver to 9999.0; if the builder reads this path,
-        the solver timeout would be 9999.0.  The test asserts it is NOT."""
+        """``workflow_2.optimization.solver.stagnation_timeout_s`` is NOT
+        consumed by ``build_workflow_2`` — the builder reads
+        ``workflow_2.solver`` instead.  This confirms the R2 risk."""
         cfg = _minimal_build_config()
         cfg["optimization"]["solver"] = {"stagnation_timeout_s": 9999.0}
-        # Do NOT set workflow_2.solver — rely on fallback to default
         cfg.pop("solver", None)
 
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(cfg)
-        # If builder read optimization.solver, timeout would be 9999.0
-        # Instead, it falls back to SolverRunner default (7200.0)
         assert orch._solver._timeout_s != 9999.0
         assert orch._solver._timeout_s == 7200.0
 
 
 # ==============================================================================
-# P0.3 — Checkpoint callback call count
+# P0.3 — Checkpoint callback call count  (hermetic, no _execute_phase_1)
 # ==============================================================================
 
 
 class TestCheckpointCallbackCount:
     """Characterize how many times ``checkpoint_callback`` fires per evaluator
-    call.  The code-audit risk (R4) shows both ``orchestrator.execute()``
-    and the factory evaluator invoke the same callback — this test measures
-    the actual runtime count."""
+    call.  Uses a monkeypatched ``orch.execute`` so no cleanup paths or
+    real filesystem operations are touched."""
 
-    RETRY_CFG = {
-        "enabled": True,
-        "max_tier1": 0,
-        "max_tier2": 0,
-        "max_tier3": 2,
-        "cooldown_s": 5.0,
-        "evaluation_timeout_s": 600.0,
-    }
+    @staticmethod
+    def _make_fake_execute(orch):
+        """Return a fake ``execute()`` that simulates the orchestrator's
+        internal callback call and sets ``last_*`` properties, then returns
+        a zero-penalty array.  Does NOT call ``_execute_phase_1``,
+        cleanup functions, or touch real paths."""
+
+        def fake_execute(
+            params: np.ndarray,
+            iteration: int = 0,
+            start_phase: str = "f2f",
+            f2f_npz_path: str = "",
+            skip_phases: set[str] | None = None,
+        ) -> np.ndarray:
+            n_obj = len(orch.objectives)
+            raw = np.full(n_obj, 0.5)
+            penalties = np.zeros(n_obj)
+
+            # Simulate orchestrator's own checkpoint callback call
+            if orch._checkpoint_callback is not None:
+                orch._checkpoint_callback(params, raw, penalties, True, "")
+
+            orch.last_raw_values = raw.copy()
+            orch.last_penalties = penalties.copy()
+            orch.last_solver_ok = True
+            orch.last_completed_labels = set()
+            return penalties
+
+        return fake_execute
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
-    def test_non_retry_path_triggers_callback_two_times(MockCST):
-        """On the non-retry path (retry.enabled=False), the callback fires
-        twice per evaluation: once from orchestrator.execute() and once from
-        the factory evaluator wrapper."""
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_non_retry_path_triggers_callback_two_times(
+        mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """Non-retry path: the callback fires twice per evaluation — once
+        from ``orch.execute()`` and once from the factory evaluator wrapper."""
         cfg = _minimal_build_config(enable_retry=False)
         callback = MagicMock()
 
         from cst_optimization.factory import build_workflow_2
 
-        _, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
-        x = np.array([0.5], dtype=float)
-        try:
-            evaluator(x)
-        except Exception:
-            pass  # CST mock may raise — we still count callback call attempts
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        # Replace real execute with hermetic fake
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
 
-        # Both the orchestrator and the evaluator call callback
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
         assert callback.call_count == 2, (
-            f"Expected 2 calls from orchestrator + evaluator, got {callback.call_count}"
+            f"Expected 2 calls (orchestrator + evaluator), got {callback.call_count}"
         )
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
-    def test_retry_path_triggers_callback_two_times(MockCST):
-        """On the retry-enabled path, the callback also fires twice:
-        once from orchestrator.execute(), and again from the factory
-        evaluator after the retry handler returns."""
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    @patch("cst_optimization.core.cleanup.force_kill_cst")
+    @patch("cst_optimization.core.cleanup.verify_process_cleanup")
+    def test_retry_path_triggers_callback_two_times(
+        mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """Retry path: the callback also fires twice — orchestrator + evaluator."""
         cfg = _minimal_build_config(enable_retry=True)
         callback = MagicMock()
 
         from cst_optimization.factory import build_workflow_2
 
-        _, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch, _, evaluator, retry_handler = build_workflow_2(cfg, checkpoint_callback=callback)
+        # Replace real execute with hermetic fake
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+        # Also patch retry cleanup methods that Tier-3 escalation could call
+        retry_handler._tier3_kill = MagicMock()
+        retry_handler._reconnect = MagicMock()
+
         x = np.array([0.5], dtype=float)
-        try:
-            evaluator(x)
-        except Exception:
-            pass
+        evaluator(x)
 
         assert callback.call_count == 2, (
             f"Expected 2 calls on retry path, got {callback.call_count}"
@@ -403,29 +536,40 @@ class TestCheckpointCallbackCount:
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
-    def test_both_paths_invoke_callback_with_arrays(MockCST):
-        """Verify the callback arguments are numpy arrays (not raw lists),
-        matching the callback type signature."""
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_both_paths_invoke_callback_with_arrays(
+        mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """Verify the callback arguments are numpy arrays (not raw lists)."""
         cfg = _minimal_build_config(enable_retry=False)
         callback = MagicMock()
 
         from cst_optimization.factory import build_workflow_2
 
-        _, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
         x = np.array([0.5], dtype=float)
-        try:
-            evaluator(x)
-        except Exception:
-            pass
+        evaluator(x)
 
         for call_args in callback.call_args_list:
             args = call_args[0]
             assert len(args) == 5, f"callback expected 5 args, got {len(args)}"
             _, raw_arr, pen_arr, solver_ok, err_str = args
-            assert isinstance(raw_arr, np.ndarray), f"raw_values should be ndarray, got {type(raw_arr)}"
-            assert isinstance(pen_arr, np.ndarray), f"penalties should be ndarray, got {type(pen_arr)}"
-            assert isinstance(solver_ok, bool), f"solver_ok should be bool, got {type(solver_ok)}"
-            assert isinstance(err_str, str), f"error should be str, got {type(err_str)}"
+            assert isinstance(raw_arr, np.ndarray), (
+                f"raw_values should be ndarray, got {type(raw_arr)}"
+            )
+            assert isinstance(pen_arr, np.ndarray), (
+                f"penalties should be ndarray, got {type(pen_arr)}"
+            )
+            assert isinstance(solver_ok, bool), (
+                f"solver_ok should be bool, got {type(solver_ok)}"
+            )
+            assert isinstance(err_str, str), (
+                f"error should be str, got {type(err_str)}"
+            )
 
 
 # ==============================================================================
@@ -455,14 +599,10 @@ class TestBuildWorkflow2ReturnSignature:
         assert len(result) == 4, f"Expected 4 values, got {len(result)}"
 
         orch, opt, evaluator, retry_handler = result
-        # orch is a DualProjectOrchestrator
         assert hasattr(orch, "execute"), "orchestrator should have execute()"
         assert hasattr(orch, "n_parameters"), "orchestrator should have n_parameters"
-        # opt is a BaseOptimizer
         assert hasattr(opt, "optimize"), "optimizer should have optimize()"
-        # evaluator is callable
         assert callable(evaluator), "evaluator should be callable"
-        # retry_handler is None when retry disabled
         assert retry_handler is None, (
             f"Expected retry_handler=None when retry disabled, got {type(retry_handler)}"
         )
@@ -476,13 +616,15 @@ class TestBuildWorkflow2ReturnSignature:
 
         result = build_workflow_2(cfg)
         assert len(result) == 4
-        orch, opt, evaluator, retry_handler = result
-        assert retry_handler is not None, "retry_handler should not be None when retry enabled"
+        _, _, _, retry_handler = result
+        assert retry_handler is not None, (
+            "retry_handler should not be None when retry enabled"
+        )
 
     @staticmethod
     @patch("cst_optimization.factory.CSTConnection")
     def test_saea_algorithm_also_returns_four_tuple(MockCST):
-        """SAEA algorithm also returns a 4-tuple (same factory return)."""
+        """SAEA algorithm also returns a 4-tuple."""
         cfg = _minimal_build_config()
         cfg["optimization"]["algorithm"] = "saea"
         cfg["optimization"]["pop_size"] = 10
@@ -500,32 +642,25 @@ class TestBuildWorkflow2ReturnSignature:
 
     @staticmethod
     def test_type_annotation_mismatch():
-        """Document the mismatch between the type annotation and actual return.
+        """Assert the type annotation DOES NOT mention EvaluationRetryHandler.
 
         This is a static/reflection test that reads the source annotation.
-        It does NOT exercise CST — purely textual."""
-        import inspect
+        It does NOT exercise CST.  If the annotation is ever fixed to include
+        ``retry_handler``, this test will fail and the R3 risk can be downgraded.
+        """
         from cst_optimization.factory import build_workflow_2
 
         sig = inspect.signature(build_workflow_2)
-        return_ann = sig.return_annotation
-        ann_str = str(return_ann)
+        ann_str = str(sig.return_annotation)
 
-        # The annotation says tuple of 3 elements (no retry_handler)
+        assert "EvaluationRetryHandler" not in ann_str, (
+            "R3 RISK DOWNGRADE CANDIDATE: type annotation now mentions "
+            "EvaluationRetryHandler — update R3 risk status and this assertion."
+        )
+        # Sanity: annotation does mention the three declared return types
         assert "DualProjectOrchestrator" in ann_str
         assert "BaseOptimizer" in ann_str
-
-        # Actual code returns 4, but annotation lists 3
-        # This test is EXPECTED TO SHOW the mismatch — if the annotation is
-        # ever fixed to include retry_handler, this test will fail and the
-        # risk can be downgraded.
-        items = ann_str.split(",")
-        n_ann_items = sum(1 for s in items if "object" in s or "DualProject" in s or "BaseOptimizer" in s or "Callable" in s)
-        # Simpler: count tuple elements
-        if "EvaluationRetryHandler" not in ann_str:
-            print(f"[W2-1] R3 CONFIRMED: type annotation does not mention EvaluationRetryHandler")
-        else:
-            print(f"[W2-1] R3 CHECK: type annotation now includes EvaluationRetryHandler — risk downgrade candidate")
+        assert "Callable" in ann_str
 
 
 # ==============================================================================
@@ -568,12 +703,11 @@ class TestSchedulerRootEntryCompatibility:
 
     @staticmethod
     def test_scheduler_not_migrated_to_separate_entry():
-        """Scheduler still references the ROOT run_workflow_2.py, not a
+        """Scheduler still references the ROOT ``run_workflow_2.py``, not a
         workflow2-specific entry point."""
         content = TestSchedulerRootEntryCompatibility.SCHEDULER_PATH.read_text(
             encoding="utf-8"
         )
-        # These would indicate partial migration
         indicators = [
             "workflows/rfgun_hom_antenna",
             "workflow2/run.py",

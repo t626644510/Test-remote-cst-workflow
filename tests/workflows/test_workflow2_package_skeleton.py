@@ -102,3 +102,23 @@ def test_run_docstring_documents_status():
     assert "run_workflow_2.py" in doc, (
         "run.py docstring should reference the legacy entry point"
     )
+
+
+def test_run_module_exports_all():
+    """``run.py`` exports the expected names in ``__all__``."""
+    from workflows.rfgun_hom_antenna.run import __all__, LEGACY_ENTRY, PACKAGE_ROOT
+    assert isinstance(__all__, list)
+    assert "LEGACY_ENTRY" in __all__
+    assert "PACKAGE_ROOT" in __all__
+    assert "describe_legacy_entry" in __all__
+    assert "get_legacy_entrypoint" in __all__
+
+
+def test_package_directory_has_expected_files():
+    """Package directory contains the three expected skeleton files."""
+    expected_files = {"__init__.py", "run.py", "README.md"}
+    actual = {p.name for p in WF2_PACKAGE.iterdir() if p.is_file()}
+    missing = expected_files - actual
+    assert not missing, (
+        f"Package directory {WF2_PACKAGE} is missing expected files: {missing}"
+    )

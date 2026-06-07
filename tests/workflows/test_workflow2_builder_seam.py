@@ -1,9 +1,12 @@
-"""W2-4A: builder ownership seam tests for ``workflows.rfgun_hom_antenna.workflow``.
+"""W2-4B: builder implementation migration tests.
 
 These tests verify that:
-- The workflow-local ``build_workflow_2`` imports and delegates correctly.
-- The root ``run_workflow_2.py`` now uses the workflow-local seam.
-- The four-value return contract is preserved.
+- ``workflows.rfgun_hom_antenna.workflow`` now OWNS the implementation.
+- ``cst_optimization.factory.build_workflow_2`` is a compatibility wrapper.
+- Importing from the old path ``cst_optimization.factory import build_workflow_2``
+  still works and preserves the 4-tuple contract.
+- The workflow-local builder and factory wrapper produce consistent results.
+- Root ``run_workflow_2.py`` still imports from workflow-local seam.
 
 No CST, solver, orchestrator execute, optimizer live run, or scheduler
 is invoked.
@@ -28,157 +31,149 @@ for _p in (str(_PROJECT_ROOT), _SRC_DIR):
 
 
 # ==============================================================================
-# A. Module import
+# A. Module import — workflow owns the implementation
 # ==============================================================================
 
 
-def test_import_workflow_module():
-    """``import workflows.rfgun_hom_antenna.workflow`` succeeds without CST."""
+@patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+def test_workflow_module_owns_build_function(MockCST):
+    """The workflow-local module has an independent ``build_workflow_2``
+    that does NOT delegate to ``cst_optimization.factory``."""
     import workflows.rfgun_hom_antenna.workflow as wf
-    assert hasattr(wf, "build_workflow_2")
+
     assert callable(wf.build_workflow_2)
+    # The function's module should be the workflow package, not factory
+    fn_module = getattr(wf.build_workflow_2, "__module__", "")
+    assert "workflows.rfgun_hom_antenna.workflow" in fn_module, (
+        f"Expected build_workflow_2 module to be workflows.rfgun_hom_antenna.workflow, "
+        f"got {fn_module!r}"
+    )
 
 
-def test_workflow_module_has_build_function():
-    """``build_workflow_2`` exists as a named function in the module."""
+@patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+def test_workflow_build_returns_four_tuple(MockCST):
+    """Workflow-local builder returns the standard 4-tuple (orch, opt, eval, retry)."""
     from workflows.rfgun_hom_antenna.workflow import build_workflow_2
-    assert callable(build_workflow_2)
+
+    cfg = {"parameters": [{"name": "p1", "low": 0, "high": 1, "enabled": True}]}
+    # Need minimal config that passes build_workflow_2 validation
+    cfg["cst"] = {"library_path": "dummy", "connect_mode": "any_or_new"}
+    cfg["objectives"] = [{
+        "name": "antenna_absorption",
+        "mode": "less_than",
+        "mode_params": {"threshold": -29.0, "sigma": 2.0},
+        "obj_params": {"project": "f2f", "antenna_port": 2,
+                        "tree_path": "1D Results\\S-Parameters\\S2,1",
+                        "search_freq_ghz": 0.5, "search_width_ghz": 0.01},
+    }]
+    cfg["projects"] = {"f2f": {"cst_path": "d:/dummy/f2f.cst", "is_pre_filter": True}}
+    cfg["optimization"] = {"algorithm": "sao", "n_initial": 1, "n_iterations": 0, "seed": 42}
+
+    result = build_workflow_2(cfg)
+    assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
+    assert len(result) == 4, f"Expected 4 values, got {len(result)}"
+    orch, opt, evaluator, retry = result
+    assert hasattr(orch, "execute"), "orchestrator should have execute()"
+    assert hasattr(opt, "optimize"), "optimizer should have optimize()"
+    assert callable(evaluator), "evaluator should be callable"
 
 
 # ==============================================================================
-# B. Delegation contract
+# B. Factory compatibility wrapper
 # ==============================================================================
 
 
-@patch("cst_optimization.factory.CSTConnection")
-def test_delegation_preserves_config_identity(MockCST):
-    """The wrapper passes the config dict through to the legacy builder
-    without wrapping or copying."""
-    from workflows.rfgun_hom_antenna.workflow import build_workflow_2
+@patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+def test_factory_wrapper_delegates_to_workflow(MockCST):
+    """``cst_optimization.factory.build_workflow_2`` now delegates to the
+    workflow-local builder."""
+    from cst_optimization.factory import build_workflow_2 as factory_build
 
-    cfg = {"test": "value", "nested": {"key": 1}}
-    ckpt = MagicMock()
+    cfg = {"parameters": [{"name": "p1", "low": 0, "high": 1, "enabled": True}]}
+    cfg["cst"] = {"library_path": "dummy", "connect_mode": "any_or_new"}
+    cfg["objectives"] = [{
+        "name": "antenna_absorption",
+        "mode": "less_than",
+        "mode_params": {"threshold": -29.0, "sigma": 2.0},
+        "obj_params": {"project": "f2f", "antenna_port": 2,
+                        "tree_path": "1D Results\\S-Parameters\\S2,1",
+                        "search_freq_ghz": 0.5, "search_width_ghz": 0.01},
+    }]
+    cfg["projects"] = {"f2f": {"cst_path": "d:/dummy/f2f.cst", "is_pre_filter": True}}
+    cfg["optimization"] = {"algorithm": "sao", "n_initial": 1, "n_iterations": 0, "seed": 42}
 
+    # Patch the workflow builder to verify delegation happens
     with patch(
-        "workflows.rfgun_hom_antenna.workflow._legacy_build"
-    ) as mock_legacy:
-        mock_legacy.return_value = (MagicMock(), MagicMock(), MagicMock(), None)
-        build_workflow_2(cfg, checkpoint_callback=ckpt)
-
-        mock_legacy.assert_called_once()
-        args, kwargs = mock_legacy.call_args
-        # Config dict identity is preserved (same object, not a copy)
-        assert args[0] is cfg, "config identity should be preserved"
-        # checkpoint_callback identity is preserved
-        assert kwargs.get("checkpoint_callback") is ckpt, (
-            "checkpoint_callback identity should be preserved"
+        "workflows.rfgun_hom_antenna.workflow.build_workflow_2"
+    ) as mock_wf:
+        mock_wf.return_value = (MagicMock(), MagicMock(), MagicMock(), None)
+        factory_build(cfg)
+        assert mock_wf.call_count == 1, (
+            f"Expected factory wrapper to delegate to workflow builder, "
+            f"got {mock_wf.call_count} calls"
         )
 
 
-@patch("cst_optimization.factory.CSTConnection")
-def test_delegation_preserves_checkpoint_callback_identity(MockCST):
-    """The wrapper passes the checkpoint_callback through by identity."""
-    from workflows.rfgun_hom_antenna.workflow import build_workflow_2
+@patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+def test_factory_wrapper_preserves_four_tuple(MockCST):
+    """The factory wrapper's 4-tuple annotation now matches the actual return."""
+    from cst_optimization.factory import build_workflow_2 as factory_build
 
-    cfg = {"test": "value"}
-    ckpt = MagicMock()
-
-    with patch(
-        "workflows.rfgun_hom_antenna.workflow._legacy_build"
-    ) as mock_legacy:
-        mock_legacy.return_value = (MagicMock(), MagicMock(), MagicMock(), None)
-        build_workflow_2(cfg, checkpoint_callback=ckpt)
-
-        args, kwargs = mock_legacy.call_args
-        assert "checkpoint_callback" in kwargs
-        assert kwargs["checkpoint_callback"] is ckpt
-
-
-@patch("cst_optimization.factory.CSTConnection")
-def test_delegation_call_count(MockCST):
-    """The wrapper delegates exactly once."""
-    from workflows.rfgun_hom_antenna.workflow import build_workflow_2
-
-    cfg = {"test": "value"}
+    cfg = {"parameters": [{"name": "p1", "low": 0, "high": 1, "enabled": True}]}
+    cfg["cst"] = {"library_path": "dummy", "connect_mode": "any_or_new"}
+    cfg["objectives"] = [{
+        "name": "antenna_absorption",
+        "mode": "less_than",
+        "mode_params": {"threshold": -29.0, "sigma": 2.0},
+        "obj_params": {"project": "f2f", "antenna_port": 2,
+                        "tree_path": "1D Results\\S-Parameters\\S2,1",
+                        "search_freq_ghz": 0.5, "search_width_ghz": 0.01},
+    }]
+    cfg["projects"] = {"f2f": {"cst_path": "d:/dummy/f2f.cst", "is_pre_filter": True}}
+    cfg["optimization"] = {"algorithm": "sao", "n_initial": 1, "n_iterations": 0, "seed": 42}
 
     with patch(
-        "workflows.rfgun_hom_antenna.workflow._legacy_build"
-    ) as mock_legacy:
-        mock_legacy.return_value = (MagicMock(), MagicMock(), MagicMock(), None)
-        build_workflow_2(cfg)
-
-        assert mock_legacy.call_count == 1, (
-            f"Expected exactly 1 delegation call, got {mock_legacy.call_count}"
-        )
-
-
-@patch("cst_optimization.factory.CSTConnection")
-def test_delegation_returns_four_tuple(MockCST):
-    """The wrapper returns exactly what the legacy builder returns — a 4-tuple.
-
-    This test patches the legacy builder and verifies the wrapper returns
-    the exact same objects (identity preserved).
-    """
-    from workflows.rfgun_hom_antenna.workflow import build_workflow_2
-
-    cfg = {"test": "value"}
-    fake_orch = MagicMock()
-    fake_opt = MagicMock()
-    fake_eval = MagicMock()
-    fake_retry = None
-    expected = (fake_orch, fake_opt, fake_eval, fake_retry)
-
-    with patch(
-        "workflows.rfgun_hom_antenna.workflow._legacy_build"
-    ) as mock_legacy:
-        mock_legacy.return_value = expected
-        result = build_workflow_2(cfg)
-
-        assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
-        assert len(result) == 4, f"Expected 4 values, got {len(result)}"
-        # Identity check — wrapper should return same objects
-        assert result[0] is fake_orch, "orchestrator identity preserved"
-        assert result[1] is fake_opt, "optimizer identity preserved"
-        assert result[2] is fake_eval, "evaluator identity preserved"
-        assert result[3] is fake_retry, "retry_handler identity preserved"
+        "workflows.rfgun_hom_antenna.workflow.build_workflow_2"
+    ) as mock_wf:
+        fake = (MagicMock(), MagicMock(), MagicMock(), None)
+        mock_wf.return_value = fake
+        result = factory_build(cfg)
+        assert result is fake, "factory wrapper should return identity of workflow result"
 
 
 # ==============================================================================
-# C. Root runner import verification
+# C. Old import path still works
 # ==============================================================================
 
 
-def test_run_workflow_2_now_imports_from_workflow_seam():
-    """``run_workflow_2.py`` now imports ``build_workflow_2`` from the
-    workflow-local seam, not from the shared factory directly."""
+@patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+def test_import_from_factory_still_works(MockCST):
+    """``from cst_optimization.factory import build_workflow_2`` still works."""
+    from cst_optimization.factory import build_workflow_2 as factory_build
+    assert callable(factory_build)
+
+
+# ==============================================================================
+# D. Root runner import
+# ==============================================================================
+
+
+def test_run_workflow_2_still_imports_from_workflow_seam():
+    """``run_workflow_2.py`` still imports ``build_workflow_2`` from the
+    workflow-local seam (unchanged from W2-4A)."""
     import run_workflow_2 as rw2
 
-    # The module-level name ``build_workflow_2`` should be resolved from
-    # the workflow-local module, not cst_optimization.factory.
-    build_fn = getattr(rw2, "build_workflow_2", None)
-    assert build_fn is not None, (
-        "run_workflow_2 should have a build_workflow_2 attribute"
-    )
-    # Verify the function's module is the workflow-local seam
+    build_fn = rw2.build_workflow_2
+    assert callable(build_fn)
     fn_module = getattr(build_fn, "__module__", "")
-    assert "rfgun_hom_antenna.workflow" in fn_module, (
-        f"Expected build_workflow_2 to come from workflows.rfgun_hom_antenna.workflow, "
+    assert "workflows.rfgun_hom_antenna.workflow" in fn_module, (
+        f"Expected root to import from workflows.rfgun_hom_antenna.workflow, "
         f"got __module__={fn_module!r}"
     )
 
 
 @patch("run_workflow_2.build_workflow_2")
 def test_run_workflow_2_can_be_patched_by_name(mock_build):
-    """The existing characterisation test's patch target
-    ``run_workflow_2.build_workflow_2`` still works after the import change."""
+    """Existing characterisation test's patch target still works."""
     import run_workflow_2 as rw2
-
-    # The patch should replace the name in the module namespace
     assert rw2.build_workflow_2 is mock_build
-
-
-@patch("run_workflow_2.build_workflow_2")
-def test_run_workflow_2_main_patch_still_works(mock_build):
-    """``run_workflow_2.build_workflow_2`` can still be patched with
-    ``MagicMock``, which is what the black-box characterisation test does."""
-    pass  # The patch itself is the test — it didn't raise ImportError

@@ -625,6 +625,57 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - `workflows/rfgun_hom_antenna/config.yaml` 未修改
 - `scripts/schedule_workflow2.ps1` 未修改
 
+### 本轮（W2-4B：builder implementation migration）
+
+**执行时间**：2026-06-07
+
+**分支**：`refactor/workflow2-builder-migration`（基于 `refactor/workflow2-builder-seam`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `workflows/rfgun_hom_antenna/workflow.py`
+4. `src/cst_optimization/factory.py`
+5. `tests/workflows/test_workflow2_characterization.py`
+6. `tests/workflows/test_workflow2_builder_seam.py`
+
+**修改的文件**：
+- `workflows/rfgun_hom_antenna/workflow.py`（实现体迁移 + docstring 修复）
+- `src/cst_optimization/factory.py`（`build_workflow_2` → 兼容性 wrapper，lazy import）
+- `tests/workflows/test_workflow2_characterization.py`（patch targets → `workflows.rfgun_hom_antenna.workflow.CSTConnection`）
+- `tests/workflows/test_workflow2_builder_seam.py`（重写为 W2-4B 语义）
+- `workflows/rfgun_hom_antenna/__init__.py`（phase markers）
+- `workflows/rfgun_hom_antenna/README.md`（W2-4B status）
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+python -m pytest tests/workflows/test_workflow2_builder_seam.py -q
+python -m pytest tests/workflows/test_workflow2_config_isolation.py -q
+python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
+```
+
+**测试结果**：43 / 43 passed
+
+| Suite | Tests | Status |
+|-------|-------|--------|
+| W2-1 characterization | 21 | ✅ |
+| W2-4B builder seam | 7 | ✅ |
+| W2-3 config isolation | 6 | ✅ |
+| W2-2 skeleton | 9 | ✅ |
+
+**关键事实**：
+- `workflows/rfgun_hom_antenna/workflow.py` 现在 OWN `build_workflow_2` 完整实现
+- 旧 docstring "创建独立 CST 窗口" → "单 CST 连接，顺序执行"（与代码一致）
+- `src/cst_optimization/factory.py::build_workflow_2` 现在是兼容性 wrapper（lazy import + 委托）
+- 旧 import 路径 `from cst_optimization.factory import build_workflow_2` 仍然可用
+- factory wrapper 现带有正确的 4 元返回类型注解（R3 部分解决）
+- `DualProjectOrchestrator` 未移动
+- `src/cst_optimization/core/**` 未修改
+- `config/default.yaml` 未修改
+- `scripts/schedule_workflow2.ps1` 未修改
+
 后续每一轮本地 agent 都应更新本节，记录实际运行的命令和结果。
 
 ### 整体状态
@@ -633,28 +684,30 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - W2-1: accepted.
 - W2-2: accepted.
 - W2-3: accepted.
-- **W2-4A: pending web review** — builder seam established, 9 seam tests + 45 total pass.
+- W2-4A: accepted.
+- **W2-4B: pending web review** — 43/43 tests pass, builder implementation migrated.
 - 未运行 live workflow。
 - 未运行 CST。
-- **root import repoint only** — factory/orchestrator/scheduler/config 均未修改。
+- **builder implementation migrated** — factory/orchestrator/core/scheduler/config 均未修改。
 
 ## 11. 当前推荐下一步
 
-### W2-4A 已完成
+### W2-4B 已完成
 
-- ✅ 从 `refactor/workflow2-config-isolation` 创建 `refactor/workflow2-builder-seam` 分支
-- ✅ 创建 `workflows/rfgun_hom_antenna/workflow.py` — thin delegation wrapper over legacy factory
-- ✅ 创建 `tests/workflows/test_workflow2_builder_seam.py`（9 tests: import, delegation contract, root import verification）
-- ✅ root `run_workflow_2.py` import repointed: `cst_optimization.factory` → `workflows.rfgun_hom_antenna.workflow`
-- ✅ `src/cst_optimization/factory.py` 未修改（implementation 未复制）
+- ✅ 从 `refactor/workflow2-builder-seam` 创建 `refactor/workflow2-builder-migration` 分支
+- ✅ `workflows/rfgun_hom_antenna/workflow.py` 现在 OWN `build_workflow_2` 完整实现
+- ✅ `src/cst_optimization/factory.py::build_workflow_2` 替换为兼容性 wrapper（lazy import + 委托）
+- ✅ 旧 import 路径 `from cst_optimization.factory import build_workflow_2` 仍然可用
+- ✅ 修复 builder docstring：单 CST 连接（取代旧"独立窗口"描述）
+- ✅ 43 total tests pass
+- ✅ `DualProjectOrchestrator` 未移动
+- ✅ `src/cst_optimization/core/**` 未修改
 - ✅ `config/default.yaml` 未修改
 - ✅ `scripts/schedule_workflow2.ps1` 未修改
-- ✅ 45 total tests pass across all 4 test suites
-- ✅ 不跑 CST
 - ⏳ 等待 web reviewer 审计通过
 
-### W2-4B（通过 W2-4A 审计后的建议）：builder implementation migration
+### W2-5（通过 W2-4B 审计后的建议）：orchestrator ownership assessment
 
-通过 W2-4A 审计后，建议进入 W2-4B 将 `build_workflow_2` 的实际实现从 `src/cst_optimization/factory.py` 复制/迁移到 `workflows/rfgun_hom_antenna/workflow.py`。
+通过 W2-4B 审计后，建议进入 W2-5 评估 `DualProjectOrchestrator` 的归属 — 是保持 core 原位，还是在其他 workflow 无依赖后迁入 workflow2 package。
 
-**注意**：W2-4B 开始时必须保有 W2-1 characterization tests 作为回归护网。`src/cst_optimization/factory.py::build_workflow_2` 可暂时保留为 compatibility wrapper，直到所有消费者迁移完毕。
+**注意**：W2-5 只做评估和文档，不做迁移。如果确需迁移，应在后续单独阶段进行。

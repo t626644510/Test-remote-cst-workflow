@@ -2,11 +2,11 @@
 
 ## Status
 
-**Builder seam established (W2-4A).** Implementation still delegates to
-the legacy shared factory — no implementation has been copied.
+**Builder implementation migrated (W2-4B).** This package now OWNS the
+``build_workflow_2`` implementation.  The shared factory
+(``cst_optimization.factory``) re-exports it as a compatibility wrapper.
 
-The root entry point has been repointed to import ``build_workflow_2``
-from this package's ``workflow.py`` (thin delegation wrapper):
+The root entry point imports ``build_workflow_2`` from this package::
 
 ```
 python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
@@ -24,7 +24,7 @@ known W2-1 solver-timeout discrepancy and migration constraints.
 workflows/rfgun_hom_antenna/
     __init__.py      — Package metadata, version, legacy entry pointer
     run.py           — Placeholder / compatibility planning module (no CST calls)
-    workflow.py      — Builder ownership seam (W2-4A), delegates to legacy factory
+    workflow.py      — Builder implementation (W2-4B), formerly in factory.py
     config.yaml      — (future) workflow-specific config
     README.md        — This file
 ```
@@ -39,8 +39,8 @@ Phases:
 - W2-1 — No-CST characterization tests
 - W2-2 — Package skeleton                                                ✅ done
 - W2-3 — Config isolation                                                ✅ done
-- **W2-4A — Builder ownership seam** ← current
-- W2-4B — Builder implementation migration (future)
+- W2-4A — Builder ownership seam                                               ✅ done
+- **W2-4B — Builder implementation migration** ← current
 - W2-5 — Orchestrator ownership assessment
 - W2-6 — Fix documented semantic risks
 - W2-7 — Core candidate evaluation

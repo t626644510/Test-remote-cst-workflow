@@ -13,8 +13,8 @@ Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-1  — no-CST characterization tests                            ✅ done
     W2-2  — package skeleton (this file)                             ✅ done
     W2-3  — workflow2 config isolation                               ✅ done
-    W2-4A — builder ownership seam (this file)                        ⬅️ current
-    W2-4B — builder implementation migration (future)
+    W2-4A — builder ownership seam                                    ✅ done
+    W2-4B — builder implementation migration (this file)               ⬅️ current
     W2-5  — orchestrator ownership assessment
     W2-6  — fix documented semantic risks
     W2-7  — core candidate evaluation

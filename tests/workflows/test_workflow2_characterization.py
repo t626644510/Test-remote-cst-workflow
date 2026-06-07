@@ -384,7 +384,7 @@ class TestSolverTimeoutSource:
     """
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_solver_timeout_comes_from_merged_solver_section(MockCST):
         """With a config that has ``workflow_2.solver`` (post-merge), the
         ``SolverRunner`` receives that value."""
@@ -397,7 +397,7 @@ class TestSolverTimeoutSource:
         assert orch._solver._timeout_s == 300.0
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_solver_timeout_falls_back_to_default_when_missing(MockCST):
         """When ``workflow_2.solver`` has no ``stagnation_timeout_s`` (or is
         missing entirely), ``SolverRunner`` falls back to 7200.0."""
@@ -410,7 +410,7 @@ class TestSolverTimeoutSource:
         assert orch._solver._timeout_s == 7200.0
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_solver_timeout_zero_becomes_default(MockCST):
         """A value of 0 triggers the SolverRunner default (7200.0)."""
         cfg = _minimal_build_config()
@@ -422,7 +422,7 @@ class TestSolverTimeoutSource:
         assert orch._solver._timeout_s == 7200.0
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_optimization_solver_key_is_not_read_by_builder(MockCST):
         """``workflow_2.optimization.solver.stagnation_timeout_s`` is NOT
         consumed by ``build_workflow_2`` — the builder reads
@@ -479,7 +479,7 @@ class TestCheckpointCallbackCount:
         return fake_execute
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
@@ -505,7 +505,7 @@ class TestCheckpointCallbackCount:
         )
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
@@ -535,7 +535,7 @@ class TestCheckpointCallbackCount:
         )
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
@@ -588,7 +588,7 @@ class TestBuildWorkflow2ReturnSignature:
     """
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_returns_four_tuple_with_sao_algorithm(MockCST):
         """Default SAO algorithm returns a 4-tuple."""
         cfg = _minimal_build_config()
@@ -608,7 +608,7 @@ class TestBuildWorkflow2ReturnSignature:
         )
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_returns_four_tuple_with_retry_enabled(MockCST):
         """With retry enabled, retry_handler is not None."""
         cfg = _minimal_build_config(enable_retry=True)
@@ -622,7 +622,7 @@ class TestBuildWorkflow2ReturnSignature:
         )
 
     @staticmethod
-    @patch("cst_optimization.factory.CSTConnection")
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_saea_algorithm_also_returns_four_tuple(MockCST):
         """SAEA algorithm also returns a 4-tuple."""
         cfg = _minimal_build_config()
@@ -642,20 +642,29 @@ class TestBuildWorkflow2ReturnSignature:
 
     @staticmethod
     def test_type_annotation_mismatch():
-        """Assert the type annotation DOES NOT mention EvaluationRetryHandler.
+        """Assert the workflow-local builder annotation still promises 3 items.
 
-        This is a static/reflection test that reads the source annotation.
-        It does NOT exercise CST.  If the annotation is ever fixed to include
-        ``retry_handler``, this test will fail and the R3 risk can be downgraded.
+        The primary implementation is now in
+        ``workflows.rfgun_hom_antenna.workflow.build_workflow_2``.  Its type
+        annotation still promises 3 elements (``DualProjectOrchestrator``,
+        ``BaseOptimizer``, ``Callable``) while the actual return is 4 (adds
+        ``retry_handler``).
+
+        The factory compatibility wrapper (``cst_optimization.factory``) now
+        has a correct 4-element annotation, so R3 is **partially resolved**
+        for that import path.  This test targets the workflow-local builder
+        where the mismatch remains active.
         """
-        from cst_optimization.factory import build_workflow_2
+        import inspect
+        from workflows.rfgun_hom_antenna.workflow import build_workflow_2
 
         sig = inspect.signature(build_workflow_2)
         ann_str = str(sig.return_annotation)
 
         assert "EvaluationRetryHandler" not in ann_str, (
-            "R3 RISK DOWNGRADE CANDIDATE: type annotation now mentions "
-            "EvaluationRetryHandler — update R3 risk status and this assertion."
+            "R3 RISK DOWNGRADE CANDIDATE: workflow-local builder annotation "
+            "now mentions EvaluationRetryHandler — update R3 risk status "
+            "and this assertion."
         )
         # Sanity: annotation does mention the three declared return types
         assert "DualProjectOrchestrator" in ann_str

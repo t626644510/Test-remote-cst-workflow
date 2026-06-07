@@ -126,7 +126,8 @@ checkpoint record per evaluation, not two.
 
 ## Integration Status
 
-**Current Workflow2 integration head**: `docs/workflow2-context-compaction` (commit `7601971`).
+**Current Workflow2 integration branch**: `docs/workflow2-context-compaction`.
+W2-6E merge closeout: `7601971`.  Latest integration decision: `a61a51d`.
 
 All 13 phases W2-0 through W2-6E are accepted and merged into this branch.
 No phase has been merged to `main` yet.

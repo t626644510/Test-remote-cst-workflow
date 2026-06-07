@@ -894,3 +894,10 @@ python -m pytest tests/workflows/test_workflow2_characterization.py -q
 - root entry 仍从 `workflows.rfgun_hom_antenna.workflow` 导入 builder
 - CLI flags `--auto-resume` / `--heartbeat` / `--warmup-from-db` 均可用
 - 无 scheduler/root/config/runtime 文件被修改
+
+**后续硬化**：
+- CLI flag 测试从手动构造 `argparse.ArgumentParser` 改为 AST 源码检查
+- `test_root_reads_default_yaml` 改为 AST 字符串字面量检查
+- 新增 `test_no_extra_unexpected_flags` 作为 CLI 变更护网
+- 测试数从 14 → 15（保留全部 scheduler 静态检查）
+- 所有 15 + 21 = 36 项测试通过

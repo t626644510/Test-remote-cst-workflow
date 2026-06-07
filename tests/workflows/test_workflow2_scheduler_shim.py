@@ -11,8 +11,8 @@ No PowerShell execution, no CST, no live workflow.
 
 from __future__ import annotations
 
+import ast
 import sys
-import argparse
 from pathlib import Path
 
 import pytest
@@ -26,7 +26,49 @@ for _p in (str(_PROJECT_ROOT), _SRC_DIR):
         sys.path.insert(0, _p)
 
 SCHEDULER_PATH = _PROJECT_ROOT / "scripts" / "schedule_workflow2.ps1"
-ROOT_ENTRY = _PROJECT_ROOT / "run_workflow_2.py"
+ROOT_ENTRY_PATH = _PROJECT_ROOT / "run_workflow_2.py"
+
+
+# ---------------------------------------------------------------------------
+# AST helper
+# ---------------------------------------------------------------------------
+
+
+def _get_root_ast() -> ast.Module:
+    """Parse ``run_workflow_2.py`` into an AST.
+
+    The AST is parsed once per test session (pytest caches the module).
+    """
+    with open(ROOT_ENTRY_PATH, "r", encoding="utf-8") as f:
+        return ast.parse(f.read())
+
+
+def _find_add_argument_calls(tree: ast.Module) -> list[str]:
+    """Return the list of ``--flag`` names passed to ``parser.add_argument``
+    calls in the root entry's AST."""
+    flags: list[str] = []
+    for node in ast.walk(tree):
+        # Match: parser.add_argument("--flag", ...)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_argument"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and node.args[0].value.startswith("--")
+        ):
+            flags.append(node.args[0].value)
+    return flags
+
+
+def _find_string_literals(tree: ast.Module) -> list[str]:
+    """Return all string constants found in the AST."""
+    strings: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            strings.append(node.value)
+    return strings
 
 
 # ==============================================================================
@@ -87,79 +129,97 @@ class TestSchedulerScript:
         """Scheduler action script path contains 'run_workflow_2.py', not a
         workflow-specific name."""
         content = SCHEDULER_PATH.read_text(encoding="utf-8")
-        # The $ScriptPath variable should join WorkDir to run_workflow_2.py
         assert "run_workflow_2.py" in content
-        # No workflow-package run.py
         assert "rfgun_hom_antenna" not in content
 
 
 # ==============================================================================
-# B. Root entry CLI compatibility
+# B. Root entry CLI compatibility (AST inspection)
 # ==============================================================================
 
 
 class TestRootEntryCLI:
     """Characterise that ``run_workflow_2.py`` exposes the expected CLI flags
-    that the scheduler depends on."""
+    that the scheduler depends on, using AST inspection — no parser invocation."""
 
     @staticmethod
     def test_root_entry_exists():
         """Root entry ``run_workflow_2.py`` exists."""
-        assert ROOT_ENTRY.exists(), f"Root entry not found at {ROOT_ENTRY}"
+        assert ROOT_ENTRY_PATH.exists(), (
+            f"Root entry not found at {ROOT_ENTRY_PATH}"
+        )
 
     @staticmethod
-    def test_cli_parser_accepts_auto_resume():
-        """``--auto-resume`` is a recognised flag."""
-        import run_workflow_2 as rw2
-        # Reconstruct the parser as used in main()
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--auto-resume", action="store_true", default=False)
-        args = parser.parse_args(["--auto-resume"])
-        assert args.auto_resume is True
+    def test_cli_defines_auto_resume():
+        """AST: root entry defines ``--auto-resume`` via parser.add_argument."""
+        tree = _get_root_ast()
+        flags = _find_add_argument_calls(tree)
+        assert "--auto-resume" in flags, (
+            "run_workflow_2.py should define --auto-resume CLI flag"
+        )
 
     @staticmethod
-    def test_cli_parser_accepts_heartbeat():
-        """``--heartbeat`` is a recognised flag."""
-        import run_workflow_2 as rw2
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--heartbeat", action="store_true", default=False)
-        args = parser.parse_args(["--heartbeat"])
-        assert args.heartbeat is True
+    def test_cli_defines_heartbeat():
+        """AST: root entry defines ``--heartbeat`` via parser.add_argument."""
+        tree = _get_root_ast()
+        flags = _find_add_argument_calls(tree)
+        assert "--heartbeat" in flags, (
+            "run_workflow_2.py should define --heartbeat CLI flag"
+        )
 
     @staticmethod
-    def test_cli_parser_accepts_warmup_from_db():
-        """``--warmup-from-db`` is a recognised flag with path argument."""
-        import run_workflow_2 as rw2
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--warmup-from-db", type=str, default="", metavar="PATH")
-        args = parser.parse_args(["--warmup-from-db", "D:/test/index.jsonl"])
-        assert args.warmup_from_db == "D:/test/index.jsonl"
+    def test_cli_defines_warmup_from_db():
+        """AST: root entry defines ``--warmup-from-db`` via parser.add_argument."""
+        tree = _get_root_ast()
+        flags = _find_add_argument_calls(tree)
+        assert "--warmup-from-db" in flags, (
+            "run_workflow_2.py should define --warmup-from-db CLI flag"
+        )
 
     @staticmethod
-    def test_cli_parser_accepts_all_scheduler_flags_together():
-        """All three scheduler-used flags can be passed together."""
-        import run_workflow_2 as rw2
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--auto-resume", action="store_true", default=False)
-        parser.add_argument("--heartbeat", action="store_true", default=False)
-        parser.add_argument("--warmup-from-db", type=str, default="", metavar="PATH")
-        args = parser.parse_args([
-            "--auto-resume", "--heartbeat",
-            "--warmup-from-db", "D:/data/index.jsonl",
-        ])
-        assert args.auto_resume is True
-        assert args.heartbeat is True
-        assert args.warmup_from_db == "D:/data/index.jsonl"
+    def test_cli_defines_all_scheduler_flags():
+        """AST: the root entry defines all three flags the scheduler depends on."""
+        tree = _get_root_ast()
+        flags = _find_add_argument_calls(tree)
+        for flag in ("--auto-resume", "--heartbeat", "--warmup-from-db"):
+            assert flag in flags, (
+                f"run_workflow_2.py should define {flag}"
+            )
+
+    @staticmethod
+    def test_no_extra_unexpected_flags():
+        """AST: the root entry has exactly the three expected flags (no
+        unexpected new flags that would indicate a major CLI refactor)."""
+        tree = _get_root_ast()
+        flags = _find_add_argument_calls(tree)
+        # When this test fails, review whether the new flag is intentional
+        # and update both scheduler and characterisation tests.
+        expected = {"--auto-resume", "--heartbeat", "--warmup-from-db"}
+        assert set(flags) == expected, (
+            f"Expected CLI flags {expected}, got {set(flags)}. "
+            "If a new flag was intentionally added, update this assertion."
+        )
 
 
 # ==============================================================================
-# C. Root entry import compatibility
+# C. Root entry import and config path (AST inspection)
 # ==============================================================================
 
 
-class TestRootEntryImport:
-    """Characterise that root ``run_workflow_2.py`` imports the builder from
-    the workflow-local package (unchanged since W2-4A)."""
+class TestRootEntryConfig:
+    """Characterise that root ``run_workflow_2.py`` still reads
+    ``config/default.yaml`` and imports from the workflow-local package."""
+
+    @staticmethod
+    def test_root_reads_default_yaml():
+        """AST: root entry source contains ``config/default.yaml`` as a
+        file-path string literal (hard-coded config path)."""
+        tree = _get_root_ast()
+        strings = _find_string_literals(tree)
+        assert "config/default.yaml" in strings, (
+            "run_workflow_2.py should contain 'config/default.yaml' "
+            "as a hard-coded path string"
+        )
 
     @staticmethod
     def test_root_imports_from_workflow_seam():
@@ -172,14 +232,6 @@ class TestRootEntryImport:
         assert "rfgun_hom_antenna.workflow" in fn_module, (
             f"Expected import from workflows.rfgun_hom_antenna.workflow, "
             f"got __module__={fn_module!r}"
-        )
-
-    @staticmethod
-    def test_root_reads_default_yaml():
-        """The root entry reads ``config/default.yaml`` (CLI-driven config
-        path is not yet supported — the path is hard-coded in main())."""
-        assert (_PROJECT_ROOT / "config" / "default.yaml").exists(), (
-            "config/default.yaml should exist for root entry to read"
         )
 
     @staticmethod

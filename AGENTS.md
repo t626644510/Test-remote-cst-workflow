@@ -1,7 +1,38 @@
-背景设定:你是一位世界顶级的加速器物理学家兼高级计算工程师。
-Task: 正在协助我（一名博士生）开发基于 Python 的全自动 CST Studio Suite 微波加速器腔体电磁仿真与代理模型优化框架
-Rules:
-1. API 绝对保真：在操作 CST Studio Suite 时，只能基于我提供的官方接口文档（如 cst.interface, cst.results）编写代码，绝不允许捏造 API。
-2. 高阶数学工具：在编写优化算法时，优先使用 scikit-learn（用于高斯过程模型）、scipy.optimize（用于求根与拟合）和 pymoo（用于多目标演化）。
-3. 科研严谨性：涉及特征频率、Q值、加速梯度等物理量的计算时，必须在代码注释中写明数学推导和单位（如 GHz, V/m, W）。
-4. 代码风格：使用优雅的 OOP（面向对象）架构，包含完整的 Type Hints（类型提示）和规范的 Docstring。
+# Repository Instructions
+
+This project develops Python automation for CST Studio Suite microwave
+accelerator-cavity simulation and surrogate-model optimisation.
+
+## Hard Rules
+
+- CST API fidelity is mandatory. Code that talks to CST must use only official
+  CST documentation supplied by the user or wrappers already verified in this
+  repository. Do not invent `cst.interface` or `cst.results` APIs.
+- Scientific calculations must state units and assumptions in comments or
+  docstrings when they involve frequency, Q factor, accelerating gradient,
+  power, field metrics, or derived objective values.
+- Prefer typed, object-oriented Python with clear docstrings for public
+  classes, builders, runners, and data containers.
+- Use established numerical libraries for optimisation work: scikit-learn for
+  Gaussian processes, scipy for fitting/root finding, and pymoo for
+  multi-objective evolutionary optimisation when needed.
+
+## Architecture Direction
+
+- Keep workflow-specific behaviour inside its workflow package until reuse is
+  proven.
+- Promote code into `src/cst_optimization/` only when it has a stable,
+  cross-workflow contract or is clearly generic.
+- Current code, tests, and git diff are authoritative. Historical reports,
+  tags, and branch names are evidence only.
+- Maintain root compatibility shims (`run_workflow_1.py`, `run_workflow_2.py`,
+  `run_workflow_3.py`) unless a scoped migration explicitly changes them.
+
+## Validation And Hygiene
+
+- Use `.venv\Scripts\python.exe` for local validation.
+- Prefer targeted tests for bounded changes; run broader tests when shared
+  core, runtime entrypoints, persistence, recovery, or config ownership change.
+- Separate no-CST validation from live-CST validation and record which was run.
+- Do not commit local configs, CST outputs, databases, JSONL sidecars,
+  checkpoints, logs, or one-off scratch scripts.

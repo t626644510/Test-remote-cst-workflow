@@ -18,7 +18,7 @@ a three-tier retry handler with post-evaluation graceful reset.
 |---|---|---|
 | no-CST smoke tests | **12/12 passed** | ``pytest tests/workflows/test_rfgun_single_pass_imports.py -v`` |
 | Live CST smoke | **PASS** | ``--n-initial 1 --n-iter 0``, all 7 metrics computed, no Python exceptions |
-| Final report | ``reports/workflow1_split/live_cst_smoke_report_final.md`` |
+| Historical pointer | ``milestone/workflow1-single-pass-baseline`` tag |
 
 ## Running
 
@@ -56,10 +56,8 @@ workflows/rfgun_single_pass/
     workflow.py                            # local build_workflow_1() builder
     evaluator.py                           # Workflow1Evaluator class
     README.md                              # this file
-    BRANCH_CONTEXT.md                      # branch rules and roadmap
 tests/workflows/
     test_rfgun_single_pass_imports.py       # 12 no-CST smoke tests
-reports/workflow1_split/                    # phase-by-phase reports
 ```
 
 ## Dependencies

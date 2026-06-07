@@ -34,28 +34,11 @@ workflows/rfgun_hom_antenna/
     README.md        — This file
 ```
 
-## Migration plan (scheme 1.5)
+## Migration status
 
-See `reports/restructure_plan/workflow2_current_context.md` for the full
-plan and current status.
-
-Phases:
-- W2-0 — Context document                                                ✅ done
-- W2-1 — No-CST characterization tests                                  ✅ done
-- W2-2 — Package skeleton                                                ✅ done
-- W2-3 — Config isolation                                                ✅ done
-- W2-4A — Builder ownership seam                                         ✅ done
-- W2-4B — Builder implementation migration                               ✅ done
-- W2-5 — Orchestrator ownership assessment                               ✅ done
-- W2-6 — Semantic risk cleanup plan                                      ✅ done
-- W2-6A — Root docstring fix (R1)                                        ✅ done
-- W2-6D — Scheduler/root shim compatibility                              ✅ done
-- W2-6B — Solver timeout decision (R2)                                   ✅ done
-- W2-6C — Checkpoint callback decision (R4)                              ✅ done
-- W2-6E — Evaluator-only callback ownership (R4 fixed)                     ✅ done
-- W2-6F — Solver timeout runtime fix (R2 fixed)                           ✅ done
-- W2-7 — Root shim / package runner migration                             ✅ done
-- W2-8 — Config ownership migration                                       ✅ done
+Workflow2 migration is complete on `main`. The compact project-level summary
+is `reports/project_context_capsule.md`; detailed phase evidence is retained in
+git history and milestone tags.
 
 ## Constraints
 
@@ -63,5 +46,5 @@ Phases:
 - The ``workflow_2`` section in ``config/default.yaml`` is **legacy** (W2-8).
   It may remain as a compatibility reference but is no longer the runtime
   source.  A later cleanup phase can remove it.
-- Do NOT merge `DualProjectOrchestrator` into shared core without
-  cross-workflow evidence.
+- Do not add new Workflow2-specific phase or project logic to shared core
+  without a bounded boundary phase.

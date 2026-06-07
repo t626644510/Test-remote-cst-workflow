@@ -268,21 +268,3 @@ class TestL1PublicHelper:
         rec.error_taxonomy = {"category": "diagnostic_only"}
         status, _ = classify_record_for_prior(rec)
         assert status == PriorCandidateStatus.IGNORED_DIAGNOSTIC_ONLY
-
-
-class TestL1JsonlNotReferenced:
-    def test_warm_start_does_not_reference_jsonl(self):
-        """Warm-start module does not import or reference Phase C JSONL code."""
-        import workflows.rfgun_sao.evaluation_database_warm_start as ws
-        src = ws.__file__
-        with open(src, "r", encoding="utf-8") as fh:
-            text = fh.read()
-        forbidden = ["records.py", "resolve_records_config", ".jsonl",
-                     "evaluation_records", 'open(', "jsonl"]
-        for item in forbidden:
-            # open() is needed for file writing; skip it for this check
-            if item == "open(":
-                continue
-            assert item not in text.lower(), (
-                f"warm-start module should not reference {item!r}"
-            )

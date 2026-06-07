@@ -12,11 +12,11 @@ provides web-agent-ready handoffs for the next bounded phase.
 ## Recovery Index
 
 - **Baseline merge:** PR #1 merged W2-0 through W2-6F into `main`.
-- **Active direction:** W2-7 runner migration is complete; W2-9 bounded live smoke is next.
+- **Active direction:** W2-7 runner migration and W2-8 config ownership are complete; W2-9 live smoke was run; W2-10 orchestrator boundary is next.
 - **Public command must remain:** `python run_workflow_2.py`.
 - **Scheduler must continue targeting** root `run_workflow_2.py` until a dedicated scheduler migration is accepted.
-- **Runtime config remains** `config/default.yaml` -> `workflow_2` subtree.
-- **`workflows/rfgun_hom_antenna/config.yaml`** remains a snapshot, not runtime source.
+- **Runtime config source (W2-8):** `workflows/rfgun_hom_antenna/config.yaml` — contains `workflow_2` subtree plus top-level `cst`, `solver`, `logging` fallback sections.
+- **`config/default.yaml["workflow_2"]`** is legacy/compatibility reference, not runtime source.
 - **`DualProjectOrchestrator`** remains in `src/cst_optimization/core/orchestrator.py` until W2-10.
 - **Do not treat live CST smoke and no-CST validation as interchangeable.**
 
@@ -94,84 +94,73 @@ python -m pytest tests/workflows/test_workflow2_scheduler_shim.py \
 
 ---
 
+### W2-8 — Config Ownership Migration
+
+**Goal:** Make `workflows/rfgun_hom_antenna/config.yaml` the Workflow2
+runtime config source, replacing the `config/default.yaml -> workflow_2` path.
+
+**Status:** Accepted and merged into the active branch.
+
+**Current evidence:**
+
+| Item | Value |
+|------|-------|
+| Branch | `refactor/workflow2-config-ownership` |
+| Base | `main` (W2-7 + W2-9 complete) |
+| Runtime config source | `workflows/rfgun_hom_antenna/config.yaml` |
+| Fallback sections | `cst`, `solver`, `logging` at top level of local config |
+| Effective solver timeout | `7200.0` from `workflow_2.optimization.solver.stagnation_timeout_s` |
+| `config/default.yaml` status | Legacy: not read by Workflow2 runner |
+
+**Config loader (`_load_workflow2_config` in `run.py`):**
+
+- Reads the co-located `config.yaml` by default.
+- Extracts `workflow_2` subtree and merges top-level `cst`, `solver`, `logging`
+  as fallbacks (same merge logic as pre-W2-8, only source path changed).
+- Loader is testable independently of `main()`.
+
+**Changed files:**
+
+- `workflows/rfgun_hom_antenna/config.yaml` — added `cst`, `solver`, `logging`
+  fallback sections; updated header from "snapshot" to "runtime source".
+- `workflows/rfgun_hom_antenna/run.py` — added `_load_workflow2_config()`;
+  `main()` now calls it instead of reading `config/default.yaml`.
+- `tests/workflows/test_workflow2_config_isolation.py` — replaced exact-match
+  test with runtime-source, precedence, and loader tests.
+- `tests/workflows/test_workflow2_scheduler_shim.py` — updated config path
+  assertion from `config/default.yaml` to `config.yaml`.
+- `tests/workflows/test_workflow2_characterization.py` — added
+  `TestCompletedEvaluationCheckpoint` (mocked orchestrator, real
+  CheckpointManager).
+
+**`config/default.yaml` NOT committed** in this phase.
+
+**Validation:**
+
+```
+python -m pytest tests/workflows/ -q
+# 1238 passed, 1 failed (pre-existing WF1 warm-start test) in 3.20s
+```
+
+**Live CST:** Not run (W2-8 is no-CST only). W2-9 was already run before W2-8.
+
+**Residual risks:**
+
+- `config/default.yaml` still has a legacy `workflow_2` subtree. A future
+  cleanup phase should decide whether to remove or deprecate it.
+- Scheduler still targets root `run_workflow_2.py` — but the shim delegates
+  correctly and the config path change is transparent to the scheduler.
+- WF1 test failure (`test_warm_start_does_not_reference_jsonl`) is pre-existing
+  and unrelated.
+
+---
+
 ## Upcoming Phases
 
-The following phases remain. The recommended order:
-**W2-9 (live smoke)** first — collect CST evidence with the current runner
-before touching config ownership.  **W2-8 (config)** second, after live evidence
-confirms the runner works.  **W2-10 (orchestrator boundary)** last, after both
-runner and config are settled.
+The following phase remains.
 
----
-
-### W2-9 — Bounded Live Smoke
-
-**Purpose:**
-
-- Collect first post-runner-migration Workflow2 live CST evidence using the
-  current public command (`python run_workflow_2.py`) and current config source
-  (`config/default.yaml`).
-
-**Minimum requirements:**
-
-- One bounded smoke command with explicit timeout or stop condition.
-- Output and logs outside tracked source unless a concise evidence report is
-  intentionally added.
-- Record effective solver timeout and config source.
-- Record checkpoint behavior: one record per logical evaluation.
-- Record CST process cleanup state after the run.
-- State whether CST was actually exercised.
-
-**Boundaries:**
-
-- No production campaign.
-- No committed `.ckpt`, `.jsonl`, database, CST result, or scratch artifacts.
-- No destructive process manipulation unless explicitly scoped.
-- No default-config changes unless the phase explicitly authorises them.
-
-**Validation:**
-
-1. Re-run W2-7 no-CST tests first (`test_workflow2_scheduler_shim.py`,
-   `test_workflow2_characterization.py`, `test_workflow2_config_isolation.py`).
-2. Then run one bounded live smoke with recorded cleanup state.
-
-**Live CST:** Required.
-
----
-
-### W2-8 — Config Ownership
-
-**Decision to make:**
-
-- Whether `workflows/rfgun_hom_antenna/config.yaml` becomes the runtime source
-  or remains a snapshot while `config/default.yaml` stays authoritative.
-
-**Required evidence:**
-
-- Exact comparison between committed workflow-local config and
-  `config/default.yaml["workflow_2"]`.
-- Clear precedence rules for top-level fallback sections: `cst`, `solver`,
-  `logging`.
-- Tests proving effective solver timeout still resolves to `7200.0` from
-  `workflow_2.optimization.solver.stagnation_timeout_s`.
-- Tests proving config source and scheduler/root behavior after migration.
-
-**Boundaries:**
-
-- Do not mix with orchestrator migration.
-- Do not leave two long-term runtime sources of truth.
-- Do not silently drop fallback values such as `cst.library_path`,
-  `logging.output_dir`, or solver `settle_s`.
-
-**Validation:**
-
-- `test_workflow2_config_isolation.py` — config equality assertions.
-- `test_workflow2_characterization.py` — solver timeout and callback tests.
-- `test_workflow2_scheduler_shim.py` — delegation and CLI tests.
-- Additional config-loader tests if a dedicated loader is introduced.
-
-**Live CST:** Not required for implementation. Recommended after acceptance if
-the runtime config source changes.
+**W2-10 (orchestrator boundary)** last, after runner, config, and live smoke
+are settled.
 
 ---
 

@@ -25,6 +25,7 @@ Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-6E — evaluator-only callback ownership (R4 fixed)             ✅ done
     W2-6F — solver timeout runtime fix (R2 fixed)                    ✅ done
     W2-7  — root shim / package runner migration                     ✅ done
+    W2-8  — config ownership migration                              ✅ done
 """
 
 __version__ = "0.1.0"

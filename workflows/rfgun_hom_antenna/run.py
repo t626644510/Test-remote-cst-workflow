@@ -10,7 +10,7 @@ Usage from project root::
 The root entry point ``run_workflow_2.py`` is a compatibility shim that
 delegates here.  Use ``python run_workflow_2.py`` to run.
 
-Reads ``config/default.yaml``, opens a single CST DesignEnvironment connection
+Reads its co-located ``config.yaml`` (W2-8 runtime source), opens a single CST
 with sequential frequency-domain and wakefield solver execution (inter-pass
 reset may recreate the DE between phases), builds the orchestrator + optimiser,
 and runs the full Bayesian optimisation loop.
@@ -42,6 +42,52 @@ import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
 from workflows.rfgun_hom_antenna.workflow import build_workflow_2
+
+# ── Config loader ────────────────────────────────────────────────────────────
+# Co-located config.yaml is the Workflow2 runtime source of truth (W2-8).
+_DEFAULT_CONFIG_PATH: Path = Path(__file__).resolve().with_name("config.yaml")
+
+
+def _load_workflow2_config(config_path: Path | None = None) -> dict:
+    """Load the effective Workflow2 config with fallback section precedence.
+
+    Parameters
+    ----------
+    config_path : Path or None
+        Path to a YAML config file.  If ``None``, the co-located
+        ``config.yaml`` is used.
+
+    Returns
+    -------
+    dict
+        The ``workflow_2`` subtree with top-level ``cst``, ``solver``, and
+        ``logging`` sections merged in as fallbacks (only when the subtree
+        does not already define them).
+
+    Precedence rules (W2-6F, W2-8):
+        - ``workflow_2.optimization.solver`` overrides
+          ``workflow_2.solver`` for overlapping keys (builder precedence).
+        - Top-level fallback sections are only merged when the workflow_2
+          subtree does NOT already carry them.
+        - The merge is a **reference copy** — mutating the returned dict
+          affects the source (current runtime contract, not a safer design).
+    """
+    if config_path is None:
+        config_path = _DEFAULT_CONFIG_PATH
+
+    with open(config_path, "r", encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh)
+
+    wf2_cfg = cfg.get("workflow_2", {})
+    if not isinstance(wf2_cfg, dict):
+        wf2_cfg = {}
+
+    # Merge top-level cst, solver, logging sections as fallbacks.
+    for section in ("cst", "solver", "logging"):
+        if section in cfg and section not in wf2_cfg:
+            wf2_cfg[section] = cfg[section]
+
+    return wf2_cfg
 
 # ── Ctrl+C handling ──────────────────────────────────────────────────────────
 # COM calls (run_solver, DesignEnvironment.close) block the main thread,
@@ -108,22 +154,17 @@ def main() -> None:
     args = parser.parse_args()
 
     # ── 1. Load config ──────────────────────────────────────────────────────
-    with open("config/default.yaml", "r", encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh)
-
-    wf2_cfg = cfg.get("workflow_2", {})
+    wf2_cfg = _load_workflow2_config()
     if not wf2_cfg.get("enabled", False):
-        print("workflow_2.enabled is False — set to true in config/default.yaml")
+        print(
+            "workflow_2.enabled is False — set to true in "
+            f"{_DEFAULT_CONFIG_PATH}"
+        )
         sys.exit(0)
-
-    # Merge top-level cst, solver, logging sections into workflow_2 config.
-    for section in ("cst", "solver", "logging"):
-        if section in cfg and section not in wf2_cfg:
-            wf2_cfg[section] = cfg[section]
 
     # ── 2. Checkpoint (resume from previous crash) ──────────────────────────
     log_dir = (
-        wf2_cfg.get("logging", cfg.get("logging", {}))
+        wf2_cfg.get("logging", {})
         .get("output_dir", "D:/Results")
     )
     os.makedirs(log_dir, exist_ok=True)

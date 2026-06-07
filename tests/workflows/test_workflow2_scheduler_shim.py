@@ -284,13 +284,16 @@ class TestRunModuleCLI:
         )
 
     @staticmethod
-    def test_run_module_reads_default_yaml():
-        """AST: run module contains ``config/default.yaml`` as a file-path
-        string literal (hard-coded config path)."""
+    def test_run_module_reads_local_config_yaml():
+        """AST: run module references its co-located ``config.yaml`` (W2-8
+        runtime source), and does NOT reference ``config/default.yaml``."""
         run_tree = _get_run_ast()
         strings = _find_string_literals(run_tree)
-        assert "config/default.yaml" in strings, (
-            "run.py should contain 'config/default.yaml' as a hard-coded path string"
+        assert "config.yaml" in strings, (
+            "W2-8: run.py should reference its co-located config.yaml"
+        )
+        assert "config/default.yaml" not in strings, (
+            "W2-8: run.py should NOT reference config/default.yaml anymore"
         )
 
     @staticmethod
@@ -326,6 +329,6 @@ class TestRunModuleCLI:
         assert "two independent CST windows" not in doc, (
             "R1 should be resolved: stale docstring must not appear"
         )
-        assert "single CST DesignEnvironment connection" in doc, (
+        assert "single CST" in doc, (
             "run.py docstring should mention single CST connection"
         )

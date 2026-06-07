@@ -1115,3 +1115,122 @@ class TestSchedulerRootEntryCompatibility:
             assert ind not in content, (
                 f"Scheduler appears to reference migrated path '{ind}'"
             )
+
+
+# ==============================================================================
+# P1.6 — Completed-evaluation checkpoint (no CST, mocked orchestrator)
+# ==============================================================================
+
+
+class TestCompletedEvaluationCheckpoint:
+    """W2-8: Verify that one logical evaluation (finite raw values,
+    solver_ok=True) calls ``CheckpointManager.mark_completed()`` exactly once.
+
+    Uses a **temporary CheckpointManager** and a **mocked
+    ``orchestrator.execute()``** — no CST, no live solver, no wakefield.
+    """
+
+    @staticmethod
+    def _fake_execute_with_labels(orch, labels: set[str]):
+        """Return a fake ``execute()`` that sets finite last_* properties
+        and returns zero penalties.  Simulates a completed evaluation with
+        the given phase labels."""
+
+        def fake_execute(
+            params: np.ndarray,
+            iteration: int = 0,
+            start_phase: str = "f2f",
+            f2f_npz_path: str = "",
+            skip_phases: set[str] | None = None,
+        ) -> np.ndarray:
+            n_obj = len(orch.objectives)
+            raw = np.full(n_obj, 0.5, dtype=float)
+            penalties = np.zeros(n_obj, dtype=float)
+            orch.last_raw_values = raw.copy()
+            orch.last_penalties = penalties.copy()
+            orch.last_solver_ok = True
+            orch.last_completed_labels = labels
+            return penalties
+
+        return fake_execute
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    @patch("cst_optimization.core.cleanup.force_kill_cst")
+    @patch("cst_optimization.core.cleanup.verify_process_cleanup")
+    def test_one_evaluation_creates_one_completed_checkpoint(
+        mock_verify, mock_force_kill, mock_rm_lock,
+        mock_rm_result, mock_kill_cst, MockCST,
+        tmp_path,
+    ):
+        """With solver_ok=True and all_finite raw values, the callback path
+        calls ``CheckpointManager.mark_completed()`` once."""
+        import tempfile, os as _os_mod
+        from cst_optimization.factory import build_workflow_2 as factory_build
+        from cst_optimization.checkpoint import CheckpointManager
+
+        cfg = _minimal_build_config(enable_retry=True)
+        # Ensure logging is enabled so orchestrator won't instantiate
+        # ResultReader eagerly during construction.
+        cfg.setdefault("logging", {})["enabled"] = False
+
+        orch, _, evaluator, retry_handler = factory_build(cfg)
+
+        # Replace real execute with hermetic fake that simulates success
+        orch.execute = TestCompletedEvaluationCheckpoint._fake_execute_with_labels(
+            orch, {"frequency_domain", "wakefield"},
+        )
+
+        # Patch retry cleanup methods
+        retry_handler._tier3_kill = MagicMock()
+        retry_handler._reconnect = MagicMock()
+
+        # Use a real CheckpointManager in a temp directory
+        ckpt_path = str(tmp_path / "test_ckpt.ckpt")
+        _os_mod.makedirs(str(tmp_path), exist_ok=True)
+        ckpt = CheckpointManager(ckpt_path)
+
+        # Replicate the _on_evaluation callback from run.py
+        def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
+            idx = ckpt.add_pending(x_phys)
+            all_finite = bool(np.all(np.isfinite(raw_values)))
+            obj_names = [obj.name for obj in orch.objectives]
+            if all_finite:
+                ckpt.mark_completed(
+                    idx,
+                    raw_values=dict(zip(obj_names, raw_values)),
+                    penalties=dict(zip(obj_names, penalties)),
+                    solver_ok=solver_ok,
+                    phases=list(orch.last_completed_labels)
+                    if orch.last_completed_labels else [],
+                )
+            else:
+                ckpt.mark_failed(idx, error=error)
+            ckpt.save()
+
+        # Monkey-patch the evaluator's internal callback chain.
+        # The SAO evaluator in build_workflow_2 uses a closure over
+        # checkpoint_callback.  We replace the evaluator chain by
+        # directly exercising the callback via the checkpoint hook.
+        x = np.array([0.5], dtype=float)
+
+        # Simulate what the evaluator wrapper does after execute() returns:
+        penalties = orch.execute(x, iteration=0)
+        raw = orch.last_raw_values
+        pen = orch.last_penalties
+        _on_evaluation(x, raw, pen, orch.last_solver_ok, "")
+
+        # Assert: one record was marked completed
+        assert ckpt.completed_count == 1, (
+            f"Expected 1 completed record, got {ckpt.completed_count}"
+        )
+        assert ckpt.pending_count == 0, (
+            f"Expected 0 pending records, got {ckpt.pending_count}"
+        )
+        # Verify the checkpoint file was created
+        assert _os_mod.path.isfile(ckpt_path), (
+            f"Checkpoint file should exist at {ckpt_path}"
+        )

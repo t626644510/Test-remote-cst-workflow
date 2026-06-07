@@ -14,12 +14,14 @@ this package's runner::
 python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
 ```
 
-The local ``config.yaml`` is a **staging / snapshot** of the ``workflow_2``
-section from the global ``config/default.yaml``.  It is **not yet consumed**
-by the runtime.  The root entry point and all scheduler invocations still
-read the legacy config.  The Workflow2-effective solver timeout (7200.0 from
+The local ``config.yaml`` is the **Workflow2 runtime source of truth (W2-8)**.
+It contains the ``workflow_2`` subtree plus top-level ``cst``, ``solver``, and
+``logging`` fallback sections.  The ``run.py`` loader merges these fallbacks
+before passing the effective config to ``build_workflow_2``.  The
+Workflow2-effective solver timeout (7200.0 from
 ``workflow_2.optimization.solver.stagnation_timeout_s``) is consumed via
-builder precedence (W2-6F).
+builder precedence (W2-6F).  ``config/default.yaml`` is no longer read by the
+Workflow2 runner.
 
 ## Package structure
 
@@ -28,7 +30,7 @@ workflows/rfgun_hom_antenna/
     __init__.py      — Package metadata, version, legacy entry pointer
     run.py           — Runtime runner (argparse, config, checkpoint, heartbeat, optimisation loop)
     workflow.py      — Builder implementation (W2-4B), formerly in factory.py
-    config.yaml      — (future) workflow-specific config
+    config.yaml      — Workflow2 runtime config (W2-8): workflow_2 + fallback sections
     README.md        — This file
 ```
 
@@ -53,14 +55,13 @@ Phases:
 - W2-6E — Evaluator-only callback ownership (R4 fixed)                     ✅ done
 - W2-6F — Solver timeout runtime fix (R2 fixed)                           ✅ done
 - W2-7 — Root shim / package runner migration                             ✅ done
+- W2-8 — Config ownership migration                                       ✅ done
 
 ## Constraints
 
 - Do NOT move `run_workflow_2.py` until the scheduler is updated.
-- Do NOT treat `workflows/rfgun_hom_antenna/config.yaml` as the runtime
-  source of truth until a later root-shim / config-loader migration is
-  implemented and tested.
-- Do NOT remove or stop maintaining the ``workflow_2`` section in
-  ``config/default.yaml`` until that migration is accepted.
+- The ``workflow_2`` section in ``config/default.yaml`` is **legacy** (W2-8).
+  It may remain as a compatibility reference but is no longer the runtime
+  source.  A later cleanup phase can remove it.
 - Do NOT merge `DualProjectOrchestrator` into shared core without
   cross-workflow evidence.

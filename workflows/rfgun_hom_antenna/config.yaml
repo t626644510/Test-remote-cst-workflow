@@ -1,26 +1,35 @@
 # Workflow 2 — HOM antenna multi-project optimisation configuration.
 #
-# STATUS: staging / snapshot — NOT yet consumed by the runtime.
+# STATUS: runtime source of truth (W2-8).
 #
-#   - The current public entry point (``run_workflow_2.py``) reads the
-#     ``workflow_2`` section from ``config/default.yaml``, not this file.
-#   - The root runner applies legacy fallback merges (top-level ``cst``,
-#     ``solver``, ``logging``) that this snapshot does NOT include.
-#   - This file will become the runtime source of truth once the root shim
-#     is repointed (planned for a later migration phase).
-#
-# This is a RAW ``workflow_2`` subtree snapshot extracted from
-# ``config/default.yaml``.  It exactly matches the ``workflow_2`` section
-# at the time of extraction.  No top-level fallback keys have been merged in.
-#
-# W2-1 finding (resolved by W2-6F):
-#   ``optimization.solver.stagnation_timeout_s: 7200.0`` is now consumed by
-#   ``build_workflow_2``.  The Workflow2 builder merges ``optimization.solver``
-#   on top of the fallback ``workflow_2.solver``, so overlapping keys from
-#   ``optimization.solver`` take precedence.  See
-#   ``reports/restructure_plan/workflow2_solver_timeout_decision.md`` for
-#   the full decision history (W2-6B analysis, W2-6F supersession).
+#   - This file is read by ``workflows/rfgun_hom_antenna/run.py`` via
+#     ``python run_workflow_2.py`` (the public root shim delegates here).
+#   - The top-level ``cst``, ``solver``, and ``logging`` sections are the
+#     Workflow2 runtime fallback defaults.
+#   - The ``workflow_2`` subtree contains Workflow2-specific settings.
+#   - ``optimization.solver.stagnation_timeout_s: 7200.0`` is consumed by
+#     ``build_workflow_2`` with W2-6F precedence (optimization.solver
+#     overrides fallback solver for overlapping keys).
+#   - ``config/default.yaml`` is NO LONGER read by the Workflow2 runner.
+#     Its ``workflow_2`` subtree is a legacy snapshot; the authoritative
+#     source is this file.
 
+# ── Workflow2 runtime fallback sections ────────────────────────────────────
+cst:
+  library_path: D:/CST2026/CST Studio Suite 2026/AMD64/python_cst_libraries
+  connect_mode: any_or_new
+  result_cache: true
+
+solver:
+  stagnation_timeout_s: 300.0
+  settle_s: 2.0
+
+logging:
+  enabled: true
+  output_dir: D:/Results
+  auto_flush_interval: 1
+
+# ── Workflow2-specific settings ────────────────────────────────────────────
 workflow_2:
   enabled: true
   result_paths:

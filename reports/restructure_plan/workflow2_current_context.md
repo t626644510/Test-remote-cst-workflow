@@ -258,13 +258,12 @@ workflows/rfgun_hom_antenna/
 
 ### W2-6：修复或固化已发现语义风险
 
-建议单独处理，不与大搬迁混合：
+建议单独处理，不与大搬迁混合（注意：R3 builder 返回签名已在 W2-4B 解决，不再列入）：
 
-- solver timeout 配置层级不一致
-- build_workflow_2 注解/文档签名与实际四元返回不一致
-- checkpoint callback 可能双触发
-- run_workflow_2.py 顶部说明的"两 CST 窗口"与当前 builder 单 connection 行为不一致
-- scheduler/root shim compatibility
+- R2: solver timeout 配置层级不一致
+- R4: checkpoint callback 可能双触发
+- R1: run_workflow_2.py 顶部说明的"两 CST 窗口"与当前 builder 单 connection 行为不一致
+- R6: scheduler/root shim compatibility
 
 ### W2-7：core candidate 评估
 
@@ -738,7 +737,7 @@ git diff --check
 - ✅ `src/cst_optimization/core/**` 未修改
 - ✅ `config/default.yaml` 未修改
 - ✅ `scripts/schedule_workflow2.ps1` 未修改
-- ⏳ 等待 web reviewer 审计通过
+- ✅ accepted (commit `7e1cf1a`)
 
 ### W2-5 已完成
 

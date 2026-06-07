@@ -497,7 +497,8 @@ class TestSolverTimeoutSource:
         assert timeout == 7200.0, (
             f"Expected workflow_2.optimization.solver.stagnation_timeout_s "
             f"= 7200.0, got {timeout}.  "
-            "This intent value is NOT consumed by the current builder."
+            "This value is consumed by the builder (W2-6F: optimization.solver "
+            "overrides fallback solver for overlapping keys)."
         )
 
     @staticmethod

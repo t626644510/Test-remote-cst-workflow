@@ -134,7 +134,25 @@ before falling back to `config["solver"]`.
 
 ---
 
-## Recommendation
+## Current Implementation (W2-6F, supersedes W2-6B Recommendation)
+
+**Decision implemented**: `workflow_2.optimization.solver` now overrides
+fallback `workflow_2.solver` for overlapping keys.  The Workflow2 builder
+(``workflows/rfgun_hom_antenna/workflow.py``) merges both configs with
+``optimization.solver`` taking precedence.
+
+**Effective result** under ``config/default.yaml`` after root-runner merge:
+- `stagnation_timeout_s` = **7200.0** (from `workflow_2.optimization.solver`)
+- `settle_s` = **2.0** (from fallback `workflow_2.solver`, not overridden)
+
+**Validation**: 34 characterization tests pass, including
+``test_actual_timeout_is_7200_via_real_config`` (loads real config, builds
+with mock CST, asserts 7200.0) and
+``test_optimization_solver_overrides_fallback`` (asserts precedence).
+
+---
+
+## Recommendation (historical — superseded by W2-6F)
 
 **Option A: Preserve + Document.**
 

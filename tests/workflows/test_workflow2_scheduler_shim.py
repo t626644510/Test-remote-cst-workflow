@@ -4,7 +4,7 @@ These tests verify that:
 - The scheduler script still invokes the root ``run_workflow_2.py``.
 - The root entry is a compatibility shim that delegates to the package run module.
 - The CLI flags are defined in ``workflows/rfgun_hom_antenna/run.py``.
-- The package run module reads ``config/default.yaml`` and imports the builder.
+- The package run module reads co-located ``workflows/rfgun_hom_antenna/config.yaml`` (W2-8) and imports the builder.
 """
 
 from __future__ import annotations

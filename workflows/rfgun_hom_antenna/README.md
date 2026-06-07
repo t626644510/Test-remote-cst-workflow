@@ -59,7 +59,7 @@ Phases:
 
 ## Constraints
 
-- Do NOT move `run_workflow_2.py` until the scheduler is updated.
+- Do NOT repoint the scheduler away from root `run_workflow_2.py` until a dedicated scheduler migration is accepted.
 - The ``workflow_2`` section in ``config/default.yaml`` is **legacy** (W2-8).
   It may remain as a compatibility reference but is no longer the runtime
   source.  A later cleanup phase can remove it.

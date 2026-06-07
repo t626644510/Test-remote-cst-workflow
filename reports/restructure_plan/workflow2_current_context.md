@@ -576,7 +576,7 @@ python -m pytest tests/workflows/test_workflow2_characterization.py -q
 - W2-0: accepted.
 - W2-1: accepted.
 - W2-2: accepted.
-- **W2-3: pending web review** — local config snapshot created, 6 config isolation tests + 9 skeleton + 21 characterization pass.
+- **W2-3: pending web reviewer re-audit** — local config snapshot created, README constraint corrected.
 - 未运行 live workflow。
 - 未运行 CST。
 - 未接受任何 runtime 改动。

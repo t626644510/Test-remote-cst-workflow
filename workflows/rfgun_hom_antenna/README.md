@@ -45,6 +45,10 @@ Phases:
 ## Constraints
 
 - Do NOT move `run_workflow_2.py` until the scheduler is updated.
-- Do NOT rely on `config/default.yaml` after W2-3.
+- Do NOT treat `workflows/rfgun_hom_antenna/config.yaml` as the runtime
+  source of truth until a later root-shim / config-loader migration is
+  implemented and tested.
+- Do NOT remove or stop maintaining the ``workflow_2`` section in
+  ``config/default.yaml`` until that migration is accepted.
 - Do NOT merge `DualProjectOrchestrator` into shared core without
   cross-workflow evidence.

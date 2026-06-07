@@ -6,7 +6,9 @@
 ``build_workflow_2`` implementation.  The shared factory
 (``cst_optimization.factory``) re-exports it as a compatibility wrapper.
 
-The root entry point imports ``build_workflow_2`` from this package::
+The root entry point (``run_workflow_2.py``) is now a **compatibility shim** that
+``from workflows.rfgun_hom_antenna.run import main`` and delegates fully to
+this package's runner::
 
 ```
 python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
@@ -24,7 +26,7 @@ builder precedence (W2-6F).
 ```
 workflows/rfgun_hom_antenna/
     __init__.py      — Package metadata, version, legacy entry pointer
-    run.py           — Placeholder / compatibility planning module (no CST calls)
+    run.py           — Runtime runner (argparse, config, checkpoint, heartbeat, optimisation loop)
     workflow.py      — Builder implementation (W2-4B), formerly in factory.py
     config.yaml      — (future) workflow-specific config
     README.md        — This file
@@ -50,6 +52,7 @@ Phases:
 - W2-6C — Checkpoint callback decision (R4)                              ✅ done
 - W2-6E — Evaluator-only callback ownership (R4 fixed)                     ✅ done
 - W2-6F — Solver timeout runtime fix (R2 fixed)                           ✅ done
+- W2-7 — Root shim / package runner migration                             ✅ done
 
 ## Constraints
 

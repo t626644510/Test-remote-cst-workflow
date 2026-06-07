@@ -1,12 +1,12 @@
 """W2-1: no-CST characterization tests for legacy workflow2 behavior.
 
 These tests pin the current behavior of the workflow2 entry point, config
-merge, builder, and scheduler WITHOUT any runtime migration.  All CST
+merge, builder, and scheduler WITHOUT CST-side live migration.  All CST
 interactions are mocked — no CST Studio Suite required.
 
 Coverage
 --------
-P0.1 — config fallback merge: how ``run_workflow_2.py`` merges top-level
+P0.1 — config fallback merge: how the Workflow2 runner merges top-level
        ``cst`` / ``solver`` / ``logging`` into the ``workflow_2`` section.
 
 P0.2 — solver timeout source: what ``stagnation_timeout_s`` value actually
@@ -119,14 +119,15 @@ _CONFIG_WITH_WF2: dict = {
 
 
 # ==============================================================================
-# White-box helper: replicates run_workflow_2.py lines 93-101 exactly
+# White-box helper: replicates runner merge logic exactly
 # ==============================================================================
 
 
 def _run_merge_like_root(whole_config: dict) -> dict:
-    """White-box characterisation of ``run_workflow_2.py`` config-merge logic.
+    """White-box characterisation of the Workflow2 runner config-merge logic.
 
-    This replicates the EXACT current behaviour of lines 93-101:
+    This replicates the EXACT current behaviour of
+    ``workflows/rfgun_hom_antenna/run.py`` lines 117-120:
 
         wf2_cfg = cfg.get("workflow_2", {})
         ...
@@ -225,7 +226,7 @@ def _minimal_build_config(enable_retry: bool = False) -> dict:
 
 
 class TestConfigFallbackMerge:
-    """Characterize how ``run_workflow_2.py`` merges top-level config into
+    """Characterize how ``workflows/rfgun_hom_antenna/run.py`` merges top-level config into
     ``workflow_2`` when the workflow_2 section lacks ``cst`` / ``solver`` / ``logging``."""
 
     # ── White-box tests (via _run_merge_like_root) ───────────────────────
@@ -453,18 +454,18 @@ class TestSolverTimeoutSource:
     @staticmethod
     @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
     def test_actual_timeout_is_7200_via_real_config(MockCST):
-        """Load the actual ``config/default.yaml``, apply root-runner merge
-        semantics (as ``run_workflow_2.py`` does), and assert that
-        ``SolverRunner`` now receives 7200.0 — the Workflow2-specific
-        optimization solver value (W2-6F).  Previously this received 300.0
-        (W2-6B behaviour, before the fix)."""
+        """Load the actual ``config/default.yaml``, apply runner merge
+        semantics (as ``workflows/rfgun_hom_antenna/run.py`` does), and
+        assert that ``SolverRunner`` now receives 7200.0 — the
+        Workflow2-specific optimization solver value (W2-6F).
+        Previously this received 300.0 (W2-6B behaviour, before the fix)."""
         cfg_path = _TEST_DIR.parent.parent / "config" / "default.yaml"
         assert cfg_path.exists(), f"config/default.yaml not found at {cfg_path}"
 
         with open(cfg_path, "r", encoding="utf-8") as f:
             whole = yaml.safe_load(f)
 
-        # Replicate root-runner merge (run_workflow_2.py lines 93-101)
+        # Replicate runner merge (workflows/rfgun_hom_antenna/run.py lines 117-120)
         wf2_cfg = whole.get("workflow_2", {})
         for section in ("cst", "solver", "logging"):
             if section in whole and section not in wf2_cfg:
@@ -1067,7 +1068,7 @@ class TestBuildWorkflow2ReturnSignature:
 
 class TestSchedulerRootEntryCompatibility:
     """Characterize that ``scripts/schedule_workflow2.ps1`` still references
-    the root ``run_workflow_2.py`` — no migration has happened yet."""
+    the root ``run_workflow_2.py`` — runner body migrated (W2-7), scheduler unchanged."""
 
     SCHEDULER_PATH = _PROJECT_ROOT / "scripts" / "schedule_workflow2.ps1"
 

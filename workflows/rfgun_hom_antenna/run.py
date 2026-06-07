@@ -31,6 +31,8 @@ from pathlib import Path
 # run.py lives at workflows/rfgun_hom_antenna/run.py  -->  parents[2] = project root
 _PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 _SRC_DIR: str = str(_PROJECT_ROOT / "src")
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 

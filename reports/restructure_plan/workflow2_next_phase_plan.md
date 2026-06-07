@@ -12,7 +12,7 @@ provides web-agent-ready handoffs for the next bounded phase.
 ## Recovery Index
 
 - **Baseline merge:** PR #1 merged W2-0 through W2-6F into `main`.
-- **Active direction:** W2-7 runner migration is complete; W2-8 config ownership is next.
+- **Active direction:** W2-7 runner migration is complete; W2-9 bounded live smoke is next.
 - **Public command must remain:** `python run_workflow_2.py`.
 - **Scheduler must continue targeting** root `run_workflow_2.py` until a dedicated scheduler migration is accepted.
 - **Runtime config remains** `config/default.yaml` -> `workflow_2` subtree.
@@ -86,23 +86,56 @@ python -m pytest tests/workflows/test_workflow2_scheduler_shim.py \
    effects on import.
 6. **No new CST API assumptions** — all API calls use existing wrappers.
 
-**Residual risks (noted, not blocking):**
+**Residual risks (noted, resolved in W2-7 closure):**
 
-- `test_workflow2_builder_seam.py` — 2 tests fail because they directly access
-  `run_workflow_2.build_workflow_2`, which no longer exists in the shim.
-- `test_workflow2_package_skeleton.py` — 5 tests fail because they assert the old
-  placeholder API (`LEGACY_ENTRY`, `PACKAGE_ROOT`, `describe_legacy_entry()`, etc.).
-  These names were removed when the placeholder was replaced with the real runner.
-- Both test files are outside the W2-7 edit scope; fixes are low-effort in a
-  dedicated cleanup phase.
+- `test_workflow2_builder_seam.py` and `test_workflow2_package_skeleton.py` — placeholder
+  API tests were updated in W2-7 closure to match the real runner interface.
+  All Workflow2 no-CST tests now pass.
 
 ---
 
 ## Upcoming Phases
 
-The following phases remain. The recommended order matches the dependency chain:
-**W2-8 (config)** is unblocked by W2-7 and is the next logical step; live evidence
-(**W2-9**) should follow before risky boundary changes (**W2-10**).
+The following phases remain. The recommended order:
+**W2-9 (live smoke)** first — collect CST evidence with the current runner
+before touching config ownership.  **W2-8 (config)** second, after live evidence
+confirms the runner works.  **W2-10 (orchestrator boundary)** last, after both
+runner and config are settled.
+
+---
+
+### W2-9 — Bounded Live Smoke
+
+**Purpose:**
+
+- Collect first post-runner-migration Workflow2 live CST evidence using the
+  current public command (`python run_workflow_2.py`) and current config source
+  (`config/default.yaml`).
+
+**Minimum requirements:**
+
+- One bounded smoke command with explicit timeout or stop condition.
+- Output and logs outside tracked source unless a concise evidence report is
+  intentionally added.
+- Record effective solver timeout and config source.
+- Record checkpoint behavior: one record per logical evaluation.
+- Record CST process cleanup state after the run.
+- State whether CST was actually exercised.
+
+**Boundaries:**
+
+- No production campaign.
+- No committed `.ckpt`, `.jsonl`, database, CST result, or scratch artifacts.
+- No destructive process manipulation unless explicitly scoped.
+- No default-config changes unless the phase explicitly authorises them.
+
+**Validation:**
+
+1. Re-run W2-7 no-CST tests first (`test_workflow2_scheduler_shim.py`,
+   `test_workflow2_characterization.py`, `test_workflow2_config_isolation.py`).
+2. Then run one bounded live smoke with recorded cleanup state.
+
+**Live CST:** Required.
 
 ---
 
@@ -139,41 +172,6 @@ The following phases remain. The recommended order matches the dependency chain:
 
 **Live CST:** Not required for implementation. Recommended after acceptance if
 the runtime config source changes.
-
----
-
-### W2-9 — Bounded Live Smoke
-
-**Purpose:**
-
-- Collect first post-runner-migration Workflow2 live CST evidence using the
-  current public command (`python run_workflow_2.py`) and current config source
-  (`config/default.yaml`).
-
-**Minimum requirements:**
-
-- One bounded smoke command with explicit timeout or stop condition.
-- Output and logs outside tracked source unless a concise evidence report is
-  intentionally added.
-- Record effective solver timeout and config source.
-- Record checkpoint behavior: one record per logical evaluation.
-- Record CST process cleanup state after the run.
-- State whether CST was actually exercised.
-
-**Boundaries:**
-
-- No production campaign.
-- No committed `.ckpt`, `.jsonl`, database, CST result, or scratch artifacts.
-- No destructive process manipulation unless explicitly scoped.
-- No default-config changes unless the phase explicitly authorises them.
-
-**Validation:**
-
-1. Re-run W2-7 no-CST tests first (`test_workflow2_scheduler_shim.py`,
-   `test_workflow2_characterization.py`, `test_workflow2_config_isolation.py`).
-2. Then run one bounded live smoke with recorded cleanup state.
-
-**Live CST:** Required.
 
 ---
 

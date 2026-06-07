@@ -6,7 +6,8 @@ These tests verify that:
 - Importing from the old path ``cst_optimization.factory import build_workflow_2``
   still works and preserves the 4-tuple contract.
 - The workflow-local builder and factory wrapper produce consistent results.
-- Root ``run_workflow_2.py`` still imports from workflow-local seam.
+- Root ``run_workflow_2.py`` delegates via ``workflows/rfgun_hom_antenna/run.py``
+  which imports ``build_workflow_2`` from the workflow-local seam.
 
 No CST, solver, orchestrator execute, optimizer live run, or scheduler
 is invoked.
@@ -158,22 +159,22 @@ def test_import_from_factory_still_works(MockCST):
 # ==============================================================================
 
 
-def test_run_workflow_2_still_imports_from_workflow_seam():
-    """``run_workflow_2.py`` still imports ``build_workflow_2`` from the
-    workflow-local seam (unchanged from W2-4A)."""
-    import run_workflow_2 as rw2
+def test_run_workflow_2_still_delegates_to_workflow_seam():
+    """``run_workflow_2.py`` delegates to ``run.py`` which imports
+    ``build_workflow_2`` from the workflow-local seam (W2-7)."""
+    import workflows.rfgun_hom_antenna.run as wf2_run
 
-    build_fn = rw2.build_workflow_2
-    assert callable(build_fn)
+    build_fn = getattr(wf2_run, "build_workflow_2", None)
+    assert callable(build_fn), "run.py should have build_workflow_2"
     fn_module = getattr(build_fn, "__module__", "")
     assert "workflows.rfgun_hom_antenna.workflow" in fn_module, (
-        f"Expected root to import from workflows.rfgun_hom_antenna.workflow, "
+        f"Expected build_workflow_2 from workflows.rfgun_hom_antenna.workflow, "
         f"got __module__={fn_module!r}"
     )
 
 
-@patch("run_workflow_2.build_workflow_2")
+@patch("workflows.rfgun_hom_antenna.run.build_workflow_2")
 def test_run_workflow_2_can_be_patched_by_name(mock_build):
-    """Existing characterisation test's patch target still works."""
-    import run_workflow_2 as rw2
-    assert rw2.build_workflow_2 is mock_build
+    """The build_workflow_2 reference in the runner can be patched."""
+    import workflows.rfgun_hom_antenna.run as wf2_run
+    assert wf2_run.build_workflow_2 is mock_build

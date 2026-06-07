@@ -1,8 +1,9 @@
 """Workflow 2 — HOM antenna multi-project optimisation (RF gun).
 
 This package is the future home of the legacy Workflow 2 runtime.
-The root entry point ``run_workflow_2.py`` has been repointed to
-import ``build_workflow_2`` from this package (W2-4A seam).
+The root entry point ``run_workflow_2.py`` is a compatibility shim (W2-7) that
+delegates to ``workflows/rfgun_hom_antenna/run.py``, which imports
+``build_workflow_2`` from this package's ``workflow.py`` (W2-4B).
 
 Current legacy entry point::
 
@@ -23,6 +24,7 @@ Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-6C — checkpoint callback decision (R4)                        ✅ done
     W2-6E — evaluator-only callback ownership (R4 fixed)             ✅ done
     W2-6F — solver timeout runtime fix (R2 fixed)                    ✅ done
+    W2-7  — root shim / package runner migration                     ✅ done
 """
 
 __version__ = "0.1.0"

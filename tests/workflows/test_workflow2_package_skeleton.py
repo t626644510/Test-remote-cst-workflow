@@ -39,32 +39,27 @@ def test_import_package():
 def test_import_run_module():
     """``import workflows.rfgun_hom_antenna.run`` succeeds without CST."""
     import workflows.rfgun_hom_antenna.run as run_mod
-    assert hasattr(run_mod, "LEGACY_ENTRY")
-    assert run_mod.LEGACY_ENTRY == "run_workflow_2.py"
-    assert run_mod.PACKAGE_ROOT == _PROJECT_ROOT
+    assert hasattr(run_mod, "main")
+    assert callable(run_mod.main)
 
 
 # ==============================================================================
-# B. Placeholder functions
+# B. Runner interface
 # ==============================================================================
 
 
-def test_describe_legacy_entry_returns_string():
-    """``describe_legacy_entry()`` returns a description without side effects."""
-    from workflows.rfgun_hom_antenna.run import describe_legacy_entry
-    desc = describe_legacy_entry()
-    assert isinstance(desc, str)
-    assert "run_workflow_2.py" in desc
+def test_run_main_is_callable():
+    """``run.main()`` exists and is callable."""
+    import workflows.rfgun_hom_antenna.run as run_mod
+    assert callable(run_mod.main)
 
 
-def test_get_legacy_entrypoint_returns_path():
-    """``get_legacy_entrypoint()`` returns the path to the root entry."""
-    from workflows.rfgun_hom_antenna.run import get_legacy_entrypoint
-    path = get_legacy_entrypoint()
-    assert isinstance(path, Path)
-    assert path.name == "run_workflow_2.py"
-    assert path.exists(), (
-        f"Legacy entry {path} should exist — it is the current public entry point"
+def test_run_main_delegates_from_root_shim():
+    """``run_workflow_2.main`` is the same function as ``run.main``."""
+    import run_workflow_2 as rw2
+    import workflows.rfgun_hom_antenna.run as wf2_run
+    assert rw2.main is wf2_run.main, (
+        "Root shim main should be the same object as run.py main"
     )
 
 
@@ -92,26 +87,19 @@ def test_init_docstring_documents_legacy_entry():
     )
 
 
-def test_run_docstring_documents_status():
-    """``run.py`` module docstring documents that this is a placeholder."""
+def test_run_docstring_documents_runner():
+    """``run.py`` module docstring describes the real runner (no longer a placeholder)."""
     import workflows.rfgun_hom_antenna.run as run_mod
     doc = run_mod.__doc__ or ""
-    assert "placeholder" in doc.lower(), (
-        "run.py docstring should clearly state it is a placeholder"
+    assert "compatibility shim" in doc, (
+        "run.py docstring should mention the root is a compatibility shim"
     )
     assert "run_workflow_2.py" in doc, (
-        "run.py docstring should reference the legacy entry point"
+        "run.py docstring should reference the root entry point"
     )
-
-
-def test_run_module_exports_all():
-    """``run.py`` exports the expected names in ``__all__``."""
-    from workflows.rfgun_hom_antenna.run import __all__, LEGACY_ENTRY, PACKAGE_ROOT
-    assert isinstance(__all__, list)
-    assert "LEGACY_ENTRY" in __all__
-    assert "PACKAGE_ROOT" in __all__
-    assert "describe_legacy_entry" in __all__
-    assert "get_legacy_entrypoint" in __all__
+    assert "placeholder" not in doc.lower(), (
+        "run.py docstring should no longer describe itself as a placeholder"
+    )
 
 
 def test_package_directory_has_expected_files():

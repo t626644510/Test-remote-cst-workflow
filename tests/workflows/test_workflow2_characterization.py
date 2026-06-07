@@ -475,10 +475,11 @@ class TestSolverTimeoutSource:
         )
 
     @staticmethod
-    def test_mismatch_intent_is_7200():
+    def test_workflow2_timeout_intent_is_7200():
         """Assert that ``config/default.yaml`` contains
         ``workflow_2.optimization.solver.stagnation_timeout_s == 7200.0``,
-        confirming the mismatch between intent and actual consumed value."""
+        confirming the Workflow2-specific timeout intent at this path.
+        W2-6F consumes this value via builder precedence."""
         cfg_path = _TEST_DIR.parent.parent / "config" / "default.yaml"
         with open(cfg_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)

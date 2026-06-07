@@ -523,10 +523,11 @@ class TestCheckpointCallbackCount:
 
     @staticmethod
     def _make_fake_execute(orch):
-        """Return a fake ``execute()`` that simulates the orchestrator's
-        internal callback call and sets ``last_*`` properties, then returns
-        a zero-penalty array.  Does NOT call ``_execute_phase_1``,
-        cleanup functions, or touch real paths."""
+        """Return a fake ``execute()`` that sets ``last_*`` properties and
+        returns a zero-penalty array.  Does NOT fire checkpoint_callback
+        (the orchestrator no longer owns the callback as of W2-6E).
+        Does NOT call ``_execute_phase_1``, cleanup functions, or touch
+        real paths."""
 
         def fake_execute(
             params: np.ndarray,
@@ -539,10 +540,8 @@ class TestCheckpointCallbackCount:
             raw = np.full(n_obj, 0.5)
             penalties = np.zeros(n_obj)
 
-            # Simulate orchestrator's own checkpoint callback call
-            if orch._checkpoint_callback is not None:
-                orch._checkpoint_callback(params, raw, penalties, True, "")
-
+            # W2-6E: orchestrator no longer fires checkpoint_callback.
+            # Only set last_* state for the evaluator wrapper to read.
             orch.last_raw_values = raw.copy()
             orch.last_penalties = penalties.copy()
             orch.last_solver_ok = True
@@ -556,11 +555,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
-    def test_non_retry_path_triggers_callback_two_times(
+    def test_non_retry_path_triggers_callback_one_time(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Non-retry path: the callback fires twice per evaluation — once
-        from ``orch.execute()`` and once from the factory evaluator wrapper."""
+        """Non-retry path: the callback fires exactly once per evaluation
+        (W2-6E: orchestrator callback removed)."""
         cfg = _minimal_build_config(enable_retry=False)
         callback = MagicMock()
 
@@ -573,8 +572,8 @@ class TestCheckpointCallbackCount:
         x = np.array([0.5], dtype=float)
         evaluator(x)
 
-        assert callback.call_count == 2, (
-            f"Expected 2 calls (orchestrator + evaluator), got {callback.call_count}"
+        assert callback.call_count == 1, (
+            f"Expected 1 call (evaluator only, W2-6E), got {callback.call_count}"
         )
 
     @staticmethod
@@ -584,10 +583,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.remove_lock_file")
     @patch("cst_optimization.core.cleanup.force_kill_cst")
     @patch("cst_optimization.core.cleanup.verify_process_cleanup")
-    def test_retry_path_triggers_callback_two_times(
+    def test_retry_path_triggers_callback_one_time(
         mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Retry path: the callback also fires twice — orchestrator + evaluator."""
+        """Retry path: the callback fires exactly once per evaluation
+        (W2-6E: orchestrator callback removed)."""
         cfg = _minimal_build_config(enable_retry=True)
         callback = MagicMock()
 
@@ -603,8 +603,8 @@ class TestCheckpointCallbackCount:
         x = np.array([0.5], dtype=float)
         evaluator(x)
 
-        assert callback.call_count == 2, (
-            f"Expected 2 calls on retry path, got {callback.call_count}"
+        assert callback.call_count == 1, (
+            f"Expected 1 call on retry path (W2-6E), got {callback.call_count}"
         )
 
     @staticmethod
@@ -651,12 +651,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
-    def test_non_retry_path_root_like_callback_creates_two_records(
+    def test_non_retry_path_root_like_callback_creates_one_record(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """A root-like callback that appends to a list (mimicking
-        ``ckpt.add_pending``) receives TWO calls and thus appends TWO
-        records for one evaluation in the non-retry path."""
+        """A root-like callback that appends to a list receives ONE call and
+        thus appends ONE record for one evaluation (W2-6E)."""
         records: list[dict] = []
 
         def root_like_callback(x_phys, raw, penalties, solver_ok, error):
@@ -676,10 +675,8 @@ class TestCheckpointCallbackCount:
         x = np.array([0.5], dtype=float)
         evaluator(x)
 
-        assert len(records) == 2, (
-            f"Expected 2 records (orchestrator + evaluator), got {len(records)}. "
-            "A root-like checkpoint callback will create two persisted records "
-            "for one logical evaluation."
+        assert len(records) == 1, (
+            f"Expected 1 record (W2-6E: orchestrator callback removed), got {len(records)}."
         )
 
     @staticmethod
@@ -689,10 +686,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.remove_lock_file")
     @patch("cst_optimization.core.cleanup.force_kill_cst")
     @patch("cst_optimization.core.cleanup.verify_process_cleanup")
-    def test_retry_path_root_like_callback_creates_two_records(
+    def test_retry_path_root_like_callback_creates_one_record(
         mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Same double-record effect for the retry-enabled path."""
+        """Retry path: a root-like callback receives ONE call and thus
+        creates ONE record per logical evaluation (W2-6E)."""
         records: list[dict] = []
 
         def root_like_callback(x_phys, raw, penalties, solver_ok, error):
@@ -714,8 +712,8 @@ class TestCheckpointCallbackCount:
         x = np.array([0.5], dtype=float)
         evaluator(x)
 
-        assert len(records) == 2, (
-            f"Expected 2 records on retry path, got {len(records)}."
+        assert len(records) == 1, (
+            f"Expected 1 record on retry path (W2-6E), got {len(records)}."
         )
 
     @staticmethod
@@ -723,11 +721,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
-    def test_both_calls_use_same_x_vector(
+    def test_same_x_vector_one_call(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Both callback invocations receive the same ``x_phys`` vector
-        for the same logical evaluation."""
+        """The single W2-6E callback invocation receives the expected
+        ``x_phys`` vector for one logical evaluation."""
         captured_x: list[np.ndarray] = []
 
         def record_x(x_phys, raw, penalties, solver_ok, error):
@@ -742,10 +740,175 @@ class TestCheckpointCallbackCount:
         x = np.array([0.5], dtype=float)
         evaluator(x)
 
-        assert len(captured_x) == 2, f"Expected 2 calls, got {len(captured_x)}"
-        assert np.array_equal(captured_x[0], captured_x[1]), (
-            "Both callback calls should receive the same x_phys vector."
+        assert len(captured_x) == 1, (
+            f"Expected 1 call (W2-6E), got {len(captured_x)}"
         )
+        assert np.array_equal(captured_x[0], x), (
+            "The single callback call should receive the same x_phys vector."
+        )
+
+    # ── W2-6E: SAEA evaluator callback test ────────────────────────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_saea_evaluator_fires_callback_once(MockCST):
+        """SAEA algorithm path: evaluator wrapper fires checkpoint_callback
+        exactly once per call."""
+        cfg = _minimal_build_config()
+        cfg["optimization"]["algorithm"] = "saea"
+        cfg["optimization"]["pop_size"] = 10
+        cfg["optimization"]["n_gen_per_iteration"] = 2
+        cfg["optimization"]["n_candidates_per_iteration"] = 2
+        callback = MagicMock()
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        try:
+            evaluator(x)
+        except Exception:
+            pass
+
+        assert callback.call_count == 1, (
+            f"Expected 1 callback call on SAEA path (W2-6E), got {callback.call_count}"
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_saea_evaluator_receives_arrays(MockCST):
+        """SAEA evaluator callback receives numpy arrays, not raw lists."""
+        cfg = _minimal_build_config()
+        cfg["optimization"]["algorithm"] = "saea"
+        cfg["optimization"]["pop_size"] = 10
+        cfg["optimization"]["n_gen_per_iteration"] = 2
+        cfg["optimization"]["n_candidates_per_iteration"] = 2
+        callback = MagicMock()
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        try:
+            evaluator(x)
+        except Exception:
+            pass
+
+        for call_args in callback.call_args_list:
+            args = call_args[0]
+            assert len(args) == 5, f"Expected 5 args, got {len(args)}"
+            _, raw_arr, pen_arr, solver_ok, err_str = args
+            assert isinstance(raw_arr, np.ndarray)
+            assert isinstance(pen_arr, np.ndarray)
+            assert isinstance(solver_ok, bool)
+            assert isinstance(err_str, str)
+
+    # ── W2-6E: partial / non-finite raw regression test ──────────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_partial_raw_nan_still_fires_callback_once(
+        mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """When raw contains NaN (partial evaluation), the evaluator wrapper
+        still fires checkpoint_callback exactly once."""
+        records: list[dict] = []
+
+        def root_like_callback(x_phys, raw, penalties, solver_ok, error):
+            records.append({"raw": raw.copy()})
+
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=root_like_callback)
+        orig_fake = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        def _nan_execute(*a, **kw):
+            result = orig_fake(*a, **kw)
+            orch.last_raw_values = np.full(len(orch.objectives), np.nan)
+            return result
+
+        orch.execute = _nan_execute
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert len(records) == 1, (
+            f"Expected 1 callback call with NaN raw, got {len(records)}"
+        )
+        assert all(np.isnan(v) for v in records[0]["raw"]), (
+            "Callback should receive NaN raw values unchanged"
+        )
+
+    # ── W2-6E fix: SAO non-retry failure semantics ────────────────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_non_retry_failure_passes_solver_ok_false(MockCST):
+        """SAO non-retry path: when orchestrator reports failure, the
+        evaluator callback receives solver_ok=False and a non-empty error
+        string."""
+        callback = MagicMock()
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        fake = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        def _fail_execute(*a, **kw):
+            fake(*a, **kw)
+            orch.last_raw_values = np.array([np.nan])
+            orch.last_penalties = np.array([1.0])
+            orch.last_solver_ok = False
+            orch.last_completed_labels = set()
+            return orch.last_penalties
+
+        orch.execute = _fail_execute
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert callback.call_count == 1, (
+            f"Expected 1 callback call, got {callback.call_count}"
+        )
+        args = callback.call_args[0]
+        _, raw_arr, pen_arr, solver_ok, err_str = args
+        assert solver_ok is False, "solver_ok should be False on failure"
+        assert isinstance(err_str, str) and len(err_str) > 0, (
+            "error string should be non-empty on failure"
+        )
+        assert np.isnan(raw_arr[0]), "NaN raw should pass through"
+        assert pen_arr[0] == 1.0, "penalties should pass through"
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_non_retry_success_passes_solver_ok_true(MockCST):
+        """SAO non-retry path: on success, the evaluator callback receives
+        solver_ok=True and an empty error string."""
+        callback = MagicMock()
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert callback.call_count == 1, (
+            f"Expected 1 callback call, got {callback.call_count}"
+        )
+        args = callback.call_args[0]
+        _, _, _, solver_ok, err_str = args
+        assert solver_ok is True, "solver_ok should be True on success"
+        assert err_str == "", "error string should be empty on success"
 
 
 # ==============================================================================

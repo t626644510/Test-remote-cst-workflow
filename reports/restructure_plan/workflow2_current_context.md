@@ -38,7 +38,8 @@ Module is core candidate only after reuse is demonstrated.
 | W2-6A | Root docstring fix (R1 resolved) | `01c599e` |
 | W2-6D | Scheduler/root shim compatibility tests (15 tests) | `5f7152a` |
 | W2-6B | Solver timeout decision (R2 characterised) | `e5f8370` |
-| **W2-6C** | Checkpoint callback decision (R4 characterised) | **`47469c2`** |
+| **W2-6C** | Checkpoint callback decision (R4 characterised) | `47469c2` |
+| **W2-6E** | Evaluator-only callback ownership (R4 resolved) | **`126ba00`** |
 
 ---
 
@@ -81,18 +82,21 @@ sequential phase execution.  No longer claims "two independent CST windows".
 **Decision**: Option A — preserve current 300s behaviour.  Document mismatch
 but do not change runtime.  See `workflow2_solver_timeout_decision.md`.
 
-### R4 — Checkpoint Callback (W2-6C, characterised, not resolved)
+### R4 — Checkpoint Callback (W2-6C/W2-6E, resolved)
 
-- Both `DualProjectOrchestrator.execute()` and SAO evaluator wrapper invoke
-  the same `checkpoint_callback` → **2 calls per evaluation**.
-- Root `_on_evaluation` calls `ckpt.add_pending()`, creating **duplicate
-  checkpoint records** (one from each callback call).
-- W2-1 P0.3 tests pin `call_count == 2` for both retry and non-retry paths.
-- W2-6C adds 3 tests proving duplicate-record side effect and same-x-vector.
+- **W2-6C** (decision): Option C — evaluator should be sole callback owner.
+  See `workflow2_checkpoint_callback_ownership_decision.md`.
+- **W2-6E** (implementation): `DualProjectOrchestrator` no longer fires
+  `checkpoint_callback`.  Evaluator wrappers (SAO retry, SAO non-retry,
+  SAEA) fire exactly **one callback per logical evaluation**.
+- SAO non-retry preserves `solver_ok`/`error` semantics via
+  `orchestrator.last_solver_ok`.
+- W2-1 P0.3 tests updated: `call_count` 2 → 1.
+- W2-6C duplicate-record tests updated: 2 records → 1 record.
 
-**Decision**: Option C — future implementation should make evaluator the
-sole callback owner, then update P0.3 tests to expect `call_count == 1`.
-See `workflow2_checkpoint_callback_ownership_decision.md`.
+**Summary**: one `checkpoint_callback` invocation per logical evaluation
+across all three algorithm paths.  Root `_on_evaluation` will create one
+checkpoint record per evaluation, not two.
 
 ---
 
@@ -105,7 +109,7 @@ See `workflow2_checkpoint_callback_ownership_decision.md`.
   specifically permits it
 - ❌ Do not move `DualProjectOrchestrator`
 - ❌ Do not promote shared core without cross-workflow evidence
-- ❌ Do not fix R2 or R4 behaviours without explicit phase approval
+- ❌ Do not fix R2 behaviour without explicit phase approval
 
 ---
 
@@ -122,11 +126,27 @@ See `workflow2_checkpoint_callback_ownership_decision.md`.
 
 ## Recommended Next Phase
 
-**W2-6E or W2-6C-fix**: implement checkpoint callback ownership fix
-(move callback to evaluator only) **only after separate approval**.
+Pending: R2 (solver timeout) characterisation is accepted but the 7200s
+intent remains unconsumed.  A future phase could implement Option B or C
+from `workflow2_solver_timeout_decision.md`, but no immediate phase is
+queued.
 
-Future phase must:
-- Update P0.3 tests: `call_count` 2 → 1
-- Cover retry, non-retry, SAEA, and partial-evaluation paths
-- Remove orchestrator callback call
-- No-CST tests first; live CST only after explicit approval
+---
+
+## Implementation Note — W2-6E (Checkpoint Callback Fix)
+
+This implements W2-6C Option C (evaluator-only callback ownership).
+
+**Changes**:
+- `src/cst_optimization/core/orchestrator.py`: Removed `self._checkpoint_callback()`
+  call from `DualProjectOrchestrator.execute()`.  Orchestrator only sets `last_*`
+  state; no longer fires callback.
+- `workflows/rfgun_hom_antenna/workflow.py`: SAO retry and non-retry evaluator
+  paths already owned the callback — unchanged.  SAEA path: replaced bare
+  `evaluator = orchestrator.execute` with a wrapper that fires
+  `checkpoint_callback` once per call.
+- Tests: `call_count` assertions updated 2→1; duplicate-record tests updated
+  2 record → 1 record; SAEA callback test added; partial-eval NaN test added.
+
+**Result**: one `checkpoint_callback` invocation per logical evaluation
+across all three algorithm paths (SAO retry, SAO non-retry, SAEA).

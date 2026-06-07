@@ -349,7 +349,11 @@ def build_workflow_2(
                      for i in range(len(obj_names))],
                     dtype=float,
                 )
-                checkpoint_callback(x_phys, raw_arr, penalties_arr, True, "")
+                checkpoint_callback(
+                    x_phys, raw_arr, penalties_arr,
+                    bool(orchestrator.last_solver_ok),
+                    "" if orchestrator.last_solver_ok else "Solver failure",
+                )
             return float(np.dot(penalties_arr, weights))
 
         optimizer = _build_sao(opt_cfg, param_set, objectives, seed)
@@ -365,6 +369,26 @@ def build_workflow_2(
             n_candidates_per_iteration=opt_cfg.get("n_candidates_per_iteration", 5),
         )
         evaluator = orchestrator.execute  # SAEA consumes vector directly
+
+        # W2-6E: wrap SAEA evaluator so checkpoint_callback fires exactly once.
+        # Since orchestrator.execute no longer owns the callback, wrap it.
+        if checkpoint_callback is not None:
+            _saea_obj_names = [o.name for o in objectives]
+
+            def _saea_evaluator(x_phys: np.ndarray) -> np.ndarray:
+                result = orchestrator.execute(x_phys)
+                raw = orchestrator.last_raw_values
+                pen = orchestrator.last_penalties
+                raw_arr = np.array(
+                    [float(raw[i]) if raw is not None and np.isfinite(raw[i]) else np.nan
+                     for i in range(len(_saea_obj_names))],
+                    dtype=float,
+                )
+                pen_arr = np.asarray(pen, dtype=float) if pen is not None else np.zeros(len(_saea_obj_names))
+                checkpoint_callback(x_phys, raw_arr, pen_arr, orchestrator.last_solver_ok, "")
+                return result
+
+            evaluator = _saea_evaluator
     else:
         raise ValueError(f"Unknown algorithm '{algorithm}'.  Choose 'sao' or 'saea'.")
 

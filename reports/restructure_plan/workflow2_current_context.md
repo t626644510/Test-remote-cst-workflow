@@ -676,11 +676,53 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - W2-3: accepted.
 - W2-4A: accepted.
 - **W2-4B: accepted** (commit `7e1cf1a`).
+- **W2-5: accepted** (commit `d168f42`).
 - 未运行 live workflow。
 - 未运行 CST。
 - **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
 
 ### 本轮（W2-5：orchestrator ownership assessment）
+
+**执行时间**：2026-06-07
+
+**分支**：`analysis/workflow2-orchestrator-ownership`（基于 `refactor/workflow2-builder-migration`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `workflows/rfgun_hom_antenna/workflow.py`
+4. `src/cst_optimization/core/orchestrator.py`
+5. `tests/workflows/test_workflow2_characterization.py`
+6. `tests/workflows/test_workflow2_builder_seam.py`
+7. `run_workflow_2.py`
+
+**搜索命令**：
+```powershell
+grep -rn "DualProjectOrchestrator" src/ workflows/ tests/ run_workflow_2.py
+grep -rn "ProjectSpec" src/ workflows/ tests/
+grep -n "f2f\|f2w\|wakefield\|frequency_domain\|pre_filter\|adaptive_gate\|start_phase\|skip_phase\|curves_db" src/cst_optimization/core/orchestrator.py
+```
+
+**验证命令**：
+```powershell
+git diff --check
+```
+
+**验证结果**：无 whitespace 错误。未运行 pytest（docs-only 阶段）。
+
+**新增文件**：
+- `reports/restructure_plan/workflow2_orchestrator_ownership_assessment.md`
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**关键结论**：
+- `DualProjectOrchestrator` 仅被 WF2 构建和使用
+- WF1/WF3 无依赖
+- 约 80 % orchestrator 代码为 WF2-specific
+- 建议：保持 core 原位，不迁移
+
+### 本轮（W2-6：semantic risk cleanup planning）
 
 **执行时间**：2026-06-07
 
@@ -723,6 +765,50 @@ git diff --check
 - **建议**：保持 core 原位。如需迁移，应先在 core 中提取通用子组件，再将 `DualProjectOrchestrator` + `ProjectSpec` 整体移入 workflow2 package。
 - 完整评估报告：`reports/restructure_plan/workflow2_orchestrator_ownership_assessment.md`
 
+### 本轮（W2-6：semantic risk cleanup planning）
+
+**执行时间**：2026-06-07
+
+**分支**：`plan/workflow2-semantic-risk-cleanup`（基于 `analysis/workflow2-orchestrator-ownership`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `reports/restructure_plan/workflow2_orchestrator_ownership_assessment.md`
+4. `run_workflow_2.py`
+5. `workflows/rfgun_hom_antenna/workflow.py`
+6. `tests/workflows/test_workflow2_characterization.py`
+7. `scripts/schedule_workflow2.ps1`
+8. `config/default.yaml`
+
+**搜索命令**：
+```powershell
+grep -rn "two independent CST\|independent CST window" run_workflow_2.py
+grep -rn "stagnation_timeout_s" config/default.yaml workflows/ src/ tests/
+grep -n "checkpoint_callback" workflows/rfgun_hom_antenna/workflow.py
+head -5 scripts/schedule_workflow2.ps1
+```
+
+**新增文件**：
+- `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**验证命令**：
+```powershell
+git diff --check
+```
+
+**验证结果**：无 whitespace 错误。未运行 pytest（docs-only 阶段）。
+
+**关键结论**：
+- R1（stale docstring）：根 `run_workflow_2.py` 仍写"两个独立 CST 窗口"，已偏离当前单连接行为
+- R2（solver timeout）：intent 7200s 在 `optimization.solver`，builder 读 `workflow_2.solver`（300s fallback）
+- R4（checkpoint 双触发）：2 次/evaluation，W2-1 已钉住
+- R6（scheduler）：root shim 兼容仍是硬边界，当前状态可接受
+- **W2-6 不做修复，只做规划**：见 `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+
 ## 11. 当前推荐下一步
 
 ### W2-4B 已完成
@@ -748,9 +834,13 @@ git diff --check
 - ✅ 80 % orchestrator 代码为 WF2-specific
 - ✅ `src/cst_optimization/core/orchestrator.py` 未修改
 - ⏳ 等待 web reviewer 审计通过
+- ✅ accepted (commit `d168f42`)
 
-### W2-6（通过 W2-5 审计后的建议）：semantic risk cleanup planning
+### W2-6 已完成
 
-通过 W2-5 审计后，建议进入 W2-6 对未解决的语义风险（R1 docstring、R2 solver timeout、R4 checkpoint 双触发、R6 scheduler 绑定）制定修复方案。
-
-**注意**：W2-6 只做方案规划，不做修复实施。修复应在后续独立阶段进行。
+- ✅ 从 `analysis/workflow2-orchestrator-ownership` 创建 `plan/workflow2-semantic-risk-cleanup` 分支
+- ✅ 创建 `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+- ✅ 对 R1（root docstring）、R2（solver timeout）、R4（checkpoint 双触发）、R6（scheduler）各风险制定修复方案
+- ✅ 提出后续实施顺序建议：W2-6A（docstring 修复）→ W2-6D（scheduler）→ W2-6B（timeout）→ W2-6C（checkpoint）
+- ✅ W2-6 不做修复，只做规划
+- ⏳ 等待 web reviewer 审计通过

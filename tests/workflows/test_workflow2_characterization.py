@@ -10,10 +10,15 @@ P0.1 — config fallback merge: how ``run_workflow_2.py`` merges top-level
        ``cst`` / ``solver`` / ``logging`` into the ``workflow_2`` section.
 
 P0.2 — solver timeout source: what ``stagnation_timeout_s`` value actually
-       reaches ``SolverRunner`` under the current config layout.
+       reaches ``SolverRunner``.  W2-6F resolved: ``optimization.solver``
+       now overrides fallback ``workflow_2.solver`` for overlapping keys.
+       Effective Workflow2 timeout is 7200.0 from
+       ``workflow_2.optimization.solver.stagnation_timeout_s``.
 
-P0.3 — checkpoint callback call count: whether both the orchestrator and
-       the factory evaluator invoke the same callback (double-trigger risk).
+P0.3 — checkpoint callback call count: whether the evaluator wrapper fires
+       ``checkpoint_callback`` exactly once per logical evaluation.
+       W2-6E resolved: ``DualProjectOrchestrator`` no longer fires the
+       callback; the evaluator owns it.
 
 P1.4 — ``build_workflow_2`` return signature: confirm 4-tuple is returned.
        Historical type-annotation mismatch (promised 3 items, returned 4)

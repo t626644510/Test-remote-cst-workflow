@@ -1,6 +1,16 @@
 # W2-6B: Solver Timeout Decision Record
 
-## Current Observed Behaviour
+**STATUS: Historical analysis.  Superseded by W2-6F.**
+
+W2-6B characterised the R2 mismatch.  W2-6F implemented the fix:
+``workflow_2.optimization.solver`` now overrides fallback ``workflow_2.solver``
+for overlapping keys.  Effective Workflow2 timeout is **7200.0** from
+``workflow_2.optimization.solver.stagnation_timeout_s``.
+
+See the supersession note at the bottom of this document for the full
+transition.
+
+## Current Observed Behaviour (at W2-6B time)
 
 ### Config Values
 
@@ -32,21 +42,23 @@ Since `workflow_2.solver` is not a direct key (the only solver sub-key is
 `workflow_2.optimization.solver`), the top-level `solver` is merged in,
 making `workflow_2.solver.stagnation_timeout_s = 300.0`.
 
-### W2-1 Characterisation Confirmation
+### W2-1 Characterisation Confirmation (historical — superseded for timeout)
 
-- `test_solver_timeout_comes_from_merged_solver_section`: `SolverRunner`
+- ``test_solver_timeout_comes_from_merged_solver_section``: `SolverRunner`
   receives 300.0 when post-merge config has `workflow_2.solver`.
-- `test_solver_timeout_falls_back_to_default_when_missing`: when no solver
+- ``test_solver_timeout_falls_back_to_default_when_missing``: when no solver
   section exists, `SolverRunner` defaults to 7200.0.
-- `test_optimization_solver_key_is_not_read_by_builder`: intentionally sets
-  `optimization.solver` to 9999.0; confirms builder does NOT read it.
+- ``test_optimization_solver_now_consumed_by_builder`` (W2-6F): intentionally
+  sets `optimization.solver` to 9999.0; confirms builder NOW reads it.
+  (Previously ``test_optimization_solver_key_is_not_read_by_builder`` which
+  asserted the old W2-6B-era behaviour.)
 
-### Summary
+### Summary (at W2-6B time)
 
-| Value | Source | Consumed? |
-|-------|--------|-----------|
+| Value | Source | Consumed (historically)? |
+|-------|--------|--------------------------|
 | 300.0 | Top-level `solver` fallback | ✅ Yes — merged by root runner, read by builder |
-| 7200.0 | `workflow_2.optimization.solver` | ❌ No — ignored by current builder |
+| 7200.0 | `workflow_2.optimization.solver` | ❌ No — ignored (historical; consumed as of W2-6F) |
 | 0.0 (→7200.0) | Builder default when solver absent | ✅ Yes — `SolverRunner` coerces ≤0 to `_DEFAULT_TIMEOUT_S` |
 
 ---
@@ -166,11 +178,13 @@ updated; live CST smoke recommended but not run.
 
 ## Tests Added in W2-6B
 
-| Test | Purpose | Type |
+| Test (historical W2-6B name → current W2-6F name) | Purpose | Type |
 |------|---------|------|
-| `test_actual_timeout_is_300_via_real_config` | Load actual `config/default.yaml`, apply root merge, build with mock CST, assert 300.0 | No-CST |
-| `test_mismatch_intent_is_7200` | Assert `workflow_2.optimization.solver.stagnation_timeout_s == 7200.0` exists in actual config | No-CST |
-| `test_builder_precedence_solver_wins_over_optimization_solver` | Set both `workflow_2.solver` and `workflow_2.optimization.solver`; confirm builder reads `solver`, not `optimization.solver` | No-CST |
+| `test_actual_timeout_is_300_via_real_config` → `test_actual_timeout_is_7200_via_real_config` | Load real config, apply root merge, assert 7200.0 from `optimization.solver` | No-CST |
+| `test_mismatch_intent_is_7200` → `test_workflow2_timeout_intent_is_7200` | Assert `optimization.solver.stagnation_timeout_s == 7200.0` exists in real config | No-CST |
+| `test_builder_precedence_solver_wins_over_optimization_solver` → `test_optimization_solver_overrides_fallback` | Set both paths; assert `optimization.solver` wins (2222.0) | No-CST |
+| `test_fallback_solver_used_when_optimization_solver_absent` | When `optimization.solver` absent, fallback to `workflow_2.solver` (300.0) | No-CST |
+| `test_settle_s_falls_back_to_solver` | `settle_s` not in `optimization.solver`, falls back to `workflow_2.solver` | No-CST |
 
 ## Appendix: Validation Commands
 

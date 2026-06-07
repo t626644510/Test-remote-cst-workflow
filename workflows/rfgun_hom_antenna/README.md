@@ -15,8 +15,9 @@ python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
 The local ``config.yaml`` is a **staging / snapshot** of the ``workflow_2``
 section from the global ``config/default.yaml``.  It is **not yet consumed**
 by the runtime.  The root entry point and all scheduler invocations still
-read the legacy config.  See the header comment in ``config.yaml`` for the
-known W2-1 solver-timeout discrepancy and migration constraints.
+read the legacy config.  The Workflow2-effective solver timeout (7200.0 from
+``workflow_2.optimization.solver.stagnation_timeout_s``) is consumed via
+builder precedence (W2-6F).
 
 ## Package structure
 

@@ -1,6 +1,16 @@
 # W2-6C: Checkpoint Callback Ownership Decision Record
 
-## Current Observed Behaviour
+**STATUS: Historical analysis.  Superseded by W2-6E.**
+
+W2-6C analysed the R4 double-trigger and proposed four options.
+W2-6E implemented Option C: evaluator-only callback ownership.
+``DualProjectOrchestrator`` no longer fires ``checkpoint_callback``.
+Workflow2 evaluator wrappers fire exactly one callback per logical evaluation.
+
+See the decision options below for the historical rationale; W2-6E
+implementation is current.
+
+## Current Behaviour (as of W2-6E)
 
 ### Callback Origin
 
@@ -19,7 +29,7 @@ def _on_evaluation(x_phys, raw_values, penalties, solver_ok, error):
     ckpt.save()                           # ← persists to disk
 ```
 
-### Two Call Sites
+### Two Call Sites (historical — orchestrator call removed in W2-6E)
 
 | Call site | File | Trigger |
 |-----------|------|---------|
@@ -31,7 +41,7 @@ Because the evaluator calls `orch.execute()` internally, the orchestrator
 fires the callback first, then the evaluator fires it again with the same
 or derived data.
 
-### Root Callback Side Effects Are NOT Idempotent
+### Root Callback Side Effects (historical — single call as of W2-6E)
 
 Each invocation of `_on_evaluation` calls `ckpt.add_pending(x_phys)`,
 which **appends a new `EvalRecord`** to `ckpt.records`.  When the callback
@@ -49,10 +59,11 @@ record was finalized, then a duplicate was appended and finalized.  The
 checkpoint file grows faster than expected and the warm-start GP may
 receive duplicate training points.
 
-### W2-1 Characterisation Confirmation
+### W2-1 Characterisation Confirmation (historical — updated in W2-6E)
 
-`TestCheckpointCallbackCount` (3 tests) confirms `callback.call_count == 2`
-for both retry and non-retry paths.
+`TestCheckpointCallbackCount` (3 tests) previously confirmed
+`callback.call_count == 2` for both retry and non-retry paths.
+As of W2-6E, these tests assert `call_count == 1`.
 
 ---
 
@@ -155,10 +166,15 @@ for the same (x_phys, iteration) key.
 
 ---
 
-## Recommendation
+## Recommendation (historical — implemented by W2-6E)
 
-**Option C: Evaluator Exclusively Owns the Callback** is the preferred
-eventual resolution, because:
+**Option C: Evaluator Exclusively Owns the Callback** was the recommended
+approach.  W2-6E implemented it:
+- `DualProjectOrchestrator` no longer fires `checkpoint_callback`.
+- Evaluator wrappers (SAO retry, SAO non-retry, SAEA) fire exactly one
+  callback per logical evaluation.
+- The SAEA path was given an explicit wrapper (W2-6E).
+- Only the evaluator owns callback firing.
 
 1. The evaluator wrapper is the single logical entry point for each SAO
    iteration.  Making it the callback owner aligns responsibility with
@@ -171,22 +187,26 @@ eventual resolution, because:
    evaluator's lifecycle — it references `orch.last_completed_labels`
    which is set by the orchestrator.
 
-**W2-6C does not implement any option.** If a future phase adopts Option C:
-1. Update W2-1 P0.3 tests: expect `call_count == 1`.
-2. Add callback test for SAEA path.
-3. Remove orchestrator callback call.
-4. Add regression test for partial evaluation recovery path.
-5. Live CST only after explicit approval.
+**W2-6E implemented Option C** (supersedes the above list).  See
+``reports/restructure_plan/workflow2_current_context.md`` for the
+implementation note.
 
 ---
 
-## Tests Added in W2-6C
+## Tests Added in W2-6C (renamed in W2-6E)
 
-| Test | Purpose | Type |
-|------|---------|------|
-| `test_non_retry_path_root_like_callback_creates_two_records` | Use a fake in-memory recorder mimicking root `_on_evaluation`; assert 2 records created for 1 evaluation | No-CST hermetic |
-| `test_retry_path_root_like_callback_creates_two_records` | Same for retry-enabled path | No-CST hermetic |
-| `test_both_calls_use_same_x_vector` | Assert both callback invocations receive the same `x_phys` input for one logical evaluation | No-CST hermetic |
+| Original name (W2-6C) | Current name (W2-6E) | Current assertion |
+|------|---------|---------|
+| `test_non_retry_path_root_like_callback_creates_two_records` | `test_non_retry_path_root_like_callback_creates_one_record` | 1 record per evaluation |
+| `test_retry_path_root_like_callback_creates_two_records` | `test_retry_path_root_like_callback_creates_one_record` | 1 record per evaluation |
+| `test_both_calls_use_same_x_vector` | `test_same_x_vector_one_call` | 1 invocation, same x vector |
+
+Additional tests added in W2-6E:
+- `test_saea_evaluator_fires_callback_once` — SAEA path fires callback once
+- `test_saea_evaluator_receives_arrays` — SAEA callback receives numpy arrays
+- `test_partial_raw_nan_still_fires_callback_once` — NaN raw still fires once
+- `test_non_retry_failure_passes_solver_ok_false` — failure semantics preserved
+- `test_non_retry_success_passes_solver_ok_true` — success semantics preserved
 
 ## Appendix: Validation Commands
 

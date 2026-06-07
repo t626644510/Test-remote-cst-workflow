@@ -33,7 +33,7 @@ import yaml
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
-from cst_optimization.factory import build_workflow_2
+from workflows.rfgun_hom_antenna.workflow import build_workflow_2
 
 # ── Ctrl+C handling ──────────────────────────────────────────────────────
 # COM calls (run_solver, DesignEnvironment.close) block the main thread,

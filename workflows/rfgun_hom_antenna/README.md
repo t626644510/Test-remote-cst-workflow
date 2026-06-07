@@ -2,9 +2,11 @@
 
 ## Status
 
-**Skeleton with staged config.** No runtime has been migrated yet.
+**Builder seam established (W2-4A).** Implementation still delegates to
+the legacy shared factory — no implementation has been copied.
 
-The legacy entry point remains at the project root:
+The root entry point has been repointed to import ``build_workflow_2``
+from this package's ``workflow.py`` (thin delegation wrapper):
 
 ```
 python run_workflow_2.py [--auto-resume] [--heartbeat] [--warmup-from-db PATH]
@@ -35,8 +37,9 @@ Phases:
 - W2-0 — Context document
 - W2-1 — No-CST characterization tests
 - W2-2 — Package skeleton                                                ✅ done
-- **W2-3 — Config isolation** ← current
-- W2-4 — Builder ownership migration
+- W2-3 — Config isolation                                                ✅ done
+- **W2-4A — Builder ownership seam** ← current
+- W2-4B — Builder implementation migration (future)
 - W2-5 — Orchestrator ownership assessment
 - W2-6 — Fix documented semantic risks
 - W2-7 — Core candidate evaluation

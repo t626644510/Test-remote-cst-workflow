@@ -138,7 +138,7 @@ No phase has been merged to `main` yet.
 | Item | Status |
 |------|--------|
 | Phases included | W2-0 through W2-6F (14 phases) |
-| Files changed (22 total vs main) | `workflows/rfgun_hom_antenna/` (new package), `run_workflow_2.py` (import + docstring fix), `src/cst_optimization/core/orchestrator.py` (callback removed), `src/cst_optimization/factory.py` (compat wrapper — no semantic change), `tests/workflows/` (new/updated no-CST tests), `reports/restructure_plan/` (docs) |
+| Files changed (21 total vs main) | `workflows/rfgun_hom_antenna/` (new package), `run_workflow_2.py` (import + docstring fix), `src/cst_optimization/core/orchestrator.py` (callback removed), `src/cst_optimization/factory.py` (compat wrapper — no semantic change), `tests/workflows/` (new/updated no-CST tests), `reports/restructure_plan/` (docs) |
 | Files intentionally unchanged | `config/default.yaml`, `scripts/schedule_workflow2.ps1`, `src/cst_optimization/core/**` (except orchestrator.py callback removal) |
 | Public entry | `run_workflow_2.py` — unchanged, still public entry |
 | Scheduler | `scripts/schedule_workflow2.ps1` — unchanged, still binds root entry |

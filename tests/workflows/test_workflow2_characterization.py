@@ -689,7 +689,8 @@ class TestCheckpointCallbackCount:
     def test_retry_path_root_like_callback_creates_one_record(
         mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Same double-record effect for the retry-enabled path."""
+        """Retry path: a root-like callback receives ONE call and thus
+        creates ONE record per logical evaluation (W2-6E)."""
         records: list[dict] = []
 
         def root_like_callback(x_phys, raw, penalties, solver_ok, error):
@@ -723,8 +724,8 @@ class TestCheckpointCallbackCount:
     def test_same_x_vector_one_call(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Both callback invocations receive the same ``x_phys`` vector
-        for the same logical evaluation."""
+        """The single W2-6E callback invocation receives the expected
+        ``x_phys`` vector for one logical evaluation."""
         captured_x: list[np.ndarray] = []
 
         def record_x(x_phys, raw, penalties, solver_ok, error):

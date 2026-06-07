@@ -680,6 +680,7 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - **W2-6: accepted** (commit `2636321`).
 - **W2-6A: accepted** (commit `01c599e`).
 - **W2-6D: pending web review** — scheduler/root shim compatibility characterised.
+- **W2-6B: pending web review** — solver timeout decision document + 3 no-CST tests added.
 - 未运行 live workflow。
 - 未运行 CST。
 - **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
@@ -823,6 +824,17 @@ git diff --check
 - ✅ 14/14 scheduler shim tests + 21/21 characterisation tests pass
 - ⏳ 等待 web reviewer 审计通过
 
+### W2-6B 已完成
+
+- ✅ 从 `test/workflow2-scheduler-shim-compat` 创建 `plan/workflow2-solver-timeout-decision` 分支
+- ✅ 创建 `reports/restructure_plan/workflow2_solver_timeout_decision.md`（含 3 个决策选项、推荐 Option A preserve+document）
+- ✅ 添加 3 个 no-CST mismatch 测试（real-config 300.0 验证、intent 7200.0 断言、builder 优先级文档）
+- ✅ 24/24 characterisation + 15/15 scheduler shim 测试通过
+- ✅ config/default.yaml 未修改
+- ✅ runtime 未修改
+- ✅ scheduler 未修改
+- ⏳ 等待 web reviewer 审计通过
+
 ### 本轮（W2-6A：清理根 docstring）
 
 **执行时间**：2026-06-07
@@ -901,3 +913,39 @@ python -m pytest tests/workflows/test_workflow2_characterization.py -q
 - 新增 `test_no_extra_unexpected_flags` 作为 CLI 变更护网
 - 测试数从 14 → 15（保留全部 scheduler 静态检查）
 - 所有 15 + 21 = 36 项测试通过
+
+### 本轮（W2-6B：solver timeout 决策 + 测试）
+
+**执行时间**：2026-06-07
+
+**分支**：`plan/workflow2-solver-timeout-decision`（基于 `test/workflow2-scheduler-shim-compat`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `run_workflow_2.py`
+3. `config/default.yaml`
+4. `workflows/rfgun_hom_antenna/workflow.py`
+5. `tests/workflows/test_workflow2_characterization.py`
+6. `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+7. `reports/restructure_plan/workflow2_current_context.md`
+
+**新增文件**：
+- `reports/restructure_plan/workflow2_solver_timeout_decision.md`
+
+**更新文件**：
+- `tests/workflows/test_workflow2_characterization.py`（添加 3 个 no-CST mismatch 测试）
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+python -m pytest tests/workflows/test_workflow2_scheduler_shim.py -q
+```
+
+**测试结果**：
+- Characterisation: 24 / 24 passed（原有 21 + 新增 3 W2-6B 测试）
+- Scheduler shim: 15 / 15 passed（无回归）
+
+**决策结论**：推荐 Option A（preserve + document）。当前 300s 为有效行为，7200s intent 未被消费。不改 config、不改 builder、不改 runtime。
+
+完整决策文档：`reports/restructure_plan/workflow2_solver_timeout_decision.md`

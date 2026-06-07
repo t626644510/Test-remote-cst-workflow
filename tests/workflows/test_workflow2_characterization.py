@@ -33,6 +33,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import yaml
 
 # ---- Path setup (same pattern as existing test files) -----------------------
 _TEST_DIR = Path(__file__).resolve().parent
@@ -438,6 +439,76 @@ class TestSolverTimeoutSource:
         orch, _, _, _ = build_workflow_2(cfg)
         assert orch._solver._timeout_s != 9999.0
         assert orch._solver._timeout_s == 7200.0
+
+    # ── W2-6B: explicit mismatch characterisation tests ────────────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_actual_timeout_is_300_via_real_config(MockCST):
+        """Load the actual ``config/default.yaml``, apply root-runner merge
+        semantics (as ``run_workflow_2.py`` does), and assert that
+        ``SolverRunner`` receives 300.0 — the top-level fallback, NOT the
+        7200.0 intent."""
+        cfg_path = _TEST_DIR.parent.parent / "config" / "default.yaml"
+        assert cfg_path.exists(), f"config/default.yaml not found at {cfg_path}"
+
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            whole = yaml.safe_load(f)
+
+        # Replicate root-runner merge (run_workflow_2.py lines 93-101)
+        wf2_cfg = whole.get("workflow_2", {})
+        for section in ("cst", "solver", "logging"):
+            if section in whole and section not in wf2_cfg:
+                wf2_cfg[section] = whole[section]
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, _, _ = build_workflow_2(wf2_cfg)
+        assert orch._solver._timeout_s == 300.0, (
+            f"Expected effective timeout 300.0 (top-level fallback), "
+            f"got {orch._solver._timeout_s}.  "
+            "The intent 7200.0 in workflow_2.optimization.solver is not consumed."
+        )
+
+    @staticmethod
+    def test_mismatch_intent_is_7200():
+        """Assert that ``config/default.yaml`` contains
+        ``workflow_2.optimization.solver.stagnation_timeout_s == 7200.0``,
+        confirming the mismatch between intent and actual consumed value."""
+        cfg_path = _TEST_DIR.parent.parent / "config" / "default.yaml"
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+
+        wf2 = cfg.get("workflow_2", {})
+        opt = wf2.get("optimization", {})
+        solver_cfg = opt.get("solver", {})
+        timeout = solver_cfg.get("stagnation_timeout_s", None)
+
+        assert timeout == 7200.0, (
+            f"Expected workflow_2.optimization.solver.stagnation_timeout_s "
+            f"= 7200.0, got {timeout}.  "
+            "This intent value is NOT consumed by the current builder."
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_builder_precedence_solver_wins_over_optimization_solver(MockCST):
+        """Set both ``workflow_2.solver`` (1111.0) and
+        ``workflow_2.optimization.solver`` (2222.0).  The builder reads
+        ``config["solver"]``, so ``SolverRunner`` receives 1111.0, not
+        2222.0.  This documents the current precedence rule."""
+        cfg = _minimal_build_config()
+        cfg["solver"] = {"stagnation_timeout_s": 1111.0, "settle_s": 2.0}
+        cfg["optimization"]["solver"] = {"stagnation_timeout_s": 2222.0}
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, _, _ = build_workflow_2(cfg)
+        assert orch._solver._timeout_s == 1111.0, (
+            f"Expected 1111.0 from config['solver'], "
+            f"got {orch._solver._timeout_s}.  "
+            "config['optimization']['solver'] is ignored under current behaviour."
+        )
 
 
 # ==============================================================================

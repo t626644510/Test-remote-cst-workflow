@@ -10,10 +10,11 @@ Usage::
     python run_workflow_2.py --auto-resume --heartbeat
     python run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
 
-Reads ``config/default.yaml``, opens a single CST DesignEnvironment connection
-with sequential frequency-domain and wakefield solver execution (inter-pass
-reset may recreate the DE between phases), builds the orchestrator + optimiser,
-and runs the full Bayesian optimisation loop.
+Reads ``workflows/rfgun_hom_antenna/config.yaml`` through the package runner,
+opens a single CST DesignEnvironment connection with sequential
+frequency-domain and wakefield solver execution (inter-pass reset may recreate
+the DE between phases), builds the orchestrator + optimiser, and runs the full
+Bayesian optimisation loop.
 
 See ``workflows/rfgun_hom_antenna/run.py`` for the full implementation.
 """

@@ -644,6 +644,109 @@ class TestCheckpointCallbackCount:
                 f"error should be str, got {type(err_str)}"
             )
 
+    # ── W2-6C: checkpoint callback side-effect characterisation ─────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_non_retry_path_root_like_callback_creates_two_records(
+        mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """A root-like callback that appends to a list (mimicking
+        ``ckpt.add_pending``) receives TWO calls and thus appends TWO
+        records for one evaluation in the non-retry path."""
+        records: list[dict] = []
+
+        def root_like_callback(x_phys, raw, penalties, solver_ok, error):
+            records.append({
+                "x": x_phys.copy(),
+                "raw": raw.copy(),
+                "penalties": penalties.copy(),
+                "solver_ok": solver_ok,
+            })
+
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=root_like_callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert len(records) == 2, (
+            f"Expected 2 records (orchestrator + evaluator), got {len(records)}. "
+            "A root-like checkpoint callback will create two persisted records "
+            "for one logical evaluation."
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    @patch("cst_optimization.core.cleanup.force_kill_cst")
+    @patch("cst_optimization.core.cleanup.verify_process_cleanup")
+    def test_retry_path_root_like_callback_creates_two_records(
+        mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """Same double-record effect for the retry-enabled path."""
+        records: list[dict] = []
+
+        def root_like_callback(x_phys, raw, penalties, solver_ok, error):
+            records.append({
+                "x": x_phys.copy(),
+                "solver_ok": solver_ok,
+            })
+
+        cfg = _minimal_build_config(enable_retry=True)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, retry_handler = build_workflow_2(
+            cfg, checkpoint_callback=root_like_callback,
+        )
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+        retry_handler._tier3_kill = MagicMock()
+        retry_handler._reconnect = MagicMock()
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert len(records) == 2, (
+            f"Expected 2 records on retry path, got {len(records)}."
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
+    @patch("cst_optimization.core.cleanup.remove_result_folder")
+    @patch("cst_optimization.core.cleanup.remove_lock_file")
+    def test_both_calls_use_same_x_vector(
+        mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
+    ):
+        """Both callback invocations receive the same ``x_phys`` vector
+        for the same logical evaluation."""
+        captured_x: list[np.ndarray] = []
+
+        def record_x(x_phys, raw, penalties, solver_ok, error):
+            captured_x.append(x_phys.copy())
+
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=record_x)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert len(captured_x) == 2, f"Expected 2 calls, got {len(captured_x)}"
+        assert np.array_equal(captured_x[0], captured_x[1]), (
+            "Both callback calls should receive the same x_phys vector."
+        )
+
 
 # ==============================================================================
 # P1.4 — build_workflow_2 return signature

@@ -681,6 +681,7 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - **W2-6A: accepted** (commit `01c599e`).
 - **W2-6D: pending web review** — scheduler/root shim compatibility characterised.
 - **W2-6B: pending web review** — solver timeout decision document + 3 no-CST tests added.
+- **W2-6C: pending web review** — checkpoint callback ownership decision + 3 no-CST side-effect tests added.
 - 未运行 live workflow。
 - 未运行 CST。
 - **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
@@ -835,6 +836,15 @@ git diff --check
 - ✅ scheduler 未修改
 - ⏳ 等待 web reviewer 审计通过
 
+### W2-6C 已完成
+
+- ✅ 从 `plan/workflow2-solver-timeout-decision` 创建 `plan/workflow2-checkpoint-callback-decision` 分支
+- ✅ 创建 `reports/restructure_plan/workflow2_checkpoint_callback_ownership_decision.md`（含 4 个决策选项、推荐 Option C evaluator-only）
+- ✅ 添加 3 个 no-CST 副作用测试（非 retry 双记录、retry 双记录、same x 向量验证）
+- ✅ 27/27 characterisation + 15/15 scheduler shim + 6/6 config + 9/9 skeleton 测试通过
+- ✅ root/builder/checkpoint/scheduler/config 均未修改
+- ⏳ 等待 web reviewer 审计通过
+
 ### 本轮（W2-6A：清理根 docstring）
 
 **执行时间**：2026-06-07
@@ -949,3 +959,43 @@ python -m pytest tests/workflows/test_workflow2_scheduler_shim.py -q
 **决策结论**：推荐 Option A（preserve + document）。当前 300s 为有效行为，7200s intent 未被消费。不改 config、不改 builder、不改 runtime。
 
 完整决策文档：`reports/restructure_plan/workflow2_solver_timeout_decision.md`
+
+### 本轮（W2-6C：checkpoint callback 所有权决策 + 测试）
+
+**执行时间**：2026-06-07
+
+**分支**：`plan/workflow2-checkpoint-callback-decision`（基于 `plan/workflow2-solver-timeout-decision`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+4. `run_workflow_2.py`
+5. `workflows/rfgun_hom_antenna/workflow.py`
+6. `tests/workflows/test_workflow2_characterization.py`
+7. `src/cst_optimization/checkpoint.py`
+
+**新增文件**：
+- `reports/restructure_plan/workflow2_checkpoint_callback_ownership_decision.md`
+
+**更新文件**：
+- `tests/workflows/test_workflow2_characterization.py`（添加 3 个 no-CST 副作用测试）
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+python -m pytest tests/workflows/test_workflow2_scheduler_shim.py -q
+python -m pytest tests/workflows/test_workflow2_config_isolation.py -q
+python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
+```
+
+**测试结果**：
+- Characterisation: 27 / 27 passed（原有 24 + 新增 3 W2-6C 测试）
+- Scheduler shim: 15 / 15 passed
+- Config isolation: 6 / 6 passed
+- Skeleton: 9 / 9 passed
+
+**决策结论**：推荐 Option C（evaluator 为 callback 所有者）。根 callback 有持久化副作用（`ckpt.add_pending`），双触发导致重复 checkpoint records。未来修复需更新 P0.3 预期 2→1。
+
+完整决策文档：`reports/restructure_plan/workflow2_checkpoint_callback_ownership_decision.md`

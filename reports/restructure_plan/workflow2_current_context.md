@@ -330,20 +330,11 @@ live CST prompt 必须明确：
 
 **需要 W2-1 钉住**：写 no-CST characterization test，mock config loader，确认 `SolverRunner` 实际收到哪个 timeout 值。在此确认前，不得修改 solver timeout 相关的 config 路径或 builder 读取逻辑。
 
-### R3：builder 返回签名不一致（类型注解/文档与实际实现错位）
+### R3：builder 返回签名不一致（已解决）
 
-当前代码审计确认以下错位：
+**历史**：W2-0/W2-1 期间，`cst_optimization.factory.build_workflow_2` 的类型注解和 docstring 声明 3 元返回（缺 `retry_handler`），但实际返回 4 元。W2-1 characterization tests 确认 4 元在 SAO 和 SAEA 路径下均一致。
 
-- **类型注解**（`factory.py:327`）：声明 3 元返回 `tuple[DualProjectOrchestrator, BaseOptimizer, Callable]`，**不含** `retry_handler`。
-- **文档字符串**（`factory.py:339-344`）：仅列出 orch、optimizer、evaluator 三项，**未记录** `retry_handler`。
-- **实际实现**（`factory.py:627`）：返回 4 值 `orchestrator, optimizer, evaluator, retry_handler`。
-- **调用方**（`run_workflow_2.py:208`）：按 4 元解包，依赖第四项 `retry_handler`。
-
-这是一个活跃的文档/类型契约错位：类型系统和 docstring 承诺 3 项，但实际实现和调用方依赖 4 项。
-
-**风险**：迁移 builder 时若基于类型注解重构，容易漏掉 `retry_handler` 返回，导致 `run_workflow_2.py` 解包失败。compatibility wrapper 也可能破坏 root runner。
-
-**需要 W2-1 钉住**：在 no-CST characterization test 中确认四元组在 SAO 和 SAEA 两种算法路径下均一致，然后才进入 builder 迁移。注意：本轮 W2-0 不修复 runtime 和类型注解。
+**当前状态（W2-4B）**：已解决。`workflows/rfgun_hom_antenna/workflow.py::build_workflow_2`（当前 owner）的类型注解和 docstring 均已明确列出全部 4 项返回，包括 `EvaluationRetryHandler | None`。旧 factory wrapper 也带有正确注解。
 
 ### R4：checkpoint callback 可能双触发
 
@@ -670,7 +661,7 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - 旧 docstring "创建独立 CST 窗口" → "单 CST 连接，顺序执行"（与代码一致）
 - `src/cst_optimization/factory.py::build_workflow_2` 现在是兼容性 wrapper（lazy import + 委托）
 - 旧 import 路径 `from cst_optimization.factory import build_workflow_2` 仍然可用
-- factory wrapper 现带有正确的 4 元返回类型注解（R3 部分解决）
+- factory wrapper 和 workflow-local builder 均带有正确的 4 元返回类型注解（R3 解决）
 - `DualProjectOrchestrator` 未移动
 - `src/cst_optimization/core/**` 未修改
 - `config/default.yaml` 未修改

@@ -641,19 +641,15 @@ class TestBuildWorkflow2ReturnSignature:
         assert callable(evaluator)
 
     @staticmethod
-    def test_type_annotation_mismatch():
-        """Assert the workflow-local builder annotation still promises 3 items.
+    def test_type_annotation_now_matches_four_tuple():
+        """Assert the workflow-local builder annotation now documents all 4
+        return components (``DualProjectOrchestrator``, ``BaseOptimizer``,
+        ``Callable``, ``EvaluationRetryHandler``).
 
-        The primary implementation is now in
-        ``workflows.rfgun_hom_antenna.workflow.build_workflow_2``.  Its type
-        annotation still promises 3 elements (``DualProjectOrchestrator``,
-        ``BaseOptimizer``, ``Callable``) while the actual return is 4 (adds
-        ``retry_handler``).
-
-        The factory compatibility wrapper (``cst_optimization.factory``) now
-        has a correct 4-element annotation, so R3 is **partially resolved**
-        for that import path.  This test targets the workflow-local builder
-        where the mismatch remains active.
+        R3 is resolved: the owner module's type annotation and docstring
+        both match the actual 4-tuple return.  The historical mismatch
+        (W2-1) existed when the implementation lived in the shared factory
+        with a 3-tuple annotation.
         """
         import inspect
         from workflows.rfgun_hom_antenna.workflow import build_workflow_2
@@ -661,12 +657,11 @@ class TestBuildWorkflow2ReturnSignature:
         sig = inspect.signature(build_workflow_2)
         ann_str = str(sig.return_annotation)
 
-        assert "EvaluationRetryHandler" not in ann_str, (
-            "R3 RISK DOWNGRADE CANDIDATE: workflow-local builder annotation "
-            "now mentions EvaluationRetryHandler — update R3 risk status "
-            "and this assertion."
+        assert "EvaluationRetryHandler" in ann_str, (
+            "R3 should be resolved: workflow-local builder annotation "
+            "should now include EvaluationRetryHandler."
         )
-        # Sanity: annotation does mention the three declared return types
+        # All four return types are documented
         assert "DualProjectOrchestrator" in ann_str
         assert "BaseOptimizer" in ann_str
         assert "Callable" in ann_str

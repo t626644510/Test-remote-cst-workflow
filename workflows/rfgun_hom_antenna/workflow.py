@@ -18,6 +18,7 @@ import numpy as np
 from cst_optimization.core.connection import CSTConnection
 from cst_optimization.core.orchestrator import DualProjectOrchestrator, ProjectSpec
 from cst_optimization.core.messages import MessageLogger
+from cst_optimization.core.retry import EvaluationRetryHandler
 from cst_optimization.core.solver import SolverRunner
 from cst_optimization.parameters.base import ParameterSet
 from cst_optimization.objectives.base import ObjectiveFunction
@@ -58,7 +59,12 @@ def build_workflow_2(
     config: dict[str, Any],
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
     | None = None,
-) -> tuple[DualProjectOrchestrator, BaseOptimizer, Callable[[np.ndarray], Any]]:
+) -> tuple[
+    DualProjectOrchestrator,
+    BaseOptimizer,
+    Callable[[np.ndarray], Any],
+    EvaluationRetryHandler | None,
+]:
     """Build the Phase-2 multi-project orchestrator and optimiser from config.
 
     Uses **one** CST DesignEnvironment connection for sequential project

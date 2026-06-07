@@ -8,7 +8,7 @@ Usage::
     with open("config/default.yaml") as fh:
         cfg = yaml.safe_load(fh)
 
-    orch, opt, evaluator = build_workflow_2(cfg["workflow_2"])
+    orch, opt, evaluator, retry_handler = build_workflow_2(cfg["workflow_2"])
     result = opt.optimize(evaluator=evaluator)
 """
 

@@ -124,6 +124,30 @@ checkpoint record per evaluation, not two.
 
 ---
 
+## Integration Status
+
+**Current Workflow2 integration head**: `docs/workflow2-context-compaction` (commit `7601971`).
+
+All 13 phases W2-0 through W2-6E are accepted and merged into this branch.
+No phase has been merged to `main` yet.
+
+### Main-merge prerequisites (not started)
+
+A future phase could prepare a PR into `main`.  Scope summary:
+
+| Item | Status |
+|------|--------|
+| Phases included | W2-0 through W2-6E (13 phases) |
+| Files intentionally changed | `workflows/rfgun_hom_antenna/` (new package), `run_workflow_2.py` (import + docstring), `src/cst_optimization/core/orchestrator.py` (callback removed), `workflows/rfgun_sao/workflow.py` (WF2-only), `tests/workflows/` (new/updated tests), `reports/restructure_plan/` (docs) |
+| Files intentionally unchanged | `config/default.yaml`, `scripts/schedule_workflow2.ps1`, `src/cst_optimization/core/**` (except orchestrator.py callback), `src/cst_optimization/factory.py` (compat wrapper) |
+| Remaining risk | R2 solver timeout (7200s intent unconsumed, 300s fallback active) |
+| No-CST validation | 62 targeted tests across 4 suites |
+| Live CST validation | Not run — recommended after main merge before production deployment |
+| Config/runtime behaviour changed? | No — root entry unchanged, scheduler unchanged, config loading unchanged |
+
+**Decision**: continue on `docs/workflow2-context-compaction` as the integration
+head.  Do not merge to main without explicit approval.
+
 ## Recommended Next Phase
 
 Pending: R2 (solver timeout) characterisation is accepted but the 7200s

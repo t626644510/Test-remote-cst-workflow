@@ -306,11 +306,11 @@ class TestConfigFallbackMerge:
     }
 
     @staticmethod
-    @patch("run_workflow_2.yaml.safe_load")
-    @patch("run_workflow_2.CheckpointManager")
-    @patch("run_workflow_2.os.makedirs")
-    @patch("run_workflow_2.build_workflow_2")
-    @patch("run_workflow_2.sys.argv", ["run_workflow_2.py"])
+    @patch("workflows.rfgun_hom_antenna.run.yaml.safe_load")
+    @patch("workflows.rfgun_hom_antenna.run.CheckpointManager")
+    @patch("workflows.rfgun_hom_antenna.run.os.makedirs")
+    @patch("workflows.rfgun_hom_antenna.run.build_workflow_2")
+    @patch("workflows.rfgun_hom_antenna.run.sys.argv", ["run_workflow_2.py"])
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")

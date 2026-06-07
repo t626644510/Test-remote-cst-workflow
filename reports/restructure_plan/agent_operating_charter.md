@@ -2,8 +2,8 @@
 
 This document is the reusable governance baseline for future development in
 this repository. It is intentionally workflow-agnostic. Workflow-specific
-plans, branch strategies, and launch prompts may add temporary context, but
-they should not weaken the principles below.
+plans, branch strategies, and local prompts may add temporary context, but
+they must not weaken the principles below.
 
 ## Primary Objective
 
@@ -32,14 +32,14 @@ Every major phase should move the project toward:
 The web agent may be strict and expensive with context. The local agent should
 be cheap, focused, and repeatable.
 
-## Source of Truth
+## Source Of Truth
 
 Code, tests, and current git diff are authoritative. Historical reports,
 phase plans, merge notes, and status documents are evidence only. Do not use
 old reports as conclusions without checking current code.
 
-When documents disagree with code, trust the code first, then either update the
-document or record the discrepancy for the next planning step.
+When documents disagree with code, trust the code first, then either update
+the document or record the discrepancy for the next planning step.
 
 ## Architecture Policy
 
@@ -53,7 +53,7 @@ document or record the discrepancy for the next planning step.
 - Stable branches should accept durable shared capabilities, not every
   workflow convenience layer.
 
-## Branch and Scope Policy
+## Branch And Scope Policy
 
 - Use branch isolation for large workflow refactors, risky architecture work,
   or experiments that may not belong in stable shared code.
@@ -64,6 +64,8 @@ document or record the discrepancy for the next planning step.
 - Treat high-blast-radius paths as sensitive, not impossible to change. The
   prompt must name the file, reason, and validation when such paths are in
   scope.
+- Clean direct merge is allowed after the named review and validation gates
+  pass. Do not delay a clean merge solely to ask for operator approval.
 
 ## Local-Agent Prompt Contract
 
@@ -77,7 +79,8 @@ Every local-agent prompt should contain only:
 6. Output: changed files, rationale, tests run, remaining risks.
 
 Avoid asking the local agent to read the whole repository by default. Avoid
-asking it to repeat already-passed broad tests unless touched code justifies it.
+asking it to repeat already-passed broad tests unless touched code justifies
+it.
 
 ## Validation Policy
 
@@ -86,6 +89,10 @@ asking it to repeat already-passed broad tests unless touched code justifies it.
   persistence, recovery behavior, or runtime entrypoints change.
 - For live CST work, separate no-CST validation from live-CST validation and
   state which one was actually run.
+- Bounded live smoke is allowed when it is part of the phase validation plan.
+  It must name the command, scope, timeout or stop condition, output location,
+  and cleanup check. Long production campaigns, destructive process
+  manipulation, and default-config changes still require explicit phase scope.
 - Record exact commands and outcomes for major milestones.
 
 ## Reporting Policy
@@ -97,49 +104,44 @@ summaries for patch-level work.
 ### Context-Compaction Rule
 
 After each major workflow phase or accepted phase cluster, workflow-specific
-"current context" documents must be compacted.  The compacted version must:
+current-context documents must be compacted. The compacted version must:
 
-- Be bounded (target ≈150–250 lines) and current-state oriented.
-- Be useful as a local-agent handoff without requiring full historical reading.
-- Point to dedicated decision documents, reports, git history, or
-  phase-specific files for detailed evidence — do not copy their contents.
-- Remove stale append-only phase logs, old read lists, old execution logs,
-  and duplicated phase details.
-- Keep phase / component / risk status current enough that a local agent can
-  start a new phase from the compacted context alone.
+- be bounded, with a target of 150-250 lines;
+- be current-state oriented;
+- work as a local-agent handoff without full historical reading;
+- point to decision records, reports, git history, or phase files for detailed
+  evidence instead of copying their contents;
+- remove stale append-only logs, old read lists, old execution logs, and
+  duplicated phase details;
+- keep phase, component, and risk status current enough that a local agent can
+  start the next phase from the compacted context alone.
 
-This rule exists precisely because append-only "current context" documents
-grow linearly with each phase and defeat their own purpose: they become too
-large to be useful for bounded-agent handoff.
+This rule exists because append-only current-context documents grow linearly
+with each phase and defeat their own purpose.
 
 ### Main PR Review Priority
 
-When reviewing a main-integration or integration-readiness PR, reviewers
-must prioritise:
+When reviewing a main-integration or integration-readiness PR, reviewers must
+prioritize:
 
-1. **Diff safety**: whether the changed files and their contents are safe,
-   correctly scoped, and free of unintended side effects.
-2. **Runtime semantics**: whether runtime behaviour matches the accepted
-   phase contracts (e.g. callback ownership, solver timeout, root entry
-   contracts).
-3. **Live CST decision**: whether live CST smoke is required or explicitly
-   deferred, and whether that decision is documented.
-4. **Boundary integrity**: whether root entry, scheduler, config,
-   shared-core, and workflow-specific boundaries are preserved as designed.
+1. Diff safety: changed files and contents are correctly scoped and free of
+   unintended side effects.
+2. Runtime semantics: behavior matches accepted phase contracts.
+3. Live CST decision: live smoke is either run, scoped for the phase, or
+   intentionally deferred with rationale.
+4. Boundary integrity: root entry, scheduler, config, shared-core, and
+   workflow-specific boundaries remain as designed.
 
-The following should **not** by themselves block a phase or delay
-acceptance:
+The following should not block a phase by themselves:
 
-- Mechanical documentation counts (changed-file counts, line counts,
-  wording drift in generated summaries) unless they materially misstate
-  architecture, runtime behaviour, validation results, or risk.
-- Cosmetic wording diffs in non-authoritative documents (context docs,
-  decision records without runtime assertions).
-- Minor summary drift between `git diff --name-only` and hand-written
-  PR descriptions — treat `git diff` as authoritative.
+- mechanical documentation counts unless they materially misstate
+  architecture, runtime behavior, validation results, or risk;
+- cosmetic wording diffs in non-authoritative documents;
+- minor summary drift between `git diff --name-only` and hand-written PR
+  descriptions. Treat `git diff` as authoritative.
 
-Only block on documentation issues when they would mislead a future
-reader about architecture, runtime safety, validation scope, or risk.
+Only block on documentation issues when they would mislead a future reader
+about architecture, runtime safety, validation scope, or risk.
 
 ## CST API Rule
 

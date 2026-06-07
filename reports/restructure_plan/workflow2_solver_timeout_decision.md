@@ -132,7 +132,8 @@ before falling back to `config["solver"]`.
 - Add explicit test for the new precedence rule.
 - Optional: run a limited live CST smoke test with the new timeout to
   confirm wakefield solves still complete in reasonable time.
-- No-CST tests first, live CST only after explicit approval.
+- Historical W2-6B gate: run no-CST tests first. Current live-smoke gating is
+  governed by `agent_operating_charter.md`.
 
 ---
 

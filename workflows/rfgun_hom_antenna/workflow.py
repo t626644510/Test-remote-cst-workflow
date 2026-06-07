@@ -141,7 +141,12 @@ def build_workflow_2(
     )
 
     # ── Solver runner ────────────────────────────────────────────────
-    solver_cfg = config.get("solver", {})
+    # W2-6F: Workflow2-specific optimization.solver overrides top-level
+    # fallback solver for overlapping keys.  Fields not set in
+    # optimization.solver (e.g. settle_s) still come from fallback.
+    base_solver_cfg = config.get("solver", {}) or {}
+    opt_solver_cfg = config.get("optimization", {}).get("solver", {}) or {}
+    solver_cfg = {**base_solver_cfg, **opt_solver_cfg}
     solver_runner = SolverRunner(
         timeout_s=solver_cfg.get("stagnation_timeout_s", 0.0),
         settle_s=solver_cfg.get("settle_s", 2.0),

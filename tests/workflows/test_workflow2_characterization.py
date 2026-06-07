@@ -426,10 +426,11 @@ class TestSolverTimeoutSource:
 
     @staticmethod
     @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
-    def test_optimization_solver_key_is_not_read_by_builder(MockCST):
-        """``workflow_2.optimization.solver.stagnation_timeout_s`` is NOT
-        consumed by ``build_workflow_2`` — the builder reads
-        ``workflow_2.solver`` instead.  This confirms the R2 risk."""
+    def test_optimization_solver_now_consumed_by_builder(MockCST):
+        """W2-6F: ``workflow_2.optimization.solver.stagnation_timeout_s`` is
+        NOW consumed by ``build_workflow_2`` — it overrides the fallback
+        solver for overlapping keys.  Previously (W2-6B) this path was
+        ignored."""
         cfg = _minimal_build_config()
         cfg["optimization"]["solver"] = {"stagnation_timeout_s": 9999.0}
         cfg.pop("solver", None)
@@ -437,18 +438,21 @@ class TestSolverTimeoutSource:
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(cfg)
-        assert orch._solver._timeout_s != 9999.0
-        assert orch._solver._timeout_s == 7200.0
+        assert orch._solver._timeout_s == 9999.0, (
+            "optimization.solver.stagnation_timeout_s should now be consumed "
+            "(W2-6F)."
+        )
 
     # ── W2-6B: explicit mismatch characterisation tests ────────────────
 
     @staticmethod
     @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
-    def test_actual_timeout_is_300_via_real_config(MockCST):
+    def test_actual_timeout_is_7200_via_real_config(MockCST):
         """Load the actual ``config/default.yaml``, apply root-runner merge
         semantics (as ``run_workflow_2.py`` does), and assert that
-        ``SolverRunner`` receives 300.0 — the top-level fallback, NOT the
-        7200.0 intent."""
+        ``SolverRunner`` now receives 7200.0 — the Workflow2-specific
+        optimization solver value (W2-6F).  Previously this received 300.0
+        (W2-6B behaviour, before the fix)."""
         cfg_path = _TEST_DIR.parent.parent / "config" / "default.yaml"
         assert cfg_path.exists(), f"config/default.yaml not found at {cfg_path}"
 
@@ -464,10 +468,10 @@ class TestSolverTimeoutSource:
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(wf2_cfg)
-        assert orch._solver._timeout_s == 300.0, (
-            f"Expected effective timeout 300.0 (top-level fallback), "
+        assert orch._solver._timeout_s == 7200.0, (
+            f"Expected effective timeout 7200.0 (Workflow2 optimization.solver), "
             f"got {orch._solver._timeout_s}.  "
-            "The intent 7200.0 in workflow_2.optimization.solver is not consumed."
+            "The fix in W2-6F makes optimization.solver override the fallback."
         )
 
     @staticmethod
@@ -492,11 +496,48 @@ class TestSolverTimeoutSource:
 
     @staticmethod
     @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
-    def test_builder_precedence_solver_wins_over_optimization_solver(MockCST):
+    def test_fallback_solver_used_when_optimization_solver_absent(MockCST):
+        """When ``optimization.solver`` is absent, the builder falls back to
+        ``workflow_2.solver`` (300.0)."""
+        cfg = _minimal_build_config()
+        cfg["optimization"].pop("solver", None)
+        cfg["solver"] = {"stagnation_timeout_s": 300.0, "settle_s": 2.0}
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, _, _ = build_workflow_2(cfg)
+        assert orch._solver._timeout_s == 300.0, (
+            f"Expected 300.0 from fallback solver, got {orch._solver._timeout_s}"
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_settle_s_falls_back_to_solver(MockCST):
+        """``settle_s`` is not set in ``optimization.solver``, so it falls
+        back to ``workflow_2.solver``."""
+        cfg = _minimal_build_config()
+        cfg["optimization"]["solver"] = {"stagnation_timeout_s": 7200.0}
+        cfg["solver"] = {"stagnation_timeout_s": 300.0, "settle_s": 5.0}
+
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, _, _ = build_workflow_2(cfg)
+        assert orch._solver._timeout_s == 7200.0, (
+            f"Expected timeout 7200.0 from optimization.solver, "
+            f"got {orch._solver._timeout_s}"
+        )
+        assert orch._solver._settle_s == 5.0, (
+            f"Expected settle_s 5.0 from fallback solver, "
+            f"got {orch._solver._settle_s}"
+        )
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_optimization_solver_overrides_fallback(MockCST):
         """Set both ``workflow_2.solver`` (1111.0) and
-        ``workflow_2.optimization.solver`` (2222.0).  The builder reads
-        ``config["solver"]``, so ``SolverRunner`` receives 1111.0, not
-        2222.0.  This documents the current precedence rule."""
+        ``workflow_2.optimization.solver`` (2222.0).  W2-6F makes
+        ``optimization.solver`` override the fallback, so ``SolverRunner``
+        receives 2222.0."""
         cfg = _minimal_build_config()
         cfg["solver"] = {"stagnation_timeout_s": 1111.0, "settle_s": 2.0}
         cfg["optimization"]["solver"] = {"stagnation_timeout_s": 2222.0}
@@ -504,10 +545,10 @@ class TestSolverTimeoutSource:
         from cst_optimization.factory import build_workflow_2
 
         orch, _, _, _ = build_workflow_2(cfg)
-        assert orch._solver._timeout_s == 1111.0, (
-            f"Expected 1111.0 from config['solver'], "
+        assert orch._solver._timeout_s == 2222.0, (
+            f"Expected 2222.0 from optimization.solver (W2-6F), "
             f"got {orch._solver._timeout_s}.  "
-            "config['optimization']['solver'] is ignored under current behaviour."
+            "optimization.solver now overrides fallback solver for overlapping keys."
         )
 
 

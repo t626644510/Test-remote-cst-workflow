@@ -1,71 +1,50 @@
 # Workflow2 Current Context
 
-This is the compact handoff for Workflow2 after PR #1 was merged to `main`.
-Use it as the first Workflow2 read before opening historical decision records.
+Short, current-state handoff.  The authoritative recovery capsule is
+`workflow2_final_context_capsule.md`.  Code, tests, and git diff are
+authoritative over reports.
 
-## Authority
+## Status
 
-- Governance: `reports/restructure_plan/agent_operating_charter.md`
-- Safety checklist: `reports/restructure_plan/agent_standing_rules.md`
-- Current facts come from code, tests, and git diff; reports are evidence only.
-- Bounded live smoke and clean direct merge are allowed by default when the
-  phase plan names the scope and validation gate.
+All W2 migration phases (W2-0 through W2-10A) are complete and merged to
+`main`.  No W2-10B code movement is planned.  No further Workflow2
+migration work is in progress.
 
-## Merge Status
+## Final Ownership
 
-- PR #1, `docs/workflow2-context-compaction` -> `main`, is merged.
-- Merge commit: `b1829c6` (`Merge Workflow2 integration: W2-0 through W2-6F`).
-- Included work: W2-0 through W2-6F.
-- Current branch baseline: `main` contains the Workflow2 package skeleton,
-  builder migration, callback ownership fix, solver-timeout fix, and tests.
+| Component | Owner |
+|-----------|-------|
+| Public entry | `run_workflow_2.py` (compatibility shim) |
+| Runner | `workflows/rfgun_hom_antenna/run.py` |
+| Runtime config | `workflows/rfgun_hom_antenna/config.yaml` (W2-8) |
+| Builder | `workflows/rfgun_hom_antenna/workflow.py::build_workflow_2` |
+| Factory wrapper | `src/cst_optimization/factory.py::build_workflow_2` (re-export) |
+| Orchestrator | `src/cst_optimization/core/orchestrator.py::DualProjectOrchestrator` (W2-10A: kept) |
+| Scheduler target | `run_workflow_2.py` (unchanged) |
 
-## Runtime Shape
+## Runtime Invariants
 
-| Component | Current state |
-|-----------|---------------|
-| Public entry | `run_workflow_2.py` remains the public entrypoint |
-| Scheduler | still targets root `run_workflow_2.py` |
-| Runtime config | `config/default.yaml` -> `workflow_2` subtree |
-| Workflow-local config | `workflows/rfgun_hom_antenna/config.yaml` is a snapshot, not runtime source |
-| Builder owner | `workflows/rfgun_hom_antenna/workflow.py::build_workflow_2` |
-| Factory path | `src/cst_optimization/factory.py::build_workflow_2` is a compatibility wrapper |
-| Orchestrator | `src/cst_optimization/core/orchestrator.py::DualProjectOrchestrator` remains in core path |
+- `python run_workflow_2.py` — public command.
+- Scheduler (`scripts/schedule_workflow2.ps1`) targets root `run_workflow_2.py`.
+- Config source: `workflows/rfgun_hom_antenna/config.yaml` with `cst`/`solver`/`logging` fallbacks.
+- `config/default.yaml["workflow_2"]` is legacy; not read at runtime.
+- Solver timeout: `7200.0` from `optimization.solver.stagnation_timeout_s` (W2-6F).
+- Checkpoint: one callback per logical evaluation (W2-6E).
+- Live smoke: F2F + trigger sufficient; no full wakefield required (W2-9).
 
-## Accepted Semantic State
+## Orchestrator (W2-10A)
 
-- R1 docstring fixed: root docstring describes one CST DesignEnvironment with
-  sequential project execution.
-- R2 solver timeout fixed: `workflow_2.optimization.solver` overrides fallback
-  solver keys; effective Workflow2 timeout is `7200.0` from
-  `workflow_2.optimization.solver.stagnation_timeout_s`.
-- R4 checkpoint callback fixed: evaluator wrappers fire one callback per
-  logical evaluation; `DualProjectOrchestrator.execute()` no longer fires it.
-- R6 scheduler/root compatibility characterized: CLI flags and scheduler root
-  entry are pinned by tests.
+Keep `DualProjectOrchestrator` in `src/cst_optimization/core/`.  No move
+planned.  Do not add new WF2-specific phase/project logic into core
+without a bounded boundary phase.
 
-## Current Boundaries
+## Known Caveats
 
-- Do not promote shared core just because Workflow2 convenience code exists.
-- Do not move `DualProjectOrchestrator` without a dedicated boundary phase.
-- Do not make `workflows/rfgun_hom_antenna/config.yaml` the runtime source
-  without a config-ownership migration phase.
-- Do not repoint scheduler/root entry without preserving CLI compatibility.
-- Live Workflow2 smoke is allowed when bounded and recorded; long campaigns
-  still need an explicit phase plan.
-
-## Key Evidence Documents
-
-| Document | Use |
-|----------|-----|
-| `workflow2_solver_timeout_decision.md` | Historical R2 analysis plus W2-6F supersession |
-| `workflow2_checkpoint_callback_ownership_decision.md` | Historical R4 analysis plus W2-6E supersession |
-| `workflow2_orchestrator_ownership_assessment.md` | W2-5 evidence for keeping orchestrator out of new shared surfaces |
-| `workflow2_semantic_risk_cleanup_plan.md` | Historical risk map for R1/R2/R4/R6 |
-| `workflow2_main_pr_summary.md` | Historical PR #1 merge summary |
+- `config/default.yaml["workflow_2"]` is legacy (future cleanup).
+- Unrelated WF1 warm-start test failure in broad sweeps — not a W2 blocker.
+- Factory type-annotates `DualProjectOrchestrator` — cosmetic import.
 
 ## Next Direction
 
-Use `reports/restructure_plan/workflow2_next_phase_plan.md` for the next
-planning handoff to the web agent. The next work should focus on root
-shim/scheduler readiness, config ownership, bounded live smoke, and the
-orchestrator boundary decision.
+Stop Workflow2 migration work.  Move to next workflow or shared-core
+assessment.  If W2 work resumes, start from `workflow2_final_context_capsule.md`.

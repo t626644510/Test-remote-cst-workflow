@@ -43,7 +43,7 @@
 - Shared config：`config/default.yaml` 中的 `workflow_2` 段
 - Workflow-local builder（OWNER）：`workflows/rfgun_hom_antenna/workflow.py::build_workflow_2`
 - Legacy factory wrapper：`src/cst_optimization/factory.py::build_workflow_2`（兼容性 wrapper，委托到 workflow-local builder）
-- Shared orchestrator：`src/cst_optimization/core/orchestrator.py::DualProjectOrchestrator`
+- Current orchestrator location：`src/cst_optimization/core/orchestrator.py::DualProjectOrchestrator`（W2-5 评估确认无跨 workflow shared-core 证据）
 - Scheduler entry：`scripts/schedule_workflow2.ps1`
 
 当前 `run_workflow_2.py` 的关键行为：
@@ -676,7 +676,7 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - W2-2: accepted.
 - W2-3: accepted.
 - W2-4A: accepted.
-- **W2-4B: pending web review** — 43/43 tests pass, builder implementation migrated.
+- **W2-4B: accepted** (commit `7e1cf1a`).
 - 未运行 live workflow。
 - 未运行 CST。
 - **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
@@ -702,6 +702,13 @@ grep -rn "DualProjectOrchestrator" src/ workflows/ tests/ run_workflow_2.py
 grep -rn "ProjectSpec" src/ workflows/ tests/
 grep -n "f2f\|f2w\|wakefield\|frequency_domain\|pre_filter\|adaptive_gate\|start_phase\|skip_phase\|curves_db" src/cst_optimization/core/orchestrator.py
 ```
+
+**验证命令**：
+```powershell
+git diff --check
+```
+
+**验证结果**：无 whitespace 错误。未运行 pytest（docs-only 阶段）。
 
 **新增文件**：
 - `reports/restructure_plan/workflow2_orchestrator_ownership_assessment.md`

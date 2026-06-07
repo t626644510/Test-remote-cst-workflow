@@ -7,9 +7,10 @@ Usage::
     python run_workflow_2.py --auto-resume --heartbeat
     python run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
 
-Reads ``config/default.yaml``, opens two independent CST windows (one per
-project), builds the orchestrator + SAO optimiser, and runs the full
-Bayesian optimisation loop.
+Reads ``config/default.yaml``, opens a single CST DesignEnvironment connection
+with sequential frequency-domain and wakefield solver execution (inter-pass
+reset may recreate the DE between phases), builds the orchestrator + SAO
+optimiser, and runs the full Bayesian optimisation loop.
 """
 
 from __future__ import annotations

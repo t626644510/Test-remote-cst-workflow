@@ -833,7 +833,6 @@ git diff --check
 - ✅ 80 % orchestrator 代码为 WF2-specific
 - ✅ `src/cst_optimization/core/orchestrator.py` 未修改
 - ✅ accepted (commit `d168f42`)
-- ✅ accepted (commit `d168f42`)
 
 ### W2-6 已完成
 
@@ -843,3 +842,42 @@ git diff --check
 - ✅ 提出后续实施顺序建议：W2-6A（docstring 修复）→ W2-6D（scheduler）→ W2-6B（timeout）→ W2-6C（checkpoint）
 - ✅ W2-6 不做修复，只做规划
 - ⏳ 等待 web reviewer 审计通过
+
+### W2-6A 已完成
+
+- ✅ 从 `plan/workflow2-semantic-risk-cleanup` 创建 `docs/workflow2-root-docstring-cleanup` 分支
+- ✅ 修复 `run_workflow_2.py` 顶部 docstring（R1）："两个独立 CST 窗口"→"单个 CST DE 连接，顺序执行"
+- ✅ 运行逻辑未修改——仅 docstring 文本替换
+- ✅ 无 CST / 无 live workflow / 无全量 pytest
+- ⏳ 等待 web reviewer 审计通过
+
+### 本轮（W2-6A：清理根 docstring）
+
+**执行时间**：2026-06-07
+
+**分支**：`docs/workflow2-root-docstring-cleanup`（基于 `plan/workflow2-semantic-risk-cleanup`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+4. `run_workflow_2.py`
+5. `workflows/rfgun_hom_antenna/workflow.py`
+
+**修改的文件**：
+- `run_workflow_2.py`（docstring only：顶部说明中"两个独立 CST 窗口"→"单个 CST DesignEnvironment 连接，频域和 wakefield 顺序执行，inter-pass reset 可重建 DE"）
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**验证命令**：
+```powershell
+git diff --check
+```
+
+**验证结果**：无 whitespace 错误。未运行 pytest（docstring-only 阶段）。
+
+**关键结论**：
+- R1 修复完成：根 docstring 表述与当前单连接行为一致
+- 运行逻辑未修改——仅 docstring 文本替换
+- `workflows/rfgun_hom_antenna/workflow.py`、`src/cst_optimization/factory.py`、`src/cst_optimization/core/**`、`config/default.yaml`、scheduler、tests 均未修改

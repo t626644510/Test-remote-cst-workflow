@@ -130,3 +130,23 @@ Future phase must:
 - Cover retry, non-retry, SAEA, and partial-evaluation paths
 - Remove orchestrator callback call
 - No-CST tests first; live CST only after explicit approval
+
+---
+
+## Implementation Note — W2-6E (Checkpoint Callback Fix)
+
+This implements W2-6C Option C (evaluator-only callback ownership).
+
+**Changes**:
+- `src/cst_optimization/core/orchestrator.py`: Removed `self._checkpoint_callback()`
+  call from `DualProjectOrchestrator.execute()`.  Orchestrator only sets `last_*`
+  state; no longer fires callback.
+- `workflows/rfgun_hom_antenna/workflow.py`: SAO retry and non-retry evaluator
+  paths already owned the callback — unchanged.  SAEA path: replaced bare
+  `evaluator = orchestrator.execute` with a wrapper that fires
+  `checkpoint_callback` once per call.
+- Tests: `call_count` assertions updated 2→1; duplicate-record tests updated
+  2 record → 1 record; SAEA callback test added; partial-eval NaN test added.
+
+**Result**: one `checkpoint_callback` invocation per logical evaluation
+across all three algorithm paths (SAO retry, SAO non-retry, SAEA).

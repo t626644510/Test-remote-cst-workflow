@@ -37,12 +37,12 @@
 
 ## 3. 当前代码状态摘要
 
-当前 workflow2 处于 W2-4A（builder ownership seam）状态：
+当前 workflow2 处于 W2-4B（builder implementation migration）状态：
 
 - Root entry：`run_workflow_2.py`
 - Shared config：`config/default.yaml` 中的 `workflow_2` 段
-- Workflow-local builder seam：`workflows/rfgun_hom_antenna/workflow.py::build_workflow_2`（W2-4A，委托到 legacy factory）
-- Legacy builder（未修改）：`src/cst_optimization/factory.py::build_workflow_2`
+- Workflow-local builder（OWNER）：`workflows/rfgun_hom_antenna/workflow.py::build_workflow_2`
+- Legacy factory wrapper：`src/cst_optimization/factory.py::build_workflow_2`（兼容性 wrapper，委托到 workflow-local builder）
 - Shared orchestrator：`src/cst_optimization/core/orchestrator.py::DualProjectOrchestrator`
 - Scheduler entry：`scripts/schedule_workflow2.ps1`
 
@@ -51,7 +51,7 @@
 - 读取 `config/default.yaml`
 - 提取 `workflow_2` 段
 - 将顶层 `cst` / `solver` / `logging` 等 fallback 合并进 workflow2 config
-- 调用 `workflows.rfgun_hom_antenna.workflow.build_workflow_2`（W2-4A seam，当前委托到 `cst_optimization.factory.build_workflow_2`）
+- 调用 `workflows.rfgun_hom_antenna.workflow.build_workflow_2`（W2-4B，OWN 实现体，不再是 delegation wrapper）
 - 当前调用方按四元组接收 builder 返回值
 
 当前 workflow2 config 的关键行为：
@@ -679,7 +679,7 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - **W2-4B: pending web review** — 43/43 tests pass, builder implementation migrated.
 - 未运行 live workflow。
 - 未运行 CST。
-- **builder implementation migrated** — factory/orchestrator/core/scheduler/config 均未修改。
+- **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
 
 ## 11. 当前推荐下一步
 

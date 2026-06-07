@@ -15,8 +15,10 @@ P0.2 — solver timeout source: what ``stagnation_timeout_s`` value actually
 P0.3 — checkpoint callback call count: whether both the orchestrator and
        the factory evaluator invoke the same callback (double-trigger risk).
 
-P1.4 — ``build_workflow_2`` return signature: confirm 4-tuple is returned
-       even though the type annotation promises only 3 items.
+P1.4 — ``build_workflow_2`` return signature: confirm 4-tuple is returned.
+       Historical type-annotation mismatch (promised 3 items, returned 4)
+       was resolved in W2-4B when the workflow-local builder annotation and
+       the factory wrapper annotation were both corrected.
 
 P1.5 — root entry / scheduler compatibility: static text check that
        ``scripts/schedule_workflow2.ps1`` references ``run_workflow_2.py``.
@@ -580,11 +582,17 @@ class TestCheckpointCallbackCount:
 class TestBuildWorkflow2ReturnSignature:
     """Characterize the actual return signature of ``build_workflow_2``.
 
-    The type annotation (factory.py:327) promises 3 items:
-        tuple[DualProjectOrchestrator, BaseOptimizer, Callable]
-    but the implementation returns 4:
-        (orchestrator, optimizer, evaluator, retry_handler)
-    The caller (``run_workflow_2.py:208``) depends on the 4-value form.
+    Historical W2-1 finding (R3): the shared factory annotation and docstring
+    promised 3 items (``DualProjectOrchestrator, BaseOptimizer, Callable``)
+    while the implementation returned 4 (adding ``retry_handler``).
+
+    This was resolved in W2-4B:
+    - ``workflows.rfgun_hom_antenna.workflow.build_workflow_2`` (current owner)
+      now has a correct 4-element annotation and docstring.
+    - ``cst_optimization.factory.build_workflow_2`` (compatibility wrapper)
+      also has a correct 4-element annotation.
+
+    The runtime 4-tuple return remains pinned by the tests below.
     """
 
     @staticmethod

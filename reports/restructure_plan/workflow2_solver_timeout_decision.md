@@ -63,13 +63,15 @@ making `workflow_2.solver.stagnation_timeout_s = 300.0`.
 
 ---
 
-## Decision Options
+## Historical W2-6B Decision Options
 
-### Option A: Preserve + Document (Recommended)
+### Option A: Preserve + Document (Historical W2-6B recommendation — superseded by W2-6F)
 
-Leave the current runtime behaviour unchanged.  Document that
-`workflow_2.optimization.solver.stagnation_timeout_s` is a non-functional
-intent that the current builder does not consume.
+Leave current runtime behaviour unchanged.  At W2-6B time,
+`workflow_2.optimization.solver.stagnation_timeout_s` was a non-functional
+intent that the builder did not consume.  W2-6F changed this:
+`optimization.solver` now overrides fallback `workflow_2.solver` for
+overlapping keys, and the effective timeout is 7200.0.
 
 **Pros**:
 - Zero behaviour change risk.
@@ -167,14 +169,11 @@ Rationale:
 3. Option B (config layout change) is premature without first deciding
    whether the timeout value itself should change.
 
-**W2-6B does not implement any option.** If a future phase chooses to
-adopt Option C, the required validation is:
-1. No-CST regression: W2-1 P0.2 tests updated to expect 7200s.
-2. New precedence test: `workflow_2.optimization.solver` wins over
-   `workflow_2.solver`.
-3. Live CST smoke: one evaluation with the new timeout to confirm
-   wakefield solver completes (requires explicit approval).
-4. Document the change in release notes and `config.yaml` header.
+**W2-6F adopted Option C.**  No-CST validation is covered by current tests
+(``test_actual_timeout_is_7200_via_real_config``,
+``test_optimization_solver_overrides_fallback``, etc.).  Live CST smoke
+remains recommended before production deployment but was not run in this
+phase.
 
 ---
 

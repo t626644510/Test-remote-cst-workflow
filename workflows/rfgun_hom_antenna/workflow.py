@@ -349,7 +349,11 @@ def build_workflow_2(
                      for i in range(len(obj_names))],
                     dtype=float,
                 )
-                checkpoint_callback(x_phys, raw_arr, penalties_arr, True, "")
+                checkpoint_callback(
+                    x_phys, raw_arr, penalties_arr,
+                    bool(orchestrator.last_solver_ok),
+                    "" if orchestrator.last_solver_ok else "Solver failure",
+                )
             return float(np.dot(penalties_arr, weights))
 
         optimizer = _build_sao(opt_cfg, param_set, objectives, seed)

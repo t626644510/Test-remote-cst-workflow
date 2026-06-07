@@ -846,6 +846,69 @@ class TestCheckpointCallbackCount:
             "Callback should receive NaN raw values unchanged"
         )
 
+    # ── W2-6E fix: SAO non-retry failure semantics ────────────────────
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_non_retry_failure_passes_solver_ok_false(MockCST):
+        """SAO non-retry path: when orchestrator reports failure, the
+        evaluator callback receives solver_ok=False and a non-empty error
+        string."""
+        callback = MagicMock()
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        fake = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        def _fail_execute(*a, **kw):
+            fake(*a, **kw)
+            orch.last_raw_values = np.array([np.nan])
+            orch.last_penalties = np.array([1.0])
+            orch.last_solver_ok = False
+            orch.last_completed_labels = set()
+            return orch.last_penalties
+
+        orch.execute = _fail_execute
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert callback.call_count == 1, (
+            f"Expected 1 callback call, got {callback.call_count}"
+        )
+        args = callback.call_args[0]
+        _, raw_arr, pen_arr, solver_ok, err_str = args
+        assert solver_ok is False, "solver_ok should be False on failure"
+        assert isinstance(err_str, str) and len(err_str) > 0, (
+            "error string should be non-empty on failure"
+        )
+        assert np.isnan(raw_arr[0]), "NaN raw should pass through"
+        assert pen_arr[0] == 1.0, "penalties should pass through"
+
+    @staticmethod
+    @patch("workflows.rfgun_hom_antenna.workflow.CSTConnection")
+    def test_non_retry_success_passes_solver_ok_true(MockCST):
+        """SAO non-retry path: on success, the evaluator callback receives
+        solver_ok=True and an empty error string."""
+        callback = MagicMock()
+        cfg = _minimal_build_config(enable_retry=False)
+        from cst_optimization.factory import build_workflow_2
+
+        orch, _, evaluator, _ = build_workflow_2(cfg, checkpoint_callback=callback)
+        orch.execute = TestCheckpointCallbackCount._make_fake_execute(orch)
+
+        x = np.array([0.5], dtype=float)
+        evaluator(x)
+
+        assert callback.call_count == 1, (
+            f"Expected 1 callback call, got {callback.call_count}"
+        )
+        args = callback.call_args[0]
+        _, _, _, solver_ok, err_str = args
+        assert solver_ok is True, "solver_ok should be True on success"
+        assert err_str == "", "error string should be empty on success"
+
 
 # ==============================================================================
 # P1.4 — build_workflow_2 return signature

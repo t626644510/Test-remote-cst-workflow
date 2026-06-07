@@ -24,6 +24,7 @@ known W2-1 solver-timeout discrepancy and migration constraints.
 workflows/rfgun_hom_antenna/
     __init__.py      — Package metadata, version, legacy entry pointer
     run.py           — Placeholder / compatibility planning module (no CST calls)
+    workflow.py      — Builder ownership seam (W2-4A), delegates to legacy factory
     config.yaml      — (future) workflow-specific config
     README.md        — This file
 ```

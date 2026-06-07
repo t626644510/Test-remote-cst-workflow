@@ -16,7 +16,6 @@ Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-4A — builder ownership seam (this file)                        ⬅️ current
     W2-4B — builder implementation migration (future)
     W2-5  — orchestrator ownership assessment
-    W2-5  — orchestrator ownership assessment
     W2-6  — fix documented semantic risks
     W2-7  — core candidate evaluation
     W2-8  — minimal live CST validation

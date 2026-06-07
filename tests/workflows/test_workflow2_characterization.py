@@ -555,11 +555,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
-    def test_non_retry_path_triggers_callback_two_times(
+    def test_non_retry_path_triggers_callback_one_time(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Non-retry path: the callback fires twice per evaluation — once
-        from ``orch.execute()`` and once from the factory evaluator wrapper."""
+        """Non-retry path: the callback fires exactly once per evaluation
+        (W2-6E: orchestrator callback removed)."""
         cfg = _minimal_build_config(enable_retry=False)
         callback = MagicMock()
 
@@ -586,7 +586,8 @@ class TestCheckpointCallbackCount:
     def test_retry_path_triggers_callback_one_time(
         mock_verify, mock_force_kill, mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """Retry path: the callback also fires twice — orchestrator + evaluator."""
+        """Retry path: the callback fires exactly once per evaluation
+        (W2-6E: orchestrator callback removed)."""
         cfg = _minimal_build_config(enable_retry=True)
         callback = MagicMock()
 
@@ -650,12 +651,11 @@ class TestCheckpointCallbackCount:
     @patch("cst_optimization.core.cleanup.kill_all_cst_processes")
     @patch("cst_optimization.core.cleanup.remove_result_folder")
     @patch("cst_optimization.core.cleanup.remove_lock_file")
-    def test_non_retry_path_root_like_callback_creates_two_records(
+    def test_non_retry_path_root_like_callback_creates_one_record(
         mock_rm_lock, mock_rm_result, mock_kill_cst, MockCST
     ):
-        """A root-like callback that appends to a list (mimicking
-        ``ckpt.add_pending``) receives TWO calls and thus appends TWO
-        records for one evaluation in the non-retry path."""
+        """A root-like callback that appends to a list receives ONE call and
+        thus appends ONE record for one evaluation (W2-6E)."""
         records: list[dict] = []
 
         def root_like_callback(x_phys, raw, penalties, solver_ok, error):

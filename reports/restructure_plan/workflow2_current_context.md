@@ -130,27 +130,33 @@ checkpoint record per evaluation, not two.
 ## Integration Status
 
 **Current Workflow2 integration branch**: `docs/workflow2-context-compaction`.
-W2-6E merge closeout: `7601971`.  Latest integration decision: `a61a51d`.
-
-All 13 phases W2-0 through W2-6E are accepted and merged into this branch.
+W2-6F merge: `a65593f`.  All 14 phases W2-0 through W2-6F accepted.
 No phase has been merged to `main` yet.
 
-### Main-merge prerequisites (not started)
-
-A future phase could prepare a PR into `main`.  Scope summary:
+### Main-merge readiness
 
 | Item | Status |
 |------|--------|
-| Phases included | W2-0 through W2-6E (13 phases) |
-| Files intentionally changed | `workflows/rfgun_hom_antenna/` (new package), `run_workflow_2.py` (import + docstring), `src/cst_optimization/core/orchestrator.py` (callback removed), `workflows/rfgun_sao/workflow.py` (WF2-only), `tests/workflows/` (new/updated tests), `reports/restructure_plan/` (docs) |
-| Files intentionally unchanged | `config/default.yaml`, `scripts/schedule_workflow2.ps1`, `src/cst_optimization/core/**` (except orchestrator.py callback), `src/cst_optimization/factory.py` (compat wrapper) |
-| Remaining risk | R2 solver timeout (7200s intent unconsumed, 300s fallback active) |
-| No-CST validation | 62 targeted tests across 4 suites |
-| Live CST validation | Not run — recommended after main merge before production deployment |
-| Config/runtime behaviour changed? | No — root entry unchanged, scheduler unchanged, config loading unchanged |
+| Phases included | W2-0 through W2-6F (14 phases) |
+| Files changed (22 total vs main) | `workflows/rfgun_hom_antenna/` (new package), `run_workflow_2.py` (import + docstring fix), `src/cst_optimization/core/orchestrator.py` (callback removed), `src/cst_optimization/factory.py` (compat wrapper — no semantic change), `tests/workflows/` (new/updated no-CST tests), `reports/restructure_plan/` (docs) |
+| Files intentionally unchanged | `config/default.yaml`, `scripts/schedule_workflow2.ps1`, `src/cst_optimization/core/**` (except orchestrator.py callback removal) |
+| Public entry | `run_workflow_2.py` — unchanged, still public entry |
+| Scheduler | `scripts/schedule_workflow2.ps1` — unchanged, still binds root entry |
+| Config source | `config/default.yaml` — unchanged, remains runtime source of truth |
+| Local config | `workflows/rfgun_hom_antenna/config.yaml` — snapshot only, not runtime source |
+| Builder owner | `workflows/rfgun_hom_antenna/workflow.py::build_workflow_2` |
+| Factory compat wrapper | `src/cst_optimization/factory.py::build_workflow_2` — unchanged semantics |
+| Orchestrator | `src/cst_optimization/core/orchestrator.py` — callback removed W2-6E; **not moved**, not promoted to shared core |
+| Checkpoint callback | Fires exactly once per evaluation (W2-6E) |
+| Solver timeout (R2) | Effective 7200.0 from `optimization.solver` (W2-6F — resolved) |
+| No-CST validation | 64 targeted tests across 4 suites (34 char + 15 sched + 6 config + 9 skeleton) |
+| Live CST validation | Not run — recommended before production deployment |
+| Config/runtime behaviour | Root entry unchanged, scheduler unchanged, config loading unchanged |
+| Risk before main PR | Low — all semantic risks (R1 docstring, R4 callback, R2 timeout) resolved; no-CST tests pass |
 
-**Decision**: continue on `docs/workflow2-context-compaction` as the integration
-head.  Do not merge to main without explicit approval.
+**Decision**: integration branch is ready for main-integration review.  Do not
+merge to main without explicit approval.  After approval, the merge should
+be a single PR containing all 22 changed files with the summary above.
 
 ## Recommended Next Phase
 

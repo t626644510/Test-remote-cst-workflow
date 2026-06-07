@@ -112,6 +112,35 @@ This rule exists precisely because append-only "current context" documents
 grow linearly with each phase and defeat their own purpose: they become too
 large to be useful for bounded-agent handoff.
 
+### Main PR Review Priority
+
+When reviewing a main-integration or integration-readiness PR, reviewers
+must prioritise:
+
+1. **Diff safety**: whether the changed files and their contents are safe,
+   correctly scoped, and free of unintended side effects.
+2. **Runtime semantics**: whether runtime behaviour matches the accepted
+   phase contracts (e.g. callback ownership, solver timeout, root entry
+   contracts).
+3. **Live CST decision**: whether live CST smoke is required or explicitly
+   deferred, and whether that decision is documented.
+4. **Boundary integrity**: whether root entry, scheduler, config,
+   shared-core, and workflow-specific boundaries are preserved as designed.
+
+The following should **not** by themselves block a phase or delay
+acceptance:
+
+- Mechanical documentation counts (changed-file counts, line counts,
+  wording drift in generated summaries) unless they materially misstate
+  architecture, runtime behaviour, validation results, or risk.
+- Cosmetic wording diffs in non-authoritative documents (context docs,
+  decision records without runtime assertions).
+- Minor summary drift between `git diff --name-only` and hand-written
+  PR descriptions — treat `git diff` as authoritative.
+
+Only block on documentation issues when they would mislead a future
+reader about architecture, runtime safety, validation scope, or risk.
+
 ## CST API Rule
 
 Any CST Studio Suite code must be based on provided official documentation or

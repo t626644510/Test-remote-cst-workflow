@@ -35,16 +35,20 @@ See `reports/restructure_plan/workflow2_current_context.md` for the full
 plan and current status.
 
 Phases:
-- W2-0 — Context document
-- W2-1 — No-CST characterization tests
+- W2-0 — Context document                                                ✅ done
+- W2-1 — No-CST characterization tests                                  ✅ done
 - W2-2 — Package skeleton                                                ✅ done
 - W2-3 — Config isolation                                                ✅ done
-- W2-4A — Builder ownership seam                                               ✅ done
-- **W2-4B — Builder implementation migration** ← current
-- W2-5 — Orchestrator ownership assessment
-- W2-6 — Fix documented semantic risks
-- W2-7 — Core candidate evaluation
-- W2-8 — Minimal live CST validation
+- W2-4A — Builder ownership seam                                         ✅ done
+- W2-4B — Builder implementation migration                               ✅ done
+- W2-5 — Orchestrator ownership assessment                               ✅ done
+- W2-6 — Semantic risk cleanup plan                                      ✅ done
+- W2-6A — Root docstring fix (R1)                                        ✅ done
+- W2-6D — Scheduler/root shim compatibility                              ✅ done
+- W2-6B — Solver timeout decision (R2)                                   ✅ done
+- W2-6C — Checkpoint callback decision (R4)                              ✅ done
+- W2-6E — Evaluator-only callback ownership (R4 fixed)                     ✅ done
+- W2-6F — Solver timeout runtime fix (R2 fixed)                           ✅ done
 
 ## Constraints
 

@@ -13,14 +13,13 @@
 # ``config/default.yaml``.  It exactly matches the ``workflow_2`` section
 # at the time of extraction.  No top-level fallback keys have been merged in.
 #
-# Known W2-1 finding:
-#   ``optimization.solver.stagnation_timeout_s: 7200.0`` represents the
-#   configuration intent for the wakefield solver timeout.  However, the
-#   current builder (``build_workflow_2``) reads solver config from
-#   ``workflow_2.solver`` (which arrives via root-runner fallback merge as
-#   ``300.0``), NOT from ``workflow_2.optimization.solver``.  This snapshot
-#   preserves the intent value; the discrepancy must be resolved at
-#   migration time.
+# W2-1 finding (resolved by W2-6F):
+#   ``optimization.solver.stagnation_timeout_s: 7200.0`` is now consumed by
+#   ``build_workflow_2``.  The Workflow2 builder merges ``optimization.solver``
+#   on top of the fallback ``workflow_2.solver``, so overlapping keys from
+#   ``optimization.solver`` take precedence.  See
+#   ``reports/restructure_plan/workflow2_solver_timeout_decision.md`` for
+#   the full decision history (W2-6B analysis, W2-6F supersession).
 
 workflow_2:
   enabled: true

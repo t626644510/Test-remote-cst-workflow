@@ -13,12 +13,16 @@ Migration plan (see ``reports/restructure_plan/workflow2_current_context.md``):
     W2-1  — no-CST characterization tests                            ✅ done
     W2-2  — package skeleton (this file)                             ✅ done
     W2-3  — workflow2 config isolation                               ✅ done
-    W2-4A — builder ownership seam                                    ✅ done
-    W2-4B — builder implementation migration (this file)               ⬅️ current
-    W2-5  — orchestrator ownership assessment
-    W2-6  — fix documented semantic risks
-    W2-7  — core candidate evaluation
-    W2-8  — minimal live CST validation
+    W2-4A — builder ownership seam                                   ✅ done
+    W2-4B — builder implementation migration                         ✅ done
+    W2-5  — orchestrator ownership assessment                        ✅ done
+    W2-6  — semantic risk cleanup plan                               ✅ done
+    W2-6A — root docstring fix (R1)                                  ✅ done
+    W2-6D — scheduler/root shim compatibility                        ✅ done
+    W2-6B — solver timeout decision (R2)                             ✅ done
+    W2-6C — checkpoint callback decision (R4)                        ✅ done
+    W2-6E — evaluator-only callback ownership (R4 fixed)             ✅ done
+    W2-6F — solver timeout runtime fix (R2 fixed)                    ✅ done
 """
 
 __version__ = "0.1.0"

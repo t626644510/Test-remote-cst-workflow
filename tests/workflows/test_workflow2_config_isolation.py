@@ -91,15 +91,11 @@ def test_local_config_matches_global_workflow2_subtree():
 
 def test_local_config_preserves_solver_timeout_intent():
     """The ``optimization.solver.stagnation_timeout_s`` value (7200.0) is
-    preserved in the local config as the configuration intent.
+    preserved in the local config as the effective Workflow2 solver timeout.
 
-    NOTE: This is the intent value stored in
-    ``workflow_2.optimization.solver.stagnation_timeout_s``.  As confirmed
-    by W2-1 characterization tests, the current builder reads solver config
-    from ``workflow_2.solver`` (post-merge fallback), NOT from
-    ``workflow_2.optimization.solver``.  The runtime discrepancy between
-    intent (7200.0) and actual (300.0) must be resolved at migration time,
-    not during config staging.
+    W2-6F resolves the historical R2 discrepancy: ``optimization.solver``
+    now overrides fallback ``workflow_2.solver`` for overlapping keys.
+    See ``workflow2_solver_timeout_decision.md`` supersession note.
     """
     with open(LOCAL_CONFIG, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)

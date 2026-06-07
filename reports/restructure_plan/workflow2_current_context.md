@@ -678,7 +678,8 @@ python -m pytest tests/workflows/test_workflow2_package_skeleton.py -q
 - **W2-4B: accepted** (commit `7e1cf1a`).
 - **W2-5: accepted** (commit `d168f42`).
 - **W2-6: accepted** (commit `2636321`).
-- **W2-6A: pending web review** — root docstring cleanup.
+- **W2-6A: accepted** (commit `01c599e`).
+- **W2-6D: pending web review** — scheduler/root shim compatibility characterised.
 - 未运行 live workflow。
 - 未运行 CST。
 - **builder implementation migrated** — factory modified（兼容性 wrapper），orchestrator/core/scheduler/config 未修改。
@@ -809,6 +810,17 @@ git diff --check
 - ✅ 修复 `run_workflow_2.py` 顶部 docstring（R1）："两个独立 CST 窗口"→"单个 CST DE 连接，顺序执行"
 - ✅ 运行逻辑未修改——仅 docstring 文本替换
 - ✅ 无 CST / 无 live workflow / 无全量 pytest
+- ✅ accepted (commit `01c599e`)
+
+### W2-6D 已完成
+
+- ✅ 从 `docs/workflow2-root-docstring-cleanup` 创建 `test/workflow2-scheduler-shim-compat` 分支
+- ✅ 添加 `tests/workflows/test_workflow2_scheduler_shim.py`（14 tests: scheduler 静态检查、CLI flags、root import 验证）
+- ✅ scheduler 未修改，root entry 未修改，config 未修改
+- ✅ 确认 scheduler 仍绑定 `run_workflow_2.py`
+- ✅ 确认 root entry 仍从 workflow-local 包导入 builder
+- ✅ 确认 CLI flags --auto-resume / --heartbeat / --warmup-from-db 均可用
+- ✅ 14/14 scheduler shim tests + 21/21 characterisation tests pass
 - ⏳ 等待 web reviewer 审计通过
 
 ### 本轮（W2-6A：清理根 docstring）
@@ -841,3 +853,44 @@ git diff --check
 - R1 修复完成：根 docstring 表述与当前单连接行为一致
 - 运行逻辑未修改——仅 docstring 文本替换
 - `workflows/rfgun_hom_antenna/workflow.py`、`src/cst_optimization/factory.py`、`src/cst_optimization/core/**`、`config/default.yaml`、scheduler、tests 均未修改
+
+### 本轮（W2-6D：scheduler/root shim 兼容性测试）
+
+**执行时间**：2026-06-07
+
+**分支**：`test/workflow2-scheduler-shim-compat`（基于 `docs/workflow2-root-docstring-cleanup`）
+
+**读取的文件**：
+1. `reports/restructure_plan/agent_operating_charter.md`
+2. `reports/restructure_plan/workflow2_current_context.md`
+3. `reports/restructure_plan/workflow2_semantic_risk_cleanup_plan.md`
+4. `run_workflow_2.py`
+5. `scripts/schedule_workflow2.ps1`
+6. `tests/workflows/test_workflow2_characterization.py`
+
+**搜索命令**：
+```powershell
+grep -rn "schedule_workflow2\|run_workflow_2.py\|--auto-resume\|--heartbeat" scripts/ tests/ run_workflow_2.py
+```
+
+**新增文件**：
+- `tests/workflows/test_workflow2_scheduler_shim.py`
+
+**更新文件**：
+- `reports/restructure_plan/workflow2_current_context.md`
+
+**运行命令**：
+```powershell
+python -m pytest tests/workflows/test_workflow2_scheduler_shim.py -v
+python -m pytest tests/workflows/test_workflow2_characterization.py -q
+```
+
+**测试结果**：
+- Scheduler shim tests: 14 / 14 passed
+- W2-1 characterisation tests: 21 / 21 passed (unchanged)
+
+**关键结论**：
+- scheduler 仍绑定 `run_workflow_2.py`，未迁移到 workflow package
+- root entry 仍从 `workflows.rfgun_hom_antenna.workflow` 导入 builder
+- CLI flags `--auto-resume` / `--heartbeat` / `--warmup-from-db` 均可用
+- 无 scheduler/root/config/runtime 文件被修改

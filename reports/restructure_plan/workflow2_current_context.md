@@ -121,7 +121,7 @@ checkpoint record per evaluation, not two.
 | Document | Content |
 |----------|---------|
 | `workflow2_semantic_risk_cleanup_plan.md` | W2-6 plan — R1/R2/R4/R6 risk analysis and proposed future phases |
-| `workflow2_solver_timeout_decision.md` | R2 analysis, 3 options, Option A recommended |
+| `workflow2_solver_timeout_decision.md` | R2 analysis, 3 options plus W2-6F supersession/fix decision |
 | `workflow2_checkpoint_callback_ownership_decision.md` | R4 analysis, 4 options, Option C recommended |
 | `workflow2_orchestrator_ownership_assessment.md` | W2-5 — DualProjectOrchestrator ownership analysis |
 
@@ -156,14 +156,13 @@ No phase has been merged to `main` yet.
 
 **Decision**: integration branch is ready for main-integration review.  Do not
 merge to main without explicit approval.  After approval, the merge should
-be a single PR containing all 22 changed files with the summary above.
+be a single PR containing all 21 changed files with the summary above.
 
 ## Recommended Next Phase
 
-Pending: R2 (solver timeout) characterisation is accepted but the 7200s
-intent remains unconsumed.  A future phase could implement Option B or C
-from `workflow2_solver_timeout_decision.md`, but no immediate phase is
-queued.
+Recommended next phase: main-integration PR preparation/review, after explicit
+approval.  Live CST smoke remains recommended before production deployment,
+but must not be run without explicit approval.
 
 ---
 

@@ -564,12 +564,10 @@ class DualProjectOrchestrator:
                         },
                     )
 
-            if self._checkpoint_callback is not None:
-                error_str = "; ".join(solver_errors) if solver_errors else ""
-                self._checkpoint_callback(
-                    params, raw_values, penalties, all_solvers_ok, error_str,
-                )
-
+            # NOTE: checkpoint_callback ownership is in the Workflow2
+            # evaluator wrapper (workflow.py).  The orchestrator does NOT
+            # fire the callback — it only exposes last_* state.
+            # See W2-6E: evaluator-only callback ownership.
             self.last_raw_values = raw_values.copy()
             self.last_penalties = penalties.copy()
             self.last_solver_ok = all_solvers_ok

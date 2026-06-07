@@ -94,6 +94,24 @@ Reports are useful for major milestones, architecture decisions, and live CST
 evidence. They should not be produced for every small patch. Prefer concise
 summaries for patch-level work.
 
+### Context-Compaction Rule
+
+After each major workflow phase or accepted phase cluster, workflow-specific
+"current context" documents must be compacted.  The compacted version must:
+
+- Be bounded (target ≈150–250 lines) and current-state oriented.
+- Be useful as a local-agent handoff without requiring full historical reading.
+- Point to dedicated decision documents, reports, git history, or
+  phase-specific files for detailed evidence — do not copy their contents.
+- Remove stale append-only phase logs, old read lists, old execution logs,
+  and duplicated phase details.
+- Keep phase / component / risk status current enough that a local agent can
+  start a new phase from the compacted context alone.
+
+This rule exists precisely because append-only "current context" documents
+grow linearly with each phase and defeat their own purpose: they become too
+large to be useful for bounded-agent handoff.
+
 ## CST API Rule
 
 Any CST Studio Suite code must be based on provided official documentation or

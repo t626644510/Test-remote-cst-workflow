@@ -12,12 +12,12 @@ provides web-agent-ready handoffs for the next bounded phase.
 ## Recovery Index
 
 - **Baseline merge:** PR #1 merged W2-0 through W2-6F into `main`.
-- **Active direction:** W2-7 runner migration and W2-8 config ownership are complete; W2-9 live smoke was run; W2-10 orchestrator boundary is next.
+- **Active direction:** W2-7 through W2-10 are complete. See `workflow2_w2_10_orchestrator_boundary_assessment.md` for the W2-10A decision.
 - **Public command must remain:** `python run_workflow_2.py`.
 - **Scheduler must continue targeting** root `run_workflow_2.py` until a dedicated scheduler migration is accepted.
 - **Runtime config source (W2-8):** `workflows/rfgun_hom_antenna/config.yaml` — contains `workflow_2` subtree plus top-level `cst`, `solver`, `logging` fallback sections.
 - **`config/default.yaml["workflow_2"]`** is legacy/compatibility reference, not runtime source.
-- **`DualProjectOrchestrator`** remains in `src/cst_optimization/core/orchestrator.py` until W2-10.
+- **`DualProjectOrchestrator`** remains in `src/cst_optimization/core/orchestrator.py` per W2-10A (decision: keep for now, no move).
 - **Do not treat live CST smoke and no-CST validation as interchangeable.**
 
 ---
@@ -157,57 +157,30 @@ python -m pytest tests/workflows/ -q
 
 ## Upcoming Phases
 
-The following phase remains.
-
-**W2-10 (orchestrator boundary)** last, after runner, config, and live smoke
-are settled.
-
----
-
-### W2-10 — Orchestrator Boundary Decision
-
-**Decision to make:**
-
-- Keep `DualProjectOrchestrator` in `src/cst_optimization/core/`, migrate it
-  into `workflows/rfgun_hom_antenna/`, or extract a smaller generic interface.
-
-**Default recommendation:**
-
-- Do not move it until W2-7 and W2-9 provide enough evidence. Treat the class
-  as high-blast-radius because it currently mixes generic utilities with
-  Workflow2-specific phase labels and CST recovery details.
-
-**Required evidence:**
-
-- Current import consumers and construction sites.
-- List of truly generic responsibilities vs Workflow2-specific logic.
-- Live evidence from W2-9 before making risky boundary changes.
-- Targeted tests if any boundary changes touch shared core.
-
-**Boundaries:**
-
-- Do not promote shared core without cross-workflow evidence.
-- Do not combine with config or scheduler migration.
-- Do not invent CST APIs.
-- Do not move high-blast-radius code without targeted and broader validation.
-
-**Validation:**
-
-- If decision-only: no tests required, but cite code evidence.
-- If code moves: run Workflow2 tests plus affected shared-core tests.
-
-**Live CST:** Not required for decision-only. Required after any runtime-affecting
-orchestrator move.
+**All W2-0 through W2-10 phases are complete.** No remaining recovery phases.
+Future work (WF4 multi-project extraction, legacy `config/default.yaml` cleanup)
+is unplanned and not part of the W2 recovery plan.
 
 ---
 
-## Web Agent Output Contract
+### W2-10A — Orchestrator Boundary Decision ✅ done
 
-For each upcoming phase, return a local-agent prompt with:
+**Decision:** Keep `DualProjectOrchestrator` in `src/cst_optimization/core/`.
 
-- one-sentence objective;
-- at most five current facts;
-- bounded read-first files;
-- allowed and forbidden edits;
-- targeted validation commands;
-- residual risks and live/no-CST status.
+**Rationale:** Zero cross-workflow reuse evidence (WF1 and WF3 use different
+orchestration models).  Moving to WF2 package would create factory import
+coupling and circular-dependency risk.  Splitting would be premature abstraction
+without a second consumer.  See `workflow2_w2_10_orchestrator_boundary_assessment.md`.
+
+**W2-10B:** No-op / decision-only. Future movement should wait for a
+proven second consumer (e.g. WF4), then extract `ProjectSpec` first, then a
+generic `MultiProjectRunner` ABC, then migrate WF2-specific logic.
+
+---
+
+## Web Agent Output Contract (reference — no upcoming phases)
+
+All W2 recovery phases are complete. This contract is preserved for future
+workflow planning outside the W2 scope. Each new phase prompt should include:
+one-sentence objective, ≤5 facts, bounded read set, edit scope, targeted
+validation, residual risks, and live/no-CST status.

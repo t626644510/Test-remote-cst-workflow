@@ -11,22 +11,22 @@ local-agent prompt contract. This file remains a compact style guide.
 
 ## Rationale
 
-Each prompt consumes context window and API tokens.  Long prompts that repeat
+Each prompt consumes context window and API tokens. Long prompts that repeat
 historical context, list every file in the repo, or describe well-known
-patterns waste capacity that could be spent on actual reasoning.  The
-protocol below reduces prompt bloat without sacrificing clarity.
+patterns waste capacity that could be spent on actual reasoning. The protocol
+below reduces prompt bloat without sacrificing clarity.
 
 ## Principles
 
 ### 1. Delta-only by default
 
-State only what **changed** since the last phase or the last prompt. Assume
-the agent has access to:
+State only what **changed** since the last phase or the last prompt. Assume the
+agent has access to:
 
-- `reports/restructure_plan/agent_operating_charter.md` — current governance.
-- `reports/restructure_plan/agent_standing_rules.md` — standing boundaries.
-- `reports/restructure_plan/lean_prompt_protocol.md` — this protocol.
-- `CLAUDE.md` — project-level instructions.
+- `reports/restructure_plan/agent_operating_charter.md` -- current governance.
+- `reports/restructure_plan/agent_standing_rules.md` -- standing boundaries.
+- `reports/restructure_plan/lean_prompt_protocol.md` -- this protocol.
+- `CLAUDE.md` -- project-level instructions.
 
 Do **not** repeat the full list of forbidden artifacts, protected areas, or
 accepted-phase history unless it has changed.
@@ -34,12 +34,12 @@ accepted-phase history unless it has changed.
 `current_agent_state.md` may be stale. Use it only as a hint, never as an
 authoritative planning source.
 
-### 2. Reference, don't reproduce
+### 2. Reference, do not reproduce
 
 Instead of:
 
 > "Remember the TSE4 rules: max_mean checks, min_mean checks, non-finite
-> handling, expanded_blocked logic…"
+> handling, expanded_blocked logic..."
 
 Write:
 
@@ -49,7 +49,7 @@ Write:
 
 - **Do not** ask the local agent to inspect the whole repository.
 - **Do not** enumerate every file that might be relevant.
-- Use an explicit **"Read only these files first"** section listing the 2–5
+- Use an explicit **"Read only these files first"** section listing the 2-5
   files the agent should load to begin.
 
 ### 4. Minimal report format for patches
@@ -87,7 +87,7 @@ branch when possible, reducing repeated diff expansion across merged history.
 
 ## Prompt template
 
-```
+```text
 Goal:
 <one sentence>
 

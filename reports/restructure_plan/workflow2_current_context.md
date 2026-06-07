@@ -38,8 +38,9 @@ Module is core candidate only after reuse is demonstrated.
 | W2-6A | Root docstring fix (R1 resolved) | `01c599e` |
 | W2-6D | Scheduler/root shim compatibility tests (15 tests) | `5f7152a` |
 | W2-6B | Solver timeout decision (R2 characterised) | `e5f8370` |
-| **W2-6C** | Checkpoint callback decision (R4 characterised) | `47469c2` |
-| **W2-6E** | Evaluator-only callback ownership (R4 resolved) | **`126ba00`** |
+| W2-6C | Checkpoint callback decision (R4 characterised) | `47469c2` |
+| W2-6E | Evaluator-only callback ownership (R4 resolved) | `126ba00` |
+| **W2-6F** | Solver timeout fix (R2 resolved) | **current** |
 
 ---
 
@@ -72,15 +73,18 @@ sequential phase execution.  No longer claims "two independent CST windows".
 - Future option: make root shim delegate to workflow package while keeping
   the file path (scheduler compatibility preserved).
 
-### R2 — Solver Timeout (W2-6B, characterised, not resolved)
+### R2 — Solver Timeout (W2-6B/W2-6F, resolved)
 
-| Value | Source | Consumed? |
-|-------|--------|-----------|
-| 300.0 | Top-level `solver` fallback (merged by root runner) | ✅ Yes — `SolverRunner` receives 300.0 |
-| 7200.0 | `workflow_2.optimization.solver.stagnation_timeout_s` | ❌ No — builder reads `config["solver"]`, not `optimization.solver` |
+- **W2-6B** (characterisation): identified mismatch — `optimization.solver`
+  value 7200.0 was ignored; `SolverRunner` received 300.0 from fallback.
+  See `workflow2_solver_timeout_decision.md` for analysis.
+- **W2-6F** (fix): `optimization.solver` now overrides fallback solver for
+  overlapping keys.  Effective Workflow2 timeout is **7200.0** from
+  `workflow_2.optimization.solver.stagnation_timeout_s`.
+- Fields not set in `optimization.solver` (e.g. `settle_s = 2.0`) still
+  fall back to `workflow_2.solver`.
 
-**Decision**: Option A — preserve current 300s behaviour.  Document mismatch
-but do not change runtime.  See `workflow2_solver_timeout_decision.md`.
+**Summary**: R2 resolved.  The intent 7200.0 is now consumed.
 
 ### R4 — Checkpoint Callback (W2-6C/W2-6E, resolved)
 
@@ -109,7 +113,6 @@ checkpoint record per evaluation, not two.
   specifically permits it
 - ❌ Do not move `DualProjectOrchestrator`
 - ❌ Do not promote shared core without cross-workflow evidence
-- ❌ Do not fix R2 behaviour without explicit phase approval
 
 ---
 

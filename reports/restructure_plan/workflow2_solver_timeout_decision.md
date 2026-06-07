@@ -148,6 +148,22 @@ adopt Option C, the required validation is:
 
 ---
 
+## Supersession Note — W2-6F
+
+**W2-6B Option A (Preserve + Document) was superseded by W2-6F.**
+The unacceptable bug that `workflow_2.optimization.solver.stagnation_timeout_s`
+= 7200.0 was silently ignored has been fixed.
+
+**Implemented decision (W2-6F)**: Workflow2-local `optimization.solver`
+overrides the root/top-level fallback solver for overlapping keys.
+Fields not set in `optimization.solver` (e.g. `settle_s`) still fall back
+to `workflow_2.solver`.
+
+**Validation**: see W2-6B Options C validation list above.  No-CST tests
+updated; live CST smoke recommended but not run.
+
+---
+
 ## Tests Added in W2-6B
 
 | Test | Purpose | Type |

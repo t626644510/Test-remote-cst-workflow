@@ -722,7 +722,7 @@ git diff --check
 - 约 80 % orchestrator 代码为 WF2-specific
 - 建议：保持 core 原位，不迁移
 
-### 本轮（W2-6：semantic risk cleanup planning）
+### 本轮（W2-5：orchestrator ownership assessment）
 
 **执行时间**：2026-06-07
 
@@ -758,11 +758,10 @@ git diff --check
 - `reports/restructure_plan/workflow2_current_context.md`
 
 **关键结论**：
-- `DualProjectOrchestrator` 仅被 WF2 构建和使用（`workflows/rfgun_hom_antenna/workflow.py:206`）
-- WF1 不使用 `DualProjectOrchestrator`（返回 `_Workflow1Container`）
-- WF3 不使用 `DualProjectOrchestrator`（返回 `RecoveryWorkflowEvaluator`）
-- 约 80 % 的 orchestrator 代码是 WF2-specific（阶段标签 F2F/F2W/F2WO、条件项目门控、adaptive gate、pre-filter、per-phase .npz 记录）
-- **建议**：保持 core 原位。如需迁移，应先在 core 中提取通用子组件，再将 `DualProjectOrchestrator` + `ProjectSpec` 整体移入 workflow2 package。
+- `DualProjectOrchestrator` 仅被 WF2 构建和使用
+- WF1/WF3 无依赖
+- 约 80 % orchestrator 代码为 WF2-specific
+- **建议**：保持 core 原位
 - 完整评估报告：`reports/restructure_plan/workflow2_orchestrator_ownership_assessment.md`
 
 ### 本轮（W2-6：semantic risk cleanup planning）
@@ -833,7 +832,7 @@ git diff --check
 - ✅ 建议：保持 core 原位，不迁移
 - ✅ 80 % orchestrator 代码为 WF2-specific
 - ✅ `src/cst_optimization/core/orchestrator.py` 未修改
-- ⏳ 等待 web reviewer 审计通过
+- ✅ accepted (commit `d168f42`)
 - ✅ accepted (commit `d168f42`)
 
 ### W2-6 已完成

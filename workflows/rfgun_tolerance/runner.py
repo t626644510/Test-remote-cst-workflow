@@ -25,12 +25,12 @@ from cst_optimization.core.connection import CSTConnection
 from cst_optimization.core.project import CSTProject
 from cst_optimization.core.results import ResultReader
 from cst_optimization.core.solver import SolverRunner
-from cst_optimization.evaluation.schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     EvaluationDatabaseRecord,
     current_schema_version,
 )
-from cst_optimization.evaluation.storage import SQLiteEvaluationDatabase, EvaluationDatabaseConfig
+from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase, EvaluationDatabaseConfig
 from cst_optimization.physics.formulas import (
     half_power_bandwidth, loaded_q_from_bandwidth,
     coupling_beta as _coupling_beta_formula, intrinsic_q0,

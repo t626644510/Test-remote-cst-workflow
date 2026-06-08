@@ -15,12 +15,12 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseStatus,
     ParameterIdentity,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_warm_start import (
+from cst_optimization.evaluation.evaluation_database_warm_start import (
     DbWarmStartConfig,
     DbWarmStartPrior,
     DbWarmStartLoadReport,
@@ -526,17 +526,20 @@ class TestAllowRawRecompute:
 
 class TestSafety:
     def test_no_cst_import(self) -> None:
-        import workflows.rfgun_sao.evaluation_database_warm_start as mod
+        import cst_optimization.evaluation.evaluation_database_warm_start as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
     def test_no_jsonl_reference(self) -> None:
-        import workflows.rfgun_sao.evaluation_database_warm_start as mod
+        import cst_optimization.evaluation.evaluation_database_warm_start as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert ".jsonl" not in text
+
+
+

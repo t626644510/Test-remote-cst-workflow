@@ -1,4 +1,4 @@
-"""Workflow 1 canonical builder -- the authoritative ``build_workflow_1`` for the
+﻿"""Workflow 1 canonical builder -- the authoritative ``build_workflow_1`` for the
 active SAO workflow package.
 
 The root ``run_workflow_1.py`` shim delegates to
@@ -50,10 +50,10 @@ from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
 )
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime_cst import (
+from cst_optimization.evaluation.retry_runtime_cst import (
     build_record_from_evaluation_result,
 )
 
@@ -414,7 +414,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Retry runtime config (RW3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
+    from cst_optimization.evaluation.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
     _retry_runtime_cfg, _rt_diag = _check_mutex(config, logger=_logger)
     if _rt_diag:
         _logger.warning("Retry runtime disabled: %s", _rt_diag)
@@ -422,13 +422,13 @@ def build_workflow_1(
     _retry_runtime_recovery: Any = None
     _retry_runtime_registry: Any = None
     if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
-        from workflows.rfgun_sao.retry_runtime_cst import (
+        from cst_optimization.evaluation.retry_runtime_cst import (
             CstConnectionRegistry,
             make_cst_recovery_callback,
             make_cst_retry_evaluate_once,
         )
-        from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.retry_runtime import run_retry_loop_no_cst
+        from cst_optimization.evaluation.evaluation_database_schema import (
             EvaluationDatabaseStatus as _EDS,
             current_schema_version,
         )
@@ -463,7 +463,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Evaluation database config (DDB3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.evaluation_database_storage import (
+    from cst_optimization.evaluation.evaluation_database_storage import (
         EvaluationDatabaseConfig as _EDBConfig,
         SQLiteEvaluationDatabase as _SQDB,
         resolve_evaluation_database_config as _resolve_db_cfg,
@@ -495,7 +495,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Success reuse config (SR3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.evaluation_success_reuse import (
+    from cst_optimization.evaluation.evaluation_success_reuse import (
         SuccessReuseConfig as _SRConfig,
         resolve_success_reuse_config as _resolve_sr_cfg,
         try_success_reuse as _try_success_reuse,
@@ -518,13 +518,13 @@ def build_workflow_1(
         )
 
     # Resolve DB warm-start config (WS3) -- stored on workflow for run.py
-    from workflows.rfgun_sao.evaluation_database_warm_start import (
+    from cst_optimization.evaluation.evaluation_database_warm_start import (
         resolve_db_warm_start_config as _resolve_ws_cfg,
     )
     _ws_cfg = _resolve_ws_cfg(config, db_enabled=_evaluation_db is not None)
 
     # Resolve failure skip config (FS5.1) -- opt-in exact-key enforce only
-    from workflows.rfgun_sao.failure_skip_candidates import (
+    from cst_optimization.evaluation.failure_skip_candidates import (
         resolve_failure_skip_config as _resolve_fs_cfg,
     )
     _failure_skip_cfg = _resolve_fs_cfg(config)
@@ -558,7 +558,7 @@ def build_workflow_1(
             pid = ParameterIdentity(
                 param_names=list(param_names), values=list(x_phys),
             )
-            from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
+            from cst_optimization.evaluation.retry_runtime_cst import build_record_from_evaluation_result
             rec = build_record_from_evaluation_result(
                 pid, reuse_result,
                 source="db_success_reuse",
@@ -580,7 +580,7 @@ def build_workflow_1(
 
         # FS5.1: failure skip check before any retry/evaluator call
         if _failure_skip_db_path is not None and _failure_skip_cfg.enabled:
-            from workflows.rfgun_sao.failure_skip_enforce import run_failure_skip_evaluator
+            from cst_optimization.evaluation.failure_skip_enforce import run_failure_skip_evaluator
             _fs_pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
             _fs_key = _fs_pid.parameter_key()
             _fs_result = run_failure_skip_evaluator(
@@ -682,7 +682,7 @@ def build_workflow_1(
                 )
 
             if status == _ES.SUCCESS:
-                # No retry needed �?use directly
+                # No retry needed 锟?use directly
                 penalties_arr = np.array(
                     [pen.get(n, 1.0) for n in metric_names], dtype=float,
                 )
@@ -769,7 +769,7 @@ def build_workflow_1(
                 recovery_callback=_retry_runtime_recovery,
             )
 
-            # Use final result — extract penalty or fall back to all-ones
+            # Use final result 鈥?extract penalty or fall back to all-ones
             fr = retry_result.final_record
             pen_arr = _extract_retry_penalty_values(fr, metric_names) if retry_result.succeeded else None
             if pen_arr is not None:
@@ -852,7 +852,7 @@ def build_workflow_1(
 
 
 # ---------------------------------------------------------------------------
-# Local helpers (WF1-specific — different signatures from factory.py)
+# Local helpers (WF1-specific 鈥?different signatures from factory.py)
 # ---------------------------------------------------------------------------
 
 
@@ -920,3 +920,4 @@ def _resolve_two_pass_settings(config: dict) -> dict:
         "s11_depth_gate": _build_s11_depth_gate(eval_cfg),
         "multi_dip_detector": _build_multi_dip_detector(eval_cfg),
     }
+

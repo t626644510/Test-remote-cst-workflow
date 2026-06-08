@@ -17,7 +17,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.extreme_recovery_safety import (
+from cst_optimization.evaluation.extreme_recovery_safety import (
     KNOWN_DESIGN_ENVIRONMENT,
     KNOWN_PID_UNEXPECTED_PROCESS,
     LICENSE_DAEMON_PROTECTED,
@@ -672,7 +672,7 @@ class TestSafetySummary:
 
 
 # ===================================================================
-# Global safety — no dangerous imports or calls
+# Global safety 鈥?no dangerous imports or calls
 # ===================================================================
 
 
@@ -680,7 +680,7 @@ class TestGlobalSafety:
     """Verify the helper module never imports or calls dangerous facilities."""
 
     def test_no_subprocess_import(self):
-        import workflows.rfgun_sao.extreme_recovery_safety as mod
+        import cst_optimization.evaluation.extreme_recovery_safety as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -688,14 +688,14 @@ class TestGlobalSafety:
         assert "from subprocess" not in text
 
     def test_no_os_system(self):
-        import workflows.rfgun_sao.extreme_recovery_safety as mod
+        import cst_optimization.evaluation.extreme_recovery_safety as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "os.system" not in text
 
     def test_no_taskkill_or_stop_process(self):
-        import workflows.rfgun_sao.extreme_recovery_safety as mod
+        import cst_optimization.evaluation.extreme_recovery_safety as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -707,10 +707,13 @@ class TestGlobalSafety:
         assert "subprocess.run" not in text
 
     def test_no_cst_import(self):
-        import workflows.rfgun_sao.extreme_recovery_safety as mod
+        import cst_optimization.evaluation.extreme_recovery_safety as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+

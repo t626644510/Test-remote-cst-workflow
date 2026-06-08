@@ -15,7 +15,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     current_schema_version,
     is_schema_compatible,
     EvaluationDatabaseStatus,
@@ -231,3 +231,4 @@ class TestDDL:
         """Calling DDL does not write any files or create tables."""
         ddl = schema_ddl_sqlite()
         assert isinstance(ddl, str)
+

@@ -18,12 +18,12 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime import (
+from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     RetryRuntimeResult,
     RetryAttemptRecord,
@@ -152,7 +152,7 @@ class TestShouldUseRetryRuntime:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — disabled config
+# Retry loop 鈥?disabled config
 # ---------------------------------------------------------------------------
 
 
@@ -192,7 +192,7 @@ class TestRetryLoopDisabled:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — success stops immediately
+# Retry loop 鈥?success stops immediately
 # ---------------------------------------------------------------------------
 
 
@@ -216,7 +216,7 @@ class TestRetryLoopSuccess:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — retry-eligible failures
+# Retry loop 鈥?retry-eligible failures
 # ---------------------------------------------------------------------------
 
 
@@ -284,7 +284,7 @@ class TestRetryLoopEligible:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — terminal non-retryable states
+# Retry loop 鈥?terminal non-retryable states
 # ---------------------------------------------------------------------------
 
 
@@ -381,7 +381,7 @@ class TestRetryLoopTerminal:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — recovery callback
+# Retry loop 鈥?recovery callback
 # ---------------------------------------------------------------------------
 
 
@@ -460,7 +460,7 @@ class TestRetryLoopRecoveryCallback:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — exception handling
+# Retry loop 鈥?exception handling
 # ---------------------------------------------------------------------------
 
 
@@ -497,7 +497,7 @@ class TestRetryLoopException:
 
 
 # ---------------------------------------------------------------------------
-# Retry loop — probably-infeasible guard rejected
+# Retry loop 鈥?probably-infeasible guard rejected
 # ---------------------------------------------------------------------------
 
 
@@ -545,7 +545,7 @@ class TestRetryLoopProbablyInfeasible:
 
 
 # ---------------------------------------------------------------------------
-# O1 — _normalize_retry_record unit tests
+# O1 鈥?_normalize_retry_record unit tests
 # ---------------------------------------------------------------------------
 
 
@@ -606,7 +606,7 @@ class TestNormalizeRetryRecord:
 
 
 # ---------------------------------------------------------------------------
-# O1 — progress guard: same retry_count repeated
+# O1 鈥?progress guard: same retry_count repeated
 # ---------------------------------------------------------------------------
 
 
@@ -677,7 +677,7 @@ class TestRetryLoopProgressSameFailure:
 
 
 # ---------------------------------------------------------------------------
-# O1 — progress guard: lower retry_count returned
+# O1 鈥?progress guard: lower retry_count returned
 # ---------------------------------------------------------------------------
 
 
@@ -722,7 +722,7 @@ class TestRetryLoopProgressLowerRetryCount:
 
 
 # ---------------------------------------------------------------------------
-# O1 — progress guard: terminal after retry
+# O1 鈥?progress guard: terminal after retry
 # ---------------------------------------------------------------------------
 
 
@@ -775,7 +775,7 @@ class TestRetryLoopProgressTerminalAfterRetry:
 
 
 # ---------------------------------------------------------------------------
-# O1 — progress guard: success with no retry_count advance
+# O1 鈥?progress guard: success with no retry_count advance
 # ---------------------------------------------------------------------------
 
 
@@ -811,7 +811,7 @@ class TestRetryLoopProgressSuccess:
 
 
 # ---------------------------------------------------------------------------
-# O1 — progress guard: recovery + same failure
+# O1 鈥?progress guard: recovery + same failure
 # ---------------------------------------------------------------------------
 
 
@@ -856,14 +856,14 @@ class TestRetryLoopProgressRecovery:
 
 
 # ---------------------------------------------------------------------------
-# O1 — safety: internal progress guard present in source
+# O1 鈥?safety: internal progress guard present in source
 # ---------------------------------------------------------------------------
 
 
 class TestO1Safety:
     def test_normalize_retry_record_in_source(self) -> None:
         """retry_runtime module contains _normalize_retry_record."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -871,7 +871,7 @@ class TestO1Safety:
 
     def test_attempts_consumed_in_source(self) -> None:
         """retry_runtime contains the internal attempts_consumed guard."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -879,7 +879,7 @@ class TestO1Safety:
 
     def test_no_should_escalate_to_probably_infeasible(self) -> None:
         """retry_runtime does not call should_escalate_to_probably_infeasible."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1031,14 +1031,14 @@ class TestPostEvalRecovery:
 
 
 # ---------------------------------------------------------------------------
-# Safety — no forbidden imports / references
+# Safety 鈥?no forbidden imports / references
 # ---------------------------------------------------------------------------
 
 
 class TestSafety:
     def test_no_jsonl_reference(self) -> None:
         """retry_runtime module does not reference Phase C JSONL sidecar."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1053,7 +1053,7 @@ class TestSafety:
 
     def test_no_cst_optimization_factory(self) -> None:
         """retry_runtime does not import cst_optimization.factory."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1061,7 +1061,7 @@ class TestSafety:
 
     def test_no_cst_optimization_recovery(self) -> None:
         """retry_runtime does not import cst_optimization.workflows.recovery."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1069,7 +1069,7 @@ class TestSafety:
 
     def test_no_file_io_in_retry_loop(self) -> None:
         """run_retry_loop_no_cst does not read or write files."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1082,7 +1082,7 @@ class TestSafety:
 
     def test_no_durable_db_reference(self) -> None:
         """retry_runtime does not reference durable database operations."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1095,7 +1095,7 @@ class TestSafety:
 
     def test_no_legacy_recovery_import(self) -> None:
         """retry_runtime does not import or reference legacy RecoveryWorkflowEvaluator."""
-        import workflows.rfgun_sao.retry_runtime as rt
+        import cst_optimization.evaluation.retry_runtime as rt
         src_path = rt.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -1103,7 +1103,7 @@ class TestSafety:
 
 
 # ---------------------------------------------------------------------------
-# No I/O — pure function checks
+# No I/O 鈥?pure function checks
 # ---------------------------------------------------------------------------
 
 
@@ -1125,3 +1125,5 @@ class TestNoIO:
         result = run_retry_loop_no_cst(initial, evaluate_once, config=config)
         assert initial.retry_count == original_retries
         assert isinstance(result, RetryRuntimeResult)
+
+

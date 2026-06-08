@@ -17,11 +17,11 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseStatus,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_skip_records import (
+from cst_optimization.evaluation.evaluation_database_skip_records import (
     SKIPPED_FAILURE_REUSE,
     SKIPPED_PROBABLY_INFEASIBLE,
     EvaluationDatabaseSchemaCapabilities,
@@ -235,7 +235,7 @@ class TestSchemaCapability:
 
 class TestGlobalSafety:
     def test_no_subprocess(self):
-        import workflows.rfgun_sao.evaluation_database_skip_records as mod
+        import cst_optimization.evaluation.evaluation_database_skip_records as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -243,14 +243,14 @@ class TestGlobalSafety:
         assert "from subprocess" not in text
 
     def test_no_os_system(self):
-        import workflows.rfgun_sao.evaluation_database_skip_records as mod
+        import cst_optimization.evaluation.evaluation_database_skip_records as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "os.system" not in text
 
     def test_no_taskkill(self):
-        import workflows.rfgun_sao.evaluation_database_skip_records as mod
+        import cst_optimization.evaluation.evaluation_database_skip_records as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -258,11 +258,11 @@ class TestGlobalSafety:
         assert "Stop-Process" not in text
 
     def test_no_cst_import(self):
-        import workflows.rfgun_sao.evaluation_database_skip_records as mod
+        import cst_optimization.evaluation.evaluation_database_skip_records as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
@@ -376,3 +376,6 @@ class TestSE11Hardening:
         assert et["environment_fault_flag"] is False
         prov = fields["provenance"]
         assert prov["operator_override_id"] == "op_1"
+
+
+

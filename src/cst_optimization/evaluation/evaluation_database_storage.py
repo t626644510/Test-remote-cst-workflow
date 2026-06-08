@@ -1,10 +1,10 @@
-# Durable evaluation DB storage — no-CST SQLite adapter.
+# Durable evaluation DB storage 鈥?no-CST SQLite adapter.
 # Stores authoritative final evaluation records only.
 # No failure reuse.  Success reuse and warm-start are implemented by
 # higher-level helpers (SR, WS tracks) with explicit opt-in config.
 # Explicit opt-in only; disabled by default.
 #
-# Phase DDB2 — no-CST SQLite storage implementation.
+# Phase DDB2 鈥?no-CST SQLite storage implementation.
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     current_schema_version,
     record_to_json_dict,
@@ -111,7 +111,7 @@ def resolve_evaluation_database_config(
         except ValueError as exc:
             if "inside the repository" in str(exc):
                 raise
-            # Not relative → path is outside repo, which is correct
+            # Not relative 鈫?path is outside repo, which is correct
             pass
 
     return EvaluationDatabaseConfig(
@@ -439,3 +439,4 @@ class SQLiteEvaluationDatabase:
                 except (json.JSONDecodeError, TypeError):
                     pass
         return data
+

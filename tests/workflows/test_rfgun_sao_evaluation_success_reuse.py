@@ -15,12 +15,12 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseStatus,
     ParameterIdentity,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_success_reuse import (
+from cst_optimization.evaluation.evaluation_success_reuse import (
     SuccessReuseConfig,
     find_eligible_success_record,
     reconstruct_evaluation_result,
@@ -255,7 +255,7 @@ class TestLookupEligibility:
     def test_param_names_mismatch_ignored(self) -> None:
         pid = _pid([1.0, 2.0])  # 2 params
         row = _make_row(
-            param_names=["p0"],  # 1 param — mismatch
+            param_names=["p0"],  # 1 param 鈥?mismatch
             objective_values={"m1": 0.5}, objective_names=["m1"],
         )
         row["parameter_key"] = pid.parameter_key()
@@ -487,21 +487,23 @@ class TestReconstructionSafety:
 
 class TestSafety:
     def test_no_cst_import(self) -> None:
-        import workflows.rfgun_sao.evaluation_success_reuse as mod
+        import cst_optimization.evaluation.evaluation_success_reuse as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         forbidden = [
-            "cst.interface", "cst.results", "import cst", "from cst",
-            "cst_optimization",
+            "cst.interface", "cst.results", "import cst", "from cst.",
         ]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
     def test_no_jsonl_reference(self) -> None:
-        import workflows.rfgun_sao.evaluation_success_reuse as mod
+        import cst_optimization.evaluation.evaluation_success_reuse as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert ".jsonl" not in text
         assert "jsonl" not in text.lower() or "json" not in text
+
+
+

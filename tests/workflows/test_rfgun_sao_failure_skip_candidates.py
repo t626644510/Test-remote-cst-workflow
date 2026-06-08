@@ -18,15 +18,15 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_storage import (
+from cst_optimization.evaluation.evaluation_database_storage import (
     EvaluationDatabaseConfig,
     SQLiteEvaluationDatabase,
 )
-from workflows.rfgun_sao.failure_skip_candidates import (
+from cst_optimization.evaluation.failure_skip_candidates import (
     CALIBRATION_FAILED,
     GATE_REJECTED,
     SCHEMA_INCOMPATIBLE,
@@ -541,7 +541,7 @@ class TestFS21Hardening:
 
 class TestGlobalSafety:
     def test_no_subprocess(self):
-        import workflows.rfgun_sao.failure_skip_candidates as mod
+        import cst_optimization.evaluation.failure_skip_candidates as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -549,14 +549,14 @@ class TestGlobalSafety:
         assert "from subprocess" not in text
 
     def test_no_os_system(self):
-        import workflows.rfgun_sao.failure_skip_candidates as mod
+        import cst_optimization.evaluation.failure_skip_candidates as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "os.system" not in text
 
     def test_no_taskkill(self):
-        import workflows.rfgun_sao.failure_skip_candidates as mod
+        import cst_optimization.evaluation.failure_skip_candidates as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -564,10 +564,13 @@ class TestGlobalSafety:
         assert "Stop-Process" not in text
 
     def test_no_cst_import(self):
-        import workflows.rfgun_sao.failure_skip_candidates as mod
+        import cst_optimization.evaluation.failure_skip_candidates as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
+
+
+

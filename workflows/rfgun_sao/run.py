@@ -1,4 +1,4 @@
-"""Experimental RF gun SAO runner -- single-pass baseline.
+﻿"""Experimental RF gun SAO runner -- single-pass baseline.
 
 Usage from project root::
 
@@ -105,8 +105,8 @@ def _record_checkpoint_evaluation(
     Rules
     -----
     1. ``solver_ok=True`` **and** all raw values finite **and** *wf_ref*
-       populated → ``mark_completed`` with ``solver_ok=True``.
-    2. Otherwise → ``mark_failed`` with a stable error string (preserving
+       populated 鈫?``mark_completed`` with ``solver_ok=True``.
+    2. Otherwise 鈫?``mark_failed`` with a stable error string (preserving
        the passed *error* if non-empty; falling back to an explanatory
        string otherwise).
 
@@ -300,7 +300,7 @@ def _cleanup_workflow_connection(
     if workflow is None:
         return result
 
-    # Phase 1 — close workflow._conn if present
+    # Phase 1 鈥?close workflow._conn if present
     conn = getattr(workflow, "_conn", None)
     if conn is not None:
         result["attempted"] = True
@@ -317,7 +317,7 @@ def _cleanup_workflow_connection(
             result["error"] = msg
             _logger.warning("CST cleanup (force=%s, pid=%s): %s", force, result["pid"], msg)
 
-    # Phase 2 — close ALL retry handler connections (orphan DE protection).
+    # Phase 2 鈥?close ALL retry handler connections (orphan DE protection).
     # After force_reset() the retry handler creates a new CST DE but
     # workflow._conn still references the old nulled connection.  Closing
     # only workflow._conn misses the replacement DE, leaving an orphan
@@ -337,7 +337,7 @@ def _cleanup_workflow_connection(
                 force, str(exc)[:200],
             )
 
-    # Phase 3 — close evaluation database (DDB3).
+    # Phase 3 鈥?close evaluation database (DDB3).
     edb = getattr(workflow, "_evaluation_db", None)
     if edb is not None:
         result["attempted"] = True
@@ -347,7 +347,7 @@ def _cleanup_workflow_connection(
         except Exception as exc:
             _logger.warning("Evaluation DB close failed: %s", str(exc)[:200])
 
-    # Phase 4 — close retry runtime connection registry (RCR2).
+    # Phase 4 鈥?close retry runtime connection registry (RCR2).
     # Tracks replacement connections created by the recovery callback.
     # Works independently of legacy retry handler.
     # This runs even if workflow._conn is None and retry_handler is None.
@@ -596,12 +596,12 @@ def main() -> None:
     ws_cfg = getattr(workflow, "_db_warm_start_cfg", None)
     ws_db = getattr(workflow, "_evaluation_db", None)
     if ws_cfg is not None and ws_cfg.enabled and ws_db is not None:
-        from workflows.rfgun_sao.evaluation_database_warm_start import (
+        from cst_optimization.evaluation.evaluation_database_warm_start import (
             load_warm_start_priors as _load_ws_priors,
             parameter_keys_from_prior_data as _ckpt_keys,
             merge_checkpoint_and_db_priors as _merge_priors,
         )
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         try:
@@ -705,3 +705,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

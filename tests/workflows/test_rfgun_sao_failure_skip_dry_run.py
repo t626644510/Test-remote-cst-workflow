@@ -19,19 +19,19 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_storage import (
+from cst_optimization.evaluation.evaluation_database_storage import (
     EvaluationDatabaseConfig,
     SQLiteEvaluationDatabase,
 )
-from workflows.rfgun_sao.failure_skip_candidates import (
+from cst_optimization.evaluation.failure_skip_candidates import (
     FailureSkipCandidateConfig,
     resolve_failure_skip_config,
 )
-from workflows.rfgun_sao.failure_skip_dry_run import (
+from cst_optimization.evaluation.failure_skip_dry_run import (
     FailureSkipDryRunDecision,
     evaluate_failure_skip_dry_run_for_key,
     evaluate_failure_skip_dry_run_for_keys,
@@ -145,7 +145,7 @@ class TestDryRunConfig:
         cfg = FailureSkipCandidateConfig(enabled=True, mode="enforce", min_failures=1)
         decision = evaluate_failure_skip_dry_run_for_key(db_path, pk, cfg)
         assert decision.enabled
-        # Enforce is downgraded — would_skip should be false
+        # Enforce is downgraded 鈥?would_skip should be false
         assert not decision.would_skip
         assert "enforce mode not implemented" in str(decision.diagnostics.get("reason", ""))
 
@@ -227,13 +227,13 @@ class TestDryRunDecision:
         db_path = _seed_db(tmp_path, rows)
         cfg = FailureSkipCandidateConfig(enabled=True, mode="dry_run", min_failures=1)
 
-        # Check other key — should find candidate
+        # Check other key 鈥?should find candidate
         decision_other = evaluate_failure_skip_dry_run_for_key(
             db_path, pid_other.parameter_key(), cfg,
         )
         assert decision_other.would_skip
 
-        # Check unknown key — no candidate
+        # Check unknown key 鈥?no candidate
         decision_unknown = evaluate_failure_skip_dry_run_for_key(
             db_path, "unknown_key", cfg,
         )
@@ -291,7 +291,7 @@ class TestMultiKey:
 
 class TestGlobalSafety:
     def test_no_subprocess(self):
-        import workflows.rfgun_sao.failure_skip_dry_run as mod
+        import cst_optimization.evaluation.failure_skip_dry_run as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -299,14 +299,14 @@ class TestGlobalSafety:
         assert "from subprocess" not in text
 
     def test_no_os_system(self):
-        import workflows.rfgun_sao.failure_skip_dry_run as mod
+        import cst_optimization.evaluation.failure_skip_dry_run as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "os.system" not in text
 
     def test_no_taskkill(self):
-        import workflows.rfgun_sao.failure_skip_dry_run as mod
+        import cst_optimization.evaluation.failure_skip_dry_run as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -314,11 +314,11 @@ class TestGlobalSafety:
         assert "Stop-Process" not in text
 
     def test_no_cst_import(self):
-        import workflows.rfgun_sao.failure_skip_dry_run as mod
+        import cst_optimization.evaluation.failure_skip_dry_run as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
@@ -480,3 +480,6 @@ class TestFakeRuntimeHarness:
         assert result.candidate_found
         assert result.candidate_decision is not None
         assert result.evidence_count >= 1
+
+
+

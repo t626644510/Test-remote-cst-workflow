@@ -15,16 +15,16 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime import (
+from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     run_retry_loop_no_cst,
 )
-from workflows.rfgun_sao.retry_runtime_cst import (
+from cst_optimization.evaluation.retry_runtime_cst import (
     CstConnectionRegistry,
     build_record_from_evaluation_result,
     make_cst_recovery_callback,
@@ -57,7 +57,7 @@ class FakeConnection:
 
 
 class FakeRaisingConnection:
-    """Connection that raises on close — for error-path tests."""
+    """Connection that raises on close 鈥?for error-path tests."""
     def close(self, force: bool = False) -> None:
         raise RuntimeError("close failed")
 
@@ -144,7 +144,7 @@ class TestCstConnectionRegistry:
 
 
 # ===================================================================
-# make_cst_recovery_callback — unit tests
+# make_cst_recovery_callback 鈥?unit tests
 # ===================================================================
 
 
@@ -251,7 +251,7 @@ class TestRecoveryCallbackUnit:
 
 
 # ===================================================================
-# make_cst_retry_evaluate_once — no recovery path
+# make_cst_retry_evaluate_once 鈥?no recovery path
 # ===================================================================
 
 
@@ -526,7 +526,7 @@ class TestCleanupWorkflowConnection:
         r1 = _cleanup_workflow_connection(wf)
         assert c1._closed is True
         assert reg.tracked_count == 0
-        # Second call — should not raise
+        # Second call 鈥?should not raise
         r2 = _cleanup_workflow_connection(wf)
         # Result for second call: _conn is now None (already closed),
         # registry is None (already cleared)
@@ -554,24 +554,27 @@ class TestCleanupWorkflowConnection:
 
 class TestSafety:
     def test_module_no_cst_import(self) -> None:
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
     def test_module_no_factory_import(self) -> None:
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "cst_optimization.factory" not in text
 
     def test_module_no_recovery_import(self) -> None:
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "cst_optimization.workflows.recovery" not in text
+
+
+

@@ -19,17 +19,17 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     RawEvaluationPayload,
 )
-from workflows.rfgun_sao.retry_runtime import (
+from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     run_retry_loop_no_cst,
 )
-from workflows.rfgun_sao.retry_runtime_cst import (
+from cst_optimization.evaluation.retry_runtime_cst import (
     map_evaluation_status_to_database_status,
     build_record_from_evaluation_result,
     make_cst_retry_evaluate_once,
@@ -202,7 +202,7 @@ class TestBuildRecord:
 
 
 # ---------------------------------------------------------------------------
-# make_cst_retry_evaluate_once — integration with run_retry_loop_no_cst
+# make_cst_retry_evaluate_once 鈥?integration with run_retry_loop_no_cst
 # ---------------------------------------------------------------------------
 
 
@@ -276,7 +276,7 @@ class TestCstRetryEvaluateOnce:
         assert result.succeeded is False
         assert result.stopped_reason == "no_retry_max_tiers_reached"
         assert len(result.attempts) == 2
-        # Not "skipped" — returned as terminal failure
+        # Not "skipped" 鈥?returned as terminal failure
         assert "skip" not in result.stopped_reason
 
     def test_gate_rejected_no_retry(self) -> None:
@@ -450,7 +450,7 @@ class TestLegacyRetryMutex:
 class TestAdapterTaxonomyIntegration:
     def test_record_from_adapter_classifies_correctly(self) -> None:
         """The adapter's output records classify correctly via taxonomy."""
-        from workflows.rfgun_sao.retry_taxonomy import classify_retry_eligibility
+        from cst_optimization.evaluation.retry_taxonomy import classify_retry_eligibility
 
         pid = _pid([1.0])
         result = EvaluationResult(
@@ -463,7 +463,7 @@ class TestAdapterTaxonomyIntegration:
         assert cl.next_tier == 1
 
     def test_success_record_from_adapter_no_retry(self) -> None:
-        from workflows.rfgun_sao.retry_taxonomy import classify_retry_eligibility
+        from cst_optimization.evaluation.retry_taxonomy import classify_retry_eligibility
 
         pid = _pid([1.0])
         result = EvaluationResult(status=EvaluationStatus.SUCCESS)
@@ -473,7 +473,7 @@ class TestAdapterTaxonomyIntegration:
 
     def test_max_tier_record_not_probably_infeasible(self) -> None:
         """Max tier exhaustion does NOT mark probably-infeasible."""
-        from workflows.rfgun_sao.retry_taxonomy import classify_retry_eligibility
+        from cst_optimization.evaluation.retry_taxonomy import classify_retry_eligibility
 
         pid = _pid([1.0])
         result = EvaluationResult(
@@ -485,27 +485,27 @@ class TestAdapterTaxonomyIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Safety — no forbidden imports / no CST
+# Safety 鈥?no forbidden imports / no CST
 # ---------------------------------------------------------------------------
 
 
 class TestSafety:
     def test_no_cst_import_at_module_level(self) -> None:
         """retry_runtime_cst does not import cst.interface or cst.results."""
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src_path = mod.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
         forbidden = [
             "cst.interface", "cst.results", "import cst",
-            "from cst", "cst_optimization",
+            "from cst.",
         ]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
     def test_no_cst_optimization_factory(self) -> None:
         """Module does not import cst_optimization.factory."""
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src_path = mod.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -513,7 +513,7 @@ class TestSafety:
 
     def test_no_cst_optimization_recovery(self) -> None:
         """Module does not import cst_optimization.workflows.recovery."""
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src_path = mod.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
@@ -521,10 +521,13 @@ class TestSafety:
 
     def test_no_file_io(self) -> None:
         """Module does not perform file I/O."""
-        import workflows.rfgun_sao.retry_runtime_cst as mod
+        import cst_optimization.evaluation.retry_runtime_cst as mod
         src_path = mod.__file__
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
         forbidden = [".write", ".read", "open(", "pathlib"]
         for item in forbidden:
             assert item not in text, f"should not perform file I/O ({item!r})"
+
+
+

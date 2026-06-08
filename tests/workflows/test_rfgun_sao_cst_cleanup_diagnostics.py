@@ -224,7 +224,7 @@ class TestSummarizeCleanupObservation:
         assert result["remaining_count"] == 0
 
     def test_only_licensing_service_no_orphan(self) -> None:
-        """Only cstd.exe remaining — no orphan candidates."""
+        """Only cstd.exe remaining 鈥?no orphan candidates."""
         procs = [
             CstProcessInfo(
                 pid=10184, process_name="cstd.exe", has_window_title=False,
@@ -240,7 +240,7 @@ class TestSummarizeCleanupObservation:
         assert "none orphan" in result["summary"]
 
     def test_orphan_de_detected(self) -> None:
-        """DE with window alongside cstd — orphan detected."""
+        """DE with window alongside cstd 鈥?orphan detected."""
         procs = [
             CstProcessInfo(
                 pid=10184, process_name="cstd.exe", has_window_title=False,
@@ -295,7 +295,7 @@ class TestSummarizeCleanupObservation:
 
 
 # ---------------------------------------------------------------------------
-# Safety — no forbidden imports / runtime execution
+# Safety 鈥?no forbidden imports / runtime execution
 # ---------------------------------------------------------------------------
 
 
@@ -308,7 +308,7 @@ class TestSafety:
             text = fh.read()
         forbidden = [
             "cst.interface", "cst.results", "import cst",
-            "from cst", "cst_optimization",
+            "from cst.",
         ]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
@@ -343,3 +343,4 @@ class TestSafety:
         with open(src_path, "r", encoding="utf-8") as fh:
             text = fh.read()
         assert "psutil" not in text
+

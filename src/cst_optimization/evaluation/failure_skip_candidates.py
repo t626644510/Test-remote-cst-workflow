@@ -1,4 +1,4 @@
-"""No-CST failure skip candidate loader — FS2.
+"""No-CST failure skip candidate loader 鈥?FS2.
 
 Pure helpers only.  No runtime skip, no evaluator wiring, no retry call,
 no subprocess, no CST import.  Candidates are loaded from a durable
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from workflows.rfgun_sao.evaluation_database_warm_start import (
+from cst_optimization.evaluation.evaluation_database_warm_start import (
     _load_json_dict,
     _load_json_list,
 )
@@ -258,7 +258,7 @@ def classify_failure_skip_evidence(
 
     # Schema compatibility
     if config.require_schema_compatible:
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         if schema_version is None or int(schema_version) != current_schema_version():
@@ -266,7 +266,7 @@ def classify_failure_skip_evidence(
 
     # --- Classification by status ---
 
-    # SUCCESS / reuse / warm-start → excluded
+    # SUCCESS / reuse / warm-start 鈫?excluded
     if status == "success":
         # Check if this is a reused-from-DB row
         if source and "reuse" in source:
@@ -290,7 +290,7 @@ def classify_failure_skip_evidence(
     if status == "solver_timeout":
         return SOLVER_TIMEOUT
 
-    # Solver failed — need taxonomy check
+    # Solver failed 鈥?need taxonomy check
     if status == "solver_failed":
         cls, _ = _check_error_taxonomy(error_taxonomy)
         if cls == XR_PROCESS_KILL:
@@ -305,7 +305,7 @@ def classify_failure_skip_evidence(
     if status == "transient_failed":
         return TRANSIENT_ENVIRONMENT_FAULT
 
-    # Synthetic skip statuses — excluded from evidence
+    # Synthetic skip statuses 鈥?excluded from evidence
     if status in ("skipped_failure_reuse", "skipped_probably_infeasible"):
         return status
 
@@ -519,7 +519,7 @@ def _check_objective_signature_match(
     if not config.require_objective_signature_match:
         return True
     if config.objective_signature is None:
-        return True  # No signature configured → skip check
+        return True  # No signature configured 鈫?skip check
     return evidence.objective_signature == config.objective_signature
 
 
@@ -616,25 +616,25 @@ def load_failure_skip_candidates(
             if pk not in set(parameter_keys):
                 continue
 
-        # SUCCESS / reuse / warm-start → skip
+        # SUCCESS / reuse / warm-start 鈫?skip
         if cls in (SUCCESS, SUCCESS_REUSE, WARM_START_PRIOR):
             continue
 
-        # Synthetic skip statuses → excluded from evidence
+        # Synthetic skip statuses 鈫?excluded from evidence
         if cls in ("skipped_failure_reuse", "skipped_probably_infeasible"):
             blocked_by_reason["skip_status_excluded"] = (
                 blocked_by_reason.get("skip_status_excluded", 0) + 1
             )
             continue
 
-        # Schema incompatible → skip
+        # Schema incompatible 鈫?skip
         if cls == SCHEMA_INCOMPATIBLE:
             blocked_by_reason["schema_incompatible"] = (
                 blocked_by_reason.get("schema_incompatible", 0) + 1
             )
             continue
 
-        # No parameter_key → skip
+        # No parameter_key 鈫?skip
         if pk is None:
             blocked_by_reason["missing_parameter_key"] = (
                 blocked_by_reason.get("missing_parameter_key", 0) + 1
@@ -715,7 +715,7 @@ def load_failure_skip_candidates(
         if allowed_count == 0:
             blocked_reasons.append("no_allowed_classifications")
 
-        # Ambiguous evidence → dry-run only
+        # Ambiguous evidence 鈫?dry-run only
         has_ambiguous = any(is_ambiguous_evidence_classification(e.classification) for e in evs)
         if has_ambiguous and config.mode != "dry_run":
             blocked_reasons.append("ambiguous_evidence_dry_run_only")
@@ -812,3 +812,4 @@ def find_failure_skip_candidate_for_key(
     if result.candidates:
         return result.candidates[0]
     return None
+

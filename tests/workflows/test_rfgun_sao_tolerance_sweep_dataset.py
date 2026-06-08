@@ -276,8 +276,8 @@ class TestSweepDataset:
 class TestDBLoader:
     def test_group_from_temp_db(self, tmp_path):
         import json as _json
-        from workflows.rfgun_sao.evaluation_database_schema import current_schema_version
-        from workflows.rfgun_sao.evaluation_database_storage import (
+        from cst_optimization.evaluation.evaluation_database_schema import current_schema_version
+        from cst_optimization.evaluation.evaluation_database_storage import (
             EvaluationDatabaseConfig, SQLiteEvaluationDatabase,
         )
         db_path = str(tmp_path / "test.db")
@@ -326,3 +326,4 @@ class TestGlobalSafety:
         assert ".xlsx" not in text
         assert "openpyxl" not in text
         assert "xlrd" not in text
+

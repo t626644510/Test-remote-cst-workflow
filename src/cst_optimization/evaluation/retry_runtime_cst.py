@@ -6,7 +6,7 @@
 # No CST imports at module level.  CST objects are injected or
 # duck-typed.  Fully testable with fake evaluators.
 #
-# Phase RW2 — no-CST adapter implementation.
+# Phase RW2 鈥?no-CST adapter implementation.
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ from typing import Any, Callable
 
 import numpy as np
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime import (
+from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     resolve_retry_runtime_config,
 )
@@ -49,7 +49,7 @@ def map_evaluation_status_to_database_status(
       ``allow_unknown_retry`` is True, which is the default).
 
     Calibration-specific statuses (``CALIBRATION_FAILED``,
-    ``GATE_REJECTED``) are not produced here — they belong in the
+    ``GATE_REJECTED``) are not produced here 鈥?they belong in the
     two-pass calibration path which uses a separate runner.
     """
     _map: dict[EvaluationStatus, str] = {
@@ -100,7 +100,7 @@ def build_record_from_evaluation_result(
     EvaluationDatabaseRecord
         Ready for ``classify_retry_eligibility()``.
     """
-    from workflows.rfgun_sao.evaluation_database_schema import (
+    from cst_optimization.evaluation.evaluation_database_schema import (
         RawEvaluationPayload,
     )
 
@@ -149,7 +149,7 @@ def make_cst_retry_evaluate_once(
 
     The returned callback is compatible with
     ``retry_runtime.run_retry_loop_no_cst()``.  It owns only the
-    single-attempt evaluation — recovery callback and retry-loop
+    single-attempt evaluation 鈥?recovery callback and retry-loop
     orchestration are supplied separately to
     ``run_retry_loop_no_cst()``.
 
@@ -247,7 +247,7 @@ def check_legacy_retry_mutex(
     # Resolve the retry runtime config
     retry_raw = config.get("retry_runtime", None)
     if retry_raw is None:
-        # No retry_runtime section at all → disabled by default
+        # No retry_runtime section at all 鈫?disabled by default
         return RetryRuntimeConfig(), None
 
     runtime_cfg = resolve_retry_runtime_config({"retry": retry_raw})
@@ -366,7 +366,7 @@ def make_cst_recovery_callback(
             try:
                 evaluator.on_reconnect(new_conn)
             except Exception:
-                # on_reconnect failed — close the tracked new connection
+                # on_reconnect failed 鈥?close the tracked new connection
                 # and propagate the exception upward.
                 registry.close_all(force=True)
                 raise
@@ -380,3 +380,4 @@ def make_cst_recovery_callback(
             return False
 
     return _recovery_callback
+

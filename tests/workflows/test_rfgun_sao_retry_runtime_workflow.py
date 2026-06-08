@@ -1,7 +1,7 @@
 """No-CST regression tests for RW3 retry runtime workflow wiring.
 
 Tests final_record semantics, mutex, synthetic smoke hook gating,
-checkpoint interaction, and penalty extraction — all without CST.
+checkpoint interaction, and penalty extraction 鈥?all without CST.
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime import (
+from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     RetryRuntimeResult,
     run_retry_loop_no_cst,
 )
-from workflows.rfgun_sao.retry_runtime_cst import (
+from cst_optimization.evaluation.retry_runtime_cst import (
     build_record_from_evaluation_result,
     make_cst_retry_evaluate_once,
     check_legacy_retry_mutex,
@@ -463,3 +463,4 @@ class TestAdapterIntegrationFinalRecord:
         assert result.succeeded is False
         assert fake.call_count == 0
         assert result.stopped_reason == "no_retry_gate_rejected"
+

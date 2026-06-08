@@ -15,10 +15,12 @@ import os
 import signal
 import sys
 
-_project_root = os.path.dirname(os.path.abspath(__file__))
-_src = os.path.join(_project_root, "src")
-if _src not in sys.path:
-    sys.path.insert(0, _src)
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_SRC_DIR = str(_PROJECT_ROOT / "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
 
 try:
     import yaml

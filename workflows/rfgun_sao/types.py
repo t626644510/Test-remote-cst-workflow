@@ -10,11 +10,12 @@ import numpy as np
 class EvaluationStatus(Enum):
     """Classification of a WF1 evaluation outcome.
 
-    Replicated from ``legacy workflow types`` to decouple
-    ``rfgun_sao`` from the legacy workflow module.
+    Replicated from the shared recovery types module to decouple
+    ``rfgun_sao`` from the shared workflow module.
     """
     SUCCESS = "success"
     PHYSICS_INVALID = "physics_invalid"
+    FREQUENCY_GATE = "frequency_gate"
     SOLVER_FAILED = "solver_failed"
     COM_LOST = "com_lost"
     UNKNOWN_ERROR = "unknown_error"
@@ -43,10 +44,12 @@ class EvaluationResult:
     status: EvaluationStatus = EvaluationStatus.UNKNOWN_ERROR
     error: str = ""
     f0_ghz: float = np.nan
+    frequency_gate_passed: bool = False
     raw_metrics: dict[str, float] | None = None
     objective_values: dict[str, float] | None = None
     penalty_values: dict[str, float] | None = None
     diagnostics: dict[str, Any] | None = None
+    pass_log: dict[str, Any] | None = None
     elapsed_s: float = 0.0
 
     @property

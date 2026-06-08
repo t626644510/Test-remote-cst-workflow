@@ -1,9 +1,7 @@
-﻿"""Workflow 1 builder -- local alternative to ``cst_optimization.factory.build_workflow_1``.
+﻿"""Workflow 1 reference builder -- validated single-pass reference implementation.
 
-Extracted from the monolithic factory during Phase 5.  Behaviour is
-identical to the original ``cst_optimization.factory.build_workflow_1``
-but only imports the objective modules that Workflow 1 actually needs
-(no wakefield, no antenna).
+This is a simplified, stable reference for the Workflow 1 builder pattern.
+The active canonical builder lives in ``workflows.rfgun_sao.workflow``.
 """
 
 from __future__ import annotations

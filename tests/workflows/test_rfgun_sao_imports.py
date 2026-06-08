@@ -296,6 +296,41 @@ def test_types_expose_evaluation_types():
     assert EvaluationResult().solver_ok is False
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
 
+
+def test_evaluation_status_enum_match_with_shared_recovery():
+    """rfgun_sao/types.py EvaluationStatus must have same values as shared recovery.py."""
+    from workflows.rfgun_sao.types import EvaluationStatus as SaoES
+    from cst_optimization.workflows.recovery import EvaluationStatus as SharedES
+
+    sao_vals = set(e.value for e in SaoES)
+    shared_vals = set(e.value for e in SharedES)
+    missing = shared_vals - sao_vals
+    extra = sao_vals - shared_vals
+    assert not missing, (
+        f"rfgun_sao/types.py EvaluationStatus missing values: {missing}. "
+        f"Shared recovery.py has: {sorted(shared_vals)}"
+    )
+    assert not extra, (
+        f"rfgun_sao/types.py EvaluationStatus has extra values: {extra}. "
+        f"Shared recovery.py has: {sorted(shared_vals)}"
+    )
+
+
+def test_evaluation_result_fields_match_shared_recovery():
+    """rfgun_sao/types.py EvaluationResult must have all fields from shared recovery.py."""
+    from dataclasses import fields as dc_fields
+    from workflows.rfgun_sao.types import EvaluationResult as SaoER
+    from cst_optimization.workflows.recovery import EvaluationResult as SharedER
+
+    sao_fields = {f.name for f in dc_fields(SaoER)}
+    shared_fields = {f.name for f in dc_fields(SharedER)}
+    missing = shared_fields - sao_fields
+    assert not missing, (
+        f"rfgun_sao/types.py EvaluationResult missing fields: {missing}. "
+        f"Shared recovery.py fields: {sorted(shared_fields)}"
+    )
+
+
 def test_default_weights_equal():
     from cst_optimization.factory import _resolve_named_weights
     w = _resolve_named_weights(None, ["a", "b", "c"])

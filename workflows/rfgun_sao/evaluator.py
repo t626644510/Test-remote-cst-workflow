@@ -1,8 +1,7 @@
 ﻿"""Workflow 1 evaluator -- single-project single-pass frequency-domain solver.
 
-Extracted from ``src/cst_optimization/factory.py::build_workflow_1()``
-during Phase 5 refactoring.  Behaviour is identical to the original
-closure.
+Canonical WF1 evaluator owned by the ``rfgun_sao`` workflow package.
+Behaviour is identical to the original closure.
 """
 
 from __future__ import annotations

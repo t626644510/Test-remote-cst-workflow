@@ -45,7 +45,7 @@ from cst_optimization.workflows.recovery import (
 )
 
 # ---- Shared helpers (single canonical source in factory.py) -----------------
-from cst_optimization.factory import _build_parameters, _build_sao, _resolve_named_weights
+from cst_optimization.factory import _build_objectives, _build_parameters, _build_sao, _resolve_named_weights
 
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_single_pass.evaluator import Workflow1Evaluator
@@ -58,32 +58,7 @@ _logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _build_objectives(
-    obj_entries: list[dict[str, Any]],
-) -> list[ObjectiveFunction]:
-    """Build objective instances from config entries (WF1-single-project).
-
-    Returns only the objective list (no project_map / ref_project_map
-    since WF1 has a single project).
-    """
-    objectives: list[ObjectiveFunction] = []
-    for entry in obj_entries:
-        if not entry.get("enabled", True):
-            continue
-
-        obj_name = entry["name"]
-        obj_cls = get_objective(obj_name)
-
-        mode_name = entry.get("mode", "minimize")
-        mode_cls = get_mode(mode_name)
-        mode_params = entry.get("mode_params", {})
-        mode = mode_cls(**mode_params) if mode_params else mode_cls()
-
-        obj_params = entry.get("obj_params", {})
-        obj = obj_cls(reader_factory=lambda: None, mode=mode, **obj_params)
-        objectives.append(obj)
-
-    return objectives
+# _build_objectives imported from cst_optimization.factory (shared)
 
 _logger = logging.getLogger(__name__)
 
@@ -135,7 +110,7 @@ def build_workflow_1(
     # Objectives
     # ---------------------------------------------------------------
     obj_entries = config.get("objectives", [])
-    objectives = _build_objectives(obj_entries)
+    objectives, _, _ = _build_objectives(obj_entries)
     metric_names = [o.name for o in objectives]
 
     # ---------------------------------------------------------------

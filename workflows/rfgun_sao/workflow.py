@@ -44,7 +44,7 @@ from cst_optimization.parameters.base import ParameterSet, ParamRange
 from cst_optimization.parameters.geometry import GeometryParameter
 
 # ---- Shared helpers (single canonical source in factory.py) -----------------
-from cst_optimization.factory import _build_parameters, _build_sao, _resolve_named_weights
+from cst_optimization.factory import _build_objectives, _build_parameters, _build_sao, _resolve_named_weights
 
 from workflows.rfgun_sao.types import (
     EvaluationResult,
@@ -212,7 +212,7 @@ def build_workflow_1(
         metric_names = objective_metric_names(specs)
         report_names = report_metric_names(specs)
         optimize_entries = [e for e in obj_entries if e.get("name") in metric_names]
-        objectives = _build_objectives(optimize_entries)
+        objectives, _, _ = _build_objectives(optimize_entries)
         opt_cfg = config.get("optimization", {})
         weights = _resolve_named_weights(
             opt_cfg.get("objective_weights", None), metric_names,
@@ -852,36 +852,8 @@ def build_workflow_1(
 
 
 # ---------------------------------------------------------------------------
-# Local helpers (WF1-specific 鈥?different signatures from factory.py)
+# Local helpers (WF1-specific)
 # ---------------------------------------------------------------------------
-
-
-def _build_objectives(
-    obj_entries: list[dict[str, Any]],
-) -> list[ObjectiveFunction]:
-    """Build objective instances from config entries (WF1-single-project).
-
-    Returns only the objective list (no project_map / ref_project_map
-    since WF1 has a single project).
-    """
-    objectives: list[ObjectiveFunction] = []
-    for entry in obj_entries:
-        if not entry.get("enabled", True):
-            continue
-
-        obj_name = entry["name"]
-        obj_cls = get_objective(obj_name)
-
-        mode_name = entry.get("mode", "minimize")
-        mode_cls = get_mode(mode_name)
-        mode_params = entry.get("mode_params", {})
-        mode = mode_cls(**mode_params) if mode_params else mode_cls()
-
-        obj_params = entry.get("obj_params", {})
-        obj = obj_cls(reader_factory=lambda: None, mode=mode, **obj_params)
-        objectives.append(obj)
-
-    return objectives
 
 
 def _build_frequency_gate(eval_cfg: dict) -> FrequencyGate:

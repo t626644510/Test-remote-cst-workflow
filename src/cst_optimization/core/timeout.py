@@ -13,7 +13,7 @@ import logging
 import threading
 from typing import Any, Callable
 
-from .errors import CSTError
+from ..diagnostics import CSTError
 
 _logger = logging.getLogger(__name__)
 

@@ -34,7 +34,7 @@ from .builders import (
     _resolve_named_weights,
 )
 from .core.connection import CSTConnection
-from .core.messages import MessageLogger
+from .diagnostics import MessageLogger
 from .core.retry import EvaluationRetryHandler, RetryConfig  # RetryConfig kept for workflow_3
 from .core.solver import SolverRunner
 from .objectives import field       # noqa: F401
@@ -45,7 +45,7 @@ from .objectives.base import ObjectiveFunction
 from .objectives.registry import get_objective, get_mode
 from .optimization.adaptive_bounds import AdaptiveBoundsConfig, AdaptiveBoundsController
 from .optimization.base import BaseOptimizer
-from .optimization.logging import OptimizationLogger
+from .diagnostics import OptimizationLogger
 from .optimization.saea import SurrogateAssistedEA
 from .optimization.sao import SurrogateAssistedOptimizer
 from .parameters.base import ParameterSet

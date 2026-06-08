@@ -18,7 +18,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.tolerance_sweep_recommendation import (
+from workflows.rfgun_tolerance.sweep_recommendation import (
     MetricAcceptanceRule,
     MetricLevelDecision,
     MetricToleranceRecommendation,
@@ -28,7 +28,7 @@ from workflows.rfgun_sao.tolerance_sweep_recommendation import (
     recommend_metric_tolerance,
     recommend_tolerance_envelope,
 )
-from workflows.rfgun_sao.tolerance_sweep_analysis import (
+from workflows.rfgun_tolerance.sweep_analysis import (
     SweepAnalysisReport,
     SweepMetricCurve,
     SweepMetricLevelSummary,
@@ -263,7 +263,7 @@ class TestEnvelope:
 
 class TestGlobalSafety:
     def test_no_factory_import(self):
-        import workflows.rfgun_sao.tolerance_sweep_recommendation as mod
+        import workflows.rfgun_tolerance.sweep_recommendation as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -271,7 +271,7 @@ class TestGlobalSafety:
         assert "cst_optimization.workflows.recovery" not in text
 
     def test_no_jsonl_excel(self):
-        import workflows.rfgun_sao.tolerance_sweep_recommendation as mod
+        import workflows.rfgun_tolerance.sweep_recommendation as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()

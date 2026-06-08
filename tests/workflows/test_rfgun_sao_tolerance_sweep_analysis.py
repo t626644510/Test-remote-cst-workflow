@@ -18,7 +18,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.tolerance_sweep_analysis import (
+from workflows.rfgun_tolerance.sweep_analysis import (
     SweepAnalysisReport,
     SweepMetricCurve,
     SweepMetricLevelSummary,
@@ -28,13 +28,13 @@ from workflows.rfgun_sao.tolerance_sweep_analysis import (
     largest_adjacent_delta_index,
     summarize_sweep_group,
 )
-from workflows.rfgun_sao.tolerance_sweep_dataset import (
+from workflows.rfgun_tolerance.sweep_dataset import (
     ToleranceSweepDataset,
     ToleranceSweepGroup,
     build_sweep_group_from_records,
     build_sweep_dataset,
 )
-from workflows.rfgun_sao.tolerance_dataset import (
+from workflows.rfgun_tolerance.dataset import (
     ToleranceDataset,
 )
 
@@ -217,7 +217,7 @@ class TestSweepAnalysis:
             {"tolerance_parameter": "offset1", "tolerance_level": 3, "records": [_record(i) for i in range(5)]},
             {"tolerance_parameter": "offset1", "tolerance_level": 30, "records": [_record(i) for i in range(5)]},
         ]
-        from workflows.rfgun_sao.tolerance_sweep_dataset import build_sweep_dataset_from_record_groups
+        from workflows.rfgun_tolerance.sweep_dataset import build_sweep_dataset_from_record_groups
         sweep = build_sweep_dataset_from_record_groups(spec)
         report = analyze_tolerance_sweep(sweep)
         assert report.tolerance_parameter == "offset1"
@@ -228,7 +228,7 @@ class TestSweepAnalysis:
         spec = [
             {"tolerance_parameter": "offset1", "tolerance_level": 3, "records": [_record(i) for i in range(3)]},
         ]
-        from workflows.rfgun_sao.tolerance_sweep_dataset import build_sweep_dataset_from_record_groups
+        from workflows.rfgun_tolerance.sweep_dataset import build_sweep_dataset_from_record_groups
         sweep = build_sweep_dataset_from_record_groups(spec)
         report = analyze_tolerance_sweep(sweep, metric_names=["m2", "m1"])
         assert [c.metric_name for c in report.metric_curves] == ["m2", "m1"]
@@ -243,7 +243,7 @@ class TestSweepAnalysis:
             }
         records_3um = [_ff_rec(i, 0.02) for i in range(5)]
         records_30um = [_ff_rec(i, 0.15) for i in range(5)]
-        from workflows.rfgun_sao.tolerance_sweep_dataset import build_sweep_group_from_records
+        from workflows.rfgun_tolerance.sweep_dataset import build_sweep_group_from_records
         g3 = build_sweep_group_from_records(records_3um, "offset1", 3.0, "um")
         g30 = build_sweep_group_from_records(records_30um, "offset1", 30.0, "um")
         sweep = build_sweep_dataset([g3, g30])
@@ -264,7 +264,7 @@ class TestSweepAnalysis:
 
 class TestGlobalSafety:
     def test_no_factory_import(self):
-        import workflows.rfgun_sao.tolerance_sweep_analysis as mod
+        import workflows.rfgun_tolerance.sweep_analysis as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -272,7 +272,7 @@ class TestGlobalSafety:
         assert "cst_optimization.workflows.recovery" not in text
 
     def test_no_jsonl_excel(self):
-        import workflows.rfgun_sao.tolerance_sweep_analysis as mod
+        import workflows.rfgun_tolerance.sweep_analysis as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()

@@ -24,3 +24,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "no_cst: tests that do NOT require a CST Studio Suite licence or DesignEnvironment connection (safe for CI / offline dev)",
+    "cst_required: tests that need a live CST DesignEnvironment — skip by default; run with -m cst_required when CST is available",
+    "slow: tests that take more than a few seconds even without CST (intensive parameter sweeps, large synthesis checks)",
+]

@@ -198,10 +198,10 @@ def test_runner_optimize_uses_only_supported_kwargs():
     raise AssertionError('Could not find opt.optimize() call in run.py')
 
 
-def test_factory_build_sao_reads_n_initial_samples_key():
-    """Phase 1 dedup: the canonical _build_sao in factory.py accepts both keys."""
-    factory_path = Path(__file__).parents[2] / "src" / "cst_optimization" / "factory.py"
-    src = factory_path.read_text("utf-8")
+def test_builders_module_has_n_initial_samples_and_n_initial():
+    """Phase 3: _build_sao in builders.py accepts both config keys."""
+    builders_path = Path(__file__).parents[2] / "src" / "cst_optimization" / "builders.py"
+    src = builders_path.read_text("utf-8")
     assert 'n_initial_samples' in src
     assert 'n_initial' in src
 

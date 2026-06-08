@@ -610,16 +610,24 @@ def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
     assert "objective_weights" in src
-def test_types_py_is_re_export_shim():
-    """Phase 1: types.py re-exports from cst_optimization.workflows.recovery."""
+def test_types_py_has_local_definition():
+    """Phase 9: types.py has local definitions (decoupled from shared recovery).
+
+    The local copies are kept intentionally for workflow isolation.
+    Equivalence with shared recovery.py is validated by
+    test_evaluation_status_enum_match_with_shared_recovery and
+    test_evaluation_result_fields_match_shared_recovery.
+    """
     src2 = (WF1_PACKAGE / "types.py").read_text("utf-8")
-    assert "cst_optimization.workflows.recovery" in src2
-    assert "class EvaluationStatus" not in src2
-    assert "class EvaluationResult" not in src2
-    # Verify re-exported types are usable
+    # types.py should have its own local class definitions, not re-exports
+    assert "class EvaluationStatus" in src2
+    assert "class EvaluationResult" in src2
+    # Verify types are usable
     from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
     assert hasattr(EvaluationStatus, "SUCCESS")
+    assert hasattr(EvaluationStatus, "FREQUENCY_GATE")
     assert hasattr(EvaluationResult, "status")
+    assert hasattr(EvaluationResult, "frequency_gate_passed")
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

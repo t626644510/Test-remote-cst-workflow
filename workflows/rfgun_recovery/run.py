@@ -37,6 +37,7 @@ except ModuleNotFoundError as exc:
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
+from cst_optimization.runner import BaseRunner
 from workflows.rfgun_recovery.workflow import build_workflow_3
 
 _interrupt_count = 0
@@ -334,5 +335,14 @@ def main() -> None:
         sys.exit(1)
 
 
+# -- BaseRunner integration (Phase 13) ----------------------------------
 
 
+class WF3Runner(BaseRunner):
+    """WF3 recovery runner — delegates to standalone functions."""
+
+    def __init__(self):
+        super().__init__(wf_name="workflow_3", default_config="config/workflow_3.yaml")
+
+    def run(self):
+        main()

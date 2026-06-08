@@ -38,6 +38,7 @@ DEFAULT_CONFIG_PATH: Path = Path(__file__).resolve().with_name("config.yaml")
 
 # ---- cst_optimization imports (require SRC_DIR on sys.path) ---------------
 from cst_optimization.checkpoint import CheckpointManager
+from cst_optimization.runner import BaseRunner
 from workflows.rfgun_sao.records import (
     append_jsonl_record,
     build_evaluation_record,
@@ -703,6 +704,22 @@ def main() -> None:
     print(f"Log: {_os.path.join(ckpt_dir, 'workflow_1_runtime.log')}")
 
 
+# -- BaseRunner integration (Phase 13) ----------------------------------
+
+
+class WF1Runner(BaseRunner):
+    """WF1 SAO runner — delegates to standalone functions.
+
+    Full migration of main() logic into BaseRunner overrides is planned.
+    Currently wraps main() to establish the Runner class pattern.
+    """
+    def __init__(self):
+        super().__init__(wf_name="workflow_1", default_config=str(DEFAULT_CONFIG_PATH))
+
+    def run(self):
+        main()
+
+
 if __name__ == "__main__":
-    main()
+    WF1Runner().run()
 

@@ -55,7 +55,6 @@ from .parameters.base import ParameterSet
 from .workflows.recovery import (
     FrequencyGate,
     MetricSpec,
-    RecoveryWorkflowEvaluator,
 )
 
 _logger = logging.getLogger(__name__)
@@ -90,7 +89,7 @@ def build_workflow_3(
     config: dict[str, Any],
     resume_jsonl_path: str = "",
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None] | None = None,
-) -> tuple[RecoveryWorkflowEvaluator, BaseOptimizer, Callable[[np.ndarray], Any]]:
+) -> tuple[Any, BaseOptimizer, Callable[[np.ndarray], Any]]:
     """Build the workflow-3 single-project recovery optimiser from config."""
     cst_cfg = config.get("cst", {})
     library_path = cst_cfg.get("library_path", r"D:\CST\AMD64\python_cst_libraries")

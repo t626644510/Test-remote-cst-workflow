@@ -41,6 +41,10 @@ from cst_optimization.optimization.acquisition import (
 from cst_optimization.optimization.sao import SurrogateAssistedOptimizer
 from cst_optimization.parameters.base import ParameterSet, ParamRange
 from cst_optimization.parameters.geometry import GeometryParameter
+
+# ---- Shared helpers (single canonical source in factory.py) -----------------
+from cst_optimization.factory import _build_parameters, _build_sao, _resolve_named_weights
+
 from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
@@ -847,29 +851,8 @@ def build_workflow_1(
 
 
 # ---------------------------------------------------------------------------
-# Local helpers (copied from factory.py, WF1-only)
+# Local helpers (WF1-specific — different signatures from factory.py)
 # ---------------------------------------------------------------------------
-
-
-def _build_parameters(
-    param_entries: list[dict[str, Any]],
-) -> list[GeometryParameter]:
-    """Build a list of ``GeometryParameter`` instances from config entries."""
-    params = []
-    for entry in param_entries:
-        if not entry.get("enabled", True):
-            continue
-        params.append(GeometryParameter(
-            cst_name=entry["name"],
-            range=ParamRange(
-                low=float(entry["low"]),
-                high=float(entry["high"]),
-                log_scale=bool(entry.get("log_scale", False)),
-            ),
-            display_name=entry.get("display_name", entry["name"]),
-            unit=entry.get("unit", "mm"),
-        ))
-    return params
 
 
 def _build_objectives(
@@ -899,89 +882,6 @@ def _build_objectives(
 
     return objectives
 
-
-def _build_sao(
-    opt_cfg: dict[str, Any],
-    param_set: ParameterSet,
-    objectives: list[ObjectiveFunction],
-    seed: int,
-) -> SurrogateAssistedOptimizer:
-    """Build a single-objective SAO optimiser."""
-    n_initial = opt_cfg.get("n_initial_samples", opt_cfg.get("n_initial", 20))
-    n_iterations = opt_cfg.get("n_iterations", 100)
-
-    acq_name = opt_cfg.get("acquisition_function", "ei")
-    acq_xi = opt_cfg.get("acquisition_xi", 0.01)
-    acq_kappa = opt_cfg.get("acquisition_kappa", 2.0)
-
-    if acq_name == "ucb":
-        acq = UpperConfidenceBound(kappa=acq_kappa)
-    elif acq_name == "pi":
-        acq = ProbabilityOfImprovement(xi=acq_xi)
-    else:
-        acq = ExpectedImprovement(xi=acq_xi)
-
-    if len(objectives) > 1:
-        objective_names = [obj.name for obj in objectives]
-        weights_arr = _resolve_named_weights(
-            opt_cfg.get("objective_weights", None),
-            objective_names,
-        )
-        weights = list(weights_arr)
-        composite = CompositeObjective(objectives, weights=weights)
-        sao_objectives: list[ObjectiveFunction] = [composite]
-    else:
-        sao_objectives = objectives
-
-    return SurrogateAssistedOptimizer(
-        parameter_set=param_set,
-        objectives=sao_objectives,
-        seed=seed,
-        acquisition=acq,
-        n_initial=n_initial,
-        n_iterations=n_iterations,
-    )
-
-
-def _resolve_named_weights(
-    configured: Any,
-    objective_names: list[str],
-) -> np.ndarray:
-    """Resolve scalarisation weights from config.
-
-    Returns a normalised weight vector (sum = 1).
-    None or empty dict -> equal weights.
-    Dict -> weights by objective_names order, missing names default to 1.0.
-    List -> must match objective_names length.
-
-    Raises ValueError on NaN, negative, or non-positive total sum.
-    """
-    if isinstance(configured, dict):
-        if not configured:
-            raw = np.ones(len(objective_names), dtype=float)
-        else:
-            raw = np.array(
-                [float(configured.get(name, 1.0)) for name in objective_names],
-                dtype=float,
-            )
-            unknown = [k for k in configured if k not in objective_names]
-            if unknown:
-                _logger.warning(
-                    "objective_weights contains unknown metric(s): %s", unknown,
-                )
-    elif configured is not None and len(configured) == len(objective_names):
-        raw = np.array(configured, dtype=float)
-    else:
-        raw = np.ones(len(objective_names), dtype=float)
-
-    if not np.all(np.isfinite(raw)):
-        raise ValueError(f"objective_weights contain non-finite values: {raw}")
-    if np.any(raw < 0):
-        raise ValueError(f"objective_weights contain negative values: {raw}")
-    total = np.sum(raw)
-    if total <= 0:
-        raise ValueError(f"objective_weights sum to non-positive: {total}")
-    return raw / total
 
 def _build_frequency_gate(eval_cfg: dict) -> FrequencyGate:
     cfg = eval_cfg.get("frequency_gate", {})

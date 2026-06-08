@@ -46,8 +46,46 @@ from cst_optimization.workflows.recovery import (
     EvaluationStatus as _ES,
 )
 
+# ---- Shared helpers (single canonical source in factory.py) -----------------
+from cst_optimization.factory import _build_parameters, _build_sao, _resolve_named_weights
+
 # ---- Local evaluator ------------------------------------------------------
 from workflows.rfgun_single_pass.evaluator import Workflow1Evaluator
+
+_logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Local helpers (WF1-specific, different signature from factory.py)
+# ---------------------------------------------------------------------------
+
+
+def _build_objectives(
+    obj_entries: list[dict[str, Any]],
+) -> list[ObjectiveFunction]:
+    """Build objective instances from config entries (WF1-single-project).
+
+    Returns only the objective list (no project_map / ref_project_map
+    since WF1 has a single project).
+    """
+    objectives: list[ObjectiveFunction] = []
+    for entry in obj_entries:
+        if not entry.get("enabled", True):
+            continue
+
+        obj_name = entry["name"]
+        obj_cls = get_objective(obj_name)
+
+        mode_name = entry.get("mode", "minimize")
+        mode_cls = get_mode(mode_name)
+        mode_params = entry.get("mode_params", {})
+        mode = mode_cls(**mode_params) if mode_params else mode_cls()
+
+        obj_params = entry.get("obj_params", {})
+        obj = obj_cls(reader_factory=lambda: None, mode=mode, **obj_params)
+        objectives.append(obj)
+
+    return objectives
 
 _logger = logging.getLogger(__name__)
 
@@ -248,115 +286,3 @@ def build_workflow_1(
     workflow.record_path = os.path.join(log_dir, "workflow1", "evaluation_records.jsonl")
 
     return workflow, optimizer, evaluator
-
-
-# ---------------------------------------------------------------------------
-# Local helpers (copied from factory.py, WF1-only)
-# ---------------------------------------------------------------------------
-
-
-def _build_parameters(
-    param_entries: list[dict[str, Any]],
-) -> list[GeometryParameter]:
-    """Build a list of ``GeometryParameter`` instances from config entries."""
-    params = []
-    for entry in param_entries:
-        if not entry.get("enabled", True):
-            continue
-        params.append(GeometryParameter(
-            cst_name=entry["name"],
-            range=ParamRange(
-                low=float(entry["low"]),
-                high=float(entry["high"]),
-                log_scale=bool(entry.get("log_scale", False)),
-            ),
-            display_name=entry.get("display_name", entry["name"]),
-            unit=entry.get("unit", "mm"),
-        ))
-    return params
-
-
-def _build_objectives(
-    obj_entries: list[dict[str, Any]],
-) -> list[ObjectiveFunction]:
-    """Build objective instances from config entries (WF1-single-project).
-
-    Returns only the objective list (no project_map / ref_project_map
-    since WF1 has a single project).
-    """
-    objectives: list[ObjectiveFunction] = []
-    for entry in obj_entries:
-        if not entry.get("enabled", True):
-            continue
-
-        obj_name = entry["name"]
-        obj_cls = get_objective(obj_name)
-
-        mode_name = entry.get("mode", "minimize")
-        mode_cls = get_mode(mode_name)
-        mode_params = entry.get("mode_params", {})
-        mode = mode_cls(**mode_params) if mode_params else mode_cls()
-
-        obj_params = entry.get("obj_params", {})
-        obj = obj_cls(reader_factory=lambda: None, mode=mode, **obj_params)
-        objectives.append(obj)
-
-    return objectives
-
-
-def _build_sao(
-    opt_cfg: dict[str, Any],
-    param_set: ParameterSet,
-    objectives: list[ObjectiveFunction],
-    seed: int,
-) -> SurrogateAssistedOptimizer:
-    """Build a single-objective SAO optimiser."""
-    n_initial = opt_cfg.get("n_initial_samples", opt_cfg.get("n_initial", 20))
-    n_iterations = opt_cfg.get("n_iterations", 100)
-
-    acq_name = opt_cfg.get("acquisition_function", "ei")
-    acq_xi = opt_cfg.get("acquisition_xi", 0.01)
-    acq_kappa = opt_cfg.get("acquisition_kappa", 2.0)
-
-    if acq_name == "ucb":
-        acq = UpperConfidenceBound(kappa=acq_kappa)
-    elif acq_name == "pi":
-        acq = ProbabilityOfImprovement(xi=acq_xi)
-    else:
-        acq = ExpectedImprovement(xi=acq_xi)
-
-    if len(objectives) > 1:
-        weights = opt_cfg.get("objective_weights", None)
-        if isinstance(weights, dict):
-            weights = [float(weights.get(obj.name, 1.0)) for obj in objectives]
-        composite = CompositeObjective(objectives, weights=weights)
-        sao_objectives: list[ObjectiveFunction] = [composite]
-    else:
-        sao_objectives = objectives
-
-    return SurrogateAssistedOptimizer(
-        parameter_set=param_set,
-        objectives=sao_objectives,
-        seed=seed,
-        acquisition=acq,
-        n_initial=n_initial,
-        n_iterations=n_iterations,
-    )
-
-
-def _resolve_named_weights(
-    configured: Any,
-    objective_names: list[str],
-) -> np.ndarray:
-    """Resolve scalarisation weights from config."""
-    if isinstance(configured, dict):
-        raw = np.array(
-            [float(configured.get(name, 1.0)) for name in objective_names],
-            dtype=float,
-        )
-    elif configured is not None and len(configured) == len(objective_names):
-        raw = np.array(configured, dtype=float)
-    else:
-        raw = np.ones(len(objective_names), dtype=float)
-    raw = np.where(raw > 0, raw, 1.0)
-    return raw / np.sum(raw)

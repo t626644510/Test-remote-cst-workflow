@@ -177,17 +177,20 @@ def test_config_yaml_has_wf1_sections_only():
     )
 
 # ============================================================
-# D. Local workflow module imports without factory
+# D. Local workflow module imports factory helpers (not builder functions)
 # ============================================================
 
-def test_local_workflow_module_imports_without_factory():
+def test_local_workflow_module_imports_factory():
+    """Phase 1 dedup: workflow.py imports shared _build_* helpers from factory."""
     sys.modules.pop("cst_optimization.factory", None)
     sys.modules.pop("workflows.rfgun_sao.workflow", None)
 
     import workflows.rfgun_sao.workflow as wf_mod
 
-    assert "cst_optimization.factory" not in sys.modules
+    assert "cst_optimization.factory" in sys.modules
     assert hasattr(wf_mod, "build_workflow_1")
+    # The local _build_sao etc. are re-exported from factory but callable
+    assert callable(getattr(wf_mod, "_build_sao", None))
 
 # ============================================================
 # E. Evaluator class can be constructed without CST
@@ -224,13 +227,18 @@ def test_evaluator_class_can_be_constructed_without_cst_connection():
     assert callable(evaluator.on_reconnect)
 
 # ============================================================
-# F. Workflow source has no factory import
+# F. Workflow source imports factory helpers (not duplicated)
 # ============================================================
 
-def test_workflow_static_source_has_no_factory_import():
+def test_workflow_source_imports_factory_helpers_not_duplicate_defs():
+    """Phase 1 dedup: workflow.py imports helpers; no longer duplicates them."""
     src = (WF1_PACKAGE / "workflow.py").read_text("utf-8")
-    assert "from cst_optimization.factory" not in src
-    assert "import cst_optimization.factory" not in src
+    # Must import from factory (single canonical source)
+    assert "from cst_optimization.factory import" in src
+    # Must NOT have local duplicate definitions
+    assert "\ndef _build_sao(" not in src
+    assert "\ndef _build_parameters(" not in src
+    assert "\ndef _resolve_named_weights(" not in src
 
 # ============================================================
 # G. No WF2 objective side-effect imports
@@ -266,8 +274,10 @@ def test_runner_optimize_uses_only_supported_kwargs():
                 return
     raise AssertionError('Could not find opt.optimize() call in run.py')
 
-def test_workflow_build_sao_reads_n_initial_samples_key():
-    src = (WF1_PACKAGE / 'workflow.py').read_text('utf-8')
+def test_factory_build_sao_reads_n_initial_samples_key():
+    """Phase 1 dedup: the canonical _build_sao in factory.py accepts both keys."""
+    factory_path = Path(__file__).parents[2] / "src" / "cst_optimization" / "factory.py"
+    src = factory_path.read_text("utf-8")
     assert 'n_initial_samples' in src
     assert 'n_initial' in src
 
@@ -287,34 +297,34 @@ def test_types_expose_evaluation_types():
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
 
 def test_default_weights_equal():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     w = _resolve_named_weights(None, ["a", "b", "c"])
     assert list(w) == [1/3, 1/3, 1/3]
 
 def test_named_weights_by_objective_order():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     w = _resolve_named_weights({"b": 5.0, "a": 3.0}, ["a", "b"])
     assert list(w) == [3/8, 5/8]
 
 def test_weight_0_is_allowed():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     w = _resolve_named_weights({'a': 0.0, 'b': 2.0}, ['a', 'b'])
     assert w[0] == 0.0 and w[1] == 1.0
 
 def test_all_zero_weights_raise_error():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     import pytest
     with pytest.raises(ValueError):
         _resolve_named_weights({'a': 0.0, 'b': 0.0}, ['a', 'b'])
 
 def test_inf_weights_raise_error():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     import pytest
     with pytest.raises(ValueError):
         _resolve_named_weights({'a': float('inf')}, ['a'])
 
 def test_invalid_weights_raise_error():
-    from workflows.rfgun_sao.workflow import _resolve_named_weights
+    from cst_optimization.factory import _resolve_named_weights
     import pytest
     with pytest.raises(ValueError):
         _resolve_named_weights({"a": -1.0}, ["a"])

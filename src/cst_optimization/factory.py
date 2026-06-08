@@ -741,8 +741,10 @@ def _build_sao(
 
     The *objectives* are passed for metadata (names, count).
     The true evaluator is passed to ``optimize(evaluator=...)`` at run time.
+
+    Accepts either ``n_initial`` or ``n_initial_samples`` (WF1 legacy) config key.
     """
-    n_initial = opt_cfg.get("n_initial", 20)
+    n_initial = opt_cfg.get("n_initial_samples", opt_cfg.get("n_initial", 20))
     n_iterations = opt_cfg.get("n_iterations", 100)
 
     acq_name = opt_cfg.get("acquisition_function", "ei")
@@ -849,15 +851,41 @@ def _resolve_named_weights(
     configured: Any,
     objective_names: list[str],
 ) -> np.ndarray:
-    """Resolve workflow-3 scalarisation weights from config."""
+    """Resolve scalarisation weights from config.
+
+    Returns a normalised weight vector (sum = 1).
+    None or empty dict -> equal weights.
+    Dict -> weights by objective_names order, missing names default to 1.0.
+    List -> must match objective_names length.
+
+    Raises ValueError on NaN, negative, or non-positive total sum.
+    """
     if isinstance(configured, dict):
-        raw = np.array([float(configured.get(name, 1.0)) for name in objective_names], dtype=float)
+        if not configured:
+            raw = np.ones(len(objective_names), dtype=float)
+        else:
+            raw = np.array(
+                [float(configured.get(name, 1.0)) for name in objective_names],
+                dtype=float,
+            )
+            unknown = [k for k in configured if k not in objective_names]
+            if unknown:
+                _logger.warning(
+                    "objective_weights contains unknown metric(s): %s", unknown,
+                )
     elif configured is not None and len(configured) == len(objective_names):
         raw = np.array(configured, dtype=float)
     else:
         raw = np.ones(len(objective_names), dtype=float)
-    raw = np.where(raw > 0, raw, 1.0)
-    return raw / np.sum(raw)
+
+    if not np.all(np.isfinite(raw)):
+        raise ValueError(f"objective_weights contain non-finite values: {raw}")
+    if np.any(raw < 0):
+        raise ValueError(f"objective_weights contain negative values: {raw}")
+    total = np.sum(raw)
+    if total <= 0:
+        raise ValueError(f"objective_weights sum to non-positive: {total}")
+    return raw / total
 
 
 def _placeholder_objectives_for_metrics(names: list[str]) -> list[ObjectiveFunction]:

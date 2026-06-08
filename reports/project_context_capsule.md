@@ -1,6 +1,6 @@
 # Project Context Capsule
 
-Date: 2026-06-08 (post-Phase-11 architecture consolidation)
+Date: 2026-06-08 (post-Phase-13 — all three workflows inherit BaseRunner, WF3 builder extracted)
 
 Compact recovery entry point. Code, tests, and git diff are authoritative.
 

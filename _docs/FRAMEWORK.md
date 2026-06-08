@@ -1,6 +1,6 @@
 # Framework Notes
 
-Compact architecture overlay for the current repository state (Phase 11).
+Compact architecture overlay for the current repository state (Phase 13).
 
 ## Shared Core (`src/cst_optimization/`)
 
@@ -15,7 +15,8 @@ Compact architecture overlay for the current repository state (Phase 11).
 | `optimization/` | SAO, SAEA, acquisition, adaptive bounds, conditional gate |
 | `parameters/` | ParameterSet, GeometryParameter |
 | `physics/` | Cavity, formulas, heating, Poynting, wakefield, quantities |
-| `factory.py` | Shared config→object builders + build_workflow_2/3 |
+| `factory.py` | Shared config→object builders + `build_workflow_2` wrapper |
+| `runner.py` | `BaseRunner` class for workflow CLI entry points |
 | `checkpoint.py` | CheckpointManager (pickle) |
 | `database.py` | 1D curve recording/replay |
 
@@ -26,7 +27,7 @@ Compact architecture overlay for the current repository state (Phase 11).
 | `workflows/rfgun_sao/` | **WF1 active**: SAO + two-pass + staged/adaptive search |
 | `workflows/rfgun_single_pass/` | **WF1 reference**: validated single-pass baseline |
 | `workflows/rfgun_hom_antenna/` | **WF2**: Dual-project HOM antenna (owns DualProjectOrchestrator, antenna/wakefield objectives) |
-| `workflows/rfgun_recovery/` | **WF3**: Recovery optimisation (run.py + evaluator.py) |
+| `workflows/rfgun_recovery/` | **WF3**: Recovery optimisation (run.py + workflow.py + evaluator.py) |
 | `workflows/rfgun_tolerance/` | **WF3 tolerance**: Monte Carlo sampling + statistical analysis |
 
 ## Root Shims

@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 dist/
 build/
 .next/
@@ -24,7 +24,6 @@ Thumbs.db
 workflow2_result/
 .claude/
 .pytest_cache/
-.vscode/
 AGENTS
 CLAUDE
 
@@ -32,3 +31,4 @@ workflows/**/config.local.yaml
 /config.local.yaml
 # Claude local settings (do not commit)
 .claude/settings.local.json
+

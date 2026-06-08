@@ -1,8 +1,9 @@
-"""Workflow 1 builder -- local alternative to ``cst_optimization.factory.build_workflow_1``.
+"""Workflow 1 canonical builder -- the authoritative ``build_workflow_1`` for the
+active SAO workflow package.
 
-Extracted from the monolithic factory during Phase 5.  Behaviour is
-identical to the original ``cst_optimization.factory.build_workflow_1``
-but only imports the objective modules that Workflow 1 actually needs
+The root ``run_workflow_1.py`` shim delegates to
+``workflows.rfgun_sao.run``, which calls this builder.
+Workflow 1 imports only the objective modules it needs
 (no wakefield, no antenna).
 """
 

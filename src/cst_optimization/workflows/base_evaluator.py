@@ -180,3 +180,47 @@ class BaseWorkflow1Evaluator:
     def _compute_penalties(self, raw_metrics: dict[str, float]) -> dict[str, float]:
         """Subclass hook: compute penalty values from raw physics metrics."""
         raise NotImplementedError("Subclass must implement _compute_penalties")
+
+    # -- adapt_for_retry is shared; subclasses can override _extra_result_fields --
+
+    def adapt_for_retry(
+        self,
+        params: np.ndarray,
+        iteration: int,
+        result_cls: type,
+        eval_status_cls: type,
+    ) -> Any:
+        """Wrap ``evaluate_single_pass`` for ``EvaluationRetryHandler``.
+
+        Parameters
+        ----------
+        params : np.ndarray
+            Physical-space parameter vector.
+        iteration : int
+            Evaluation index.
+        result_cls : type
+            ``EvaluationResult`` class (from rfgun_sao or shared recovery).
+        eval_status_cls : type
+            ``EvaluationStatus`` enum class.
+
+        Returns
+        -------
+        EvaluationResult
+        """
+        param_dict = dict(zip(self._param_names, params))
+        raw, pen, ok, status, err = self.evaluate_single_pass(param_dict, iteration, eval_status_cls)
+        kwargs: dict[str, Any] = {
+            "status": status,
+            "error": err,
+            "f0_ghz": float(raw.get("resonant_freq", np.nan)),
+            "raw_metrics": raw,
+            "penalty_values": pen,
+            "objective_values": {k: raw.get(k, np.nan) for k in self._metric_names},
+        }
+        # Hook for subclasses to add extra fields (e.g. diagnostics)
+        kwargs.update(self._extra_result_fields())
+        return result_cls(**kwargs)
+
+    def _extra_result_fields(self) -> dict[str, Any]:
+        """Hook: extra fields for ``EvaluationResult`` (e.g. diagnostics)."""
+        return {}

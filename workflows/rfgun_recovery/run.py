@@ -37,7 +37,7 @@ except ModuleNotFoundError as exc:
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
-from cst_optimization.factory import build_workflow_3
+from workflows.rfgun_recovery.workflow import build_workflow_3
 
 _interrupt_count = 0
 _logger = logging.getLogger("workflow_3")

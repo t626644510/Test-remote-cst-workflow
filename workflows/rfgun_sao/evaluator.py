@@ -141,29 +141,10 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
     def adapt_for_retry(
         self, params: np.ndarray, iteration: int,
     ) -> EvaluationResult:
-        """Wrap ``evaluate_single_pass`` for ``EvaluationRetryHandler``.
+        """Delegate to base class shared implementation."""
+        return super().adapt_for_retry(params, iteration, EvaluationResult, _ES)
 
-        Parameters
-        ----------
-        params : np.ndarray
-            Physical-space parameter vector.
-        iteration : int
-            Evaluation index.
-
-        Returns
-        -------
-        EvaluationResult
-            Structured result with status, raw_metrics, penalty_values.
-        """
-        param_dict = dict(zip(self._param_names, params))
-        raw, pen, ok, status, err = self.evaluate_single_pass(param_dict, iteration)
-        return EvaluationResult(
-            status=status,
-            error=err,
-            f0_ghz=float(raw.get("resonant_freq", np.nan)),
-            raw_metrics=raw,
-            penalty_values=pen,
-            objective_values={k: raw.get(k, np.nan) for k in self._metric_names},
-            diagnostics=dict(self._last_diagnostics),
-        )
+    def _extra_result_fields(self) -> dict[str, Any]:
+        """Include diagnostics in evaluation result."""
+        return {"diagnostics": dict(self._last_diagnostics)}
 

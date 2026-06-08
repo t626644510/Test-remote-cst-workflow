@@ -1,4 +1,4 @@
-"""Wakefield-impedance optimisation objectives.
+﻿"""Wakefield-impedance optimisation objectives (WF2-local).
 
 Longitudinal and transverse beam-coupling impedance objectives for the
 HOM antenna optimisation workflow (Phase 2).
@@ -11,7 +11,7 @@ penalty mode.
 Example YAML::
 
     objectives:
-      # Longitudinal: HOM only (>550 MHz), <1.5 kΩ
+      # Longitudinal: HOM only (>550 MHz), <1.5 k惟
       - name: z_longitudinal
         mode: less_than
         mode_params: {threshold: 0.0, sigma: 1.0}
@@ -22,7 +22,7 @@ Example YAML::
           reference_beam: ParticleBeam1
           project: wakefield
 
-      # Transverse: beam subtraction + magnitude, <50 kΩ/m
+      # Transverse: beam subtraction + magnitude, <50 k惟/m
       - name: z_transverse
         mode: less_than
         mode_params: {threshold: 0.0, sigma: 1.0}
@@ -41,9 +41,9 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from .base import ObjectiveFunction
-from .registry import register_objective
-from ..physics.wakefield import (
+from cst_optimization.objectives.base import ObjectiveFunction
+from cst_optimization.objectives.registry import register_objective
+from cst_optimization.physics.wakefield import (
     ParticleBeam,
     WakeImpedanceData,
     read_beam_impedance,
@@ -64,7 +64,7 @@ _logger = logging.getLogger(__name__)
 
 @register_objective
 class LongitudinalImpedanceObjective(ObjectiveFunction):
-    """Longitudinal beam-coupling impedance Z_‖(f).
+    """Longitudinal beam-coupling impedance Z_鈥?f).
 
     Reads the Z-direction wake impedance from the on-axis reference beam,
     applies an optional HOM frequency mask (to exclude the fundamental-mode
@@ -74,13 +74,12 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
     Derivation
     ----------
     From ParticleBeam1 (on-axis), read ``Wake impedance\\Z``.
-    Exclude the fundamental-mode band (≤ *freq_min_hz*), keep HOM region.
-    Scalarize with chosen strategy → exceedance metric.
+    Exclude the fundamental-mode band (鈮?*freq_min_hz*), keep HOM region.
+    Scalarize with chosen strategy 鈫?exceedance metric.
 
-    Raw value unit: depends on *strategy* —
-        - ``threshold_exceedance_integral`` → Ω·Hz
-        - ``peak_exceedance``             → Ω
-        - ``composite``                   → dimensionless
+    Raw value unit: depends on *strategy* 鈥?        - ``threshold_exceedance_integral`` 鈫?惟路Hz
+        - ``peak_exceedance``             鈫?惟
+        - ``composite``                   鈫?dimensionless
 
     Typical mode: ``less_than`` with ``threshold=0``.
 
@@ -91,7 +90,7 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
     reference_beam : str
         Name of the on-axis reference beam (e.g. ``"ParticleBeam1"``).
     z_threshold_ohm : float
-        Maximum allowed longitudinal impedance (1.5 kΩ = 1500 Ω).
+        Maximum allowed longitudinal impedance (1.5 k惟 = 1500 惟).
     strategy : str
         Scalarization strategy name.
     weights : tuple[float, float, float] or None
@@ -104,7 +103,7 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
     """
 
     name: ClassVar[str] = "z_longitudinal"
-    unit: ClassVar[str] = "Ω·Hz | Ω | dimensionless"
+    unit: ClassVar[str] = "惟路Hz | 惟 | dimensionless"
 
     def __init__(
         self,
@@ -168,7 +167,7 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
 
 @register_objective
 class TransverseImpedanceObjective(ObjectiveFunction):
-    """Transverse beam-coupling impedance Z_⊥(f).
+    """Transverse beam-coupling impedance Z_鈯?f).
 
     Computes the transverse impedance from one or more offset beam-lines
     via finite-difference subtraction against the on-axis reference beam,
@@ -178,17 +177,16 @@ class TransverseImpedanceObjective(ObjectiveFunction):
     ----------
     For each offset beam *i* with offset distance *d_i*::
 
-        ΔX_i(f) = Z_x(offset_i, f) − Z_x(ref, f)
-        ΔY_i(f) = Z_y(offset_i, f) − Z_y(ref, f)
-        Z_trans,i(f) = √(ΔX_i² + ΔY_i²) / d_i   [Ω/m]
+        螖X_i(f) = Z_x(offset_i, f) 鈭?Z_x(ref, f)
+        螖Y_i(f) = Z_y(offset_i, f) 鈭?Z_y(ref, f)
+        Z_trans,i(f) = 鈭?螖X_i虏 + 螖Y_i虏) / d_i   [惟/m]
 
     Each Z_trans,i is scalarized.  Results are aggregated across
     offset beams (worst-case by default).
 
-    Raw value unit: depends on *strategy* —
-        - ``threshold_exceedance_integral`` → Ω/m·Hz
-        - ``peak_exceedance``             → Ω/m
-        - ``composite``                   → dimensionless
+    Raw value unit: depends on *strategy* 鈥?        - ``threshold_exceedance_integral`` 鈫?惟/m路Hz
+        - ``peak_exceedance``             鈫?惟/m
+        - ``composite``                   鈫?dimensionless
 
     Typical mode: ``less_than`` with ``threshold=0``.
 
@@ -201,7 +199,7 @@ class TransverseImpedanceObjective(ObjectiveFunction):
     offset_beams : list[dict]
         Each dict with keys ``name``, ``offset_x_mm``, ``offset_y_mm``.
     z_threshold_ohm_per_m : float
-        Maximum allowed transverse impedance (50 kΩ/m).
+        Maximum allowed transverse impedance (50 k惟/m).
     strategy : str
     aggregation : str
         ``"worst_case"`` (default), ``"rms"``, or ``"mean"``.
@@ -210,7 +208,7 @@ class TransverseImpedanceObjective(ObjectiveFunction):
     """
 
     name: ClassVar[str] = "z_transverse"
-    unit: ClassVar[str] = "Ω/m·Hz | Ω/m | dimensionless"
+    unit: ClassVar[str] = "惟/m路Hz | 惟/m | dimensionless"
 
     def __init__(
         self,
@@ -312,3 +310,4 @@ class TransverseImpedanceObjective(ObjectiveFunction):
             scalar_values,
             mode=self._aggregation,  # type: ignore[arg-type]
         )
+

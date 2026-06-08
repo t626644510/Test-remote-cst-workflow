@@ -35,15 +35,12 @@ from .builders import (
 )
 from .core.connection import CSTConnection
 from .core.messages import MessageLogger
-from .core.orchestrator import DualProjectOrchestrator, ProjectSpec
 from .core.retry import EvaluationRetryHandler, RetryConfig  # RetryConfig kept for workflow_3
 from .core.solver import SolverRunner
-from .objectives import antenna     # noqa: F401  — @register_objective side-effects
 from .objectives import field       # noqa: F401
 from .objectives import frequency   # noqa: F401
 from .objectives import modes       # noqa: F401  — @register_mode side-effects
 from .objectives import quality     # noqa: F401
-from .objectives import wakefield   # noqa: F401
 from .objectives.base import ObjectiveFunction
 from .objectives.registry import get_objective, get_mode
 from .optimization.adaptive_bounds import AdaptiveBoundsConfig, AdaptiveBoundsController
@@ -70,8 +67,6 @@ def build_workflow_2(
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
     | None = None,
 ) -> tuple[
-    DualProjectOrchestrator,
-    BaseOptimizer,
     Callable[[np.ndarray], Any],
     EvaluationRetryHandler | None,
 ]:
@@ -357,10 +352,4 @@ def build_workflow_3(
 
     return workflow, optimizer, evaluator
 
-
-# ---------------------------------------------------------------------------
-# Re-export for backward compatibility (Phase 3: moved to WF2 package)
-# ---------------------------------------------------------------------------
-
-from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator  # noqa: F401, E402
 

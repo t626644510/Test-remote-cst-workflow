@@ -51,8 +51,8 @@ from cst_optimization.objectives import modes       # noqa: F401
 from cst_optimization.objectives import frequency   # noqa: F401
 from cst_optimization.objectives import quality     # noqa: F401
 from cst_optimization.objectives import field       # noqa: F401
-from cst_optimization.objectives import wakefield   # noqa: F401
-from cst_optimization.objectives import antenna     # noqa: F401
+from workflows.rfgun_hom_antenna import wakefield_objective   # noqa: F401
+from workflows.rfgun_hom_antenna import antenna_objective     # noqa: F401
 
 _logger = logging.getLogger(__name__)
 

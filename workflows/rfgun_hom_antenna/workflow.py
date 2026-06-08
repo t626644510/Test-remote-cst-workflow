@@ -16,12 +16,14 @@ import numpy as np
 
 # ── Core CST abstractions ──────────────────────────────────────────────────
 from cst_optimization.core.connection import CSTConnection
-from cst_optimization.core.orchestrator import DualProjectOrchestrator, ProjectSpec
 from cst_optimization.core.messages import MessageLogger
 from cst_optimization.core.retry import EvaluationRetryHandler
 from cst_optimization.core.solver import SolverRunner
 from cst_optimization.parameters.base import ParameterSet
 from cst_optimization.objectives.base import ObjectiveFunction
+
+# ── WF2 local ─────────────────────────────────────────────────────────────
+from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator, ProjectSpec
 
 # ── Optimisers ──────────────────────────────────────────────────────────────
 from cst_optimization.optimization.base import BaseOptimizer

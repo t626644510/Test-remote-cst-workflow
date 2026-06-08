@@ -360,28 +360,8 @@ def build_workflow_3(
 
 
 # ---------------------------------------------------------------------------
-# Internal helper (still used by build_workflow_3's SAO adapter)
+# Re-export for backward compatibility (Phase 3: moved to WF2 package)
 # ---------------------------------------------------------------------------
 
+from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator  # noqa: F401, E402
 
-def _make_sao_evaluator(
-    orchestrator: DualProjectOrchestrator,
-    opt_cfg: dict[str, Any],
-    n_objectives: int,
-) -> Callable[[np.ndarray], float]:
-    """Create a scalar evaluator wrapper around the orchestrator.
-
-    The orchestrator returns shape ``(n_obj,)`` penalty vector.
-    SAO needs ``float`` — this wrapper applies a weighted sum.
-    """
-    obj_weights = opt_cfg.get("objective_weights", None)
-    if obj_weights and len(obj_weights) == n_objectives:
-        w = np.array(obj_weights, dtype=float) / np.sum(obj_weights)
-    else:
-        w = np.ones(n_objectives) / n_objectives
-
-    def _evaluator(x_phys: np.ndarray) -> float:
-        penalties = orchestrator.execute(x_phys)
-        return float(np.dot(penalties, w))
-
-    return _evaluator

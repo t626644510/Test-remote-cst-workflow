@@ -107,7 +107,13 @@ class EvaluationStatus(Enum):
 
 @dataclass
 class EvaluationResult:
-    """One workflow-3 evaluation record."""
+    """One evaluation record — canonical type shared across all workflows.
+
+    .. note::
+
+        *rfgun_sao/types.py* re-exports this class; new code should import
+        directly from ``cst_optimization.workflows.recovery``.
+    """
 
     status: EvaluationStatus = EvaluationStatus.UNKNOWN_ERROR
     error: str = ""
@@ -117,6 +123,7 @@ class EvaluationResult:
     objective_values: dict[str, float] | None = None
     penalty_values: dict[str, float] | None = None
     pass_log: dict[str, Any] | None = None
+    diagnostics: dict[str, Any] | None = None
     elapsed_s: float = 0.0
 
     @property

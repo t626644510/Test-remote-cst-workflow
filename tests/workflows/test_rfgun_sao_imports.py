@@ -575,11 +575,16 @@ def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
     assert "objective_weights" in src
-def test_no_legacy_recovery_import():
-    for py_file in WF1_PACKAGE.glob('*.py'):
-        src2 = py_file.read_text('utf-8')
-        assert 'cst_optimization.workflows.recovery' not in src2, \
-            f'{py_file.name} imports from legacy recovery'
+def test_types_py_is_re_export_shim():
+    """Phase 1: types.py re-exports from cst_optimization.workflows.recovery."""
+    src2 = (WF1_PACKAGE / "types.py").read_text("utf-8")
+    assert "cst_optimization.workflows.recovery" in src2
+    assert "class EvaluationStatus" not in src2
+    assert "class EvaluationResult" not in src2
+    # Verify re-exported types are usable
+    from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+    assert hasattr(EvaluationStatus, "SUCCESS")
+    assert hasattr(EvaluationResult, "status")
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

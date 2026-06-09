@@ -222,13 +222,13 @@ class ToleranceSampler:
         )
 
         if failed_rows:
-            import json as _json
             print(f"\nRecovery: {len(failed_rows)} failed record(s) found "
                   f"({n_existing_success} already success).")
             for row in failed_rows:
                 global_idx += 1
                 try:
-                    x = np.array(_json.loads(row["param_values"]), dtype=float)
+                    pv = row["param_values"]
+                    x = np.array(pv, dtype=float) if not isinstance(pv, np.ndarray) else pv.astype(float)
                 except Exception:
                     print(f"  [skip] bad param_values in row id={row.get('id')}")
                     continue

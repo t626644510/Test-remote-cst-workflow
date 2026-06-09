@@ -159,7 +159,7 @@ class ToleranceSampler:
 
         # Database
         os.makedirs(os.path.dirname(config.db_path) or ".", exist_ok=True)
-        db_cfg = EvaluationDatabaseConfig(path=config.db_path)
+        db_cfg = EvaluationDatabaseConfig(path=config.db_path, enabled=True)
         self._db = SQLiteEvaluationDatabase(db_cfg)
         self._db.open()
 

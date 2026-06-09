@@ -128,6 +128,48 @@ def main():
                 pass
         sensitivities[level] = sens_reports
 
+    # ---- 3.5: Cross-level rank stability ----------------------------------
+    # For each (param, metric) pair, count how often it's rank=1 across levels.
+    # Collect param/metric names from first available group
+    all_param_names = []
+    all_metric_names = []
+    for group in groups:
+        ds = group.dataset
+        if ds is not None:
+            all_param_names = list(ds.param_names)
+            all_metric_names = list(ds.metric_names)
+            break
+    rank_stability: dict[str, dict[str, dict]] = {}  # param -> metric -> stats
+    levels_with_data = [l for l, _ in LEVELS if float(l) in sensitivities and sensitivities[float(l)]]
+    for pname in all_param_names:
+        rank_stability[pname] = {}
+        for mname in all_metric_names:
+            ranks = []
+            scores = []
+            for lvl, _ in LEVELS:
+                sr_map = sensitivities.get(float(lvl), {})
+                sr = sr_map.get(mname)
+                if sr is None or not sr.metric_reports:
+                    continue
+                mr = sr.metric_reports[0]
+                for s in mr.sensitivities:
+                    if s.parameter_name == pname:
+                        ranks.append(s.rank)
+                        scores.append(s.score)
+                        break
+            n_levels = len(ranks)
+            rank1_count = sum(1 for r in ranks if r == 1)
+            top3_count = sum(1 for r in ranks if r <= 3)
+            mean_rank = sum(ranks) / n_levels if n_levels else float('inf')
+            mean_score = sum(abs(s) for s in scores) / n_levels if n_levels else 0.0
+            rank_stability[pname][mname] = {
+                "n_levels": n_levels,
+                "rank1_pct": rank1_count / n_levels * 100 if n_levels else 0,
+                "top3_pct": top3_count / n_levels * 100 if n_levels else 0,
+                "mean_rank": mean_rank,
+                "mean_abs_score": mean_score,
+            }
+
     # ---- 4. Tolerance Recommendation --------------------------------------
     # === CONFIGURABLE: acceptance rules for tolerance recommendation ===
     ACCEPTANCE_RULES = {
@@ -226,8 +268,47 @@ def main():
                 print()
         print()
 
+    # 4.5: Cross-level Rank Stability
+    print("## 5. Cross-Level Parameter Rank Stability")
+    print()
+    print("For each core metric, which parameters consistently dominate")
+    print("across all 6 tolerance levels?")
+    print()
+    print("| Metric | Parameter | |ρ| mean | Rank=1 % | Top-3 % | Mean Rank | Verdict |")
+    print("|--------|-----------|:-------:|:--------:|:-------:|:---------:|---------|")
+    CORE_METRICS = ["resonant_freq", "coupling_beta", "field_flatness"]
+    for mname in CORE_METRICS:
+        if mname not in all_metric_names:
+            continue
+        entries = []
+        for pname in all_param_names:
+            stats = rank_stability.get(pname, {}).get(mname, {})
+            if stats.get("n_levels", 0) >= 3:
+                entries.append((pname, stats))
+        entries.sort(key=lambda x: -x[1]["rank1_pct"])
+        for pname, stats in entries[:5]:
+            r1 = stats["rank1_pct"]
+            t3 = stats["top3_pct"]
+            mr = stats["mean_rank"]
+            ms = stats["mean_abs_score"]
+            nl = stats["n_levels"]
+            if r1 >= 80:
+                verdict = "**Dominant**"
+            elif r1 >= 50:
+                verdict = "Strong"
+            elif t3 >= 50:
+                verdict = "Consistent top-3"
+            elif ms >= 0.3:
+                verdict = "Moderate influence"
+            else:
+                verdict = "Weak / noise-level"
+            print(f"| {mname} | `{pname}` | {ms:.2f} | {r1:.0f}% ({nl} lvls) | {t3:.0f}% | {mr:.1f} | {verdict} |")
+        print()
+    print("*Verdict: Dominant = rank-1 in ≥80% levels; Strong = ≥50%; Consistent top-3 = in top-3 ≥50%; Moderate = mean |ρ| ≥0.3.*")
+    print()
+
     # 5e. Tolerance Recommendation
-    print("## 5. Tolerance Recommendation")
+    print("## 6. Tolerance Recommendation")
     print()
     print(f"**Overall recommended max tolerance**: **{envelope.overall_recommended_max_tolerance_um or 'N/A'} um**")
     print()
@@ -250,16 +331,6 @@ def main():
     print("and metric averages computed per bin. This shows how metrics")
     print("degrade as THIS parameter deviates (with others also varying).")
     print()
-
-    # Collect param/metric names from first available group
-    all_param_names = []
-    all_metric_names = []
-    for group in groups:
-        ds = group.dataset
-        if ds is not None:
-            all_param_names = list(ds.param_names)
-            all_metric_names = list(ds.metric_names)
-            break
 
     # Pick top-3 most CV-sensitive metrics for per-param display
     cv_curves = sorted(report.metric_curves, key=lambda c: max(s.cv_percent for s in c.summaries if s.cv_percent == s.cv_percent), reverse=True)
@@ -328,7 +399,7 @@ def main():
     print()
 
     # 5g. Failure Rate
-    print("## 6. Failure Rate by Level")
+    print("## 8. Failure Rate by Level")
     print()
     print("| Level | Failure Rate |")
     print("|-------|-------------|")

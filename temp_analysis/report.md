@@ -203,18 +203,6 @@
   - `R_cell_2`: -0.393 (rank=2)
   - `R_between_cell_1_2`: +0.375 (rank=3)
   - `R_cell_1`: -0.352 (rank=4)
-python.exe : Traceback (most recent call last):
-At line:1 char:99
-+ ... \cst_ver3"; & $python temp_analysis\analyze_tolerance.py 2>&1 | Out-F ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-  File "C:\Users\lau\cst_ver3\temp_analysis\analyze_tolerance.py", line 353, in <module>
-    main()
-  File "C:\Users\lau\cst_ver3\temp_analysis\analyze_tolerance.py", line 272, in main
-    cfg = _yaml.safe_load(fh)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\__init__.py", line 125, in safe_load
   - `R_bend_cell3_left`: -0.212 (rank=5)
 
 **field_flatness** (n=52):
@@ -337,52 +325,35 @@ At line:1 char:99
   - `R_between_cell_3_cutoff`: -0.395 (rank=5)
 
 
-## 5. Tolerance Recommendation
+## 5. Cross-Level Parameter Rank Stability
 
-    return load(stream, SafeLoader)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\__init__.py", line 81, in load
-    return loader.get_single_data()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\constructor.py", line 49, in get_single_data
-    node = self.get_single_node()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 36, in get_single_node
-    document = self.compose_document()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 55, in compose_document
-    node = self.compose_node(None, None)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 133, in compose_mapping_node
-    item_value = self.compose_node(node, item_key)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 133, in compose_mapping_node
-    item_value = self.compose_node(node, item_key)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 82, in compose_node
-    node = self.compose_sequence_node(anchor)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 111, in compose_sequence_node
-    node.value.append(self.compose_node(node, index))
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 133, in compose_mapping_node
-    item_value = self.compose_node(node, item_key)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\composer.py", line 64, in compose_node
-    if self.check_event(AliasEvent):
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\parser.py", line 98, in check_event
-    self.current_event = self.state()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\parser.py", line 449, in parse_block_mapping_value
-    if not self.check_token(KeyToken, ValueToken, BlockEndToken):
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\scanner.py", line 116, in check_token
-    self.fetch_more_tokens()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\scanner.py", line 255, in fetch_more_tokens
-    return self.fetch_plain()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\scanner.py", line 679, in fetch_plain
-    self.tokens.append(self.scan_plain())
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\scanner.py", line 1305, in scan_plain
-    spaces = self.scan_plain_spaces(indent, start_mark)
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\scanner.py", line 1332, in scan_plain_spaces
-    self.forward()
-  File "C:\Users\lau\cst_ver3\.venv\lib\site-packages\yaml\reader.py", line 106, in forward
-    if ch in '\n\x85\u2028\u2029'  \
-TypeError: 'in <string>' requires string as left operand, not int
+For each core metric, which parameters consistently dominate
+across all 6 tolerance levels?
+
+| Metric | Parameter | |��| mean | Rank=1 % | Top-3 % | Mean Rank | Verdict |
+|--------|-----------|:-------:|:--------:|:-------:|:---------:|---------|
+| resonant_freq | `length1` | 0.30 | 50% (6 lvls) | 83% | 2.0 | Strong |
+| resonant_freq | `R_cell_3` | 0.23 | 33% (6 lvls) | 50% | 8.7 | Consistent top-3 |
+| resonant_freq | `R_cell_2` | 0.20 | 17% (6 lvls) | 17% | 7.8 | Weak / noise-level |
+| resonant_freq | `offset1` | 0.11 | 0% (6 lvls) | 0% | 13.7 | Weak / noise-level |
+| resonant_freq | `offset2` | 0.10 | 0% (6 lvls) | 0% | 14.3 | Weak / noise-level |
+
+| coupling_beta | `R_cell_3` | 0.79 | 100% (6 lvls) | 100% | 1.0 | **Dominant** |
+| coupling_beta | `offset1` | 0.07 | 0% (6 lvls) | 0% | 15.7 | Weak / noise-level |
+| coupling_beta | `offset2` | 0.07 | 0% (6 lvls) | 0% | 15.8 | Weak / noise-level |
+| coupling_beta | `offset3` | 0.06 | 0% (6 lvls) | 0% | 16.0 | Weak / noise-level |
+| coupling_beta | `a` | 0.03 | 0% (6 lvls) | 0% | 18.0 | Weak / noise-level |
+
+| field_flatness | `a` | 0.30 | 50% (6 lvls) | 83% | 1.8 | Strong |
+| field_flatness | `PickUpDeep` | 0.19 | 33% (6 lvls) | 50% | 5.3 | Consistent top-3 |
+| field_flatness | `cell_1_vertical_length` | 0.27 | 17% (6 lvls) | 83% | 2.5 | Consistent top-3 |
+| field_flatness | `offset1` | 0.04 | 0% (6 lvls) | 0% | 17.0 | Weak / noise-level |
+| field_flatness | `offset2` | 0.13 | 0% (6 lvls) | 0% | 8.5 | Weak / noise-level |
+
+*Verdict: Dominant = rank-1 in ��80% levels; Strong = ��50%; Consistent top-3 = in top-3 ��50%; Moderate = mean |��| ��0.3.*
+
+## 6. Tolerance Recommendation
+
 **Overall recommended max tolerance**: **10.0 um**
 
 **Limiting metrics**: pulsed_heating
@@ -403,3 +374,259 @@ For each parameter, actual perturbation values are binned,
 and metric averages computed per bin. This shows how metrics
 degrade as THIS parameter deviates (with others also varying).
 
+### `offset1` (nominal=0.0000 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.22 (93%) | 4.1e+12 (2%) | 0.094 (103%) | 140 |
+| 3-5 | 2.82 (79%) | 4.29e+12 (22%) | 0.139 (88%) | 46 |
+| 5-10 | 3.96 (58%) | 4.6e+12 (41%) | 0.198 (60%) | 58 |
+| 10-15 | 4.01 (67%) | 4.9e+12 (40%) | 0.275 (48%) | 33 |
+| 15-20 | 4.48 (68%) | 5.41e+12 (46%) | 0.304 (48%) | 13 |
+| 20-30 | 3.57 (83%) | 5.6e+12 (53%) | 0.396 (35%) | 11 |
+
+### `offset2` (nominal=0.0000 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.73 (90%) | 4.13e+12 (6%) | 0.0969 (89%) | 151 |
+| 3-5 | 2.44 (87%) | 4.54e+12 (33%) | 0.147 (85%) | 40 |
+| 5-10 | 3.15 (67%) | 4.54e+12 (28%) | 0.211 (67%) | 49 |
+| 10-15 | 3.55 (70%) | 4.55e+12 (28%) | 0.252 (54%) | 31 |
+| 15-20 | 4.11 (60%) | 5.59e+12 (68%) | 0.29 (58%) | 18 |
+| 20-30 | 4.42 (62%) | 5.1e+12 (47%) | 0.376 (40%) | 12 |
+
+### `offset3` (nominal=0.0000 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.05 (94%) | 4.15e+12 (10%) | 0.0892 (96%) | 125 |
+| 3-5 | 2.55 (78%) | 4.31e+12 (29%) | 0.12 (86%) | 48 |
+| 5-10 | 3.76 (64%) | 4.31e+12 (14%) | 0.198 (62%) | 61 |
+| 10-15 | 4.44 (60%) | 4.54e+12 (27%) | 0.254 (55%) | 40 |
+| 15-20 | 4.23 (62%) | 5.61e+12 (46%) | 0.279 (52%) | 15 |
+| 20-30 | 4.37 (67%) | 6.4e+12 (71%) | 0.421 (36%) | 12 |
+
+### `a` (nominal=10.6155 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.07 (97%) | 4.14e+12 (6%) | 0.104 (93%) | 141 |
+| 3-5 | 2.8 (76%) | 4.39e+12 (21%) | 0.142 (93%) | 44 |
+| 5-10 | 3.82 (63%) | 4.88e+12 (51%) | 0.197 (73%) | 60 |
+| 10-15 | 4.33 (52%) | 4.84e+12 (40%) | 0.256 (56%) | 33 |
+| 15-20 | 4.95 (58%) | 4.29e+12 (9%) | 0.261 (55%) | 14 |
+| 20-30 | 4.93 (58%) | 4.64e+12 (30%) | 0.396 (31%) | 9 |
+
+### `length1` (nominal=1.0290 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.27 (90%) | 4.3e+12 (31%) | 0.101 (107%) | 125 |
+| 3-5 | 2.28 (83%) | 4.13e+12 (4%) | 0.103 (66%) | 44 |
+| 5-10 | 3.78 (66%) | 4.35e+12 (19%) | 0.181 (63%) | 64 |
+| 10-15 | 4.09 (63%) | 4.81e+12 (40%) | 0.245 (58%) | 39 |
+| 15-20 | 4.07 (70%) | 4.76e+12 (36%) | 0.281 (54%) | 17 |
+| 20-30 | 3.8 (75%) | 5.41e+12 (53%) | 0.442 (24%) | 12 |
+
+### `PickUpDeep` (nominal=0.2620 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.21 (90%) | 4.33e+12 (24%) | 0.124 (95%) | 150 |
+| 3-5 | 2.75 (80%) | 4.33e+12 (32%) | 0.148 (101%) | 47 |
+| 5-10 | 3.83 (68%) | 4.31e+12 (20%) | 0.182 (69%) | 56 |
+| 10-15 | 4.62 (52%) | 4.71e+12 (51%) | 0.231 (63%) | 32 |
+| 15-20 | 5.13 (51%) | 4.74e+12 (25%) | 0.285 (50%) | 11 |
+| 20-30 | 4.27 (74%) | 6.76e+12 (54%) | 0.424 (34%) | 5 |
+
+### `R_cell_1` (nominal=11.2565 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.15 (95%) | 4.22e+12 (17%) | 0.106 (92%) | 151 |
+| 3-5 | 2.8 (68%) | 4.49e+12 (31%) | 0.154 (88%) | 47 |
+| 5-10 | 4.24 (57%) | 4.45e+12 (31%) | 0.21 (70%) | 65 |
+| 10-15 | 4.76 (60%) | 4.69e+12 (30%) | 0.271 (49%) | 24 |
+| 15-20 | 3.86 (74%) | 5e+12 (53%) | 0.332 (46%) | 10 |
+| 20-30 | 3.82 (71%) | 7.91e+12 (81%) | 0.404 (51%) | 4 |
+
+### `R_cell_2` (nominal=11.0049 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.89 (89%) | 4.16e+12 (8%) | 0.0871 (85%) | 130 |
+| 3-5 | 2.79 (82%) | 4.36e+12 (24%) | 0.14 (76%) | 49 |
+| 5-10 | 4.16 (58%) | 4.26e+12 (19%) | 0.195 (65%) | 68 |
+| 10-15 | 4.26 (65%) | 4.87e+12 (50%) | 0.279 (56%) | 34 |
+| 15-20 | 5.16 (50%) | 5.65e+12 (48%) | 0.333 (48%) | 10 |
+| 20-30 | 3.85 (72%) | 6.52e+12 (57%) | 0.411 (40%) | 10 |
+
+### `R_cell_3` (nominal=10.7820 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.72 (91%) | 4.11e+12 (4%) | 0.0714 (73%) | 119 |
+| 3-5 | 2.77 (76%) | 4.21e+12 (12%) | 0.118 (68%) | 59 |
+| 5-10 | 4.1 (63%) | 4.43e+12 (26%) | 0.182 (58%) | 62 |
+| 10-15 | 4.32 (51%) | 5.1e+12 (36%) | 0.295 (38%) | 37 |
+| 15-20 | 4.75 (67%) | 5.31e+12 (60%) | 0.407 (25%) | 15 |
+| 20-30 | 5.23 (50%) | 5.58e+12 (80%) | 0.511 (17%) | 9 |
+
+### `R_bend_cell1` (nominal=1.5270 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.86 (100%) | 4.14e+12 (7%) | 0.102 (104%) | 118 |
+| 3-5 | 2.42 (76%) | 4.16e+12 (12%) | 0.116 (94%) | 50 |
+| 5-10 | 4.24 (59%) | 4.34e+12 (20%) | 0.178 (65%) | 65 |
+| 10-15 | 3.81 (66%) | 4.69e+12 (28%) | 0.239 (55%) | 32 |
+| 15-20 | 4.46 (51%) | 5.44e+12 (50%) | 0.282 (53%) | 22 |
+| 20-30 | 4.61 (59%) | 5.93e+12 (71%) | 0.37 (47%) | 14 |
+
+### `R_bend_cell2_left` (nominal=1.4423 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.91 (91%) | 4.23e+12 (17%) | 0.098 (100%) | 124 |
+| 3-5 | 2.75 (76%) | 4.27e+12 (27%) | 0.138 (90%) | 56 |
+| 5-10 | 4.04 (62%) | 4.38e+12 (28%) | 0.185 (66%) | 64 |
+| 10-15 | 4.48 (59%) | 4.49e+12 (21%) | 0.243 (56%) | 32 |
+| 15-20 | 4.14 (68%) | 5.42e+12 (49%) | 0.333 (46%) | 16 |
+| 20-30 | 4.54 (66%) | 6.31e+12 (70%) | 0.398 (38%) | 9 |
+
+### `R_bend_cell3_left` (nominal=2.4460 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.74 (96%) | 4.1e+12 (3%) | 0.0888 (96%) | 131 |
+| 3-5 | 2.93 (76%) | 4.1e+12 (2%) | 0.132 (84%) | 58 |
+| 5-10 | 3.96 (59%) | 4.35e+12 (16%) | 0.228 (58%) | 59 |
+| 10-15 | 4.95 (44%) | 5.3e+12 (39%) | 0.283 (50%) | 35 |
+| 15-20 | 5.72 (45%) | 5.08e+12 (49%) | 0.255 (55%) | 13 |
+| 20-30 | 4.12 (82%) | 9.53e+12 (62%) | 0.488 (24%) | 5 |
+
+### `R_between_cell_1_2` (nominal=4.0253 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.04 (94%) | 4.19e+12 (13%) | 0.0985 (94%) | 139 |
+| 3-5 | 2.7 (83%) | 4.33e+12 (34%) | 0.146 (83%) | 43 |
+| 5-10 | 3.59 (67%) | 4.31e+12 (16%) | 0.198 (65%) | 64 |
+| 10-15 | 4.54 (52%) | 5.19e+12 (45%) | 0.27 (58%) | 33 |
+| 15-20 | 5.51 (42%) | 5.37e+12 (63%) | 0.305 (61%) | 18 |
+| 20-30 | 5.46 (51%) | 4.82e+12 (20%) | 0.348 (39%) | 4 |
+
+### `R_between_cell_2_3` (nominal=3.2820 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.03 (94%) | 4.26e+12 (20%) | 0.11 (99%) | 141 |
+| 3-5 | 2.7 (77%) | 4.3e+12 (22%) | 0.14 (82%) | 43 |
+| 5-10 | 4.32 (56%) | 4.39e+12 (39%) | 0.184 (76%) | 63 |
+| 10-15 | 4.15 (62%) | 4.73e+12 (38%) | 0.234 (57%) | 30 |
+| 15-20 | 4.66 (64%) | 4.98e+12 (37%) | 0.301 (43%) | 15 |
+| 20-30 | 3.46 (71%) | 5.86e+12 (56%) | 0.412 (35%) | 9 |
+
+### `R_between_cell_3_cutoff` (nominal=4.0380 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.93 (88%) | 4.18e+12 (10%) | 0.101 (93%) | 136 |
+| 3-5 | 2.6 (81%) | 4.34e+12 (28%) | 0.134 (87%) | 48 |
+| 5-10 | 4.34 (56%) | 4.4e+12 (22%) | 0.199 (67%) | 64 |
+| 10-15 | 4.31 (62%) | 5.08e+12 (55%) | 0.269 (54%) | 29 |
+| 15-20 | 5.19 (52%) | 4.95e+12 (47%) | 0.287 (61%) | 15 |
+| 20-30 | 3.7 (85%) | 5.74e+12 (57%) | 0.373 (48%) | 9 |
+
+### `cell_1_vertical_length` (nominal=1.4338 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.08 (90%) | 4.26e+12 (20%) | 0.105 (97%) | 155 |
+| 3-5 | 3.51 (81%) | 4.22e+12 (13%) | 0.138 (81%) | 41 |
+| 5-10 | 3.92 (54%) | 4.58e+12 (30%) | 0.192 (67%) | 56 |
+| 10-15 | 4.49 (62%) | 5.05e+12 (46%) | 0.275 (50%) | 29 |
+| 15-20 | 4.26 (69%) | 4.1e+12 (2%) | 0.311 (35%) | 11 |
+| 20-30 | 4.11 (58%) | 5.59e+12 (80%) | 0.471 (26%) | 9 |
+
+### `cell_2_vertical_left` (nominal=0.7719 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.91 (94%) | 4.22e+12 (16%) | 0.0982 (101%) | 135 |
+| 3-5 | 2.56 (66%) | 4.32e+12 (19%) | 0.125 (81%) | 45 |
+| 5-10 | 4.1 (59%) | 4.5e+12 (35%) | 0.203 (64%) | 68 |
+| 10-15 | 4.43 (60%) | 4.6e+12 (30%) | 0.256 (56%) | 31 |
+| 15-20 | 4.92 (60%) | 5.12e+12 (47%) | 0.329 (45%) | 14 |
+| 20-30 | 5.36 (56%) | 5.93e+12 (79%) | 0.398 (42%) | 8 |
+
+### `cell_2_vertical_right` (nominal=0.5761 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.17 (87%) | 4.3e+12 (29%) | 0.106 (99%) | 150 |
+| 3-5 | 3.57 (77%) | 4.28e+12 (18%) | 0.155 (78%) | 57 |
+| 5-10 | 3.61 (71%) | 4.47e+12 (29%) | 0.204 (62%) | 47 |
+| 10-15 | 4.16 (55%) | 4.74e+12 (34%) | 0.244 (55%) | 26 |
+| 15-20 | 4.03 (63%) | 5.19e+12 (47%) | 0.319 (50%) | 13 |
+| 20-30 | 5.19 (55%) | 5.29e+12 (64%) | 0.448 (33%) | 8 |
+
+### `cell_3_vertical_left` (nominal=0.9300 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 2.17 (100%) | 4.11e+12 (3%) | 0.0936 (93%) | 122 |
+| 3-5 | 2.18 (77%) | 4.1e+12 (2%) | 0.127 (83%) | 47 |
+| 5-10 | 3.76 (63%) | 4.28e+12 (14%) | 0.177 (68%) | 62 |
+| 10-15 | 4.01 (58%) | 4.91e+12 (33%) | 0.238 (57%) | 39 |
+| 15-20 | 4.92 (55%) | 4.93e+12 (42%) | 0.305 (54%) | 19 |
+| 20-30 | 4.17 (72%) | 7.22e+12 (65%) | 0.413 (38%) | 12 |
+
+### `cell_3_vertical_right` (nominal=0.9310 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.95 (100%) | 4.1e+12 (3%) | 0.102 (96%) | 123 |
+| 3-5 | 2.65 (78%) | 4.23e+12 (11%) | 0.113 (86%) | 51 |
+| 5-10 | 3.88 (64%) | 4.53e+12 (34%) | 0.19 (70%) | 66 |
+| 10-15 | 4.18 (56%) | 4.67e+12 (26%) | 0.241 (56%) | 32 |
+| 15-20 | 4.6 (55%) | 4.97e+12 (47%) | 0.303 (52%) | 18 |
+| 20-30 | 4.77 (58%) | 6.63e+12 (67%) | 0.398 (39%) | 11 |
+
+### `bend1` (nominal=1.5570 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.9 (90%) | 4.23e+12 (21%) | 0.0896 (93%) | 125 |
+| 3-5 | 2.85 (73%) | 4.22e+12 (10%) | 0.131 (75%) | 53 |
+| 5-10 | 4.19 (63%) | 4.3e+12 (17%) | 0.183 (67%) | 62 |
+| 10-15 | 4.09 (66%) | 4.6e+12 (34%) | 0.265 (51%) | 37 |
+| 15-20 | 4.52 (55%) | 5.38e+12 (41%) | 0.346 (43%) | 15 |
+| 20-30 | 3.66 (70%) | 6.82e+12 (75%) | 0.434 (41%) | 9 |
+
+### `e_x` (nominal=1.7820 mm)
+
+| Perturb (um) | resonant_freq (CV%) | max_modified_poynting (CV%) | field_flatness (CV%) | n |
+|:---:|:---:|:---:|:---:|:---:|
+| 0-3 | 1.64 (104%) | 4.14e+12 (7%) | 0.0799 (90%) | 100 |
+| 3-5 | 2.05 (74%) | 4.11e+12 (3%) | 0.0994 (85%) | 51 |
+| 5-10 | 3.64 (59%) | 4.38e+12 (19%) | 0.195 (66%) | 78 |
+| 10-15 | 4.67 (53%) | 5.15e+12 (49%) | 0.268 (57%) | 46 |
+| 15-20 | 5.39 (53%) | 4.98e+12 (65%) | 0.279 (59%) | 17 |
+| 20-30 | 4.55 (67%) | 4.86e+12 (29%) | 0.339 (44%) | 9 |
+
+
+## 8. Failure Rate by Level
+
+| Level | Failure Rate |
+|-------|-------------|
+| 3 um | 0/60 (0.0%) |
+| 5 um | 0/60 (0.0%) |
+| 10 um | 0/60 (0.0%) |
+| 15 um | 8/60 (13.3%) |
+| 20 um | 16/60 (26.7%) |
+| 30 um | 35/60 (58.3%) |
+
+---
+*Report generated from 6 tolerance levels, 360 total records.*

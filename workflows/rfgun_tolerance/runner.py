@@ -28,6 +28,7 @@ from cst_optimization.core.solver import SolverRunner
 from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     EvaluationDatabaseRecord,
+    RawEvaluationPayload,
     current_schema_version,
 )
 from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase, EvaluationDatabaseConfig
@@ -354,14 +355,19 @@ class ToleranceSampler:
                 except Exception:
                     pass
 
-        # Persist to DB
-        record.error_message = error
-        record.raw_metrics = raw_metrics if raw_metrics else None
-        record.elapsed_s = round(time.perf_counter() - t_start, 1)
+        # Persist to DB — use RawEvaluationPayload so raw_metrics are written
+        elapsed = round(time.perf_counter() - t_start, 1)
+        record.raw_payload = RawEvaluationPayload(
+            raw_metrics=raw_metrics if raw_metrics else None,
+            objective_values=raw_metrics if raw_metrics else None,
+            gate_results=None,
+            diagnostics=None,
+        )
+        record.source = "rfgun_tolerance.runner"
+        record.error_taxonomy = {"error_message": error} if error else None
 
         try:
             row_id = self._db.insert_final_record(record)
-            elapsed = record.elapsed_s
             status = "OK" if solver_ok else "FAIL"
             vals = ", ".join(
                 f"{k}={v:.4g}" for k, v in raw_metrics.items()

@@ -165,7 +165,9 @@ tolerance:
     max_restarts: 5
     cooldown_s: 30.0
   seed: 42
-  project_path: D:/ModelData/AllParaVer1_E2test.cst
+  output_dir: wf3-campaign/wf3-campaign/wf3_tolerance_6x60
+  db_path: wf3-campaign/wf3-campaign/wf3_tolerance_6x60/tolerance_eval.db
+  project_path: D:/workflow_elgun/PickupDesign_2026.cst
   parameters:
   - name: offset1
     nominal: 0.0

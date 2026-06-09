@@ -75,16 +75,23 @@ def main():
 
     sweep = build_sweep_dataset(groups, TOLERANCE_PARAMETER)
 
-    # ---- 1.5: Convert resonant_freq to absolute MHz offset ------------------
-    # Use |freq - target| so mean is away from zero; CV% becomes interpretable.
+    # ---- 1.5: Convert near-zero-target metrics to absolute offset ------------
+    # CV% = std/|mean|*100 is meaningless when mean ≈ 0. Use |value - target|.
     FREQ_TARGET_GHZ = 11.424
     for group in groups:
         ds = group.dataset
         if ds is None:
             continue
+        # resonant_freq -> |offset| in MHz
         try:
             fi = ds.metric_names.index("resonant_freq")
             ds.metric_values[:, fi] = np.abs(ds.metric_values[:, fi] - FREQ_TARGET_GHZ) * 1000.0
+        except (ValueError, IndexError):
+            pass
+        # field_flatness -> |flatness| (target is 0)
+        try:
+            fi = ds.metric_names.index("field_flatness")
+            ds.metric_values[:, fi] = np.abs(ds.metric_values[:, fi])
         except (ValueError, IndexError):
             pass
     # Update sweep references after mutation
@@ -124,10 +131,10 @@ def main():
     # ---- 4. Tolerance Recommendation --------------------------------------
     # === CONFIGURABLE: acceptance rules for tolerance recommendation ===
     ACCEPTANCE_RULES = {
-        "resonant_freq":  {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 0.0, "max_abs_error_from_target": 1.0},
+        "resonant_freq":  {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
         "coupling_beta":  {"max_cv_percent": 25.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 3.0},
         "q0":             {"max_cv_percent": 20.0, "max_failure_rate": 20.0, "direction": "larger_is_better"},
-        "field_flatness": {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 0.0},
+        "field_flatness": {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
         "max_modified_poynting": {"max_cv_percent": 30.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
         "pulsed_heating": {"max_cv_percent": 20.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
         # "peak_e_field": not included — user does not care about this metric

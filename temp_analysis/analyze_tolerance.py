@@ -75,7 +75,8 @@ def main():
 
     sweep = build_sweep_dataset(groups, TOLERANCE_PARAMETER)
 
-    # ---- 1.5: Convert resonant_freq to MHz offset ------------------------
+    # ---- 1.5: Convert resonant_freq to absolute MHz offset ------------------
+    # Use |freq - target| so mean is away from zero; CV% becomes interpretable.
     FREQ_TARGET_GHZ = 11.424
     for group in groups:
         ds = group.dataset
@@ -83,7 +84,7 @@ def main():
             continue
         try:
             fi = ds.metric_names.index("resonant_freq")
-            ds.metric_values[:, fi] = (ds.metric_values[:, fi] - FREQ_TARGET_GHZ) * 1000.0
+            ds.metric_values[:, fi] = np.abs(ds.metric_values[:, fi] - FREQ_TARGET_GHZ) * 1000.0
         except (ValueError, IndexError):
             pass
     # Update sweep references after mutation
@@ -121,15 +122,21 @@ def main():
         sensitivities[level] = sens_reports
 
     # ---- 4. Tolerance Recommendation --------------------------------------
-    rules = [
-        MetricAcceptanceRule(metric_name="resonant_freq", max_cv_percent=2.0, max_failure_rate=20.0, direction="target", target_mean=11.424, max_abs_error_from_target=0.005),
-        MetricAcceptanceRule(metric_name="field_flatness", max_cv_percent=40.0, max_failure_rate=20.0, direction="target", target_mean=0.0),
-        MetricAcceptanceRule(metric_name="pulsed_heating", max_cv_percent=15.0, max_failure_rate=20.0, direction="smaller_is_better"),
-        MetricAcceptanceRule(metric_name="max_modified_poynting", max_cv_percent=15.0, max_failure_rate=20.0, direction="smaller_is_better"),
-        MetricAcceptanceRule(metric_name="coupling_beta", max_cv_percent=25.0, max_failure_rate=20.0, direction="target", target_mean=3.0),
-        MetricAcceptanceRule(metric_name="q0", max_cv_percent=20.0, max_failure_rate=20.0, direction="larger_is_better"),
-        MetricAcceptanceRule(metric_name="peak_e_field", max_cv_percent=5.0, max_failure_rate=20.0, direction="larger_is_better"),
-    ]
+    # === CONFIGURABLE: acceptance rules for tolerance recommendation ===
+    ACCEPTANCE_RULES = {
+        "resonant_freq":  {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 0.0, "max_abs_error_from_target": 1.0},
+        "coupling_beta":  {"max_cv_percent": 25.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 3.0},
+        "q0":             {"max_cv_percent": 20.0, "max_failure_rate": 20.0, "direction": "larger_is_better"},
+        "field_flatness": {"max_cv_percent": 50.0, "max_failure_rate": 20.0, "direction": "target", "target_mean": 0.0},
+        "max_modified_poynting": {"max_cv_percent": 30.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
+        "pulsed_heating": {"max_cv_percent": 20.0, "max_failure_rate": 20.0, "direction": "smaller_is_better"},
+        # "peak_e_field": not included — user does not care about this metric
+    }
+    # freq is in abs MHz after conversion; target=0, 1 MHz max error
+    rules = []
+    for mname, rcfg in ACCEPTANCE_RULES.items():
+        kwargs = dict(rcfg)
+        rules.append(MetricAcceptanceRule(metric_name=mname, **kwargs))
     envelope = recommend_tolerance_envelope(report, rules)
 
     # ---- 5. Render Markdown -----------------------------------------------
@@ -229,75 +236,89 @@ def main():
               f"{rec.knee_candidate_um or 'N/A'} um |")
     print()
 
-    # 5f. Per-Parameter Tolerance Analysis
+    # 5f. Per-Parameter Tolerance Budget
     print("## 7. Per-Parameter Tolerance Budget")
     print()
-    print("Analysis: for each parameter, compute max perturbation (um) before")
-    print("key metrics cross thresholds. Based on pooled data across all levels.")
+    print("For each parameter, actual perturbation values are binned,")
+    print("and metric averages computed per bin. This shows how metrics")
+    print("degrade as THIS parameter deviates (with others also varying).")
     print()
 
-    # Pool all success records across all levels
-    all_param_vals = []
-    all_metric_vals = []
+    # Collect param/metric names from first available group
     all_param_names = []
     all_metric_names = []
     for group in groups:
         ds = group.dataset
-        if ds is None:
-            continue
-        all_param_vals.append(ds.parameter_values)
-        all_metric_vals.append(ds.metric_values)
-        if not all_param_names:
+        if ds is not None:
             all_param_names = list(ds.param_names)
-        if not all_metric_names:
             all_metric_names = list(ds.metric_names)
+            break
 
-    if all_param_vals:
-        X_all = np.vstack(all_param_vals)
-        Y_all = np.vstack(all_metric_vals)
+    # Pick top-3 most CV-sensitive metrics for per-param display
+    cv_curves = sorted(report.metric_curves, key=lambda c: max(s.cv_percent for s in c.summaries if s.cv_percent == s.cv_percent), reverse=True)
+    top3_metrics = [c.metric_name for c in cv_curves[:3]]
 
-        # Get nominal values from config
-        import yaml
-        cfg_path = _project_root / "config" / "default.yaml"
-        with open(cfg_path, encoding="utf-8") as fh:
-            cfg = yaml.safe_load(fh)
-        tol_params = cfg.get("tolerance", {}).get("parameters", [])
-        nominals = {}
-        for p in tol_params:
-            if p.get("enabled", True):
-                nominals[p["name"]] = float(p["nominal"])
+    # Get nominal values from config
+    import yaml as _yaml
+    cfg_path = _project_root / "config" / "default.yaml"
+    with open(cfg_path, encoding="utf-8") as fh:
+        cfg = _yaml.safe_load(fh)
+    tol_params = cfg.get("tolerance", {}).get("parameters", [])
+    nominals = {}
+    for p in tol_params:
+        if p.get("enabled", True):
+            nominals[p["name"]] = float(p["nominal"])
 
-        # For each parameter, compute perturbation (um) and correlate with metrics
-        param_perturb = {}
+    # Pool ALL success records across all levels
+    X_pool = []
+    Y_pool = []
+    for group in groups:
+        ds = group.dataset
+        if ds is None or ds.accepted_row_count < 3:
+            continue
+        X_pool.append(ds.parameter_values)
+        Y_pool.append(ds.metric_values)
+    if X_pool:
+        X_all = np.vstack(X_pool)  # (N_total, 22)
+        Y_all = np.vstack(Y_pool)  # (N_total, 7)
+
+        # Perturbation bins (um): 0-3, 3-5, 5-10, 10-15, 15-20, 20-30
+        BIN_EDGES = [0, 3, 5, 10, 15, 20, 30]
+        BIN_LABELS = ["0-3", "3-5", "5-10", "10-15", "15-20", "20-30"]
+
         for pi, pname in enumerate(all_param_names):
             nom = nominals.get(pname, 0.0)
-            perturb_um = np.abs(X_all[:, pi] - nom) * 1000.0  # um
-            param_perturb[pname] = perturb_um
+            perturb_um = np.abs(X_all[:, pi] - nom) * 1000.0
+            print(f"### `{pname}` (nominal={nom:.4f} mm)")
+            print()
+            header = ["Perturb (um)"] + [f"{m} (CV%)" for m in top3_metrics] + ["n"]
+            print("| " + " | ".join(header) + " |")
+            print("|" + "|".join([":---:"] * len(header)) + "|")
 
-        print("| Parameter | Max Perturb (um) | resonant_freq | coupling_beta | field_flatness | peak_e_field | q0 | pulsed_heating |")
-        print("|-----------|:----------------:|:-------------:|:------------:|:-------------:|:------------:|:--:|:-------------:|")
-        for pname in all_param_names:
-            pu = param_perturb[pname]
-            max_pu = np.max(pu)
-            row = [f"`{pname}`", f"{max_pu:.0f}"]
-            for mi, mname in enumerate(all_metric_names):
-                y = Y_all[:, mi]
-                finite = np.isfinite(y) & np.isfinite(pu)
-                if finite.sum() < 10:
-                    row.append("insufficient")
+            for bi in range(len(BIN_EDGES) - 1):
+                lo, hi = BIN_EDGES[bi], BIN_EDGES[bi + 1]
+                mask = (perturb_um >= lo) & (perturb_um < hi)
+                n_bin = mask.sum()
+                if n_bin < 3:
                     continue
-                # Linear regression slope: metric change per um
-                try:
-                    slope, intercept = np.polyfit(pu[finite], y[finite], 1)
-                    # Metric change at max perturbation
-                    delta = slope * max_pu
-                    row.append(f"{delta:+.3g}")
-                except Exception:
-                    row.append("N/A")
-            print("| " + " | ".join(row) + " |")
-        print()
-        print("*Values show estimated metric change at max perturbation (linear regression slope × max μm).*")
-        print()
+                row = [f"{lo}-{hi}"]
+                for mname in top3_metrics:
+                    try:
+                        mi = all_metric_names.index(mname)
+                        vals = Y_all[mask, mi]
+                        finite = np.isfinite(vals)
+                        if finite.sum() < 3:
+                            row.append("--")
+                        else:
+                            v = vals[finite]
+                            cv = np.std(v, ddof=1) / abs(np.mean(v)) * 100 if abs(np.mean(v)) > 1e-12 else float('inf')
+                            row.append(f"{np.mean(v):.3g} ({cv:.0f}%)")
+                    except (ValueError, IndexError):
+                        row.append("--")
+                row.append(str(n_bin))
+                print("| " + " | ".join(row) + " |")
+            print()
+    print()
 
     # 5g. Failure Rate
     print("## 6. Failure Rate by Level")

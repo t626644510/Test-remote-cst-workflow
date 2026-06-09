@@ -7,6 +7,8 @@ Usage:
 import sys
 from pathlib import Path
 
+import os
+
 import numpy as np
 
 _project_root = Path(__file__).resolve().parents[1]
@@ -43,14 +45,17 @@ from workflows.rfgun_tolerance.statistics import (
 )
 
 # ---- Config -----------------------------------------------------------
-CAMPAIGN_DIR = _project_root / "wf3-campaign" / "wf3-campaign" / "wf3_tolerance_6x60"
+TOLERANCE_DIR = "D:/Results/tolerance"
 LEVELS = [
-    (3, "3um"),
-    (5, "5um"),
-    (10, "10um"),
-    (15, "15um"),
-    (20, "20um"),
-    (30, "30um"),
+    (3, "tolerance_eval_3um.db"),
+    (5, "tolerance_eval_5um.db"),
+    (10, "tolerance_eval_10um.db"),
+    (15, "tolerance_eval_15um.db"),
+    (20, "tolerance_eval_20um.db"),
+    (30, "tolerance_eval_30um.db"),
+    (7, "tolerance_eval_7.0um.db"),
+    (12, "tolerance_eval_12um.db"),
+    (25, "tolerance_eval_25.0um.db"),
 ]
 TOLERANCE_PARAMETER = "tolerance_abs"
 METRIC_NAMES = [
@@ -63,7 +68,7 @@ def main():
     # ---- 1. Load all groups -----------------------------------------------
     groups: list[ToleranceSweepGroup] = []
     for level_um, dirname in LEVELS:
-        db_path = CAMPAIGN_DIR / dirname / "evaluations.db"
+        db_path = os.path.join(TOLERANCE_DIR, dirname)
         group = build_sweep_group_from_db(
             str(db_path),
             tolerance_parameter=TOLERANCE_PARAMETER,
@@ -191,7 +196,8 @@ def main():
     # ---- 5. Render Markdown -----------------------------------------------
     print("# Tolerance Sweep Analysis Report")
     print()
-    print(f"**Campaign**: `wf3_tolerance_6x60`  |  **Parameter**: `{TOLERANCE_PARAMETER}`  |  **Levels**: 3, 5, 10, 15, 20, 30 um")
+    level_list = ", ".join(f"{lvl:.0f}um" if lvl == int(lvl) else f"{lvl:.1f}um" for lvl, _ in LEVELS)
+    print(f"**Campaign**: `wf3_tolerance`  |  **Parameter**: `{TOLERANCE_PARAMETER}`  |  **Levels**: {len(LEVELS)} ({level_list})")
     print()
 
     # 5a. Data Overview

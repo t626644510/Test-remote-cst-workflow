@@ -170,44 +170,96 @@ class ToleranceSampler:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, n_samples: int | None = None) -> int:
-        """Run tolerance sampling.
+    def run(self, n_samples: int | None = None, recover_only: bool = False) -> int:
+        """Run tolerance sampling with auto-recovery of failed records.
+
+        1. Query DB for previously failed parameter combinations → re-run them.
+        2. If recover_only=False and still under target, fill with new samples.
 
         Parameters
         ----------
         n_samples : int or None
-            Number of samples.  Defaults to ``cfg.max_samples``.
+            Target sample count.  Defaults to ``cfg.max_samples``.
+        recover_only : bool
+            If True, only re-run failed records; skip new random samples.
 
         Returns
         -------
         int
-            Number of successful evaluations written to the database.
+            Number of evaluations written to the database.
         """
-        n = n_samples or self._cfg.max_samples
-        n = max(self._cfg.min_samples, min(n, self._cfg.max_samples))
-        n_batches = (n + self._cfg.batch_size - 1) // self._cfg.batch_size
+        n_target = n_samples or self._cfg.max_samples
+        n_target = max(self._cfg.min_samples, n_target)
+        n_remaining = n_target
+        success_count = 0
+        global_idx = 0
 
         _logger.info(
-            "Tolerance sampling: %d samples in %d batches (batch_size=%d)",
-            n, n_batches, self._cfg.batch_size,
+            "Tolerance sampling: target=%d, batch_size=%d, recover_only=%s",
+            n_target, self._cfg.batch_size, recover_only,
         )
-        print(f"Tolerance sampling: {n} samples in {n_batches} batches")
+        print(f"Tolerance sampling: target {n_target} samples")
+        if recover_only:
+            print(f"  Mode: RECOVER — only re-running previously failed records")
         print(f"  Project: {self._cfg.project_path}")
         print(f"  Database: {self._cfg.db_path}")
         print(f"  Parameters: {len(self._param_names)}")
         print("-" * 60)
 
-        success_count = 0
+        # ---- Phase 1: Recovery of failed records ---------------------------
+        try:
+            all_rows = self._db.get_all_records()
+        except Exception:
+            all_rows = []
+
+        failed_rows = [
+            r for r in all_rows
+            if r.get("status") not in ("success", None, "")
+            and r.get("param_values") is not None
+        ]
+        n_existing_success = sum(
+            1 for r in all_rows if r.get("status") == "success"
+        )
+
+        if failed_rows:
+            import json as _json
+            print(f"\nRecovery: {len(failed_rows)} failed record(s) found "
+                  f"({n_existing_success} already success).")
+            for row in failed_rows:
+                global_idx += 1
+                try:
+                    x = np.array(_json.loads(row["param_values"]), dtype=float)
+                except Exception:
+                    print(f"  [skip] bad param_values in row id={row.get('id')}")
+                    continue
+                self._evaluate_one(global_idx, x, recovery=True)
+                success_count += 1
+                n_remaining -= 1
+            print(f"Recovery complete.")
+        else:
+            print(f"\nNo failed records ({n_existing_success} existing success).")
+
+        # ---- Phase 2: New random samples to fill target ---------------------
+        if recover_only:
+            print("Recover-only mode — skipping new random samples.")
+            return success_count
+
+        if n_remaining <= 0:
+            print("Target already reached — no new random samples needed.")
+            return success_count
+
+        n_batches = (n_remaining + self._cfg.batch_size - 1) // self._cfg.batch_size
+        print(f"\nNew samples: {n_remaining} in {n_batches} batch(es)")
         for batch_idx in range(n_batches):
             batch_start = batch_idx * self._cfg.batch_size
-            batch_end = min(batch_start + self._cfg.batch_size, n)
+            batch_end = min(batch_start + self._cfg.batch_size, n_remaining)
             batch_n = batch_end - batch_start
 
             print(f"\nBatch {batch_idx + 1}/{n_batches} ({batch_n} samples)")
 
             param_vectors = self._sample_batch(batch_n)
             for i, x in enumerate(param_vectors):
-                global_idx = batch_start + i + 1
+                global_idx += 1
                 self._evaluate_one(global_idx, x)
                 success_count += 1
 
@@ -252,7 +304,7 @@ class ToleranceSampler:
             _logger.info("CST connection established — PID %s", self._conn.pid)
         return self._conn
 
-    def _evaluate_one(self, index: int, x: np.ndarray) -> None:
+    def _evaluate_one(self, index: int, x: np.ndarray, recovery: bool = False) -> None:
         """Run one CST solve and persist to the evaluation database."""
         conn = self._get_connection()
         param_dict = dict(zip(self._param_names, x))

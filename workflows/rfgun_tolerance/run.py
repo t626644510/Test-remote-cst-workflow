@@ -37,6 +37,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Override output_dir from config",
     )
     parser.add_argument(
+        "--recover", action="store_true", default=False,
+        help="Recover mode: only re-run previously failed records, no new samples.",
+    )
+    parser.add_argument(
         "--tolerance-scale", type=float, nargs="*", default=None,
         help="Multiply all tolerance_abs values by this factor "
              "(e.g. 2.33 for 7um from 3um baseline). "
@@ -46,7 +50,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_one(cfg, scale=None):
+def _run_one(cfg, scale=None, recover=False):
     """Run a single tolerance sampling batch. Returns number of evaluations."""
     from workflows.rfgun_tolerance.runner import ToleranceSampler
 
@@ -74,7 +78,7 @@ def _run_one(cfg, scale=None):
 
     sampler = ToleranceSampler(cfg)
     try:
-        n = sampler.run()
+        n = sampler.run(recover_only=recover)
         print(f"Done. {n} evaluations -> {cfg.db_path}")
         return n
     except KeyboardInterrupt:
@@ -109,7 +113,7 @@ def main() -> None:
             cfg.db_path = ""
 
         try:
-            n = _run_one(cfg, scale=scale)
+            n = _run_one(cfg, scale=scale, recover=args.recover)
             total += n
         except KeyboardInterrupt:
             print(f"\nInterrupted after {i + 1}/{len(scales)} levels.")

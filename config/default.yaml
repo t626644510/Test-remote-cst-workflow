@@ -150,7 +150,7 @@ objectives:
 
 tolerance:
   min_samples: 30
-  max_samples: 100
+  max_samples: 60
   batch_size: 10
   convergence_rtol: 0.01
   retry:

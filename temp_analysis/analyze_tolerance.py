@@ -344,13 +344,17 @@ def main():
     print("## 7. Per-Parameter Tolerance Budget")
     print()
     print("For each parameter, actual perturbation values are binned,")
-    print("and metric averages computed per bin. This shows how metrics")
-    print("degrade as THIS parameter deviates (with others also varying).")
+    print("and metric averages computed per bin. **All 22 parameters vary")
+    print("simultaneously** — values reflect combined effects, not isolated impact.")
+    print("Compare rows within a column to see degradation trends.")
+    print("`n` = number of samples in that perturbation bin.")
     print()
 
-    # Pick top-3 most CV-sensitive metrics for per-param display
+    # Core metrics for per-param display: freq, beta, flatness + top CV metric
+    core = ["resonant_freq", "coupling_beta", "field_flatness"]
     cv_curves = sorted(report.metric_curves, key=lambda c: max(s.cv_percent for s in c.summaries if s.cv_percent == s.cv_percent), reverse=True)
-    top3_metrics = [c.metric_name for c in cv_curves[:3]]
+    top_cv = [c.metric_name for c in cv_curves if c.metric_name not in core]
+    per_param_metrics = [m for m in core + top_cv if m in all_metric_names][:4]
 
     # Get nominal values from config
     import yaml as _yaml
@@ -385,7 +389,7 @@ def main():
             perturb_um = np.abs(X_all[:, pi] - nom) * 1000.0
             print(f"### `{pname}` (nominal={nom:.4f} mm)")
             print()
-            header = ["Perturb (um)"] + [f"{m} (CV%)" for m in top3_metrics] + ["n"]
+            header = ["Perturb (um)"] + [f"{m} (CV%)" for m in per_param_metrics] + ["n"]
             print("| " + " | ".join(header) + " |")
             print("|" + "|".join([":---:"] * len(header)) + "|")
 
@@ -396,7 +400,7 @@ def main():
                 if n_bin < 3:
                     continue
                 row = [f"{lo}-{hi}"]
-                for mname in top3_metrics:
+                for mname in per_param_metrics:
                     try:
                         mi = all_metric_names.index(mname)
                         vals = Y_all[mask, mi]

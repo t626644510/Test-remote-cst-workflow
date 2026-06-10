@@ -1,6 +1,6 @@
 ﻿# Tolerance Sweep Analysis Report
 
-**Campaign**: `wf3_tolerance`  |  **Parameter**: `tolerance_abs`  |  **Levels**: 9 (3um, 5um, 10um, 15um, 20um, 30um, 7um, 12um, 25um)
+**Campaign**: `wf3_tolerance`  |  **Parameter**: `tolerance_abs`  |  **Levels**: 9 (3um, 5um, 7um, 10um, 12um, 15um, 20um, 25um, 30um)
 
 ## 1. Data Overview
 
@@ -8,18 +8,18 @@
 |-------|--------|----------|--------|-------------|
 | 3 um | 3um | 62 | 0 | 100.0% |
 | 5 um | 5um | 60 | 0 | 100.0% |
+| 7 um | 7um | 59 | 1 | 98.3% |
 | 10 um | 10um | 60 | 0 | 100.0% |
+| 12 um | 12um | 58 | 2 | 96.7% |
 | 15 um | 15um | 52 | 16 | 76.5% |
 | 20 um | 20um | 44 | 16 | 73.3% |
-| 30 um | 30um | 26 | 69 | 27.4% |
-| 7 um | 7um | 59 | 1 | 98.3% |
-| 12 um | 12um | 58 | 2 | 96.7% |
 | 25 um | 25um | 42 | 18 | 70.0% |
+| 30 um | 30um | 26 | 69 | 27.4% |
 
 ## 2. Coefficient of Variation (CV%)
 
-| Metric | 3um | 5um | 10um | 15um | 20um | 30um | Monotonic | Knee |
-|--------|-----|-----|------|------|------|------|-----------|------|
+| Metric | 3um | 5um | 7um | 10um | 12um | 15um | 20um | 25um | 30um | Monotonic | Knee |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|-----------|------|
 | resonant_freq | 71.7 | 67.3 | 77.1 | 64.8 | 74.3 | 57.2 | 55.7 | 66.7 | 59.2 | non_monotonic | 12um |
 | coupling_beta | 7.0 | 11.2 | 13.4 | 21.9 | 23.5 | 33.2 | 41.7 | 41.9 | 42.4 | increasing | 12um |
 | q0 | 0.4 | 0.7 | 0.8 | 1.3 | 1.5 | 2.0 | 5.2 | 10.1 | 22.7 | increasing | 25um |
@@ -30,8 +30,8 @@
 
 ## 3. Mean Values by Tolerance Level
 
-| Metric | 3um | 5um | 10um | 15um | 20um | 30um | Monotonic |
-|--------|-----|-----|------|------|------|------|-----------|
+| Metric | 3um | 5um | 7um | 10um | 12um | 15um | 20um | 25um | 30um | Monotonic |
+|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|-----------|
 | resonant_freq | 1.048 | 1.679 | 1.859 | 3.319 | 3.159 | 4.122 | 4.722 | 4.032 | 4.789 | non_monotonic |
 | coupling_beta | 1.91 | 1.91 | 2.008 | 1.908 | 2.034 | 1.864 | 1.866 | 2.186 | 2.033 | non_monotonic |
 | q0 | 1.854e+04 | 1.854e+04 | 1.859e+04 | 1.854e+04 | 1.861e+04 | 1.853e+04 | 1.893e+04 | 1.916e+04 | 2.193e+04 | non_monotonic |
@@ -40,7 +40,7 @@
 | max_modified_poynting | 4.087e+12 | 4.09e+12 | 4.263e+12 | 4.202e+12 | 4.761e+12 | 4.467e+12 | 4.87e+12 | 6.271e+12 | 5.97e+12 | non_monotonic |
 | pulsed_heating | 24.86 | 24.75 | 25.62 | 25.37 | 28.09 | 28.03 | 28.91 | 36.51 | 35.19 | non_monotonic |
 
-## 4. Parameter Sensitivity (Spearman |score| �� 0.2)
+## 4. Parameter Sensitivity (Spearman |score| >= 0.2)
 
 ### 3 um
 
@@ -133,6 +133,51 @@
   - `R_bend_cell1`: -0.201 (rank=5)
 
 
+### 7 um
+
+**resonant_freq** (n=59):
+  - `cell_2_vertical_left`: -0.253 (rank=1)
+  - `R_between_cell_1_2`: -0.219 (rank=2)
+  - `bend1`: -0.214 (rank=3)
+
+**coupling_beta** (n=59):
+  - `R_cell_3`: -0.790 (rank=1)
+  - `R_cell_2`: +0.370 (rank=2)
+  - `length1`: -0.347 (rank=3)
+  - `a`: -0.268 (rank=4)
+  - `R_cell_1`: +0.250 (rank=5)
+
+**q0** (n=59):
+  - `R_cell_3`: -0.801 (rank=1)
+  - `R_cell_1`: +0.325 (rank=2)
+  - `length1`: -0.322 (rank=3)
+  - `R_cell_2`: +0.301 (rank=4)
+  - `a`: -0.252 (rank=5)
+
+**peak_e_field** (n=59):
+  - `R_between_cell_1_2`: +0.366 (rank=1)
+  - `PickUpDeep`: +0.265 (rank=2)
+  - `R_cell_3`: -0.263 (rank=3)
+  - `R_cell_2`: -0.209 (rank=4)
+
+**field_flatness** (n=59):
+  - `R_cell_2`: +0.383 (rank=1)
+  - `e_x`: +0.252 (rank=2)
+  - `bend1`: -0.251 (rank=3)
+  - `cell_2_vertical_left`: +0.221 (rank=4)
+  - `R_cell_1`: +0.213 (rank=5)
+
+**max_modified_poynting** (n=59):
+  - `R_cell_1`: +0.781 (rank=1)
+  - `bend1`: -0.249 (rank=2)
+  - `PickUpDeep`: +0.207 (rank=3)
+
+**pulsed_heating** (n=59):
+  - `R_cell_1`: +0.811 (rank=1)
+  - `bend1`: -0.214 (rank=2)
+  - `R_between_cell_1_2`: +0.213 (rank=3)
+
+
 ### 10 um
 
 **resonant_freq** (n=60):
@@ -179,6 +224,54 @@
   - `R_cell_3`: -0.295 (rank=3)
   - `cell_3_vertical_left`: -0.274 (rank=4)
   - `R_bend_cell2_left`: -0.265 (rank=5)
+
+
+### 12 um
+
+**resonant_freq** (n=58):
+  - `R_between_cell_1_2`: -0.288 (rank=1)
+  - `bend1`: -0.281 (rank=2)
+  - `PickUpDeep`: -0.252 (rank=3)
+  - `cell_2_vertical_left`: -0.243 (rank=4)
+
+**coupling_beta** (n=58):
+  - `R_cell_3`: -0.797 (rank=1)
+  - `R_cell_2`: +0.369 (rank=2)
+  - `length1`: -0.308 (rank=3)
+  - `R_cell_1`: +0.281 (rank=4)
+  - `a`: -0.231 (rank=5)
+
+**q0** (n=58):
+  - `R_cell_3`: -0.818 (rank=1)
+  - `R_cell_1`: +0.349 (rank=2)
+  - `length1`: -0.296 (rank=3)
+  - `R_cell_2`: +0.293 (rank=4)
+  - `a`: -0.210 (rank=5)
+
+**peak_e_field** (n=58):
+  - `R_between_cell_1_2`: +0.352 (rank=1)
+  - `R_cell_3`: -0.332 (rank=2)
+  - `PickUpDeep`: +0.272 (rank=3)
+  - `bend1`: +0.244 (rank=4)
+  - `R_cell_2`: -0.242 (rank=5)
+
+**field_flatness** (n=58):
+  - `bend1`: -0.254 (rank=1)
+  - `R_cell_2`: +0.225 (rank=2)
+  - `R_cell_1`: +0.205 (rank=3)
+
+**max_modified_poynting** (n=58):
+  - `R_cell_1`: +0.676 (rank=1)
+  - `R_cell_2`: +0.427 (rank=2)
+  - `cell_1_vertical_length`: +0.241 (rank=3)
+  - `cell_2_vertical_left`: +0.210 (rank=4)
+  - `bend1`: -0.200 (rank=5)
+
+**pulsed_heating** (n=58):
+  - `R_cell_1`: +0.774 (rank=1)
+  - `R_cell_2`: +0.298 (rank=2)
+  - `bend1`: -0.261 (rank=3)
+  - `cell_2_vertical_left`: +0.200 (rank=4)
 
 
 ### 15 um
@@ -278,6 +371,57 @@
   - `R_between_cell_2_3`: +0.234 (rank=5)
 
 
+### 25 um
+
+**resonant_freq** (n=42):
+  - `R_between_cell_1_2`: -0.326 (rank=1)
+  - `R_between_cell_2_3`: -0.309 (rank=2)
+  - `R_cell_1`: -0.225 (rank=3)
+  - `cell_2_vertical_left`: -0.220 (rank=4)
+  - `PickUpDeep`: -0.209 (rank=5)
+
+**coupling_beta** (n=42):
+  - `R_cell_3`: -0.869 (rank=1)
+  - `R_cell_2`: +0.553 (rank=2)
+  - `length1`: -0.314 (rank=3)
+  - `R_bend_cell1`: -0.275 (rank=4)
+  - `R_cell_1`: +0.272 (rank=5)
+
+**q0** (n=42):
+  - `R_cell_3`: -0.573 (rank=1)
+  - `bend1`: -0.365 (rank=2)
+  - `R_cell_1`: +0.330 (rank=3)
+  - `R_cell_2`: +0.314 (rank=4)
+  - `a`: -0.257 (rank=5)
+
+**peak_e_field** (n=42):
+  - `R_between_cell_1_2`: +0.389 (rank=1)
+  - `e_x`: -0.265 (rank=2)
+  - `R_bend_cell2_left`: -0.263 (rank=3)
+  - `PickUpDeep`: +0.258 (rank=4)
+  - `R_cell_3`: -0.256 (rank=5)
+
+**field_flatness** (n=42):
+  - `offset1`: +0.329 (rank=1)
+  - `R_cell_3`: -0.316 (rank=2)
+  - `length1`: -0.243 (rank=3)
+  - `R_cell_1`: +0.226 (rank=4)
+
+**max_modified_poynting** (n=42):
+  - `R_cell_3`: -0.548 (rank=1)
+  - `R_cell_1`: +0.515 (rank=2)
+  - `R_cell_2`: +0.441 (rank=3)
+  - `R_bend_cell1`: -0.402 (rank=4)
+  - `cell_1_vertical_length`: +0.283 (rank=5)
+
+**pulsed_heating** (n=42):
+  - `R_cell_1`: +0.556 (rank=1)
+  - `R_cell_3`: -0.554 (rank=2)
+  - `R_bend_cell1`: -0.425 (rank=3)
+  - `R_cell_2`: +0.408 (rank=4)
+  - `cell_1_vertical_length`: +0.253 (rank=5)
+
+
 ### 30 um
 
 **resonant_freq** (n=26):
@@ -330,150 +474,6 @@
   - `R_between_cell_3_cutoff`: -0.424 (rank=5)
 
 
-### 7 um
-
-**resonant_freq** (n=59):
-  - `cell_2_vertical_left`: -0.253 (rank=1)
-  - `R_between_cell_1_2`: -0.219 (rank=2)
-  - `bend1`: -0.214 (rank=3)
-
-**coupling_beta** (n=59):
-  - `R_cell_3`: -0.790 (rank=1)
-  - `R_cell_2`: +0.370 (rank=2)
-  - `length1`: -0.347 (rank=3)
-  - `a`: -0.268 (rank=4)
-  - `R_cell_1`: +0.250 (rank=5)
-
-**q0** (n=59):
-  - `R_cell_3`: -0.801 (rank=1)
-  - `R_cell_1`: +0.325 (rank=2)
-  - `length1`: -0.322 (rank=3)
-  - `R_cell_2`: +0.301 (rank=4)
-  - `a`: -0.252 (rank=5)
-
-**peak_e_field** (n=59):
-  - `R_between_cell_1_2`: +0.366 (rank=1)
-  - `PickUpDeep`: +0.265 (rank=2)
-  - `R_cell_3`: -0.263 (rank=3)
-  - `R_cell_2`: -0.209 (rank=4)
-
-**field_flatness** (n=59):
-  - `R_cell_2`: +0.383 (rank=1)
-  - `e_x`: +0.252 (rank=2)
-  - `bend1`: -0.251 (rank=3)
-  - `cell_2_vertical_left`: +0.221 (rank=4)
-  - `R_cell_1`: +0.213 (rank=5)
-
-**max_modified_poynting** (n=59):
-  - `R_cell_1`: +0.781 (rank=1)
-  - `bend1`: -0.249 (rank=2)
-  - `PickUpDeep`: +0.207 (rank=3)
-
-**pulsed_heating** (n=59):
-  - `R_cell_1`: +0.811 (rank=1)
-  - `bend1`: -0.214 (rank=2)
-  - `R_between_cell_1_2`: +0.213 (rank=3)
-
-
-### 12 um
-
-**resonant_freq** (n=58):
-  - `R_between_cell_1_2`: -0.288 (rank=1)
-  - `bend1`: -0.281 (rank=2)
-  - `PickUpDeep`: -0.252 (rank=3)
-  - `cell_2_vertical_left`: -0.243 (rank=4)
-
-**coupling_beta** (n=58):
-  - `R_cell_3`: -0.797 (rank=1)
-  - `R_cell_2`: +0.369 (rank=2)
-  - `length1`: -0.308 (rank=3)
-  - `R_cell_1`: +0.281 (rank=4)
-  - `a`: -0.231 (rank=5)
-
-**q0** (n=58):
-  - `R_cell_3`: -0.818 (rank=1)
-  - `R_cell_1`: +0.349 (rank=2)
-  - `length1`: -0.296 (rank=3)
-  - `R_cell_2`: +0.293 (rank=4)
-  - `a`: -0.210 (rank=5)
-
-**peak_e_field** (n=58):
-  - `R_between_cell_1_2`: +0.352 (rank=1)
-  - `R_cell_3`: -0.332 (rank=2)
-  - `PickUpDeep`: +0.272 (rank=3)
-  - `bend1`: +0.244 (rank=4)
-  - `R_cell_2`: -0.242 (rank=5)
-
-**field_flatness** (n=58):
-  - `bend1`: -0.254 (rank=1)
-  - `R_cell_2`: +0.225 (rank=2)
-  - `R_cell_1`: +0.205 (rank=3)
-
-**max_modified_poynting** (n=58):
-  - `R_cell_1`: +0.676 (rank=1)
-  - `R_cell_2`: +0.427 (rank=2)
-  - `cell_1_vertical_length`: +0.241 (rank=3)
-  - `cell_2_vertical_left`: +0.210 (rank=4)
-  - `bend1`: -0.200 (rank=5)
-
-**pulsed_heating** (n=58):
-  - `R_cell_1`: +0.774 (rank=1)
-  - `R_cell_2`: +0.298 (rank=2)
-  - `bend1`: -0.261 (rank=3)
-  - `cell_2_vertical_left`: +0.200 (rank=4)
-
-
-### 25 um
-
-**resonant_freq** (n=42):
-  - `R_between_cell_1_2`: -0.326 (rank=1)
-  - `R_between_cell_2_3`: -0.309 (rank=2)
-  - `R_cell_1`: -0.225 (rank=3)
-  - `cell_2_vertical_left`: -0.220 (rank=4)
-  - `PickUpDeep`: -0.209 (rank=5)
-
-**coupling_beta** (n=42):
-  - `R_cell_3`: -0.869 (rank=1)
-  - `R_cell_2`: +0.553 (rank=2)
-  - `length1`: -0.314 (rank=3)
-  - `R_bend_cell1`: -0.275 (rank=4)
-  - `R_cell_1`: +0.272 (rank=5)
-
-**q0** (n=42):
-  - `R_cell_3`: -0.573 (rank=1)
-  - `bend1`: -0.365 (rank=2)
-  - `R_cell_1`: +0.330 (rank=3)
-  - `R_cell_2`: +0.314 (rank=4)
-  - `a`: -0.257 (rank=5)
-
-**peak_e_field** (n=42):
-  - `R_between_cell_1_2`: +0.389 (rank=1)
-  - `e_x`: -0.265 (rank=2)
-  - `R_bend_cell2_left`: -0.263 (rank=3)
-  - `PickUpDeep`: +0.258 (rank=4)
-  - `R_cell_3`: -0.256 (rank=5)
-
-**field_flatness** (n=42):
-  - `offset1`: +0.329 (rank=1)
-  - `R_cell_3`: -0.316 (rank=2)
-  - `length1`: -0.243 (rank=3)
-  - `R_cell_1`: +0.226 (rank=4)
-
-**max_modified_poynting** (n=42):
-  - `R_cell_3`: -0.548 (rank=1)
-  - `R_cell_1`: +0.515 (rank=2)
-  - `R_cell_2`: +0.441 (rank=3)
-  - `R_bend_cell1`: -0.402 (rank=4)
-  - `cell_1_vertical_length`: +0.283 (rank=5)
-
-**pulsed_heating** (n=42):
-  - `R_cell_1`: +0.556 (rank=1)
-  - `R_cell_3`: -0.554 (rank=2)
-  - `R_bend_cell1`: -0.425 (rank=3)
-  - `R_cell_2`: +0.408 (rank=4)
-  - `cell_1_vertical_length`: +0.253 (rank=5)
-
-
 ## 5. Cross-Level Parameter Rank Stability
 
 For each core metric, which parameters consistently dominate
@@ -499,7 +499,7 @@ across all 6 tolerance levels?
 | field_flatness | `R_cell_2` | 0.10 | 11% (9 lvls) | 22% | 13.4 | Weak / noise-level |
 | field_flatness | `bend1` | 0.11 | 11% (9 lvls) | 22% | 11.2 | Weak / noise-level |
 
-*Verdict: Dominant = rank-1 in ��80% levels; Strong = ��50%; Consistent top-3 = in top-3 ��50%; Moderate = mean |��| ��0.3.*
+*Verdict: Dominant = rank-1 in >=80% levels; Strong = >=50%; Consistent top-3 = in top-3 >=50%; Moderate = mean |rho| >=0.3.*
 
 ## 6. Tolerance Recommendation
 
@@ -772,13 +772,13 @@ degrade as THIS parameter deviates (with others also varying).
 |-------|-------------|
 | 3 um | 0/62 (0.0%) |
 | 5 um | 0/60 (0.0%) |
+| 7 um | 1/60 (1.7%) |
 | 10 um | 0/60 (0.0%) |
+| 12 um | 2/60 (3.3%) |
 | 15 um | 16/68 (23.5%) |
 | 20 um | 16/60 (26.7%) |
-| 30 um | 69/95 (72.6%) |
-| 7 um | 1/60 (1.7%) |
-| 12 um | 2/60 (3.3%) |
 | 25 um | 18/60 (30.0%) |
+| 30 um | 69/95 (72.6%) |
 
 ---
 *Report generated from 9 tolerance levels, 585 total records.*

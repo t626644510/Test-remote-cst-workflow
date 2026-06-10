@@ -219,8 +219,16 @@ def main():
     # 5b. CV% Table
     print("## 2. Coefficient of Variation (CV%)")
     print()
-    print("| Metric | 3um | 5um | 10um | 15um | 20um | 30um | Monotonic | Knee |")
-    print("|--------|-----|-----|------|------|------|------|-----------|------|")
+    # Dynamic header from actual levels
+    first_curve = report.metric_curves[0] if report.metric_curves else None
+    if first_curve:
+        lvl_labels = [f"{lvl:.0f}um" if lvl == int(lvl) else f"{lvl:.1f}um" for lvl in first_curve.levels_um]
+    else:
+        lvl_labels = []
+    header_cols = ["Metric"] + lvl_labels + ["Monotonic", "Knee"]
+    sep_cols = ["--------"] + [":---:"] * len(lvl_labels) + ["-----------", "------"]
+    print("| " + " | ".join(header_cols) + " |")
+    print("|" + "|".join(sep_cols) + "|")
     for curve in report.metric_curves:
         parts = [curve.metric_name]
         for s in curve.summaries:
@@ -235,8 +243,10 @@ def main():
     # 5c. Mean Table
     print("## 3. Mean Values by Tolerance Level")
     print()
-    print("| Metric | 3um | 5um | 10um | 15um | 20um | 30um | Monotonic |")
-    print("|--------|-----|-----|------|------|------|------|-----------|")
+    header_cols2 = ["Metric"] + lvl_labels + ["Monotonic"]
+    sep_cols2 = ["--------"] + [":---:"] * len(lvl_labels) + ["-----------"]
+    print("| " + " | ".join(header_cols2) + " |")
+    print("|" + "|".join(sep_cols2) + "|")
     for curve in report.metric_curves:
         parts = [curve.metric_name]
         for s in curve.summaries:

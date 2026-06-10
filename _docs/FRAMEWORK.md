@@ -51,3 +51,27 @@ Compact architecture overlay for the current repository state (Phase 13).
 .venv\Scripts\python.exe -m pytest tests --tb=short -q
 .venv\Scripts\python.exe -m compileall src workflows run_workflow_*.py
 ```
+
+## Tolerance Analysis Toolchain
+
+`workflows/rfgun_tolerance/` provides Monte Carlo tolerance sampling and sweep analysis.
+
+**Sampling** (requires CST):
+```powershell
+# Run multiple tolerance levels in one command; auto-detects existing DBs
+python -m workflows.rfgun_tolerance.run --config config/default.yaml --tolerance-scale 1.0 1.67 3.33 5.0 6.67 10.0 2.33 4.0 8.33
+
+# Recovery mode: re-run only previously failed records (no new random samples)
+python -m workflows.rfgun_tolerance.run --config config/default.yaml --tolerance-scale 10.0 --recover
+```
+
+**Analysis** (no CST required):
+```powershell
+python temp_analysis/analyze_tolerance.py > temp_analysis/report.md
+```
+
+Key config fields in `config/default.yaml` `tolerance:` section:
+- `output_dir`: DB and log root directory
+- `db_path`: SQLite DB path template
+- `max_samples`: samples per level
+- `project_path`: CST project file

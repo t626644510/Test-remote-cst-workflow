@@ -46,17 +46,17 @@ from workflows.rfgun_tolerance.statistics import (
 
 # ---- Config -----------------------------------------------------------
 TOLERANCE_DIR = "D:/Results/tolerance"
-LEVELS = [
+LEVELS = sorted([
     (3, "tolerance_eval_3um.db"),
     (5, "tolerance_eval_5um.db"),
+    (7, "tolerance_eval_7.0um.db"),
     (10, "tolerance_eval_10um.db"),
+    (12, "tolerance_eval_12um.db"),
     (15, "tolerance_eval_15um.db"),
     (20, "tolerance_eval_20um.db"),
-    (30, "tolerance_eval_30um.db"),
-    (7, "tolerance_eval_7.0um.db"),
-    (12, "tolerance_eval_12um.db"),
     (25, "tolerance_eval_25.0um.db"),
-]
+    (30, "tolerance_eval_30um.db"),
+], key=lambda x: x[0])
 TOLERANCE_PARAMETER = "tolerance_abs"
 METRIC_NAMES = [
     "resonant_freq", "coupling_beta", "q0", "peak_e_field",
@@ -250,7 +250,7 @@ def main():
     print()
 
     # 5d. Parameter Sensitivity (Top-5 per metric at each level)
-    print("## 4. Parameter Sensitivity (Spearman |score| ≥ 0.2)")
+    print("## 4. Parameter Sensitivity (Spearman |score| >= 0.2)")
     print()
     for level_um, _ in LEVELS:
         sr_map = sensitivities.get(float(level_um), {})
@@ -310,7 +310,7 @@ def main():
                 verdict = "Weak / noise-level"
             print(f"| {mname} | `{pname}` | {ms:.2f} | {r1:.0f}% ({nl} lvls) | {t3:.0f}% | {mr:.1f} | {verdict} |")
         print()
-    print("*Verdict: Dominant = rank-1 in ≥80% levels; Strong = ≥50%; Consistent top-3 = in top-3 ≥50%; Moderate = mean |ρ| ≥0.3.*")
+    print("*Verdict: Dominant = rank-1 in >=80% levels; Strong = >=50%; Consistent top-3 = in top-3 >=50%; Moderate = mean |rho| >=0.3.*")
     print()
 
     # 5e. Tolerance Recommendation

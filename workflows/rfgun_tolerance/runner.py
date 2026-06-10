@@ -232,7 +232,8 @@ class ToleranceSampler:
                 except Exception:
                     print(f"  [skip] bad param_values in row id={row.get('id')}")
                     continue
-                self._evaluate_one(global_idx, x, recovery=True)
+                old_id = row.get("id")
+                self._evaluate_one(global_idx, x, recovery=True, old_row_id=old_id)
                 success_count += 1
                 n_remaining -= 1
             print(f"Recovery complete.")
@@ -304,7 +305,7 @@ class ToleranceSampler:
             _logger.info("CST connection established — PID %s", self._conn.pid)
         return self._conn
 
-    def _evaluate_one(self, index: int, x: np.ndarray, recovery: bool = False) -> None:
+    def _evaluate_one(self, index: int, x: np.ndarray, recovery: bool = False, old_row_id: int | None = None) -> None:
         """Run one CST solve and persist to the evaluation database."""
         conn = self._get_connection()
         param_dict = dict(zip(self._param_names, x))
@@ -417,6 +418,16 @@ class ToleranceSampler:
         )
         record.source = "rfgun_tolerance.runner"
         record.error_taxonomy = {"error_message": error} if error else None
+
+        # Recovery mode: delete the old failed row before inserting new result
+        if old_row_id is not None:
+            try:
+                self._db._conn.execute(
+                    "DELETE FROM evaluation_records WHERE id = ?", (old_row_id,)
+                )
+                self._db._conn.commit()
+            except Exception:
+                pass
 
         try:
             row_id = self._db.insert_final_record(record)

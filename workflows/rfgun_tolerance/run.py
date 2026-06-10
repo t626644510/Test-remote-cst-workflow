@@ -57,7 +57,11 @@ def _run_one(cfg, scale=None, recover=False):
     if scale is not None:
         base_um = float(cfg.parameters[0].tolerance_abs) * 1000.0 if cfg.parameters else 3.0
         scaled_um = base_um * scale
-        level_str = f"{scaled_um:.0f}um" if scaled_um == int(scaled_um) else f"{scaled_um:.1f}um"
+        rounded = round(scaled_um)
+        if abs(scaled_um - rounded) < 0.05:
+            level_str = f"{rounded}um"
+        else:
+            level_str = f"{scaled_um:.1f}um"
 
         for p in cfg.parameters:
             p.tolerance_abs = round(p.tolerance_abs * scale, 10)

@@ -1,0 +1,16 @@
+axis: z
+expected_features:
+  - RFVacuumVolume
+  - BeamPipe
+  - CavityWall
+  - NoseCone
+  - Iris
+  - CathodeSurface
+  - BeamExit
+  - CouplerPort
+
+known_faces:
+  cathode:
+    approximate_location: z_min
+  beam_exit:
+    approximate_location: z_max

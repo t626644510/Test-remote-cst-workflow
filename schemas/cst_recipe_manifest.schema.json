@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/cst_history_extractor/cst_recipe_manifest.schema.json",
+  "title": "CST Recipe Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "materials",
+    "geometry_summary",
+    "boundaries",
+    "ports",
+    "mesh",
+    "solver",
+    "monitors",
+    "postprocessing",
+    "result_exports"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "project_id": { "type": "string" },
+    "source": { "type": "string" },
+    "project": {
+      "type": "object",
+      "required": ["units", "background", "parameters"],
+      "properties": {
+        "units": { "type": ["object", "null"] },
+        "background": { "type": ["object", "null"] },
+        "parameters": { "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "materials": { "type": "array" },
+    "geometry_summary": {
+      "type": "object",
+      "required": ["imported_files", "components", "solids"],
+      "properties": {
+        "imported_files": { "type": "array", "items": { "type": "string" } },
+        "components": { "type": "array", "items": { "type": "string" } },
+        "solids": { "type": "array", "items": { "type": "string" } },
+        "source_history_indices": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "boundaries": {
+      "type": "object",
+      "required": ["global", "symmetry", "local"],
+      "properties": {
+        "global": { "type": ["object", "null"] },
+        "symmetry": { "type": "array" },
+        "local": { "type": "array" }
+      },
+      "additionalProperties": true
+    },
+    "ports": { "type": "array" },
+    "mesh": {
+      "type": "object",
+      "required": ["global", "local_refinements"],
+      "properties": {
+        "global": { "type": ["object", "null"] },
+        "local_refinements": { "type": "array" }
+      },
+      "additionalProperties": true
+    },
+    "solver": {
+      "type": "object",
+      "required": ["type", "settings", "confidence", "source_history_indices"],
+      "properties": {
+        "type": { "type": "string" },
+        "settings": { "type": "object" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_history_indices": {
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "monitors": { "type": "array" },
+    "postprocessing": { "type": "array" },
+    "result_exports": { "type": "array" }
+  },
+  "additionalProperties": true
+}

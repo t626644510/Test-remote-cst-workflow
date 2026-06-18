@@ -1,0 +1,27 @@
+{
+  "geometry_command_count": 2,
+  "final_components": [
+    "vacuum"
+  ],
+  "final_solids": [
+    "rf_vacuum"
+  ],
+  "imported_geometry": [
+    "baseline_cavity.step"
+  ],
+  "ignored_geometry_commands": [
+    {
+      "index": 4,
+      "reason": "import_not_relevant_to_solver_recipe"
+    },
+    {
+      "index": 5,
+      "reason": "primitive_creation_not_relevant_to_solver_recipe"
+    }
+  ],
+  "source_history_indices": [
+    4,
+    5
+  ],
+  "confidence": 0.55
+}

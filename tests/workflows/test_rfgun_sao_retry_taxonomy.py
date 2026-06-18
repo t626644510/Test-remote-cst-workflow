@@ -14,13 +14,13 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     RawEvaluationPayload,
 )
-from workflows.rfgun_sao.retry_taxonomy import (
+from cst_optimization.evaluation.retry_taxonomy import (
     RetryFailureClass,
     RetryEligibilityAction,
     RetryTier,
@@ -263,7 +263,7 @@ class TestNoIO:
         assert isinstance(cl, RetryClassification)
 
 # ---------------------------------------------------------------------------
-# N1 ¡ª Semantics hardening
+# N1 â€” Semantics hardening
 # ---------------------------------------------------------------------------
 
 
@@ -381,7 +381,7 @@ class TestN1ProbablyInfeasible:
 class TestN1JsonlNotReferenced:
     def test_retry_taxonomy_does_not_reference_jsonl(self):
         """Retry taxonomy module does not import or reference Phase C JSONL."""
-        import workflows.rfgun_sao.retry_taxonomy as rt
+        import cst_optimization.evaluation.retry_taxonomy as rt
         src = rt.__file__
         with open(src, "r", encoding="utf-8") as fh:
             text = fh.read()

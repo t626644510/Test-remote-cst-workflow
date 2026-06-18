@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
@@ -84,7 +84,7 @@ def build_in_memory_index(
     diagnostics.
     """
     if current_schema is None:
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         current_schema = current_schema_version()
@@ -133,7 +133,7 @@ def classify_record_for_dedup(
     Does **not** query an index.
     """
     if current_schema is None:
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         current_schema = current_schema_version()
@@ -199,7 +199,7 @@ def find_records_by_parameter_identity(
 ) -> list[EvaluationDatabaseRecord]:
     """Find records matching *pid* in the index.
 
-    *pid* must not be ``None`` — callers must check before calling.
+    *pid* must not be ``None`` -callers must check before calling.
     Returns an empty list if no match.
     """
     key = pid.parameter_key()

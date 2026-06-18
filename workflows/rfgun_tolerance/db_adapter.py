@@ -75,7 +75,7 @@ def load_records_from_sqlite_db(path: str | Path) -> list[dict[str, Any]]:
     list of dict
         Records compatible with ``build_tolerance_dataset_from_records()``.
     """
-    from cst_optimization.evaluation.storage import (
+    from cst_optimization.evaluation.evaluation_database_storage import (
         EvaluationDatabaseConfig,
         SQLiteEvaluationDatabase,
     )

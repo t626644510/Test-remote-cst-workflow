@@ -3,7 +3,7 @@
 # reconstructing EvaluationResult from DB rows.
 # No runtime skip, no workflow integration.
 #
-# Phase SR2 — no-CST lookup implementation.
+# Phase SR2 -no-CST lookup implementation.
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from cst_optimization.evaluation.schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     current_schema_version,
 )
-from cst_optimization.workflows.recovery import EvaluationResult, EvaluationStatus
+from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
 _logger = logging.getLogger(__name__)
 
@@ -252,7 +252,7 @@ def _is_row_eligible(
         return False
 
     # Payload validation: objective_values is always required in SR2.
-    # Raw-only rows are never eligible — no safe recompute helper exists.
+    # Raw-only rows are never eligible -no safe recompute helper exists.
     objective_values = row.get("objective_values")
     if objective_values is None:
         return False
@@ -264,7 +264,7 @@ def _is_row_eligible(
     if not isinstance(objective_values, dict) or len(objective_values) == 0:
         return False
 
-    # Max age check is not implemented in SR2 — raise if set.
+    # Max age check is not implemented in SR2 -raise if set.
     if config.max_age_days is not None:
         raise ValueError(
             "max_age_days is not supported in SR2. "

@@ -1,6 +1,6 @@
-"""Workflow 1 evaluator -- single-project single-pass frequency-domain solver.
+﻿"""Workflow 1 evaluator -- single-project single-pass frequency-domain solver.
 
-Canonical WF1 evaluator owned by the ``rfgun_sao`` workflow package.
+Reference implementation owned by the ``rfgun_single_pass`` workflow package.
 Behaviour is identical to the original closure.
 """
 
@@ -21,12 +21,7 @@ from typing import Any
 import numpy as np
 
 from cst_optimization.workflows.base_evaluator import BaseWorkflow1Evaluator
-from workflows.rfgun_sao.metrics import (
-    MetricSpec,
-    compute_role_penalties,
-    report_only_diagnostics,
-)
-from workflows.rfgun_sao.types import (
+from cst_optimization.workflows.recovery import (
     EvaluationResult,
     EvaluationStatus as _ES,
 )
@@ -64,7 +59,6 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
         objectives: list,
         param_names: list[str],
         metric_names: list[str],
-        metric_specs: list[MetricSpec] | None = None,
     ) -> None:
         self._conn = connection
         self._project_path = project_path
@@ -73,17 +67,6 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
         self._objectives = objectives
         self._param_names = list(param_names)
         self._metric_names = list(metric_names)
-        self._objectives_by_name = {obj.name: obj for obj in objectives}
-        if metric_specs is not None:
-            self._metric_specs = metric_specs
-        else:
-            # Fallback: treat all metric_names as optimize specs
-            from workflows.rfgun_sao.metrics import MetricRole, MetricSpec
-            self._metric_specs = [
-                MetricSpec(name=n, role=MetricRole.OPTIMIZE)
-                for n in metric_names
-            ]
-        self._last_diagnostics: dict[str, float] = {}
 
     # ------------------------------------------------------------------
     # Reconnect hook
@@ -94,18 +77,6 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
         self._conn = new_conn
 
     # ------------------------------------------------------------------
-    # Diagnostics accessor
-    # ------------------------------------------------------------------
-
-    def last_diagnostics(self) -> dict[str, float]:
-        """Return report-only diagnostics from the most recent evaluation.
-
-        Returns an empty dict if no evaluation has succeeded or if the
-        last evaluation failed before diagnostics were computed.
-        """
-        return dict(self._last_diagnostics)
-
-    # ------------------------------------------------------------------
     # Main evaluation
     # ------------------------------------------------------------------
 
@@ -114,25 +85,18 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
         param_dict: dict[str, float],
         iteration: int,
     ) -> tuple[dict[str, float], dict[str, float], bool, _ES, str]:
-        """Run one CST simulation (delegates to shared base class)."""
-        self._last_diagnostics = {}
-        raw_metrics, penalties, solver_ok, status, error = (
-            super().evaluate_single_pass(param_dict, iteration, _ES)
-        )
-        if solver_ok:
-            self._last_diagnostics = report_only_diagnostics(
-                metric_specs=self._metric_specs,
-                raw_metrics=raw_metrics,
-            )
-        return raw_metrics, penalties, solver_ok, status, error
+        """Delegate to base class shared physics evaluation."""
+        return super().evaluate_single_pass(param_dict, iteration, _ES)
 
     def _compute_penalties(self, raw_metrics: dict[str, float]) -> dict[str, float]:
-        """Role-aware penalty computation (SAO version)."""
-        return compute_role_penalties(
-            metric_specs=self._metric_specs,
-            objectives_by_name=self._objectives_by_name,
-            raw_metrics=raw_metrics,
-        )
+        """Simple per-objective penalty computation (single_pass reference)."""
+        penalties: dict[str, float] = {}
+        for obj in self._objectives:
+            val = raw_metrics.get(obj.name, np.nan)
+            penalties[obj.name] = (
+                float(obj.mode.compute(float(val))) if np.isfinite(val) else 1.0
+            )
+        return penalties
 
     # ------------------------------------------------------------------
     # Retry adapter
@@ -143,7 +107,3 @@ class Workflow1Evaluator(BaseWorkflow1Evaluator):
     ) -> EvaluationResult:
         """Delegate to base class shared implementation."""
         return super().adapt_for_retry(params, iteration, EvaluationResult, _ES)
-
-    def _extra_result_fields(self) -> dict[str, Any]:
-        """Include diagnostics in evaluation result."""
-        return {"diagnostics": dict(self._last_diagnostics)}

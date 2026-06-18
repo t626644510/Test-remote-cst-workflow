@@ -1,4 +1,4 @@
-"""No-CST failure skip dry-run diagnostics — FS3.
+"""No-CST failure skip dry-run diagnostics -FS3.
 
 Evaluates whether a proposed ``parameter_key`` would be skipped under
 the FS policy, but never actually skips anything.  All evaluator, retry,
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from cst_optimization.evaluation.failure_skip import (
+from cst_optimization.evaluation.failure_skip_candidates import (
     FailureSkipCandidateConfig,
     find_failure_skip_candidate_for_key,
     load_failure_skip_candidates,
@@ -49,11 +49,11 @@ class FailureSkipDryRunDecision:
     blocked_reasons : tuple of str
         Reasons blocking the skip, if any.
     evaluator_must_run : bool
-        True in dry_run — evaluator must always be called.
+        True in dry_run -evaluator must always be called.
     retry_must_run : bool
-        True in dry_run — retry must always be called.
+        True in dry_run -retry must always be called.
     budget_consumed_normally : bool
-        True in dry_run — CST budget consumed normally.
+        True in dry_run -CST budget consumed normally.
     diagnostics : Mapping
         Extra diagnostic information.
     """

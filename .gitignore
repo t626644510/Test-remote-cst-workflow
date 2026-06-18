@@ -32,3 +32,9 @@ workflows/**/config.local.yaml
 /config.local.yaml
 # Claude local settings (do not commit)
 .claude/settings.local.json
+runs/
+temp_analysis/
+wf3-campaign/
+*.db
+*.sqlite
+*.sqlite3

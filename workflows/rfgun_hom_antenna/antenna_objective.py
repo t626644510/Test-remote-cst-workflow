@@ -1,4 +1,4 @@
-"""Antenna fundamental-mode absorption optimisation objectives.
+"""Antenna fundamental-mode absorption optimisation objectives (WF2-local).
 
 Each class reads S-parameters at a specific HOM antenna port and computes
 the absorption at the fundamental mode resonance peak.
@@ -22,9 +22,9 @@ from typing import ClassVar
 
 import numpy as np
 
-from .base import ObjectiveFunction
-from .registry import register_objective
-from ..physics.formulas import half_power_bandwidth, resonance_from_dip
+from cst_optimization.objectives.base import ObjectiveFunction
+from cst_optimization.objectives.registry import register_objective
+from cst_optimization.physics.formulas import half_power_bandwidth, resonance_from_dip
 
 
 def _tree_path_for_port(port: int) -> str:

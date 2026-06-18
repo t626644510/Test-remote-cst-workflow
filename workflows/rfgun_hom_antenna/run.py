@@ -41,6 +41,7 @@ import yaml
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
+from cst_optimization.runner import BaseRunner
 from workflows.rfgun_hom_antenna.workflow import build_workflow_2
 
 # ── Config loader ────────────────────────────────────────────────────────────
@@ -390,5 +391,21 @@ def main() -> None:
         _heartbeat_stop.set()
 
 
+# -- BaseRunner integration (Phase 13) ----------------------------------
+
+
+class WF2Runner(BaseRunner):
+    """WF2 HOM antenna runner — delegates to standalone functions."""
+
+    def __init__(self):
+        super().__init__(
+            wf_name="workflow_2",
+            default_config=str(Path(__file__).resolve().with_name("config.yaml")),
+        )
+
+    def run(self):
+        main()
+
+
 if __name__ == "__main__":
-    main()
+    WF2Runner().run()

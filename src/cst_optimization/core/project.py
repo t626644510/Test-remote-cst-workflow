@@ -13,7 +13,7 @@ from types import TracebackType
 from typing import Any
 
 from .cleanup import ProjectCloser
-from .errors import CSTConnectionLostError
+from ..diagnostics import CSTConnectionLostError
 
 _logger = logging.getLogger(__name__)
 

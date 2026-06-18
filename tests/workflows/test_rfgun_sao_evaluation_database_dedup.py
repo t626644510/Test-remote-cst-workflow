@@ -14,14 +14,14 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     RawEvaluationPayload,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_dedup import (
+from cst_optimization.evaluation.evaluation_database_dedup import (
     DedupDecisionAction,
     DedupDecision,
     InMemoryEvaluationRecordIndex,
@@ -214,7 +214,7 @@ class TestNoIO:
 
     def test_jsonl_not_referenced(self):
         """The dedup module does not reference JSONL sidecar code."""
-        import workflows.rfgun_sao.evaluation_database_dedup as dedup_mod
+        import cst_optimization.evaluation.evaluation_database_dedup as dedup_mod
         src = dedup_mod.__file__
         with open(src, "r", encoding="utf-8") as fh:
             text = fh.read()

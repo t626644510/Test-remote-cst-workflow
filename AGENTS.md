@@ -19,14 +19,23 @@ accelerator-cavity simulation and surrogate-model optimisation.
 
 ## Architecture Direction
 
-- Keep workflow-specific behaviour inside its workflow package until reuse is
-  proven.
-- Promote code into `src/cst_optimization/` only when it has a stable,
-  cross-workflow contract or is clearly generic.
-- Current code, tests, and git diff are authoritative. Historical reports,
-  tags, and branch names are evidence only.
-- Maintain root compatibility shims (`run_workflow_1.py`, `run_workflow_2.py`,
-  `run_workflow_3.py`) unless a scoped migration explicitly changes them.
+- **Workflow packages** live under `workflows/`:
+  - `rfgun_sao/` — WF1 active: SAO + two-pass + staged/adaptive search
+  - `rfgun_single_pass/` — WF1 reference: validated single-pass baseline
+  - `rfgun_hom_antenna/` — WF2: dual-project HOM antenna optimisation
+  - `rfgun_recovery/` — WF3: single-project recovery optimisation
+  - `rfgun_tolerance/` — WF3 tolerance: Monte Carlo sampling + analysis
+- **Shared core** is `src/cst_optimization/`:
+  - `core/` — CST abstractions (connection, project, solver, retry, cleanup)
+  - `evaluation/` — unified evaluation DB + retry infrastructure
+  - `diagnostics.py` — error types + CST message capture + Excel logger
+  - `factory.py` — shared config-to-object builders + `build_workflow_2`
+  - `runner.py` — `BaseRunner` class for workflow CLI entry points
+  - `checkpoint.py` — `CheckpointManager`
+- Keep workflow-specific behaviour inside its workflow package until reuse is proven.
+- Promote code into `src/cst_optimization/` only when it has a stable cross-workflow contract.
+- Current code, tests, and git diff are authoritative. Historical reports, tags, and branch names are evidence only.
+- Root compatibility shims (`run_workflow_1.py`, `run_workflow_2.py`, `run_workflow_3.py`) delegate to their respective workflow packages.
 
 ## Validation And Hygiene
 

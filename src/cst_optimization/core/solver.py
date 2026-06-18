@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .errors import (
+from ..diagnostics import (
     SolverCOMError,
     SolverConvergenceError,
     SolverMeshError,

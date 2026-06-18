@@ -7,12 +7,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from workflows.rfgun_sao.evaluation_database_dedup import (
+from cst_optimization.evaluation.evaluation_database_dedup import (
     DedupDecisionAction,
     InMemoryEvaluationRecordIndex,
     build_in_memory_index,
 )
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
@@ -136,7 +136,7 @@ def classify_record_for_prior(
     or ``(status, reason)`` if not.
     """
     if current_schema is None:
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         current_schema = current_schema_version()
@@ -175,7 +175,7 @@ def classify_record_for_prior(
 
 
 # ---------------------------------------------------------------------------
-# Record → PriorCandidate conversion
+# Record ->PriorCandidate conversion
 # ---------------------------------------------------------------------------
 
 
@@ -254,7 +254,7 @@ def build_prior_candidates_from_records(
     payload (when ``require_raw_metrics`` is True) are converted.
     """
     if current_schema is None:
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             current_schema_version,
         )
         current_schema = current_schema_version()
@@ -609,7 +609,7 @@ def load_warm_start_priors(
     DbWarmStartLoadReport
         Loading report with accepted priors and rejection stats.
     """
-    from workflows.rfgun_sao.evaluation_database_schema import current_schema_version
+    from cst_optimization.evaluation.evaluation_database_schema import current_schema_version
     import math
 
     if current_schema is None:
@@ -843,7 +843,7 @@ def _load_json_dict(raw: Any) -> dict | None:
 
 
 # ===================================================================
-# WS3.1 — Pure no-CST helpers for checkpoint-dedup merging
+# WS3.1 -Pure no-CST helpers for checkpoint-dedup merging
 # ===================================================================
 
 
@@ -906,7 +906,7 @@ def merge_checkpoint_and_db_priors(
 ) -> tuple[tuple[np.ndarray, np.ndarray] | None, dict[str, int]]:
     """Merge checkpoint and DB priors, deduplicating by parameter key.
 
-    Checkpoint observations remain authoritative — any DB prior whose
+    Checkpoint observations remain authoritative -any DB prior whose
     ``parameter_key`` already appears in the checkpoint is omitted.
 
     Parameters

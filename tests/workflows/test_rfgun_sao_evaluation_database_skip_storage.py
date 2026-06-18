@@ -18,11 +18,11 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseStatus,
     current_schema_version,
 )
-from workflows.rfgun_sao.evaluation_database_skip_records import (
+from cst_optimization.evaluation.evaluation_database_skip_records import (
     SKIPPED_FAILURE_REUSE,
     SKIPPED_PROBABLY_INFEASIBLE,
     EvaluationSkipRecordPayload,
@@ -30,19 +30,19 @@ from workflows.rfgun_sao.evaluation_database_skip_records import (
     is_reusable_success_status,
     is_skip_status,
 )
-from workflows.rfgun_sao.evaluation_database_skip_storage import (
+from cst_optimization.evaluation.evaluation_database_skip_storage import (
     build_skip_payload_from_enforce_decision,
     write_failure_skip_synthetic_row,
 )
-from workflows.rfgun_sao.evaluation_database_storage import (
+from cst_optimization.evaluation.evaluation_database_storage import (
     EvaluationDatabaseConfig,
     SQLiteEvaluationDatabase,
 )
-from workflows.rfgun_sao.failure_skip_candidates import (
+from cst_optimization.evaluation.failure_skip_candidates import (
     FailureSkipCandidateConfig,
     load_failure_skip_candidates,
 )
-from workflows.rfgun_sao.failure_skip_enforce import (
+from cst_optimization.evaluation.failure_skip_enforce import (
     FailureSkipEnforceDecision,
 )
 
@@ -63,7 +63,7 @@ def _create_db(tmp_path: Path) -> str:
 
 def _insert_success_row(db_path: str, param_values: list[float]) -> None:
     """Insert a SUCCESS row for warm-start/reuse tests."""
-    from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+    from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
     pid = ParameterIdentity(param_names=["p0"], values=param_values)
     conn = __import__("sqlite3").connect(db_path)
     try:
@@ -228,7 +228,7 @@ class TestReadBack:
         assert not is_reusable_success_status(SKIPPED_PROBABLY_INFEASIBLE)
 
     def test_not_failure_skip_evidence_source(self):
-        from workflows.rfgun_sao.evaluation_database_skip_records import (
+        from cst_optimization.evaluation.evaluation_database_skip_records import (
             is_failure_skip_evidence_source_status,
         )
         assert not is_failure_skip_evidence_source_status(SKIPPED_FAILURE_REUSE)
@@ -345,7 +345,7 @@ class TestExclusion:
 
 class TestGlobalSafety:
     def test_no_subprocess(self):
-        import workflows.rfgun_sao.evaluation_database_skip_storage as mod
+        import cst_optimization.evaluation.evaluation_database_skip_storage as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -353,14 +353,14 @@ class TestGlobalSafety:
         assert "from subprocess" not in text
 
     def test_no_os_system(self):
-        import workflows.rfgun_sao.evaluation_database_skip_storage as mod
+        import cst_optimization.evaluation.evaluation_database_skip_storage as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
         assert "os.system" not in text
 
     def test_no_taskkill(self):
-        import workflows.rfgun_sao.evaluation_database_skip_storage as mod
+        import cst_optimization.evaluation.evaluation_database_skip_storage as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
@@ -368,11 +368,11 @@ class TestGlobalSafety:
         assert "Stop-Process" not in text
 
     def test_no_cst_import(self):
-        import workflows.rfgun_sao.evaluation_database_skip_storage as mod
+        import cst_optimization.evaluation.evaluation_database_skip_storage as mod
         src = mod.__file__
         with open(src, encoding="utf-8") as f:
             text = f.read()
-        forbidden = ["cst.interface", "cst.results", "import cst", "from cst"]
+        forbidden = ["cst.interface", "cst.results", "import cst", "from cst."]
         for item in forbidden:
             assert item not in text, f"should not import {item!r}"
 
@@ -387,8 +387,8 @@ class TestRealSuccessReuseProtection:
 
     def test_skip_row_only_no_reuse(self, tmp_path):
         """Skip row with same parameter_key -> success_reuse returns None."""
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
-        from workflows.rfgun_sao.evaluation_success_reuse import (
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_success_reuse import (
             SuccessReuseConfig,
             try_success_reuse,
         )
@@ -412,8 +412,8 @@ class TestRealSuccessReuseProtection:
 
     def test_success_and_skip_row_only_success_reused(self, tmp_path):
         """Skip and success rows -> only success row is reused (different keys)."""
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
-        from workflows.rfgun_sao.evaluation_success_reuse import (
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_success_reuse import (
             SuccessReuseConfig,
             try_success_reuse,
         )
@@ -457,8 +457,8 @@ class TestRealSuccessReuseProtection:
 
     def test_success_and_skip_same_key_returns_success_only(self, tmp_path):
         """Success and skip row with same parameter_key -> returns SUCCESS only."""
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
-        from workflows.rfgun_sao.evaluation_success_reuse import (
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_success_reuse import (
             SuccessReuseConfig,
             try_success_reuse,
         )
@@ -504,7 +504,7 @@ class TestRealWarmStartProtection:
 
     def test_skip_row_only_no_priors(self, tmp_path):
         """Only skip row in DB -> warm-start returns zero priors."""
-        from workflows.rfgun_sao.evaluation_database_warm_start import (
+        from cst_optimization.evaluation.evaluation_database_warm_start import (
             DbWarmStartConfig,
             load_warm_start_priors,
         )
@@ -528,8 +528,8 @@ class TestRealWarmStartProtection:
 
     def test_success_and_skip_row_only_success_prior(self, tmp_path):
         """Both skip and success rows -> warm-start returns only success prior."""
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
-        from workflows.rfgun_sao.evaluation_database_warm_start import (
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_database_warm_start import (
             DbWarmStartConfig,
             load_warm_start_priors,
         )

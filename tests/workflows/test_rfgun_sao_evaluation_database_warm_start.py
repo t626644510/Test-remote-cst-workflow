@@ -14,13 +14,13 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     RawEvaluationPayload,
 )
-from workflows.rfgun_sao.evaluation_database_warm_start import (
+from cst_optimization.evaluation.evaluation_database_warm_start import (
     PriorCandidateStatus,
     PriorCandidate,
     PriorConstructionReport,
@@ -200,7 +200,7 @@ class TestNoIO:
         assert isinstance(report, PriorConstructionReport)
 
 # ---------------------------------------------------------------------------
-# L1 ¡ª Semantics hardening
+# L1 â€” Semantics hardening
 # ---------------------------------------------------------------------------
 
 

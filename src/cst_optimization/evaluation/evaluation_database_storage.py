@@ -1,10 +1,10 @@
-# Durable evaluation DB storage — no-CST SQLite adapter.
+# Durable evaluation DB storage -no-CST SQLite adapter.
 # Stores authoritative final evaluation records only.
 # No failure reuse.  Success reuse and warm-start are implemented by
 # higher-level helpers (SR, WS tracks) with explicit opt-in config.
 # Explicit opt-in only; disabled by default.
 #
-# Phase DDB2 — no-CST SQLite storage implementation.
+# Phase DDB2 -no-CST SQLite storage implementation.
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     current_schema_version,
     record_to_json_dict,
@@ -111,7 +111,7 @@ def resolve_evaluation_database_config(
         except ValueError as exc:
             if "inside the repository" in str(exc):
                 raise
-            # Not relative → path is outside repo, which is correct
+            # Not relative ->path is outside repo, which is correct
             pass
 
     return EvaluationDatabaseConfig(
@@ -293,6 +293,65 @@ class SQLiteEvaluationDatabase:
         RuntimeError
             If the database is not open.
         """
+        conn = self._conn
+        if conn is None:
+            raise RuntimeError("Database is not open")
+
+        cursor = self._insert_final_record_uncommitted(record, run_id=run_id)
+        conn.commit()
+        return cursor.lastrowid or -1
+
+    def replace_final_record(
+        self,
+        old_row_id: int,
+        record: EvaluationDatabaseRecord,
+        run_id: str | None = None,
+    ) -> int:
+        """Atomically replace one existing row with a final record.
+
+        The delete and insert occur in one SQLite transaction. If validation
+        or insertion fails, the original row remains available for diagnosis
+        and later recovery.
+
+        Parameters
+        ----------
+        old_row_id : int
+            Existing ``evaluation_records.id`` to replace.
+        record : EvaluationDatabaseRecord
+            New authoritative record.
+        run_id : str or None
+            Optional run identifier for the replacement row.
+
+        Returns
+        -------
+        int
+            Row ID of the replacement record.
+        """
+        conn = self._conn
+        if conn is None:
+            raise RuntimeError("Database is not open")
+
+        with conn:
+            deleted = conn.execute(
+                "DELETE FROM evaluation_records WHERE id = ?",
+                (old_row_id,),
+            )
+            if deleted.rowcount != 1:
+                raise ValueError(
+                    f"Cannot replace missing evaluation row id={old_row_id}"
+                )
+            cursor = self._insert_final_record_uncommitted(
+                record,
+                run_id=run_id,
+            )
+        return cursor.lastrowid or -1
+
+    def _insert_final_record_uncommitted(
+        self,
+        record: EvaluationDatabaseRecord,
+        run_id: str | None = None,
+    ) -> sqlite3.Cursor:
+        """Validate and insert a record without committing the transaction."""
         # Validate the record before insert
         try:
             validate_evaluation_record(record)
@@ -318,7 +377,7 @@ class SQLiteEvaluationDatabase:
         pid = record.parameter_identity
         effective_run_id = run_id or self._run_id
 
-        cursor = conn.execute(
+        return conn.execute(
             """
             INSERT INTO evaluation_records (
                 schema_version, parameter_key, param_names, param_values,
@@ -357,8 +416,6 @@ class SQLiteEvaluationDatabase:
                 effective_run_id,
             ),
         )
-        conn.commit()
-        return cursor.lastrowid or -1
 
     # ------------------------------------------------------------------
     # Query

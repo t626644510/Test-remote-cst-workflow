@@ -93,6 +93,7 @@ class AdaptiveConditionalGate:
         self._eval_count: int = 0
         self._f2w_pass_count: int = 0
         self._f2w_total: int = 0
+        self._warmup_start_count: int = 0  # eval_count when current WARMUP stint began
 
         # ── TCP window state ─────────────────────────────────────────
         self.current_db_threshold: float = config.db_initial
@@ -402,10 +403,11 @@ class AdaptiveConditionalGate:
     def _maybe_transition(self) -> None:
         """Check and execute phase transitions based on current state."""
         if self.phase == GatePhase.WARMUP:
-            if self._eval_count >= self._cfg.warmup_n_evaluations:
+            warmup_evals = self._eval_count - self._warmup_start_count
+            if warmup_evals >= self._cfg.warmup_n_evaluations:
                 _logger.info(
-                    "Warmup complete (%d evaluations) — entering GP_GATED phase",
-                    self._eval_count,
+                    "Warmup complete (%d evaluations in stint) — entering GP_GATED phase",
+                    warmup_evals,
                 )
                 self.phase = GatePhase.GP_GATED
                 self._rebuild_gps()
@@ -422,6 +424,29 @@ class AdaptiveConditionalGate:
                     self.f2w_pass_rate, self.prediction_accuracy,
                 )
                 self.phase = GatePhase.FULL_4OBJ
+                return
+
+            # ── GP_GATED → WARMUP fallback ───────────────────────────
+            # If GP predictions degrade severely despite rebuilds, re-enter
+            # unconditional warmup to collect fresh training data.
+            if (
+                self.consecutive_fail >= self._cfg.max_consecutive_fail * 2
+                or (
+                    self._eval_count > self._cfg.warmup_n_evaluations + 5
+                    and self.f2w_pass_rate < self._cfg.pass_rate_critical
+                )
+            ):
+                _logger.warning(
+                    "GP_GATED → WARMUP (consecutive_fail=%d, pass_rate=%.2f) — "
+                    "re-entering unconditional warmup to rebuild GP training data",
+                    self.consecutive_fail, self.f2w_pass_rate,
+                )
+                self.phase = GatePhase.WARMUP
+                self._warmup_start_count = self._eval_count
+                self.consecutive_fail = 0
+                self.consecutive_pass = 0
+                self.current_db_threshold = self._cfg.db_initial
+                self._rebuild_gps()
             return
 
         if self.phase == GatePhase.FULL_4OBJ:

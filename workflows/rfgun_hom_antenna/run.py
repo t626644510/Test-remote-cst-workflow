@@ -271,6 +271,7 @@ def main() -> None:
     # ── 4. Build orchestrator + optimiser ───────────────────────────────────
     orch, opt, evaluator, retry_handler = build_workflow_2(
         wf2_cfg, checkpoint_callback=_on_evaluation,
+        start_iteration=ckpt.completed_count + ckpt.pending_count if has_ckpt else 0,
     )
 
     print(f"Parameters: {orch.n_parameters}")

@@ -77,6 +77,29 @@ accelerator-cavity simulation and surrogate-model optimisation.
 | `milestone/pre-phase1-dedup-merge-2026-06-08` | Main before Phase 1-8 merge |
 | `milestone/phase1-dedup-merged-2026-06-08` | Phase 1-8 dedup merged |
 
+## W2 Risk Audit (2026-06-18)
+
+Post-refactoring risk audit of Workflow 2. Two fixes applied; four risks confirmed safe with latent hazards noted.
+
+### Fixed
+
+| # | Risk | Fix |
+|---|------|-----|
+| 4 | **Partial eval recovery iter mismatch on second crash** — evaluator `_it=[0]` counter reset after recovery, causing `ckpt.records.index(rec)` ≠ `index.jsonl.iter`. | Added `start_iteration` param to `build_workflow_2()`; `run.py` passes `len(ckpt.records)`. |
+| 5 | **GP_GATED stuck at ~20% run rate** — no fallback to WARMUP if GP persistently predicts poorly. | Added `GP_GATED → WARMUP` fallback on `consecutive_fail ≥ max*2` or `pass_rate < critical`. WARMUP→GP_GATED now uses stint-local count. |
+
+### Safe — Latent Hazards
+
+| # | Risk | Why Safe Now | Hazard to Watch |
+|---|------|-------------|-----------------|
+| 2 | W2-8 config isolation | All 40+ key paths covered by local `config.yaml` + `_load_workflow2_config()` merge | Hardcoded defaults in `build_workflow_2()` (e.g. `library_path` → `D:\CST\AMD64\...`) are stale CST2022-era paths. Never reachable while merge works, but would silently misbehave if merge is bypassed or top-level sections removed. |
+| 3 | Circular import | `factory.py`'s `build_workflow_2/3` use **lazy import** (function-body `from workflows.rfgun_hom_antenna...`) to break the cycle | If anyone promotes the lazy import to top-level, instant cycle: `factory → workflow → factory`. Add `# WARNING: DO NOT promote` comment at the lazy import site. |
+| 6 | Retry reconnect `setattr` | `orchestrator.execute()` creates fresh `CSTProject` per call and closes in `finally`; no cross-call caching. `_reset_connection()` uses the same `setattr` pattern. | If future optimization caches `CSTProject` objects on `self`, they would hold dead COM handles after reconnect. Would need `_invalidate_cached_projects()` hook. |
+
+### Risk 1 (CST availability)
+
+Confirmed live: CST 2026 library path, F2F.cst, F2W.cst, F2W_offset.cst all exist and functional on this machine.
+
 ## Validation Baseline
 
 ```powershell

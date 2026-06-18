@@ -343,7 +343,7 @@ class TestConfigFallbackMerge:
         # Capture the config dict passed to build_workflow_2
         captured_cfg: dict = {}
 
-        def _fake_build(cfg, checkpoint_callback=None):
+        def _fake_build(cfg, checkpoint_callback=None, start_iteration=0):
             captured_cfg.clear()
             captured_cfg.update(cfg)
             fake_orch = MagicMock()

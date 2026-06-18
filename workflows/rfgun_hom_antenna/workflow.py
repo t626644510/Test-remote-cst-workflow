@@ -61,6 +61,7 @@ def build_workflow_2(
     config: dict[str, Any],
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
     | None = None,
+    start_iteration: int = 0,
 ) -> tuple[
     DualProjectOrchestrator,
     BaseOptimizer,
@@ -77,6 +78,14 @@ def build_workflow_2(
     ----------
     config : dict
         The ``workflow_2`` section of ``default.yaml``.
+    checkpoint_callback : callable or None
+        Optional callback(evaluation_count, x, f, success) for persistence.
+    start_iteration : int
+        Starting value for the evaluator's internal call counter.  Callers
+        resuming from a checkpoint should pass ``len(ckpt.records)`` so that
+        ``iteration`` values written to ``index.jsonl`` stay aligned with
+        checkpoint record indices across crash-recovery cycles (fixes the
+        second-crash index-mismatch bug described in the W2 risk audit).
 
     Returns
     -------
@@ -308,7 +317,7 @@ def build_workflow_2(
         # ── SAO evaluator (with retry wrapping) ──────────────────────
         from cst_optimization.workflows.recovery import EvaluationStatus as _ES
 
-        def evaluator(x_phys: np.ndarray, _it=[0]) -> float:
+        def evaluator(x_phys: np.ndarray, _it=[start_iteration]) -> float:
             iteration = int(_it[0])
             _it[0] += 1
 

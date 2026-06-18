@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "STEP Geometry Manifest",
+  "type": "object",
+  "required": ["schema_version", "source_step", "model_summary", "faces"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "source_step": { "type": "string" },
+    "reader": {
+      "type": "object",
+      "properties": {
+        "backend": { "type": "string" },
+        "units": { "type": ["string", "null"] },
+        "cadquery_version": { "type": "string" },
+        "measurement_quality": { "type": "string" },
+        "limitations": { "type": "array", "items": { "type": "string" } },
+        "backend_notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "model_summary": {
+      "type": "object",
+      "required": ["solid_count", "shell_count", "face_count", "edge_count", "bbox", "detected_axis"],
+      "properties": {
+        "solid_count": { "type": "integer", "minimum": 0 },
+        "shell_count": { "type": "integer", "minimum": 0 },
+        "face_count": { "type": "integer", "minimum": 0 },
+        "edge_count": { "type": "integer", "minimum": 0 },
+        "bbox": { "type": "object" },
+        "detected_axis": { "enum": ["x", "y", "z"] },
+        "entity_counts": { "type": "object" }
+      }
+    },
+    "faces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["face_id", "surface_type", "centroid", "bbox", "axis_relation", "adjacent_faces"],
+        "properties": {
+          "face_id": { "type": "string", "pattern": "^F[0-9]{4}$" },
+          "occ_index": { "type": "integer" },
+          "step_face_id": { "type": "string" },
+          "surface_type": {
+            "enum": ["plane", "cylinder", "cone", "sphere", "torus", "bspline", "surface_of_revolution", "unknown"]
+          },
+          "area": { "type": "number" },
+          "area_method": { "type": "string" },
+          "area_confidence": { "type": "number" },
+          "centroid": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "normal_estimate": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "bbox": { "type": "object" },
+          "axis_relation": { "type": "object" },
+          "edge_count": { "type": "integer" },
+          "edge_refs": { "type": "array", "items": { "type": "string" } },
+          "adjacent_faces": { "type": "array", "items": { "type": "string" } },
+          "fingerprint": { "type": "string" }
+          ,
+          "cadquery_hash": { "type": ["integer", "null"] },
+          "measurement_quality": { "type": "string" },
+          "solid_refs": { "type": "array", "items": { "type": "string" } },
+          "shell_refs": { "type": "array", "items": { "type": "string" } },
+          "backend_notes": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

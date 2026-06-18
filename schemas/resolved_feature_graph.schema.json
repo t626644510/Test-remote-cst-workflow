@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Resolved Feature Graph",
+  "type": "object",
+  "required": ["schema_version", "source_feature_graph_draft", "features", "unassigned_faces"],
+  "properties": {
+    "schema_version": { "const": "0.1" },
+    "source_feature_graph_draft": { "type": "string" },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "geometry_refs", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "geometry_refs": { "type": "array", "items": { "type": "string" } },
+          "confidence": { "type": "number" },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "status": { "enum": ["candidate", "confirmed", "rejected", "modified", "unknown"] },
+          "requires_human_review": { "type": "boolean" },
+          "default_boundary_role": { "type": "string" },
+          "material": { "type": "string" },
+          "metadata": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "unassigned_faces": { "type": "array", "items": { "type": "string" } },
+    "review_notes": { "type": "object" }
+  },
+  "additionalProperties": true
+}

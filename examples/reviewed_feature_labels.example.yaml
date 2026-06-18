@@ -1,0 +1,19 @@
+confirmed_features:
+  cathode_surface:
+    type: CathodeSurface
+    geometry_refs: ["F0001"]
+    default_boundary_role: electric
+  beam_exit:
+    type: BeamAperture
+    geometry_refs: ["F0098", "F0099"]
+    default_boundary_role: open_or_electric_by_recipe
+
+rejected_candidates:
+  - nose_cone_candidate_03
+
+manual_groups:
+  main_cavity_wall:
+    type: ConductingWall
+    geometry_refs: ["F0010", "F0011", "F0012"]
+    material: copper
+    default_boundary_role: electric

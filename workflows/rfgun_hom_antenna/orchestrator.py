@@ -21,16 +21,12 @@ from typing import Any, Callable, TYPE_CHECKING
 import numpy as np
 
 from cst_optimization.core.connection import CSTConnection
-from cst_optimization.core.errors import CSTConnectionLostError
 from cst_optimization.core.project import CSTProject
 from cst_optimization.core.results import ResultReader
 from cst_optimization.core.solver import SolverResult, SolverRunner
-from cst_optimization.core.messages import MessageLogger
+from cst_optimization.diagnostics import CSTConnectionLostError, MessageLogger, OptimizationLogger
 from cst_optimization.parameters.base import ParameterSet
 from cst_optimization.objectives.base import ObjectiveFunction
-
-if TYPE_CHECKING:
-    from cst_optimization.optimization.logging import OptimizationLogger
 
 _logger = logging.getLogger(__name__)
 

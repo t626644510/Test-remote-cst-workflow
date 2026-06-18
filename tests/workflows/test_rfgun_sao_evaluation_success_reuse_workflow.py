@@ -1,4 +1,4 @@
-"""No-CST tests for SR3 success reuse — call-count skip proof tests."""
+"""No-CST tests for SR3 success reuse -call-count skip proof tests."""
 
 from __future__ import annotations
 
@@ -17,15 +17,15 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseStatus,
     ParameterIdentity,
 )
-from workflows.rfgun_sao.evaluation_database_storage import (
+from cst_optimization.evaluation.evaluation_database_storage import (
     EvaluationDatabaseConfig,
     SQLiteEvaluationDatabase,
 )
-from workflows.rfgun_sao.evaluation_success_reuse import (
+from cst_optimization.evaluation.evaluation_success_reuse import (
     SuccessReuseConfig,
     try_success_reuse,
     resolve_success_reuse_config,
@@ -39,7 +39,7 @@ from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
 
 class TrackerCSTConn:
-    """Fake CST connection — tracks calls, no real CST."""
+    """Fake CST connection -tracks calls, no real CST."""
     pid = 99999
     def __init__(self, *args, **kwargs):
         self.connect_called = False
@@ -53,7 +53,7 @@ class TrackerCSTConn:
 
 
 class TrackerEval:
-    """Fake Workflow1Evaluator — tracks evaluate_single_pass and adapt_for_retry."""
+    """Fake Workflow1Evaluator -tracks evaluate_single_pass and adapt_for_retry."""
     def __init__(self):
         self.evaluate_single_pass_calls = 0
         self.adapt_for_retry_calls = 0
@@ -85,7 +85,7 @@ class TrackerEval:
 
 
 class TrackerRetryHandler:
-    """Fake EvaluationRetryHandler — tracks execute and force_reset."""
+    """Fake EvaluationRetryHandler -tracks execute and force_reset."""
     def __init__(self):
         self.execute_calls = 0
         self.force_reset_calls = 0
@@ -137,7 +137,7 @@ def _prepopulate_db(tmp_path: Path, param_values: list[float]) -> str:
         pid = ParameterIdentity(
             param_names=["p1"], values=param_values,
         )
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.evaluation_database_schema import (
             EvaluationDatabaseRecord, RawEvaluationPayload,
         )
         payload = RawEvaluationPayload(

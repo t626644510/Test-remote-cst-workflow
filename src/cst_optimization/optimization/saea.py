@@ -223,7 +223,7 @@ class SurrogateAssistedEA(BaseOptimizer):
             selected_norm = self._select_candidates(candidates_x_norm, candidates_f_std)
 
             # True evaluation of selected candidates
-            from .logging import extract_gp_params
+            from ..diagnostics import extract_gp_params
             for x_sel_norm in selected_norm:
                 x_sel_phys = params.denormalize(x_sel_norm)
 

@@ -16,7 +16,7 @@ import numpy as np
 
 # ── Core CST abstractions ──────────────────────────────────────────────────
 from cst_optimization.core.connection import CSTConnection
-from cst_optimization.core.messages import MessageLogger
+from cst_optimization.diagnostics import MessageLogger
 from cst_optimization.core.retry import EvaluationRetryHandler
 from cst_optimization.core.solver import SolverRunner
 from cst_optimization.parameters.base import ParameterSet
@@ -29,7 +29,7 @@ from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator, Pr
 from cst_optimization.optimization.base import BaseOptimizer
 from cst_optimization.optimization.sao import SurrogateAssistedOptimizer
 from cst_optimization.optimization.saea import SurrogateAssistedEA
-from cst_optimization.optimization.logging import OptimizationLogger
+from cst_optimization.diagnostics import OptimizationLogger
 from cst_optimization.optimization.acquisition import (
     ExpectedImprovement,
     UpperConfidenceBound,
@@ -51,8 +51,8 @@ from cst_optimization.objectives import modes       # noqa: F401
 from cst_optimization.objectives import frequency   # noqa: F401
 from cst_optimization.objectives import quality     # noqa: F401
 from cst_optimization.objectives import field       # noqa: F401
-from cst_optimization.objectives import wakefield   # noqa: F401
-from cst_optimization.objectives import antenna     # noqa: F401
+from workflows.rfgun_hom_antenna import wakefield_objective   # noqa: F401
+from workflows.rfgun_hom_antenna import antenna_objective     # noqa: F401
 
 _logger = logging.getLogger(__name__)
 

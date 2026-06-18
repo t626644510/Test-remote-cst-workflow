@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -275,8 +275,8 @@ def test_runner_optimize_uses_only_supported_kwargs():
     raise AssertionError('Could not find opt.optimize() call in run.py')
 
 def test_builders_module_has_n_initial_samples_and_n_initial():
-    """Phase 3: _build_sao in builders.py accepts both config keys."""
-    builders_path = Path(__file__).parents[2] / "src" / "cst_optimization" / "builders.py"
+    """Phase 11: _build_sao in factory.py accepts both config keys (builders merged)."""
+    builders_path = Path(__file__).parents[2] / "src" / "cst_optimization" / "factory.py"
     src = builders_path.read_text("utf-8")
     assert 'n_initial_samples' in src
     assert 'n_initial' in src
@@ -295,6 +295,41 @@ def test_types_expose_evaluation_types():
     assert hasattr(EvaluationResult, 'error')
     assert EvaluationResult().solver_ok is False
     assert EvaluationResult(status=EvaluationStatus.SUCCESS).solver_ok is True
+
+
+def test_evaluation_status_enum_match_with_shared_recovery():
+    """rfgun_sao/types.py EvaluationStatus must have same values as shared recovery.py."""
+    from workflows.rfgun_sao.types import EvaluationStatus as SaoES
+    from cst_optimization.workflows.recovery import EvaluationStatus as SharedES
+
+    sao_vals = set(e.value for e in SaoES)
+    shared_vals = set(e.value for e in SharedES)
+    missing = shared_vals - sao_vals
+    extra = sao_vals - shared_vals
+    assert not missing, (
+        f"rfgun_sao/types.py EvaluationStatus missing values: {missing}. "
+        f"Shared recovery.py has: {sorted(shared_vals)}"
+    )
+    assert not extra, (
+        f"rfgun_sao/types.py EvaluationStatus has extra values: {extra}. "
+        f"Shared recovery.py has: {sorted(shared_vals)}"
+    )
+
+
+def test_evaluation_result_fields_match_shared_recovery():
+    """rfgun_sao/types.py EvaluationResult must have all fields from shared recovery.py."""
+    from dataclasses import fields as dc_fields
+    from workflows.rfgun_sao.types import EvaluationResult as SaoER
+    from cst_optimization.workflows.recovery import EvaluationResult as SharedER
+
+    sao_fields = {f.name for f in dc_fields(SaoER)}
+    shared_fields = {f.name for f in dc_fields(SharedER)}
+    missing = shared_fields - sao_fields
+    assert not missing, (
+        f"rfgun_sao/types.py EvaluationResult missing fields: {missing}. "
+        f"Shared recovery.py fields: {sorted(shared_fields)}"
+    )
+
 
 def test_default_weights_equal():
     from cst_optimization.factory import _resolve_named_weights
@@ -575,16 +610,24 @@ def test_workflow_source_has_objective_weights():
     import pathlib
     src = (pathlib.Path(__file__).resolve().parent.parent.parent / "workflows" / "rfgun_sao" / "workflow.py").read_text("utf-8")
     assert "objective_weights" in src
-def test_types_py_is_re_export_shim():
-    """Phase 1: types.py re-exports from cst_optimization.workflows.recovery."""
+def test_types_py_has_local_definition():
+    """Phase 9: types.py has local definitions (decoupled from shared recovery).
+
+    The local copies are kept intentionally for workflow isolation.
+    Equivalence with shared recovery.py is validated by
+    test_evaluation_status_enum_match_with_shared_recovery and
+    test_evaluation_result_fields_match_shared_recovery.
+    """
     src2 = (WF1_PACKAGE / "types.py").read_text("utf-8")
-    assert "cst_optimization.workflows.recovery" in src2
-    assert "class EvaluationStatus" not in src2
-    assert "class EvaluationResult" not in src2
-    # Verify re-exported types are usable
+    # types.py should have its own local class definitions, not re-exports
+    assert "class EvaluationStatus" in src2
+    assert "class EvaluationResult" in src2
+    # Verify types are usable
     from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
     assert hasattr(EvaluationStatus, "SUCCESS")
+    assert hasattr(EvaluationStatus, "FREQUENCY_GATE")
     assert hasattr(EvaluationResult, "status")
+    assert hasattr(EvaluationResult, "frequency_gate_passed")
 def test_evaluator_static_source_has_no_factory_import():
     src = (WF1_PACKAGE / "evaluator.py").read_text("utf-8")
     assert "from cst_optimization.factory" not in src

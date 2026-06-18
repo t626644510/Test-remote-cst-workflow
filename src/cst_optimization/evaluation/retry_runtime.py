@@ -1,7 +1,7 @@
 # Retry / recovery runtime wiring skeleton (no-CST).
 # Injectable runners, no CST dependency, disabled by default.
 #
-# Phase O1 — Retry runtime no-CST progress hardening:
+# Phase O1 -Retry runtime no-CST progress hardening:
 #   - Internal attempts_consumed guard prevents infinite loops when
 #     injectable evaluate_once() returns failed records without
 #     advancing retry_count.
@@ -17,11 +17,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
 )
-from workflows.rfgun_sao.retry_taxonomy import (
+from cst_optimization.evaluation.retry_taxonomy import (
     RetryEligibilityAction,
     RetryPolicy,
     classify_retry_eligibility,

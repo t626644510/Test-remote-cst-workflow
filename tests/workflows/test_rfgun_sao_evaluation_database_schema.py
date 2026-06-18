@@ -15,7 +15,7 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     current_schema_version,
     is_schema_compatible,
     EvaluationDatabaseStatus,

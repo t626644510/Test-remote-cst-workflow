@@ -271,7 +271,7 @@ class SurrogateAssistedOptimizer(BaseOptimizer):
             y_next_raw = evaluator(x_next_phys) if evaluator else self._evaluate_normalized()[0]
 
             # Log decision
-            from .logging import extract_gp_params
+            from ..diagnostics import extract_gp_params
             self._log_decision(
                 iteration=iter_num, x_proposed=x_next_phys,
                 acquisition_value=float(acq_vals[best_idx]),

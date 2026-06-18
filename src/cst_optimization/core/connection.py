@@ -17,7 +17,7 @@ from typing import Any
 
 from . import init_cst_path
 from .cleanup import verify_process_cleanup
-from .errors import CSTConnectionLostError
+from ..diagnostics import CSTConnectionLostError
 
 _logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 """Shared evaluation types used by all workflows.
 
-Phase 6: ``RecoveryWorkflowEvaluator`` moved to
-``workflows/rfgun_sao/evaluator.py`` (WF1 package).
+Phase 11: ``RecoveryWorkflowEvaluator`` moved to
+``workflows/rfgun_recovery/evaluator.py`` (WF3 package).
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ _clone_metric_specs = None
 
 
 def _lazy_import_evaluator():
-    """Deferred import to avoid circular: recovery → rfgun_sao.evaluator → types → recovery."""
+    """Deferred import to avoid circular: recovery → rfgun_recovery.evaluator."""
     global _RecoveryWorkflowEvaluator, _clone_metric_specs
     if _RecoveryWorkflowEvaluator is None:
-        from workflows.rfgun_sao.evaluator import (  # noqa: E402
+        from workflows.rfgun_recovery.evaluator import (  # noqa: E402
             RecoveryWorkflowEvaluator as _RWE,
             clone_metric_specs as _CMS,
         )

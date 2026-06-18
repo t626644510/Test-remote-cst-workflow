@@ -1,8 +1,9 @@
-"""Workflow 1 builder -- local alternative to ``cst_optimization.factory.build_workflow_1``.
+"""Workflow 1 canonical builder -- the authoritative ``build_workflow_1`` for the
+active SAO workflow package.
 
-Extracted from the monolithic factory during Phase 5.  Behaviour is
-identical to the original ``cst_optimization.factory.build_workflow_1``
-but only imports the objective modules that Workflow 1 actually needs
+The root ``run_workflow_1.py`` shim delegates to
+``workflows.rfgun_sao.run``, which calls this builder.
+Workflow 1 imports only the objective modules it needs
 (no wakefield, no antenna).
 """
 
@@ -43,16 +44,16 @@ from cst_optimization.parameters.base import ParameterSet, ParamRange
 from cst_optimization.parameters.geometry import GeometryParameter
 
 # ---- Shared helpers (single canonical source in factory.py) -----------------
-from cst_optimization.factory import _build_parameters, _build_sao, _resolve_named_weights
+from cst_optimization.factory import _build_objectives, _build_parameters, _build_sao, _resolve_named_weights
 
 from workflows.rfgun_sao.types import (
     EvaluationResult,
     EvaluationStatus as _ES,
 )
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
 )
-from workflows.rfgun_sao.retry_runtime_cst import (
+from cst_optimization.evaluation.retry_runtime_cst import (
     build_record_from_evaluation_result,
 )
 
@@ -211,7 +212,7 @@ def build_workflow_1(
         metric_names = objective_metric_names(specs)
         report_names = report_metric_names(specs)
         optimize_entries = [e for e in obj_entries if e.get("name") in metric_names]
-        objectives = _build_objectives(optimize_entries)
+        objectives, _, _ = _build_objectives(optimize_entries)
         opt_cfg = config.get("optimization", {})
         weights = _resolve_named_weights(
             opt_cfg.get("objective_weights", None), metric_names,
@@ -413,7 +414,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Retry runtime config (RW3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
+    from cst_optimization.evaluation.retry_runtime_cst import check_legacy_retry_mutex as _check_mutex
     _retry_runtime_cfg, _rt_diag = _check_mutex(config, logger=_logger)
     if _rt_diag:
         _logger.warning("Retry runtime disabled: %s", _rt_diag)
@@ -421,13 +422,13 @@ def build_workflow_1(
     _retry_runtime_recovery: Any = None
     _retry_runtime_registry: Any = None
     if _retry_runtime_cfg and _retry_runtime_cfg.enabled:
-        from workflows.rfgun_sao.retry_runtime_cst import (
+        from cst_optimization.evaluation.retry_runtime_cst import (
             CstConnectionRegistry,
             make_cst_recovery_callback,
             make_cst_retry_evaluate_once,
         )
-        from workflows.rfgun_sao.retry_runtime import run_retry_loop_no_cst
-        from workflows.rfgun_sao.evaluation_database_schema import (
+        from cst_optimization.evaluation.retry_runtime import run_retry_loop_no_cst
+        from cst_optimization.evaluation.evaluation_database_schema import (
             EvaluationDatabaseStatus as _EDS,
             current_schema_version,
         )
@@ -462,7 +463,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Evaluation database config (DDB3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.evaluation_database_storage import (
+    from cst_optimization.evaluation.evaluation_database_storage import (
         EvaluationDatabaseConfig as _EDBConfig,
         SQLiteEvaluationDatabase as _SQDB,
         resolve_evaluation_database_config as _resolve_db_cfg,
@@ -494,7 +495,7 @@ def build_workflow_1(
     # ---------------------------------------------------------------
     # Success reuse config (SR3)
     # ---------------------------------------------------------------
-    from workflows.rfgun_sao.evaluation_success_reuse import (
+    from cst_optimization.evaluation.evaluation_success_reuse import (
         SuccessReuseConfig as _SRConfig,
         resolve_success_reuse_config as _resolve_sr_cfg,
         try_success_reuse as _try_success_reuse,
@@ -517,13 +518,13 @@ def build_workflow_1(
         )
 
     # Resolve DB warm-start config (WS3) -- stored on workflow for run.py
-    from workflows.rfgun_sao.evaluation_database_warm_start import (
+    from cst_optimization.evaluation.evaluation_database_warm_start import (
         resolve_db_warm_start_config as _resolve_ws_cfg,
     )
     _ws_cfg = _resolve_ws_cfg(config, db_enabled=_evaluation_db is not None)
 
     # Resolve failure skip config (FS5.1) -- opt-in exact-key enforce only
-    from workflows.rfgun_sao.failure_skip_candidates import (
+    from cst_optimization.evaluation.failure_skip_candidates import (
         resolve_failure_skip_config as _resolve_fs_cfg,
     )
     _failure_skip_cfg = _resolve_fs_cfg(config)
@@ -557,7 +558,7 @@ def build_workflow_1(
             pid = ParameterIdentity(
                 param_names=list(param_names), values=list(x_phys),
             )
-            from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
+            from cst_optimization.evaluation.retry_runtime_cst import build_record_from_evaluation_result
             rec = build_record_from_evaluation_result(
                 pid, reuse_result,
                 source="db_success_reuse",
@@ -579,7 +580,7 @@ def build_workflow_1(
 
         # FS5.1: failure skip check before any retry/evaluator call
         if _failure_skip_db_path is not None and _failure_skip_cfg.enabled:
-            from workflows.rfgun_sao.failure_skip_enforce import run_failure_skip_evaluator
+            from cst_optimization.evaluation.failure_skip_enforce import run_failure_skip_evaluator
             _fs_pid = ParameterIdentity(param_names=list(param_names), values=list(x_phys))
             _fs_key = _fs_pid.parameter_key()
             _fs_result = run_failure_skip_evaluator(
@@ -681,7 +682,7 @@ def build_workflow_1(
                 )
 
             if status == _ES.SUCCESS:
-                # No retry needed �?use directly
+                # No retry needed -use directly
                 penalties_arr = np.array(
                     [pen.get(n, 1.0) for n in metric_names], dtype=float,
                 )
@@ -768,7 +769,7 @@ def build_workflow_1(
                 recovery_callback=_retry_runtime_recovery,
             )
 
-            # Use final result — extract penalty or fall back to all-ones
+            # Use final result -extract penalty or fall back to all-ones
             fr = retry_result.final_record
             pen_arr = _extract_retry_penalty_values(fr, metric_names) if retry_result.succeeded else None
             if pen_arr is not None:
@@ -851,71 +852,13 @@ def build_workflow_1(
 
 
 # ---------------------------------------------------------------------------
-# Local helpers (WF1-specific — different signatures from factory.py)
+# Local helpers (WF1-specific)
 # ---------------------------------------------------------------------------
 
 
-def _build_objectives(
-    obj_entries: list[dict[str, Any]],
-) -> list[ObjectiveFunction]:
-    """Build objective instances from config entries (WF1-single-project).
-
-    Returns only the objective list (no project_map / ref_project_map
-    since WF1 has a single project).
-    """
-    objectives: list[ObjectiveFunction] = []
-    for entry in obj_entries:
-        if not entry.get("enabled", True):
-            continue
-
-        obj_name = entry["name"]
-        obj_cls = get_objective(obj_name)
-
-        mode_name = entry.get("mode", "minimize")
-        mode_cls = get_mode(mode_name)
-        mode_params = entry.get("mode_params", {})
-        mode = mode_cls(**mode_params) if mode_params else mode_cls()
-
-        obj_params = entry.get("obj_params", {})
-        obj = obj_cls(reader_factory=lambda: None, mode=mode, **obj_params)
-        objectives.append(obj)
-
-    return objectives
-
-
-def _build_frequency_gate(eval_cfg: dict) -> FrequencyGate:
-    cfg = eval_cfg.get("frequency_gate", {})
-    return FrequencyGate(
-        enabled=bool(cfg.get("enabled", False)),
-        target_ghz=float(cfg.get("target_ghz", 11.424)),
-        max_abs_offset_mhz=float(cfg.get("max_abs_offset_mhz", 20.0)),
-    )
-
-
-def _build_s11_depth_gate(eval_cfg: dict) -> S11DepthGate:
-    cfg = eval_cfg.get("s11_depth_gate", {})
-    return S11DepthGate(
-        enabled=bool(cfg.get("enabled", False)),
-        threshold_db=float(cfg.get("threshold_db", -1.0)),
-    )
-
-
-def _build_multi_dip_detector(eval_cfg: dict) -> MultiDipDetector:
-    cfg = eval_cfg.get("multi_dip_detection", {})
-    return MultiDipDetector(
-        enabled=bool(cfg.get("enabled", False)),
-        mode_spacing_ghz=float(cfg.get("mode_spacing_ghz", 0.04)),
-    )
-
-
-def _resolve_two_pass_settings(config: dict) -> dict:
-    eval_cfg = config.get("evaluation", {})
-    return {
-        "mode": str(eval_cfg.get("mode", "single_pass")).strip().lower(),
-        "target_freq_ghz": float(eval_cfg.get("target_freq_ghz", 11.424)),
-        "calibration_guess_ghz": float(eval_cfg.get("calibration_guess_ghz", 11.424)),
-        "inter_pass_recovery": bool(eval_cfg.get("inter_pass_recovery", False)),
-        "frequency_gate": _build_frequency_gate(eval_cfg),
-        "s11_depth_gate": _build_s11_depth_gate(eval_cfg),
-        "multi_dip_detector": _build_multi_dip_detector(eval_cfg),
-    }
+from workflows.rfgun_sao.gate_builder import (
+    _build_frequency_gate,
+    _build_s11_depth_gate,
+    _build_multi_dip_detector,
+    resolve_two_pass_settings as _resolve_two_pass_settings,
+)

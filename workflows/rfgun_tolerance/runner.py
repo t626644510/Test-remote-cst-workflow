@@ -25,12 +25,13 @@ from cst_optimization.core.connection import CSTConnection
 from cst_optimization.core.project import CSTProject
 from cst_optimization.core.results import ResultReader
 from cst_optimization.core.solver import SolverRunner
-from cst_optimization.evaluation.schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     EvaluationDatabaseRecord,
+    RawEvaluationPayload,
     current_schema_version,
 )
-from cst_optimization.evaluation.storage import SQLiteEvaluationDatabase, EvaluationDatabaseConfig
+from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase, EvaluationDatabaseConfig
 from cst_optimization.physics.formulas import (
     half_power_bandwidth, loaded_q_from_bandwidth,
     coupling_beta as _coupling_beta_formula, intrinsic_q0,
@@ -68,7 +69,7 @@ class ToleranceConfig:
     convergence_rtol: float = 0.01
     seed: int = 42
     db_path: str = ""
-    output_dir: str = "D:/Results/tolerance"
+    output_dir: str = "runs/tolerance"
     parameters: list[ToleranceParam] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -117,7 +118,7 @@ def load_tolerance_config(config_path: str | Path) -> ToleranceConfig:
     )
     output_dir = tol.get(
         "output_dir",
-        os.path.dirname(project_path) if project_path else "D:/Results/tolerance",
+        os.path.dirname(project_path) if project_path else "runs/tolerance",
     )
     db_path = tol.get("db_path", os.path.join(output_dir, "tolerance_eval.db"))
 
@@ -158,7 +159,7 @@ class ToleranceSampler:
 
         # Database
         os.makedirs(os.path.dirname(config.db_path) or ".", exist_ok=True)
-        db_cfg = EvaluationDatabaseConfig(path=config.db_path)
+        db_cfg = EvaluationDatabaseConfig(path=config.db_path, enabled=True)
         self._db = SQLiteEvaluationDatabase(db_cfg)
         self._db.open()
 
@@ -169,44 +170,96 @@ class ToleranceSampler:
     # Public API
     # ------------------------------------------------------------------
 
-    def run(self, n_samples: int | None = None) -> int:
-        """Run tolerance sampling.
+    def run(self, n_samples: int | None = None, recover_only: bool = False) -> int:
+        """Run tolerance sampling with auto-recovery of failed records.
+
+        1. Query DB for previously failed parameter combinations → re-run them.
+        2. If recover_only=False and still under target, fill with new samples.
 
         Parameters
         ----------
         n_samples : int or None
-            Number of samples.  Defaults to ``cfg.max_samples``.
+            Target sample count.  Defaults to ``cfg.max_samples``.
+        recover_only : bool
+            If True, only re-run failed records; skip new random samples.
 
         Returns
         -------
         int
-            Number of successful evaluations written to the database.
+            Number of evaluations written to the database.
         """
-        n = n_samples or self._cfg.max_samples
-        n = max(self._cfg.min_samples, min(n, self._cfg.max_samples))
-        n_batches = (n + self._cfg.batch_size - 1) // self._cfg.batch_size
+        n_target = n_samples or self._cfg.max_samples
+        n_target = max(self._cfg.min_samples, n_target)
+        success_count = 0
+        global_idx = 0
 
         _logger.info(
-            "Tolerance sampling: %d samples in %d batches (batch_size=%d)",
-            n, n_batches, self._cfg.batch_size,
+            "Tolerance sampling: target=%d, batch_size=%d, recover_only=%s",
+            n_target, self._cfg.batch_size, recover_only,
         )
-        print(f"Tolerance sampling: {n} samples in {n_batches} batches")
+        print(f"Tolerance sampling: target {n_target} samples")
+        if recover_only:
+            print(f"  Mode: RECOVER — only re-running previously failed records")
         print(f"  Project: {self._cfg.project_path}")
         print(f"  Database: {self._cfg.db_path}")
         print(f"  Parameters: {len(self._param_names)}")
         print("-" * 60)
 
-        success_count = 0
+        # ---- Phase 1: Recovery of failed records ---------------------------
+        try:
+            all_rows = self._db.get_all_records()
+        except Exception:
+            all_rows = []
+
+        failed_rows = [
+            r for r in all_rows
+            if r.get("status") not in ("success", None, "")
+            and r.get("param_values") is not None
+        ]
+        n_existing_success = sum(
+            1 for r in all_rows if r.get("status") == "success"
+        )
+        n_remaining = max(0, n_target - len(all_rows))
+
+        if failed_rows:
+            print(f"\nRecovery: {len(failed_rows)} failed record(s) found "
+                  f"({n_existing_success} already success).")
+            for row in failed_rows:
+                global_idx += 1
+                try:
+                    pv = row["param_values"]
+                    x = np.array(pv, dtype=float) if not isinstance(pv, np.ndarray) else pv.astype(float)
+                except Exception:
+                    print(f"  [skip] bad param_values in row id={row.get('id')}")
+                    continue
+                old_id = row.get("id")
+                self._evaluate_one(global_idx, x, recovery=True, old_row_id=old_id)
+                success_count += 1
+            print(f"Recovery complete.")
+        else:
+            print(f"\nNo failed records ({n_existing_success} existing success).")
+
+        # ---- Phase 2: New random samples to fill target ---------------------
+        if recover_only:
+            print("Recover-only mode — skipping new random samples.")
+            return success_count
+
+        if n_remaining <= 0:
+            print("Target already reached — no new random samples needed.")
+            return success_count
+
+        n_batches = (n_remaining + self._cfg.batch_size - 1) // self._cfg.batch_size
+        print(f"\nNew samples: {n_remaining} in {n_batches} batch(es)")
         for batch_idx in range(n_batches):
             batch_start = batch_idx * self._cfg.batch_size
-            batch_end = min(batch_start + self._cfg.batch_size, n)
+            batch_end = min(batch_start + self._cfg.batch_size, n_remaining)
             batch_n = batch_end - batch_start
 
             print(f"\nBatch {batch_idx + 1}/{n_batches} ({batch_n} samples)")
 
             param_vectors = self._sample_batch(batch_n)
             for i, x in enumerate(param_vectors):
-                global_idx = batch_start + i + 1
+                global_idx += 1
                 self._evaluate_one(global_idx, x)
                 success_count += 1
 
@@ -251,7 +304,7 @@ class ToleranceSampler:
             _logger.info("CST connection established — PID %s", self._conn.pid)
         return self._conn
 
-    def _evaluate_one(self, index: int, x: np.ndarray) -> None:
+    def _evaluate_one(self, index: int, x: np.ndarray, recovery: bool = False, old_row_id: int | None = None) -> None:
         """Run one CST solve and persist to the evaluation database."""
         conn = self._get_connection()
         param_dict = dict(zip(self._param_names, x))
@@ -354,14 +407,22 @@ class ToleranceSampler:
                 except Exception:
                     pass
 
-        # Persist to DB
-        record.error_message = error
-        record.raw_metrics = raw_metrics if raw_metrics else None
-        record.elapsed_s = round(time.perf_counter() - t_start, 1)
+        # Persist to DB — use RawEvaluationPayload so raw_metrics are written
+        elapsed = round(time.perf_counter() - t_start, 1)
+        record.raw_payload = RawEvaluationPayload(
+            raw_metrics=raw_metrics if raw_metrics else None,
+            objective_values=raw_metrics if raw_metrics else None,
+            gate_results=None,
+            diagnostics=None,
+        )
+        record.source = "rfgun_tolerance.runner"
+        record.error_taxonomy = {"error_message": error} if error else None
 
         try:
-            row_id = self._db.insert_final_record(record)
-            elapsed = record.elapsed_s
+            if old_row_id is None:
+                row_id = self._db.insert_final_record(record)
+            else:
+                row_id = self._db.replace_final_record(old_row_id, record)
             status = "OK" if solver_ok else "FAIL"
             vals = ", ".join(
                 f"{k}={v:.4g}" for k, v in raw_metrics.items()

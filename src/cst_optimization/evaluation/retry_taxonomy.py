@@ -1,5 +1,5 @@
 # Retry taxonomy helpers for the RF gun SAO workflow.
-# No-CST helper skeleton — no runtime wiring, no durable DB, no failure reuse.
+# No-CST helper skeleton -no runtime wiring, no durable DB, no failure reuse.
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from cst_optimization.evaluation.schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     current_schema_version,
@@ -54,7 +54,7 @@ class RetryEligibilityAction(str, Enum):
 class RetryTier(int, Enum):
     """Retry escalation tiers.
 
-    Descriptive taxonomy only — no CST or cleanup functions called.
+    Descriptive taxonomy only -no CST or cleanup functions called.
     """
     NO_RETRY = 0
     TIER_1_RECONNECT = 1
@@ -154,8 +154,8 @@ def classify_failure_record(
     1. Schema incompatible
     2. Missing parameter identity
     3. Diagnostic-only (explicit marker)
-    4. Known status → corresponding failure class
-    5. Unknown status → UNSUPPORTED_STATUS
+    4. Known status ->corresponding failure class
+    5. Unknown status ->UNSUPPORTED_STATUS
     """
     if current_schema is None:
         current_schema = current_schema_version()
@@ -370,7 +370,7 @@ def should_escalate_to_probably_infeasible(
     """Check if a failure history qualifies for permanent infeasibility
     classification.
 
-    Conservative guard — returns ``False`` for most inputs.
+    Conservative guard -returns ``False`` for most inputs.
 
     Requirements for ``True``:
     1. Policy must explicitly enable permanent classification
@@ -445,7 +445,7 @@ def summarize_retry_classifications(
 ) -> dict[str, int]:
     """Summarise retry classifications by action type.
 
-    Returns a dict mapping action value → count.  No I/O.
+    Returns a dict mapping action value ->count.  No I/O.
     """
     counts: dict[str, int] = {}
     for rec in records:

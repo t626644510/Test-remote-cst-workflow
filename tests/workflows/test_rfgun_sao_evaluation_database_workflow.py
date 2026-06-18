@@ -16,13 +16,13 @@ for p in (str(_PROJECT_ROOT), _SRC_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from workflows.rfgun_sao.evaluation_database_schema import (
+from cst_optimization.evaluation.evaluation_database_schema import (
     EvaluationDatabaseRecord,
     EvaluationDatabaseStatus,
     ParameterIdentity,
     RawEvaluationPayload,
 )
-from workflows.rfgun_sao.evaluation_database_storage import (
+from cst_optimization.evaluation.evaluation_database_storage import (
     EvaluationDatabaseConfig,
     resolve_evaluation_database_config,
 )
@@ -80,7 +80,7 @@ class TestWorkflowConfig:
 class TestWriteSemantics:
     def test_insert_needs_parameter_identity(self) -> None:
         """Record without parameter_identity is rejected."""
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
+        from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
@@ -95,7 +95,7 @@ class TestWriteSemantics:
 
     def test_success_record_has_objective_values(self) -> None:
         """SUCCESS record has objective_values in DB."""
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
+        from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase
         import json, tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
@@ -131,7 +131,7 @@ class TestWriteSemantics:
 class TestNoReuseQueries:
     def test_no_reuse_query_on_open(self) -> None:
         """Opening DB does not trigger any reuse/warm-start query."""
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
+        from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
@@ -159,9 +159,9 @@ class TestLegacyRetryAndDB:
 
     def test_legacy_result_writes_db_record(self, tmp_path: Path) -> None:
         """A legacy-style EvaluationResult can be built into a DB record."""
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
-        from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase
+        from cst_optimization.evaluation.retry_runtime_cst import build_record_from_evaluation_result
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
         from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
         pid = ParameterIdentity(param_names=["p1"], values=[1.0])
@@ -188,9 +188,9 @@ class TestLegacyRetryAndDB:
 
     def test_legacy_result_with_error_writes_db_record(self, tmp_path: Path) -> None:
         """Failed legacy EvaluationResult builds a valid DB record."""
-        from workflows.rfgun_sao.evaluation_database_storage import SQLiteEvaluationDatabase
-        from workflows.rfgun_sao.retry_runtime_cst import build_record_from_evaluation_result
-        from workflows.rfgun_sao.evaluation_database_schema import ParameterIdentity
+        from cst_optimization.evaluation.evaluation_database_storage import SQLiteEvaluationDatabase
+        from cst_optimization.evaluation.retry_runtime_cst import build_record_from_evaluation_result
+        from cst_optimization.evaluation.evaluation_database_schema import ParameterIdentity
         from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
 
         pid = ParameterIdentity(param_names=["p1"], values=[1.0])

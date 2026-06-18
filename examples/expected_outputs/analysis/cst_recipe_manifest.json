@@ -1,0 +1,199 @@
+{
+  "schema_version": "0.1",
+  "project_id": "example_history",
+  "source": "examples\\example_history.bas",
+  "extraction_notes": {
+    "history_limitations": []
+  },
+  "project": {
+    "units": {
+      "values": {
+        "object": "Units",
+        "Length": "mm",
+        "Frequency": "GHz",
+        "Time": "ns",
+        "Temperature": "K"
+      },
+      "confidence": 0.95,
+      "source_history_indices": [
+        1
+      ]
+    },
+    "background": null,
+    "parameters": {
+      "values": {
+        "cavity_radius": "42.0",
+        "cell_length": "115.0"
+      },
+      "confidence": 0.9,
+      "source_history_indices": [
+        2
+      ]
+    }
+  },
+  "materials": [
+    {
+      "name": "OFHC_Copper",
+      "subcategory": "material_definition",
+      "settings": {
+        "object": "Material",
+        "Reset": true,
+        "Name": "OFHC_Copper",
+        "Folder": "CavityMaterials",
+        "Type": "Normal",
+        "Epsilon": "1.0",
+        "Mu": "1.0",
+        "Sigma": "5.8e7",
+        "Create": true
+      },
+      "confidence": 0.95,
+      "source_history_indices": [
+        3
+      ]
+    }
+  ],
+  "geometry_summary": {
+    "imported_files": [
+      "baseline_cavity.step"
+    ],
+    "components": [
+      "vacuum"
+    ],
+    "solids": [
+      "rf_vacuum"
+    ],
+    "source_history_indices": [
+      4,
+      5
+    ],
+    "confidence": 0.55
+  },
+  "boundaries": {
+    "global": {
+      "type": "global_boundary",
+      "settings": {
+        "object": "Boundary",
+        "Xmin": "electric",
+        "Xmax": "electric",
+        "Ymin": "electric",
+        "Ymax": "electric",
+        "Zmin": "magnetic",
+        "Zmax": "open",
+        "ApplyInAllDirections": "False"
+      },
+      "confidence": 0.9,
+      "source_history_indices": [
+        6
+      ]
+    },
+    "symmetry": [],
+    "local": []
+  },
+  "ports": [
+    {
+      "type": "waveguide_port",
+      "number": "1",
+      "label": "input_coupler",
+      "settings": {
+        "object": "WaveguidePort",
+        "Reset": true,
+        "PortNumber": "1",
+        "Label": "input_coupler",
+        "NumberOfModes": "1",
+        "AdjustPolarization": "False",
+        "Create": true
+      },
+      "confidence": 0.9,
+      "source_history_indices": [
+        7
+      ]
+    }
+  ],
+  "mesh": {
+    "global": {
+      "type": "global_mesh",
+      "settings": {
+        "object": "Mesh",
+        "Reset": true,
+        "LinesPerWavelength": "20",
+        "MinimumStepNumber": "5",
+        "UseRatioLimit": "True"
+      },
+      "confidence": 0.82,
+      "source_history_indices": [
+        8
+      ]
+    },
+    "local_refinements": []
+  },
+  "solver": {
+    "type": "eigenmode",
+    "settings": {
+      "cst_solver_type_string": "Eigenmode",
+      "raw_settings": [
+        {
+          "object": "EigenmodeSolver",
+          "Reset": true,
+          "Modes": "5",
+          "Accuracy": "1e-6",
+          "StoreResultsInCache": "False"
+        }
+      ]
+    },
+    "confidence": 0.95,
+    "source_history_indices": [
+      9
+    ]
+  },
+  "monitors": [
+    {
+      "type": "e_field_monitor",
+      "settings": {
+        "object": "Monitor",
+        "Reset": true,
+        "Name": "E-field 1.3GHz",
+        "Domain": "Frequency",
+        "FieldType": "Efield",
+        "Frequency": "1.3",
+        "Create": true
+      },
+      "confidence": 0.9,
+      "source_history_indices": [
+        10
+      ]
+    }
+  ],
+  "postprocessing": [
+    {
+      "type": "result_template",
+      "settings": {
+        "object": "ResultTemplate",
+        "Reset": true,
+        "Name": "Q Factor",
+        "Type": "0D",
+        "Evaluate": true
+      },
+      "confidence": 0.9,
+      "source_history_indices": [
+        11
+      ]
+    }
+  ],
+  "result_exports": [
+    {
+      "type": "export_3d",
+      "settings": {
+        "object": "FieldExport",
+        "Reset": true,
+        "FileName": "exports/e_field_mode1.h5",
+        "Mode": "FixedNumber",
+        "Step": "1",
+        "Execute": true
+      },
+      "confidence": 0.86,
+      "source_history_indices": [
+        12
+      ]
+    }
+  ]
+}

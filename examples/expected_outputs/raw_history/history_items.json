@@ -1,0 +1,110 @@
+[
+  {
+    "index": 1,
+    "raw_name": "set project units",
+    "macro_body": "With Units\n     .SetUnit \"Length\", \"mm\"\n     .SetUnit \"Frequency\", \"GHz\"\n     .SetUnit \"Time\", \"ns\"\n     .SetUnit \"Temperature\", \"K\"\nEnd With",
+    "source_line_start": 1,
+    "source_line_end": 8,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: set project units\nWith Units\n     .SetUnit \"Length\", \"mm\"\n     .SetUnit \"Frequency\", \"GHz\"\n     .SetUnit \"Time\", \"ns\"\n     .SetUnit \"Temperature\", \"K\"\nEnd With"
+  },
+  {
+    "index": 2,
+    "raw_name": "store cavity parameters",
+    "macro_body": "StoreParameter \"cavity_radius\", \"42.0\"\nStoreParameter \"cell_length\", \"115.0\"",
+    "source_line_start": 9,
+    "source_line_end": 12,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: store cavity parameters\nStoreParameter \"cavity_radius\", \"42.0\"\nStoreParameter \"cell_length\", \"115.0\""
+  },
+  {
+    "index": 3,
+    "raw_name": "define copper material",
+    "macro_body": "With Material\n     .Reset\n     .Name \"OFHC_Copper\"\n     .Folder \"CavityMaterials\"\n     .Type \"Normal\"\n     .Epsilon \"1.0\"\n     .Mu \"1.0\"\n     .Sigma \"5.8e7\"\n     .Create\nEnd With",
+    "source_line_start": 13,
+    "source_line_end": 24,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: define copper material\nWith Material\n     .Reset\n     .Name \"OFHC_Copper\"\n     .Folder \"CavityMaterials\"\n     .Type \"Normal\"\n     .Epsilon \"1.0\"\n     .Mu \"1.0\"\n     .Sigma \"5.8e7\"\n     .Create\nEnd With"
+  },
+  {
+    "index": 4,
+    "raw_name": "import baseline geometry",
+    "macro_body": "With STEP\n     .Reset\n     .FileName \"baseline_cavity.step\"\n     .ScaleToUnit \"False\"\n     .ImportToActiveCoordinateSystem \"True\"\n     .Import\nEnd With",
+    "source_line_start": 25,
+    "source_line_end": 33,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: import baseline geometry\nWith STEP\n     .Reset\n     .FileName \"baseline_cavity.step\"\n     .ScaleToUnit \"False\"\n     .ImportToActiveCoordinateSystem \"True\"\n     .Import\nEnd With"
+  },
+  {
+    "index": 5,
+    "raw_name": "create vacuum cylinder",
+    "macro_body": "With Cylinder\n     .Reset\n     .Name \"rf_vacuum\"\n     .Component \"vacuum\"\n     .Material \"Vacuum\"\n     .OuterRadius \"20\"\n     .Zrange \"-50\", \"50\"\n     .Create\nEnd With",
+    "source_line_start": 34,
+    "source_line_end": 44,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: create vacuum cylinder\nWith Cylinder\n     .Reset\n     .Name \"rf_vacuum\"\n     .Component \"vacuum\"\n     .Material \"Vacuum\"\n     .OuterRadius \"20\"\n     .Zrange \"-50\", \"50\"\n     .Create\nEnd With"
+  },
+  {
+    "index": 6,
+    "raw_name": "global boundary conditions",
+    "macro_body": "With Boundary\n     .Xmin \"electric\"\n     .Xmax \"electric\"\n     .Ymin \"electric\"\n     .Ymax \"electric\"\n     .Zmin \"magnetic\"\n     .Zmax \"open\"\n     .ApplyInAllDirections \"False\"\nEnd With",
+    "source_line_start": 45,
+    "source_line_end": 55,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: global boundary conditions\nWith Boundary\n     .Xmin \"electric\"\n     .Xmax \"electric\"\n     .Ymin \"electric\"\n     .Ymax \"electric\"\n     .Zmin \"magnetic\"\n     .Zmax \"open\"\n     .ApplyInAllDirections \"False\"\nEnd With"
+  },
+  {
+    "index": 7,
+    "raw_name": "waveguide input port",
+    "macro_body": "With WaveguidePort\n     .Reset\n     .PortNumber \"1\"\n     .Label \"input_coupler\"\n     .NumberOfModes \"1\"\n     .AdjustPolarization \"False\"\n     .Create\nEnd With",
+    "source_line_start": 56,
+    "source_line_end": 65,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: waveguide input port\nWith WaveguidePort\n     .Reset\n     .PortNumber \"1\"\n     .Label \"input_coupler\"\n     .NumberOfModes \"1\"\n     .AdjustPolarization \"False\"\n     .Create\nEnd With"
+  },
+  {
+    "index": 8,
+    "raw_name": "global mesh setup",
+    "macro_body": "With Mesh\n     .Reset\n     .LinesPerWavelength \"20\"\n     .MinimumStepNumber \"5\"\n     .UseRatioLimit \"True\"\nEnd With",
+    "source_line_start": 66,
+    "source_line_end": 73,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: global mesh setup\nWith Mesh\n     .Reset\n     .LinesPerWavelength \"20\"\n     .MinimumStepNumber \"5\"\n     .UseRatioLimit \"True\"\nEnd With"
+  },
+  {
+    "index": 9,
+    "raw_name": "eigenmode solver settings",
+    "macro_body": "ChangeSolverType \"Eigenmode\"\nWith EigenmodeSolver\n     .Reset\n     .Modes \"5\"\n     .Accuracy \"1e-6\"\n     .StoreResultsInCache \"False\"\nEnd With",
+    "source_line_start": 74,
+    "source_line_end": 82,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: eigenmode solver settings\nChangeSolverType \"Eigenmode\"\nWith EigenmodeSolver\n     .Reset\n     .Modes \"5\"\n     .Accuracy \"1e-6\"\n     .StoreResultsInCache \"False\"\nEnd With"
+  },
+  {
+    "index": 10,
+    "raw_name": "e field monitor",
+    "macro_body": "With Monitor\n     .Reset\n     .Name \"E-field 1.3GHz\"\n     .Domain \"Frequency\"\n     .FieldType \"Efield\"\n     .Frequency \"1.3\"\n     .Create\nEnd With",
+    "source_line_start": 83,
+    "source_line_end": 92,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: e field monitor\nWith Monitor\n     .Reset\n     .Name \"E-field 1.3GHz\"\n     .Domain \"Frequency\"\n     .FieldType \"Efield\"\n     .Frequency \"1.3\"\n     .Create\nEnd With"
+  },
+  {
+    "index": 11,
+    "raw_name": "result template q factor",
+    "macro_body": "With ResultTemplate\n     .Reset\n     .Name \"Q Factor\"\n     .Type \"0D\"\n     .Evaluate\nEnd With",
+    "source_line_start": 93,
+    "source_line_end": 100,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: result template q factor\nWith ResultTemplate\n     .Reset\n     .Name \"Q Factor\"\n     .Type \"0D\"\n     .Evaluate\nEnd With"
+  },
+  {
+    "index": 12,
+    "raw_name": "export 3d fields",
+    "macro_body": "With FieldExport\n     .Reset\n     .FileName \"exports/e_field_mode1.h5\"\n     .Mode \"FixedNumber\"\n     .Step \"1\"\n     .Execute\nEnd With",
+    "source_line_start": 101,
+    "source_line_end": 109,
+    "parser_strategy": "comment_delimited",
+    "raw_macro_excerpt": "' History Item: export 3d fields\nWith FieldExport\n     .Reset\n     .FileName \"exports/e_field_mode1.h5\"\n     .Mode \"FixedNumber\"\n     .Step \"1\"\n     .Execute\nEnd With"
+  }
+]

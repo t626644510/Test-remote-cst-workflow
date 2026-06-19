@@ -169,6 +169,16 @@ def main() -> None:
         .get("output_dir", "D:/Results")
     )
     os.makedirs(log_dir, exist_ok=True)
+
+    # ── Terminal log header (so truncated logs have a recoverable start) ─
+    _term_log_path = os.path.join(log_dir, "workflow_2_terminal.log")
+    try:
+        with open(_term_log_path, "a", encoding="utf-8") as _f:
+            _f.write(f"\n=== Workflow 2 started {time.strftime('%Y-%m-%d %H:%M:%S')} "
+                     f"PID={os.getpid()} ===\n")
+    except Exception:
+        pass
+
     ckpt = CheckpointManager(f"{log_dir}/workflow_2")
     has_ckpt = ckpt.load()
 

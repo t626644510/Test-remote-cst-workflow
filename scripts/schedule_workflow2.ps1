@@ -61,10 +61,17 @@ $Action = New-ScheduledTaskAction `
     -Argument $ActionArgs `
     -WorkingDirectory $WorkDir
 
-# ── Build the trigger (at startup with delay) ─────────────────────────
-$Trigger = New-ScheduledTaskTrigger `
+# ── Build triggers ────────────────────────────────────────────────────
+# Trigger 1: at system startup (with delay for CST license)
+$TriggerStartup = New-ScheduledTaskTrigger `
     -AtStartup `
     -RandomDelay (New-TimeSpan -Minutes $DelayMinutes)
+
+# Trigger 2: daily at 09:00, repeat every 4 hours (periodic health restart)
+$TriggerDaily = New-ScheduledTaskTrigger `
+    -Daily `
+    -At "09:00" `
+    -RepetitionInterval (New-TimeSpan -Hours 4)
 
 # ── Build settings ────────────────────────────────────────────────────
 $Settings = New-ScheduledTaskSettingsSet `
@@ -76,7 +83,7 @@ $Settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit (New-TimeSpan -Hours 72) `
     -MultipleInstances IgnoreNew
 
-# ── Register the task ─────────────────────────────────────────────────
+# ── Register the workflow task ────────────────────────────────────────
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
 
 try {
@@ -86,15 +93,58 @@ try {
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $Action `
-        -Trigger $Trigger `
+        -Trigger $TriggerStartup, $TriggerDaily `
         -Settings $Settings `
         -Principal $Principal `
-        -Description "Auto-restart CST Workflow 2 after system reboot with crash recovery"
+        -Description "CST Workflow 2 — auto-restart on boot + daily 09:00 with 4h repeat"
 
-    Write-Host "SUCCESS: Task '$TaskName' registered."
+    Write-Host "SUCCESS: Workflow task '$TaskName' registered."
+    Write-Host "  Triggers: AtStartup + Daily 09:00 (every 4h)"
+    Write-Host ""
+
+    # ── Register the watchdog task (every 5 min heartbeat check) ──────
+    $WatchdogName = "${TaskName}_Watchdog"
+    $WatchdogScript = Join-Path $WorkDir "scripts\watchdog.ps1"
+    if (-not (Test-Path $WatchdogScript)) {
+        Write-Warning "Watchdog script not found at $WatchdogScript — skipping watchdog registration"
+    } else {
+        Unregister-ScheduledTask -TaskName $WatchdogName -Confirm:$false -ErrorAction SilentlyContinue
+
+        $WatchdogAction = New-ScheduledTaskAction `
+            -Execute "powershell.exe" `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$WatchdogScript`"" `
+            -WorkingDirectory $WorkDir
+
+        # Trigger: every 5 minutes, indefinitely
+        $WatchdogTrigger = New-ScheduledTaskTrigger `
+            -Once `
+            -At (Get-Date -Hour 0 -Minute 0 -Second 0) `
+            -RepetitionInterval (New-TimeSpan -Minutes 5)
+
+        $WatchdogSettings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable `
+            -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
+            -MultipleInstances IgnoreNew `
+            -Hidden
+
+        Register-ScheduledTask `
+            -TaskName $WatchdogName `
+            -Action $WatchdogAction `
+            -Trigger $WatchdogTrigger `
+            -Settings $WatchdogSettings `
+            -Principal $Principal `
+            -Description "Heartbeat watchdog for CST Workflow 2 — checks every 5 min and launches if dead"
+
+        Write-Host "SUCCESS: Watchdog task '$WatchdogName' registered."
+        Write-Host "  Trigger: every 5 minutes"
+    }
+
     Write-Host ""
     Write-Host "To view:   taskschd.msc"
     Write-Host "To remove: Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false"
+    Write-Host "           Unregister-ScheduledTask -TaskName '$WatchdogName' -Confirm:`$false"
     Write-Host "To run now: Start-ScheduledTask -TaskName '$TaskName'"
 } catch {
     Write-Error "Failed to register task: $_"

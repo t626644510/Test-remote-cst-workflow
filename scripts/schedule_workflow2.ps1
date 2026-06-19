@@ -3,14 +3,14 @@
     Register a Windows Task Scheduler job to auto-restart Workflow 2 after reboot.
 
 .DESCRIPTION
-    Creates a scheduled task that runs at system startup (with a 2-minute delay)
-    and re-launches ``run_workflow_2.py --auto-resume --heartbeat``.
+    Creates a startup task plus a five-minute heartbeat watchdog.  The
+    watchdog is the recurring health trigger; the workflow task itself is not
+    periodically restarted while a healthy process is running.
 
     The task runs as the current user and is configured to:
     - Trigger at system startup
-    - Not run if on battery (laptop)
     - Auto-terminate after 72 hours
-    - Restart every 72 hours if still eligible
+    - Reject overlapping launches through the runner's process lock
 
 .EXAMPLE
     .\scripts\schedule_workflow2.ps1
@@ -22,7 +22,8 @@ param(
     [string]$TaskName = "CST_Workflow2_AutoResume",
     [int]$DelayMinutes = 2,
     [string]$PythonExe = "",
-    [string]$WorkDir = ""
+    [string]$WorkDir = "",
+    [string]$WarmupDbPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,16 +47,26 @@ if (-not (Test-Path $ScriptPath)) {
     Write-Error "Cannot find run_workflow_2.py at $ScriptPath"
     exit 1
 }
+if (-not $WarmupDbPath) {
+    $DefaultWarmupDb = Join-Path $WorkDir "Results\raw_curves\index.cleaned.jsonl"
+    if (Test-Path $DefaultWarmupDb) {
+        $WarmupDbPath = $DefaultWarmupDb
+    }
+}
 
 Write-Host "Task Name:    $TaskName"
 Write-Host "Python:       $PythonExe"
 Write-Host "Script:       $ScriptPath"
 Write-Host "Work Dir:     $WorkDir"
+Write-Host "Warmup DB:    $WarmupDbPath"
 Write-Host "Delay:        ${DelayMinutes} min after startup"
 Write-Host ""
 
 # ── Build the action ──────────────────────────────────────────────────
 $ActionArgs = "`"$ScriptPath`" --auto-resume --heartbeat"
+if ($WarmupDbPath) {
+    $ActionArgs += " --warmup-from-db `"$WarmupDbPath`""
+}
 $Action = New-ScheduledTaskAction `
     -Execute $PythonExe `
     -Argument $ActionArgs `
@@ -66,12 +77,6 @@ $Action = New-ScheduledTaskAction `
 $TriggerStartup = New-ScheduledTaskTrigger `
     -AtStartup `
     -RandomDelay (New-TimeSpan -Minutes $DelayMinutes)
-
-# Trigger 2: daily at 09:00, repeat every 4 hours (periodic health restart)
-$TriggerDaily = New-ScheduledTaskTrigger `
-    -Daily `
-    -At "09:00" `
-    -RepetitionInterval (New-TimeSpan -Hours 4)
 
 # ── Build settings ────────────────────────────────────────────────────
 $Settings = New-ScheduledTaskSettingsSet `
@@ -93,13 +98,13 @@ try {
     Register-ScheduledTask `
         -TaskName $TaskName `
         -Action $Action `
-        -Trigger $TriggerStartup, $TriggerDaily `
+        -Trigger $TriggerStartup `
         -Settings $Settings `
         -Principal $Principal `
-        -Description "CST Workflow 2 — auto-restart on boot + daily 09:00 with 4h repeat"
+        -Description "CST Workflow 2 — startup launch; watchdog handles crash recovery"
 
     Write-Host "SUCCESS: Workflow task '$TaskName' registered."
-    Write-Host "  Triggers: AtStartup + Daily 09:00 (every 4h)"
+    Write-Host "  Trigger: AtStartup"
     Write-Host ""
 
     # ── Register the watchdog task (every 5 min heartbeat check) ──────
@@ -110,16 +115,21 @@ try {
     } else {
         Unregister-ScheduledTask -TaskName $WatchdogName -Confirm:$false -ErrorAction SilentlyContinue
 
+        $WatchdogArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$WatchdogScript`""
+        if ($WarmupDbPath) {
+            $WatchdogArgs += " -WarmupDbPath `"$WarmupDbPath`""
+        }
         $WatchdogAction = New-ScheduledTaskAction `
             -Execute "powershell.exe" `
-            -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$WatchdogScript`"" `
+            -Argument $WatchdogArgs `
             -WorkingDirectory $WorkDir
 
         # Trigger: every 5 minutes, indefinitely
         $WatchdogTrigger = New-ScheduledTaskTrigger `
             -Once `
-            -At (Get-Date -Hour 0 -Minute 0 -Second 0) `
-            -RepetitionInterval (New-TimeSpan -Minutes 5)
+            -At (Get-Date).AddMinutes(1) `
+            -RepetitionInterval (New-TimeSpan -Minutes 5) `
+            -RepetitionDuration (New-TimeSpan -Days 3650)
 
         $WatchdogSettings = New-ScheduledTaskSettingsSet `
             -AllowStartIfOnBatteries `

@@ -34,7 +34,7 @@ from __future__ import annotations
 import inspect
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import numpy as np
 import pytest
@@ -338,12 +338,22 @@ class TestConfigFallbackMerge:
         ckpt_instance = MagicMock()
         ckpt_instance.load.return_value = False
         ckpt_instance.completed_count = 0
+        ckpt_instance.records = []
+        ckpt_instance.partial_records = []
+        ckpt_instance.get_warm_xy.return_value = (
+            np.empty((0, 0)), np.empty((0,)),
+        )
         mock_ckpt_mgr.return_value = ckpt_instance
 
         # Capture the config dict passed to build_workflow_2
         captured_cfg: dict = {}
 
-        def _fake_build(cfg, checkpoint_callback=None, start_iteration=0):
+        def _fake_build(
+            cfg,
+            checkpoint_callback=None,
+            phase_checkpoint_callback=None,
+            start_iteration=0,
+        ):
             captured_cfg.clear()
             captured_cfg.update(cfg)
             fake_orch = MagicMock()
@@ -363,7 +373,12 @@ class TestConfigFallbackMerge:
         mock_build_wf2.side_effect = _fake_build
 
         # The fake evaluator needs a warm_start attribute for the not-taken retry path
-        rw2.main()
+        with (
+            patch("builtins.open", mock_open(read_data="")),
+            patch("workflows.rfgun_hom_antenna.run.os.path.getsize", return_value=1),
+            patch("msvcrt.locking"),
+        ):
+            rw2.main()
 
         # Assertions on the captured merged config
         assert "cst" in captured_cfg, "cst should have been merged into workflow_2 config"

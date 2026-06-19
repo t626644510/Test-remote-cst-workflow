@@ -28,6 +28,7 @@ from .objectives import modes       # noqa: F401  — @register_mode side-effect
 from .objectives import quality     # noqa: F401
 from .objectives.base import ObjectiveFunction
 from .objectives.registry import get_objective, get_mode
+from .optimization.base import BaseOptimizer
 from .optimization.sao import SurrogateAssistedOptimizer
 from .parameters.base import ParameterSet, ParamRange
 from .parameters.geometry import GeometryParameter
@@ -49,7 +50,13 @@ def build_workflow_2(
     config: dict[str, Any],
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
     | None = None,
+    phase_checkpoint_callback: Callable[
+        [np.ndarray, int, list[str], str], None
+    ] | None = None,
+    start_iteration: int = 0,
 ) -> tuple[
+    Any,
+    BaseOptimizer,
     Callable[[np.ndarray], Any],
     EvaluationRetryHandler | None,
 ]:
@@ -60,7 +67,12 @@ def build_workflow_2(
     """
     from workflows.rfgun_hom_antenna.workflow import build_workflow_2 as _wf2_build
 
-    return _wf2_build(config, checkpoint_callback=checkpoint_callback)
+    return _wf2_build(
+        config,
+        checkpoint_callback=checkpoint_callback,
+        phase_checkpoint_callback=phase_checkpoint_callback,
+        start_iteration=start_iteration,
+    )
 
 
 def build_workflow_3(

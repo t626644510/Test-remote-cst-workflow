@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import signal
 import sys
 import threading
@@ -170,6 +171,25 @@ def main() -> None:
     )
     os.makedirs(log_dir, exist_ok=True)
 
+    # Hold a Windows byte-range lock for the lifetime of this process.  A
+    # crashed process releases it automatically, while overlapping scheduler
+    # and watchdog launches exit before opening a second CST session.
+    _run_lock_path = os.path.join(log_dir, "workflow_2.lock")
+    _run_lock_file = open(_run_lock_path, "a+b")
+    if os.path.getsize(_run_lock_path) == 0:
+        _run_lock_file.write(b"0")
+        _run_lock_file.flush()
+    _run_lock_file.seek(0)
+    try:
+        import msvcrt
+        msvcrt.locking(_run_lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        print(
+            f"Workflow 2 is already running (lock busy: {_run_lock_path})."
+        )
+        _run_lock_file.close()
+        sys.exit(0)
+
     # ── Terminal log header (so truncated logs have a recoverable start) ─
     _term_log_path = os.path.join(log_dir, "workflow_2_terminal.log")
     try:
@@ -198,15 +218,6 @@ def main() -> None:
 
         _hb_thread = threading.Thread(target=_heartbeat_loop, daemon=True)
         _hb_thread.start()
-        # Check if previous run crashed (heartbeat within last 10 min)
-        if os.path.isfile(_hb_path):
-            try:
-                mtime = os.path.getmtime(_hb_path)
-                if time.time() - mtime < 600:
-                    print("[heartbeat] Previous run may have crashed — enabling auto-resume")
-                    args.auto_resume = True
-            except Exception:
-                pass
         print(f"[heartbeat] writing to {_hb_path} every 60 s")
 
     # ── Crash recovery: resume partial evaluations ─────────────────────────
@@ -220,12 +231,16 @@ def main() -> None:
     if has_ckpt:
         partial = ckpt.partial_records
         if partial:
-            print(f"Found {len(partial)} partially-evaluated records (F2F done, wakefield pending)")
-            print("Resuming partial evaluations (skip completed phases)...")
+            print(f"Found {len(partial)} partially-evaluated records")
+            if args.auto_resume:
+                print("Resuming partial evaluations from saved phase curves...")
+            else:
+                print("Use --auto-resume to replay saved phases before optimisation.")
 
     # ── 2b. Warmup from 1D curves database (overrides checkpoint prior_data) ─
+    next_db_iteration = 0
     if args.warmup_from_db:
-        from cst_optimization.database import curves_to_warmup
+        from cst_optimization.database import curves_to_warmup, load_index
         from cst_optimization.factory import _build_objectives
 
         index_path = args.warmup_from_db
@@ -242,7 +257,42 @@ def main() -> None:
         else:
             w = np.ones(n_obj) / n_obj
 
+        index_records = load_index(index_path)
+        db_iterations = [
+            int(rec["iter"])
+            for rec in index_records
+            if isinstance(rec.get("iter"), int)
+        ]
+        if db_iterations:
+            next_db_iteration = max(db_iterations) + 1
+
         X_db, y_db = curves_to_warmup(index_path, db_objectives, weights=w)
+        if len(X_db) > 0:
+            parameter_cfg = wf2_cfg.get("parameters", [])
+            lows = np.array([float(p["low"]) for p in parameter_cfg])
+            highs = np.array([float(p["high"]) for p in parameter_cfg])
+            finite = np.all(np.isfinite(X_db), axis=1) & np.isfinite(y_db)
+            in_bounds = np.all((X_db >= lows) & (X_db <= highs), axis=1)
+            keep = finite & in_bounds
+            rejected = int(len(X_db) - np.count_nonzero(keep))
+            X_db = X_db[keep]
+            y_db = y_db[keep]
+
+            unique_indices: list[int] = []
+            seen: set[bytes] = set()
+            for i, row in enumerate(X_db):
+                key = np.asarray(row, dtype=np.float64).tobytes()
+                if key not in seen:
+                    seen.add(key)
+                    unique_indices.append(i)
+            duplicates = len(X_db) - len(unique_indices)
+            X_db = X_db[unique_indices]
+            y_db = y_db[unique_indices]
+            if rejected or duplicates:
+                print(
+                    f"  filtered: {rejected} invalid/out-of-bounds, "
+                    f"{duplicates} duplicate"
+                )
         n_valid = len(X_db)
         print(f"  {n_valid} valid evaluations for warmup")
         if n_valid > 0:
@@ -250,7 +300,48 @@ def main() -> None:
             best_idx = int(np.argmin(y_db))
             print(f"  Best penalty: {float(y_db[best_idx]):.6f} (index {best_idx})")
 
-    # ── 3. Checkpoint callback ─────────────────────────────────────────────
+    # Never overwrite an existing atomized curve file, even when the warmup
+    # index was sanitized or renumbered independently of the output folder.
+    next_output_iteration = 0
+    curves_output_dir = Path(log_dir) / "raw_curves"
+    if curves_output_dir.is_dir():
+        existing_iterations = []
+        for npz_path in curves_output_dir.glob("eval_*.npz"):
+            match = re.match(r"eval_(\d+)", npz_path.name)
+            if match:
+                existing_iterations.append(int(match.group(1)))
+        if existing_iterations:
+            next_output_iteration = max(existing_iterations) + 1
+
+    # ── 3. Checkpoint callbacks ────────────────────────────────────────────
+    def _x_key(x_phys: np.ndarray) -> bytes:
+        return np.asarray(x_phys, dtype=np.float64).tobytes()
+
+    _pending_by_x: dict[bytes, int] = {
+        _x_key(np.asarray(rec.x, dtype=float)): idx
+        for idx, rec in enumerate(ckpt.records)
+        if rec.status == "pending"
+    }
+
+    def _ensure_pending(x_phys: np.ndarray) -> int:
+        key = _x_key(x_phys)
+        idx = _pending_by_x.get(key)
+        if idx is None:
+            idx = ckpt.add_pending(x_phys)
+            _pending_by_x[key] = idx
+        return idx
+
+    def _on_phase_completed(
+        x_phys: np.ndarray,
+        iteration: int,
+        phases_done: list[str],
+        npz_path: str,
+    ) -> None:
+        idx = _ensure_pending(x_phys)
+        ckpt.mark_phase_done(idx, phases=phases_done)
+        ckpt.records[idx].error = ""
+        ckpt.save()
+
     def _on_evaluation(
         x_phys: np.ndarray,
         raw_values: np.ndarray,
@@ -258,10 +349,12 @@ def main() -> None:
         solver_ok: bool,
         error: str,
     ) -> None:
-        idx = ckpt.add_pending(x_phys)
-        all_finite = bool(np.all(np.isfinite(raw_values)))
+        idx = _ensure_pending(x_phys)
+        success = bool(
+            solver_ok and np.all(np.isfinite(penalties))
+        )
         obj_names = [obj.name for obj in orch.objectives]
-        if all_finite:
+        if success:
             ckpt.mark_completed(
                 idx,
                 raw_values=dict(zip(obj_names, raw_values)),
@@ -269,19 +362,28 @@ def main() -> None:
                 solver_ok=solver_ok,
                 phases=list(orch.last_completed_labels) if orch.last_completed_labels else [],
             )
+            _pending_by_x.pop(_x_key(x_phys), None)
         else:
             # Record actually-completed phases from orchestrator state
             phases_done = list(orch.last_completed_labels) if orch.last_completed_labels else []
             if phases_done:
                 ckpt.mark_phase_done(idx, phases=phases_done)
+                ckpt.records[idx].error = error
+                ckpt.records[idx].solver_ok = False
             else:
                 ckpt.mark_failed(idx, error=error)
         ckpt.save()
 
     # ── 4. Build orchestrator + optimiser ───────────────────────────────────
     orch, opt, evaluator, retry_handler = build_workflow_2(
-        wf2_cfg, checkpoint_callback=_on_evaluation,
-        start_iteration=ckpt.completed_count + ckpt.pending_count if has_ckpt else 0,
+        wf2_cfg,
+        checkpoint_callback=_on_evaluation,
+        phase_checkpoint_callback=_on_phase_completed,
+        start_iteration=max(
+            len(ckpt.records),
+            next_db_iteration,
+            next_output_iteration,
+        ),
     )
 
     print(f"Parameters: {orch.n_parameters}")
@@ -293,31 +395,38 @@ def main() -> None:
     print("-" * 60)
 
     # ── 4.5 Resume partial evaluations (F2F done, F2W pending) ──────────────
-    if has_ckpt:
+    if has_ckpt and args.auto_resume:
         partial = ckpt.partial_records
         curves_dir = os.path.join(log_dir, "raw_curves")
         for rec in partial:
             print(f"\nResuming partial eval: phases_done={rec.phases_done}")
-            # Find the F2F .npz file for this evaluation
-            # The index.jsonl tracks which .npz belongs to which iter
+            # Find the most complete atomized .npz for this evaluation.
             npz_path = ""
             index_path = os.path.join(curves_dir, "index.jsonl")
             if os.path.isfile(index_path):
                 from cst_optimization.database import load_index
+                candidates: list[tuple[int, str, str]] = []
                 for entry in load_index(index_path):
-                    if entry.get("has_f2f") and entry.get("iter") == ckpt.records.index(rec):
-                        npz_name = entry.get("npz_file", "")
-                        if npz_name:
-                            # Try phase-specific .npz first
-                            phase_npz = npz_name.replace(".npz", "_f2f.npz")
-                            phase_path = os.path.join(curves_dir, phase_npz)
-                            if os.path.isfile(phase_path):
-                                npz_path = phase_path
-                            else:
-                                npz_path = os.path.join(curves_dir, npz_name)
-                        break
+                    if entry.get("iter") != ckpt.records.index(rec):
+                        continue
+                    npz_name = entry.get("npz_file", "")
+                    candidate_path = os.path.join(curves_dir, npz_name)
+                    if not npz_name or not os.path.isfile(candidate_path):
+                        continue
+                    phases = entry.get("phases_done", [])
+                    score = len(phases)
+                    if not phases:
+                        score = sum(
+                            bool(entry.get(flag))
+                            for flag in ("has_f2f", "has_f2w", "has_f2wo")
+                        )
+                    candidates.append(
+                        (score, entry.get("timestamp", ""), candidate_path)
+                    )
+                if candidates:
+                    npz_path = max(candidates)[2]
             if not npz_path:
-                print(f"  WARNING: No F2F .npz found — skipping recovery for this record")
+                print("  WARNING: No saved phase .npz found — skipping recovery")
                 continue
             x_arr = np.array(rec.x, dtype=float)
             # Pass phases_done so already-completed projects are skipped
@@ -326,7 +435,7 @@ def main() -> None:
                 penalties = orch.execute(
                     x_arr,
                     iteration=ckpt.records.index(rec),
-                    start_phase="f2w",
+                    start_phase="resume",
                     f2f_npz_path=npz_path,
                     skip_phases=skip,
                 )
@@ -345,7 +454,11 @@ def main() -> None:
                 raw = orch.last_raw_values
                 pen = orch.last_penalties
                 obj_names = [obj.name for obj in orch.objectives]
-                if raw is not None and np.all(np.isfinite(raw)):
+                if (
+                    orch.last_solver_ok
+                    and pen is not None
+                    and np.all(np.isfinite(pen))
+                ):
                     ckpt.mark_completed(
                         idx,
                         raw_values=dict(zip(obj_names, raw)),
@@ -358,6 +471,30 @@ def main() -> None:
                 ckpt.save()
             except Exception as e:
                 print(f"  Recovery eval FAILED: {e}")
+
+    # Refresh checkpoint priors after phase replay and merge them with any
+    # sanitized curve-database warm start without duplicating parameter rows.
+    checkpoint_X, checkpoint_y = ckpt.get_warm_xy()
+    if len(checkpoint_X) > 0:
+        if prior_data is None:
+            prior_data = (checkpoint_X, checkpoint_y)
+        else:
+            merged_X = [*np.asarray(prior_data[0], dtype=float)]
+            merged_y = [*np.asarray(prior_data[1], dtype=float)]
+            seen = {
+                np.asarray(row, dtype=np.float64).tobytes()
+                for row in merged_X
+            }
+            for row, value in zip(checkpoint_X, checkpoint_y):
+                key = np.asarray(row, dtype=np.float64).tobytes()
+                if key not in seen:
+                    seen.add(key)
+                    merged_X.append(row)
+                    merged_y.append(value)
+            prior_data = (
+                np.asarray(merged_X, dtype=float),
+                np.asarray(merged_y, dtype=float),
+            )
 
     # ── 5. Run optimisation ─────────────────────────────────────────────────
     try:

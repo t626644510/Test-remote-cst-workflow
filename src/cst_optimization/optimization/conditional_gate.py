@@ -234,7 +234,7 @@ class AdaptiveConditionalGate:
         for i, name in enumerate(self._obj_names):
             gp = self._gps[i]
             if gp is not None:
-                pred, _ = gp.predict(X_new, return_std=False)
+                pred = gp.predict(X_new, return_std=False)
                 result[name] = float(pred[0])
         return result
 

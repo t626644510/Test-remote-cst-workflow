@@ -182,13 +182,14 @@ class CheckpointManager:
     def get_warm_xy(self) -> tuple[np.ndarray, np.ndarray]:
         """Return ``(X, y)`` arrays from completed records for SAO warm-start.
 
-        Includes records where *phases_done* contains ``"f2f"`` (partial success:
-        F2F S-parameters are valid even if wakefield was skipped or failed).
-        *y* is the sum of objective penalties (scalar per point).
+        Partial records are deliberately excluded: their missing objective
+        penalties must be recovered from saved phase curves before they can be
+        used as optimiser observations.  Treating an empty penalty mapping as
+        zero would incorrectly make a partial evaluation look optimal.
         """
         usable = [
             r for r in self.records
-            if r.status == "completed" or "f2f" in r.phases_done
+            if r.status == "completed" and r.penalties
         ]
         if not usable:
             return np.empty((0, 0)), np.empty((0,))
@@ -225,7 +226,7 @@ class CheckpointManager:
     ) -> None:
         """Record that specific phases have completed (for crash recovery)."""
         rec = self.records[idx]
-        rec.phases_done = list(phases)
+        rec.phases_done = list(dict.fromkeys([*rec.phases_done, *phases]))
         if params_hash:
             rec.f2f_params_hash = params_hash
         rec.timestamp = datetime.now(timezone.utc).isoformat()

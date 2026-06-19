@@ -61,6 +61,9 @@ def build_workflow_2(
     config: dict[str, Any],
     checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
     | None = None,
+    phase_checkpoint_callback: Callable[
+        [np.ndarray, int, list[str], str], None
+    ] | None = None,
     start_iteration: int = 0,
 ) -> tuple[
     DualProjectOrchestrator,
@@ -80,6 +83,10 @@ def build_workflow_2(
         The ``workflow_2`` section of ``default.yaml``.
     checkpoint_callback : callable or None
         Optional callback(evaluation_count, x, f, success) for persistence.
+    phase_checkpoint_callback : callable or None
+        Called immediately after each expensive CST phase is saved.  Receives
+        ``(x, iteration, phases_done, npz_path)`` so crash recovery can skip
+        completed long solves even if later Python post-processing fails.
     start_iteration : int
         Starting value for the evaluator's internal call counter.  Callers
         resuming from a checkpoint should pass ``len(ckpt.records)`` so that
@@ -219,6 +226,23 @@ def build_workflow_2(
         adaptive_gate = None
 
     # ── Orchestrator ─────────────────────────────────────────────────
+    # Keep the newest atomized phase file per parameter vector so an
+    # in-process retry can replay saved curves instead of re-running a long
+    # CST phase after a Python-side post-processing failure.
+    _phase_resume_npz: dict[bytes, str] = {}
+
+    def _on_phase_checkpoint(
+        x_phys: np.ndarray,
+        iteration: int,
+        phases_done: list[str],
+        npz_path: str,
+    ) -> None:
+        _phase_resume_npz[np.asarray(x_phys, dtype=np.float64).tobytes()] = npz_path
+        if phase_checkpoint_callback is not None:
+            phase_checkpoint_callback(
+                x_phys, iteration, phases_done, npz_path,
+            )
+
     orchestrator = DualProjectOrchestrator(
         specs=specs,
         connection=conn,
@@ -233,6 +257,7 @@ def build_workflow_2(
         opt_logger=opt_logger,
         ref_project_map=ref_project_map,
         checkpoint_callback=checkpoint_callback,
+        phase_checkpoint_callback=_on_phase_checkpoint,
         curves_db_dir=curves_db_dir,
         library_path=library_path,
         cooldown_s=float(retry_cfg_raw.get("cooldown_s", 5.0)) if retry_cfg_raw else 5.0,
@@ -264,28 +289,36 @@ def build_workflow_2(
             )
 
         # ── Evaluation wrapper for retry handler ─────────────────────
-        _retry_skip_phases: dict[int, set[str]] = {}
+        _retry_skip_phases: dict[bytes, set[str]] = {}
 
         def _evaluate_for_retry(x_phys: np.ndarray, iteration: int) -> Any:
             from cst_optimization.workflows.recovery import EvaluationResult, EvaluationStatus
-            param_key = (
-                hash(x_phys.tobytes()) if hasattr(x_phys, 'tobytes')
-                else hash(tuple(x_phys))
-            )
+            param_key = np.asarray(x_phys, dtype=np.float64).tobytes()
             skip = _retry_skip_phases.get(param_key, None)
+            resume_npz = _phase_resume_npz.get(param_key, "")
             try:
                 penalties = orchestrator.execute(
-                    x_phys, iteration=iteration,
+                    x_phys,
+                    iteration=iteration,
+                    start_phase="resume" if skip and resume_npz else "f2f",
+                    f2f_npz_path=resume_npz,
                     skip_phases=skip,
                 )
             except Exception as exc:
                 err = str(exc)[:200]
+                _retry_skip_phases[param_key] = (
+                    orchestrator.last_completed_labels.copy()
+                )
                 is_com = any(
                     w in err.lower()
                     for w in ("com", "connection", "designenvironment")
                 )
                 return EvaluationResult(
-                    status=EvaluationStatus.COM_LOST if is_com else EvaluationStatus.SOLVER_FAILED,
+                    status=(
+                        EvaluationStatus.COM_LOST
+                        if is_com
+                        else EvaluationStatus.UNKNOWN_ERROR
+                    ),
                     error=err,
                 )
             _retry_skip_phases[param_key] = orchestrator.last_completed_labels.copy()
@@ -305,6 +338,24 @@ def build_workflow_2(
                 return EvaluationResult(
                     status=EvaluationStatus.SOLVER_FAILED,
                     error="Solver failure (mesh/COM/pre-filter reject)",
+                    raw_metrics=raw_metrics,
+                    penalty_values=penalty_dict,
+                )
+            unexpected_missing = [
+                obj_names[i]
+                for i in range(len(obj_names))
+                if (
+                    (raw is None or not np.isfinite(raw[i]))
+                    and obj_project_map[i] not in orchestrator.last_skipped_labels
+                )
+            ]
+            if unexpected_missing:
+                return EvaluationResult(
+                    status=EvaluationStatus.UNKNOWN_ERROR,
+                    error=(
+                        "Objective post-processing incomplete: "
+                        + ", ".join(unexpected_missing)
+                    ),
                     raw_metrics=raw_metrics,
                     penalty_values=penalty_dict,
                 )

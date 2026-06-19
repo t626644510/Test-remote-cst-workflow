@@ -85,6 +85,9 @@ class DualProjectOrchestrator:
         opt_logger: OptimizationLogger | None = None,
         ref_project_map: list[str] | None = None,
         checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None] | None = None,
+        phase_checkpoint_callback: Callable[
+            [np.ndarray, int, list[str], str], None
+        ] | None = None,
         curves_db_dir: str = "",
         cooldown_s: float = 5.0,
         adaptive_gate: Any | None = None,
@@ -111,6 +114,7 @@ class DualProjectOrchestrator:
         self._pre_eval_cleanup = pre_eval_cleanup
         self._opt_logger = opt_logger
         self._checkpoint_callback = checkpoint_callback
+        self._phase_checkpoint_callback = phase_checkpoint_callback
         self._curves_db_dir = curves_db_dir
         self._adaptive_gate = adaptive_gate
         self._gate_predictions: dict[str, float] | None = None
@@ -132,6 +136,7 @@ class DualProjectOrchestrator:
         self.last_penalties: np.ndarray | None = None
         self.last_solver_ok: bool = False
         self.last_completed_labels: set[str] = set()  # for per-phase retry
+        self.last_skipped_labels: set[str] = set()
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -176,6 +181,11 @@ class DualProjectOrchestrator:
         _term_print(f"[iter {iteration}] {vals}")
         n_obj = len(self._objectives)
         raw_values = np.full(n_obj, np.nan)
+        self.last_raw_values = raw_values.copy()
+        self.last_penalties = np.full(n_obj, 1.0)
+        self.last_solver_ok = False
+        self.last_completed_labels = set()
+        self.last_skipped_labels = set()
         self._gate_predictions = None  # reset per evaluation
         t_start = time.perf_counter()
 
@@ -184,7 +194,7 @@ class DualProjectOrchestrator:
         solver_errors: list[str] = []
         all_solvers_ok: bool = True
         if skip_phases:
-            skipped_labels = set(skip_phases)
+            skipped_labels: set[str] = set()
             # Also seed completed_labels so Phase 1 and Phase 1.5 gate checks
             # recognise already-done projects from a prior retry attempt
             for spec in self._specs:
@@ -202,16 +212,26 @@ class DualProjectOrchestrator:
             _mk_reader = make_recording_reader
         else:
             _mk_reader = _make_reader_factory
+        phase_base_npz = ""
+        resume_reader: Any | None = None
 
-        # ── start_phase="f2w": load F2F from .npz, skip Phase 1 ─────
-        if start_phase == "f2w":
+        # ── Resume from atomized phase curves, skipping completed CST work ─
+        if start_phase in {"f2w", "resume"}:
             if not f2f_npz_path or not os.path.isfile(f2f_npz_path):
-                _term_print("[start_phase=f2w] ERROR: f2f_npz_path missing or not found")
+                _term_print(
+                    f"[start_phase={start_phase}] ERROR: "
+                    "saved phase .npz missing or not found"
+                )
                 self.last_completed_labels = completed_labels.copy()
                 return np.full(n_obj, 1.0)
             from cst_optimization.database import VirtualResultReader
-            _term_print(f"[start_phase=f2w] Replaying F2F S-params from {os.path.basename(f2f_npz_path)}")
+            _term_print(
+                f"[start_phase={start_phase}] Replaying saved curves from "
+                f"{os.path.basename(f2f_npz_path)}"
+            )
             _vreader = VirtualResultReader(f2f_npz_path)
+            resume_reader = _vreader
+            phase_base_npz = f2f_npz_path
             # Locate the pre_filter (F2F) project label
             _f2f_label = ""
             for _s in self._specs:
@@ -224,18 +244,20 @@ class DualProjectOrchestrator:
                 self.last_penalties = np.zeros(n_obj)
                 self.last_solver_ok = True
                 self.last_completed_labels = completed_labels.copy()
+                _vreader.close()
                 return np.zeros(n_obj)
-            _term_print("[start_phase=f2w] Pre-filter PASSED — entering Phase 1.5")
-            # Register virtual F2F so Phase 1.5 gate check finds the reader
+            _term_print(
+                f"[start_phase={start_phase}] Pre-filter PASSED — "
+                "entering remaining phases"
+            )
+            # Register saved projects so remaining gate/objective reads use the
+            # atomized .npz instead of re-running completed CST solvers.
             completed_labels.add(_f2f_label)
-            self._project_paths[_f2f_label] = "__virtual__"
+            for _label in completed_labels:
+                if _label in self._spec_by_label:
+                    self._project_paths[_label] = "__virtual__"
             _orig_mk = _mk_reader
             _mk_reader = lambda pp: (lambda: _vreader) if pp == "__virtual__" else _orig_mk(pp)
-            # Inter-pass reset → fresh DE for wakefield
-            _term_print("[Inter-pass] Resetting DE before conditional projects (F2F replayed)")
-            self._reset_connection()
-            _term_print(f"[Inter-pass] New DE PID={self._conn.pid}")
-
         try:
             # ── Phase 1: Run non-conditional solvers with pre-filter gate ──
             if start_phase == "f2f":
@@ -259,13 +281,26 @@ class DualProjectOrchestrator:
                     # ── Atomize: save F2F .npz + extra cooldown before inter-pass ──
                     if _recording:
                         _term_print("  [atomize] saving F2F .npz")
-                        self._save_phase_npz(iteration, "f2f", ["f2f"])
+                        self.last_completed_labels = completed_labels.copy()
+                        phase_base_npz = self._save_phase_npz(
+                            params,
+                            iteration,
+                            "f2f",
+                            self._checkpoint_phases(completed_labels),
+                            base_npz_path=phase_base_npz,
+                        )
                     # Extra cooldown to let CST flush I/O before DE destroy
                     _term_print(f"  [cooldown] {self._cooldown_s:.0f}s before inter-pass reset")
                     time.sleep(self._cooldown_s)
 
             # ── Inter-pass reset: fresh DE for wakefield solvers ─────
-            if any(s.condition_trigger for s in self._specs):
+            missing_conditional = any(
+                s.condition_trigger and s.label not in completed_labels
+                for s in self._specs
+            )
+            if any(s.condition_trigger for s in self._specs) and (
+                start_phase == "f2f" or missing_conditional
+            ):
                 _term_print("[Inter-pass] Resetting DE before conditional projects")
                 self._reset_connection()
                 _term_print(f"[Inter-pass] New DE PID={self._conn.pid}")
@@ -280,6 +315,11 @@ class DualProjectOrchestrator:
             _first_conditional = True  # first cond already has fresh DE from inter-pass
             for spec in self._specs:
                 if not spec.condition_trigger:
+                    continue
+                if spec.label in completed_labels:
+                    _term_print(
+                        f"  [{spec.label}] SKIP — already completed in saved phase data"
+                    )
                     continue
                 # Find the trigger objective and its project
                 trigger_idx = None
@@ -403,18 +443,20 @@ class DualProjectOrchestrator:
                     completed_labels.add(spec.label)
                     # ── Atomize: save incremental .npz after each conditional phase ──
                     if _recording:
-                        phases = ["f2f"] if start_phase == "f2w" else []
-                        for s2 in self._specs:
-                            if not s2.condition_trigger and s2.label in completed_labels:
-                                phases.append(s2.label)
-                            elif s2.condition_trigger and s2.label in completed_labels:
-                                phases.append(s2.label)
                         _term_print(f"  [atomize] saving {spec.label} .npz")
-                        self._save_phase_npz(iteration, spec.label, phases)
+                        self.last_completed_labels = completed_labels.copy()
+                        phase_base_npz = self._save_phase_npz(
+                            params,
+                            iteration,
+                            spec.label,
+                            self._checkpoint_phases(completed_labels),
+                            base_npz_path=phase_base_npz,
+                        )
                 self._msg.write(label=spec.label, iteration=iteration)
 
             # ── Phase 2: Evaluate all objectives ──────────────────────
             _term_print(f"[Phase 2] Evaluating {n_obj} objectives")
+            objective_errors: list[str] = []
             for idx, (obj, proj_label) in enumerate(
                 zip(self._objectives, self._obj_project_map)
             ):
@@ -454,6 +496,7 @@ class DualProjectOrchestrator:
                         "Failed to evaluate objective '%s' (project '%s'): %s",
                         obj.name, proj_label, exc,
                     )
+                    objective_errors.append(f"{obj.name}: {exc}")
 
             # ── Phase 3: Apply penalty modes → objective vector ───────
             penalties = np.empty(n_obj)
@@ -476,8 +519,27 @@ class DualProjectOrchestrator:
                 else:
                     penalties[idx] = 1.0
 
+            unexpected_missing = [
+                obj.name
+                for idx, obj in enumerate(self._objectives)
+                if (
+                    not np.isfinite(raw_values[idx])
+                    and self._obj_project_map[idx] not in skipped_labels
+                )
+            ]
+            postprocess_missing = unexpected_missing if all_solvers_ok else []
+            self.last_raw_values = raw_values.copy()
+            self.last_penalties = penalties.copy()
+            self.last_solver_ok = all_solvers_ok and not postprocess_missing
+            self.last_completed_labels = completed_labels.copy()
+            self.last_skipped_labels = skipped_labels.copy()
+
             # ── Gate recording ────────────────────────────────────────
-            if self._adaptive_gate is not None:
+            if (
+                self._adaptive_gate is not None
+                and all_solvers_ok
+                and not postprocess_missing
+            ):
                 penalty_dict_for_gate = {
                     obj.name: float(penalties[idx])
                     for idx, obj in enumerate(self._objectives)
@@ -497,7 +559,11 @@ class DualProjectOrchestrator:
             if self._opt_logger is not None:
                 elapsed_total = time.perf_counter() - t_start
                 physics = {
-                    obj.name: float(raw_values[idx]) if np.isfinite(raw_values[idx]) else "NaN"
+                    obj.name: (
+                        float(raw_values[idx])
+                        if np.isfinite(raw_values[idx])
+                        else np.nan
+                    )
                     for idx, obj in enumerate(self._objectives)
                 }
                 penalty_dict = {
@@ -520,8 +586,13 @@ class DualProjectOrchestrator:
                     param_names=self._params.names,
                     physics=physics,
                     objective_values=penalty_dict,
-                    solver_ok=all_solvers_ok,
-                    error=error_str,
+                    solver_ok=all_solvers_ok and not postprocess_missing,
+                    error="; ".join(
+                        part for part in [
+                            error_str,
+                            "; ".join(objective_errors),
+                        ] if part
+                    ),
                     elapsed_s=round(elapsed_total, 1),
                 )
                 _term_print(f"  [log] written to {self._opt_logger.filepath} "
@@ -550,10 +621,14 @@ class DualProjectOrchestrator:
                         index_path,
                         {
                             "iter": iteration,
+                            "record_type": "evaluation",
+                            "schema_version": 2,
                             "params": dict(zip(self._params.names, [float(v) for v in params])),
                             "npz_file": npz_name,
-                            "solver_ok": all_solvers_ok,
-                            "error": "; ".join(solver_errors) if solver_errors else "",
+                            "solver_ok": all_solvers_ok and not postprocess_missing,
+                            "error": "; ".join(
+                                [*solver_errors, *objective_errors]
+                            ),
                             "has_f2f": _has["has_f2f"],
                             "has_f2w": _has["has_f2w"],
                             "has_f2wo": _has["has_f2wo"],
@@ -564,13 +639,25 @@ class DualProjectOrchestrator:
             # evaluator wrapper (workflow.py).  The orchestrator does NOT
             # fire the callback — it only exposes last_* state.
             # See W2-6E: evaluator-only callback ownership.
-            self.last_raw_values = raw_values.copy()
-            self.last_penalties = penalties.copy()
-            self.last_solver_ok = all_solvers_ok
-            self.last_completed_labels = completed_labels.copy()
+            if postprocess_missing:
+                detail = "; ".join(objective_errors) or ", ".join(postprocess_missing)
+                raise RuntimeError(
+                    "Objective post-processing incomplete for "
+                    f"{', '.join(postprocess_missing)}: {detail}"
+                )
             return penalties
 
         finally:
+            self.last_raw_values = raw_values.copy()
+            if "penalties" in locals():
+                self.last_penalties = penalties.copy()
+            self.last_completed_labels = completed_labels.copy()
+            self.last_skipped_labels = skipped_labels.copy()
+            if resume_reader is not None:
+                try:
+                    resume_reader.close()
+                except Exception:
+                    pass
             # ── Phase 4: Guaranteed cleanup ──────────────────────────
             import threading as _th
             # Close projects with timeout — raw COM close() can hang
@@ -728,13 +815,33 @@ class DualProjectOrchestrator:
 
         return f2f_ok
 
+    def _checkpoint_phases(self, completed_labels: set[str]) -> list[str]:
+        """Return stable phase labels, including the legacy ``f2f`` alias."""
+        phases: list[str] = []
+        if any(
+            spec.is_pre_filter and spec.label in completed_labels
+            for spec in self._specs
+        ):
+            phases.append("f2f")
+        phases.extend(
+            spec.label for spec in self._specs if spec.label in completed_labels
+        )
+        return phases
+
     def _save_phase_npz(
         self,
+        params: np.ndarray,
         iteration: int,
         phase_label: str,
         completed_phases: list[str],
+        base_npz_path: str = "",
     ) -> str:
-        """Save incremental .npz for a phase and return the file path."""
+        """Save a cumulative phase .npz and return its file path.
+
+        When recovering from an earlier atomized file, arrays from
+        *base_npz_path* are merged with newly recorded curves so the newest
+        phase file remains independently replayable.
+        """
         from cst_optimization.database import collect_curves, save_curves_npz, save_index_record
 
         curves = collect_curves()
@@ -744,17 +851,48 @@ class DualProjectOrchestrator:
         npz_path = os.path.join(self._curves_db_dir, npz_name)
         os.makedirs(self._curves_db_dir, exist_ok=True)
         save_curves_npz(npz_path, curves)
+        if (
+            base_npz_path
+            and os.path.isfile(base_npz_path)
+            and os.path.abspath(base_npz_path) != os.path.abspath(npz_path)
+        ):
+            with np.load(base_npz_path, allow_pickle=True) as base_data:
+                merged_payload = {
+                    key: base_data[key] for key in base_data.files
+                }
+            with np.load(npz_path, allow_pickle=True) as new_data:
+                merged_payload.update(
+                    {key: new_data[key] for key in new_data.files}
+                )
+            np.savez_compressed(npz_path, **merged_payload)
         index_path = os.path.join(self._curves_db_dir, "index.jsonl")
         save_index_record(
             index_path,
             {
                 "iter": iteration,
-                "params": dict(zip(self._params.names, self.last_raw_values.tolist() if self.last_raw_values is not None else [])),
+                "record_type": "phase",
+                "schema_version": 2,
+                "params": dict(
+                    zip(self._params.names, [float(v) for v in params])
+                ),
                 "npz_file": npz_name,
                 "phases_done": list(completed_phases),
-                "solver_ok": self.last_solver_ok,
+                "solver_ok": True,
+                "has_f2f": "f2f" in completed_phases,
+                "has_f2w": "wakefield" in completed_phases,
+                "has_f2wo": "wakefield_offset" in completed_phases,
             },
         )
+        if self._phase_checkpoint_callback is not None:
+            try:
+                self._phase_checkpoint_callback(
+                    params.copy(), iteration, list(completed_phases), npz_path,
+                )
+            except Exception:
+                _logger.exception(
+                    "Phase checkpoint callback failed after saving %s",
+                    npz_path,
+                )
         return npz_path
 
     def _run_solver_with_mesh_retry(self, proj: CSTProject) -> SolverResult:
@@ -904,6 +1042,8 @@ class DualProjectOrchestrator:
         ``DesignEnvironment`` triggers CST to unpack it back to a normal
         folder-based layout.
         """
+        if cst_path == "__virtual__":
+            return
         try:
             proj = self._conn.open_project(cst_path)
             proj.close()

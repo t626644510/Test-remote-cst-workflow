@@ -323,7 +323,7 @@ def build_workflow_2(
                 )
             _retry_skip_phases[param_key] = orchestrator.last_completed_labels.copy()
 
-            solver_ok = orchestrator.last_solver_ok
+            evaluation_ok = orchestrator.last_evaluation_ok
             raw = orchestrator.last_raw_values
             pen = orchestrator.last_penalties
             raw_metrics = {
@@ -334,10 +334,10 @@ def build_workflow_2(
                 obj_names[i]: float(pen[i]) if pen is not None else 1.0
                 for i in range(len(obj_names))
             }
-            if not solver_ok:
+            if not evaluation_ok:
                 return EvaluationResult(
                     status=EvaluationStatus.SOLVER_FAILED,
-                    error="Solver failure (mesh/COM/pre-filter reject)",
+                    error="Workflow 2 solver or post-processing failure",
                     raw_metrics=raw_metrics,
                     penalty_values=penalty_dict,
                 )
@@ -418,8 +418,8 @@ def build_workflow_2(
                 )
                 checkpoint_callback(
                     x_phys, raw_arr, penalties_arr,
-                    bool(orchestrator.last_solver_ok),
-                    "" if orchestrator.last_solver_ok else "Solver failure",
+                    bool(orchestrator.last_evaluation_ok),
+                    "" if orchestrator.last_evaluation_ok else "Evaluation failure",
                 )
             return float(np.dot(penalties_arr, weights))
 
@@ -452,7 +452,13 @@ def build_workflow_2(
                     dtype=float,
                 )
                 pen_arr = np.asarray(pen, dtype=float) if pen is not None else np.zeros(len(_saea_obj_names))
-                checkpoint_callback(x_phys, raw_arr, pen_arr, orchestrator.last_solver_ok, "")
+                checkpoint_callback(
+                    x_phys,
+                    raw_arr,
+                    pen_arr,
+                    orchestrator.last_evaluation_ok,
+                    "",
+                )
                 return result
 
             evaluator = _saea_evaluator

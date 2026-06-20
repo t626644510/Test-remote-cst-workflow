@@ -19,7 +19,6 @@ and runs the full Bayesian optimisation loop.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import re
 import signal
@@ -43,6 +42,11 @@ import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
 from cst_optimization.runner import BaseRunner
+from workflows.rfgun_hom_antenna.recovery import (
+    build_recovery_seed,
+    infer_checkpoint_source_iterations,
+    write_recovery_report,
+)
 from workflows.rfgun_hom_antenna.workflow import build_workflow_2
 
 # ── Config loader ────────────────────────────────────────────────────────────
@@ -153,14 +157,36 @@ def main() -> None:
         default=False,
         help="Write a heartbeat timestamp file every 60 s for crash detection",
     )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="",
+        metavar="PATH",
+        help="Use an explicit Workflow 2 YAML configuration",
+    )
+    parser.add_argument(
+        "--recovery-only",
+        action="store_true",
+        default=False,
+        help="Recover all pending checkpoint records, then exit",
+    )
+    parser.add_argument(
+        "--smoke-only",
+        action="store_true",
+        default=False,
+        help="Mark generated schema-v3 records as non-production smoke data",
+    )
     args = parser.parse_args()
+    if args.recovery_only:
+        args.auto_resume = True
 
     # ── 1. Load config ──────────────────────────────────────────────────────
-    wf2_cfg = _load_workflow2_config()
+    config_path = Path(args.config).resolve() if args.config else None
+    wf2_cfg = _load_workflow2_config(config_path)
     if not wf2_cfg.get("enabled", False):
         print(
             "workflow_2.enabled is False — set to true in "
-            f"{_DEFAULT_CONFIG_PATH}"
+            f"{config_path or _DEFAULT_CONFIG_PATH}"
         )
         sys.exit(0)
 
@@ -375,15 +401,19 @@ def main() -> None:
         ckpt.save()
 
     # ── 4. Build orchestrator + optimiser ───────────────────────────────────
+    recovery_start_iteration = max(
+        len(ckpt.records),
+        next_db_iteration,
+        next_output_iteration,
+    )
+    optimiser_start_iteration = recovery_start_iteration + (
+        ckpt.pending_count if has_ckpt and args.auto_resume else 0
+    )
     orch, opt, evaluator, retry_handler = build_workflow_2(
         wf2_cfg,
         checkpoint_callback=_on_evaluation,
         phase_checkpoint_callback=_on_phase_completed,
-        start_iteration=max(
-            len(ckpt.records),
-            next_db_iteration,
-            next_output_iteration,
-        ),
+        start_iteration=optimiser_start_iteration,
     )
 
     print(f"Parameters: {orch.n_parameters}")
@@ -394,8 +424,235 @@ def main() -> None:
     print(f"Initial samples: {opt._n_initial},  Iterations: {opt._n_iterations}")
     print("-" * 60)
 
+    # Recover every pending checkpoint point before the optimiser may propose
+    # new points. Historical files are selected by physical-parameter hash,
+    # never by checkpoint-list position.
+    recovery_failures = 0
+    if has_ckpt and args.auto_resume and ckpt.pending_records:
+        from cst_optimization.database import load_index
+        from cst_optimization.workflows.recovery import (
+            EvaluationResult,
+            EvaluationStatus,
+        )
+
+        curves_dir = os.path.join(log_dir, "raw_curves")
+        index_path = os.path.join(curves_dir, "index.jsonl")
+        index_records = load_index(index_path)
+        parameter_names = list(orch.parameter_set.names)
+        checkpoint_values = [record.x for record in ckpt.records]
+        source_iterations = infer_checkpoint_source_iterations(
+            checkpoint_values,
+            index_records,
+            parameter_names,
+        )
+        phase_order = [spec.label for spec in orch._specs]
+        f2f_label = next(
+            spec.label for spec in orch._specs if spec.is_pre_filter
+        )
+        recovery_jobs: list[dict[str, object]] = []
+        output_iteration = recovery_start_iteration
+
+        for checkpoint_index, record in enumerate(ckpt.records):
+            if record.status != "pending":
+                continue
+            x_phys = np.asarray(record.x, dtype=float)
+            seed = build_recovery_seed(
+                index_path=index_path,
+                curves_dir=curves_dir,
+                parameter_names=parameter_names,
+                parameter_values=x_phys,
+                objectives=orch.objectives,
+                obj_project_map=orch._obj_project_map,
+                ref_project_map=orch._ref_project_map,
+                phase_order=phase_order,
+                output_iteration=output_iteration,
+                smoke_only=args.smoke_only,
+                include_smoke_sources=args.smoke_only,
+            )
+            if seed.source_iter is None:
+                seed.source_iter = source_iterations.get(checkpoint_index)
+            recovery_jobs.append(
+                {
+                    "checkpoint_index": checkpoint_index,
+                    "x": x_phys,
+                    "seed": seed,
+                    "source_iter": seed.source_iter,
+                    "output_iteration": output_iteration,
+                    "recovered_phases": list(seed.recovered_phases),
+                    "replay_values": dict(seed.replay_values),
+                    "source_files": list(seed.source_files),
+                }
+            )
+            output_iteration += 1
+
+        report_path = os.path.join(
+            log_dir,
+            "recovery_reports",
+            time.strftime("recovery_%Y%m%d_%H%M%S.md"),
+        )
+        write_recovery_report(report_path, recovery_jobs)
+        print(f"Recovery analysis written to: {report_path}")
+
+        for job in recovery_jobs:
+            checkpoint_index = int(job["checkpoint_index"])
+            x_phys = np.asarray(job["x"], dtype=float)
+            output_iteration = int(job["output_iteration"])
+            source_iter = job["source_iter"]
+            seed = job["seed"]
+            resume_path = str(seed.npz_path)
+            recovered_phases = set(seed.recovered_phases)
+            print(
+                "\nRecovering checkpoint "
+                f"{checkpoint_index} (source_iter={source_iter}, "
+                f"output_iter={output_iteration}, "
+                f"phases={sorted(recovered_phases) or ['none']})"
+            )
+
+            def _recover_once(
+                retry_params: np.ndarray,
+                retry_iteration: int,
+            ) -> EvaluationResult:
+                nonlocal resume_path, recovered_phases
+                can_resume = bool(
+                    resume_path
+                    and os.path.isfile(resume_path)
+                    and f2f_label in recovered_phases
+                )
+                try:
+                    orch.execute(
+                        retry_params,
+                        iteration=retry_iteration,
+                        start_phase="resume" if can_resume else "f2f",
+                        f2f_npz_path=resume_path if can_resume else "",
+                        skip_phases=recovered_phases if can_resume else set(),
+                        source_iter=(
+                            int(source_iter)
+                            if isinstance(source_iter, int)
+                            else None
+                        ),
+                        smoke_only=args.smoke_only,
+                    )
+                except Exception as exc:
+                    if orch.last_phase_npz_path:
+                        resume_path = orch.last_phase_npz_path
+                    if orch.last_completed_labels:
+                        recovered_phases = set(orch.last_completed_labels)
+                    error = str(exc)
+                    status = (
+                        EvaluationStatus.COM_LOST
+                        if "COM" in error.upper()
+                        else EvaluationStatus.SOLVER_FAILED
+                    )
+                    return EvaluationResult(status=status, error=error)
+
+                raw = orch.last_raw_values
+                penalties = orch.last_penalties
+                raw_metrics = {
+                    objective.name: (
+                        float(raw[index])
+                        if raw is not None and np.isfinite(raw[index])
+                        else np.nan
+                    )
+                    for index, objective in enumerate(orch.objectives)
+                }
+                penalty_values = {
+                    objective.name: (
+                        float(penalties[index])
+                        if penalties is not None
+                        else np.nan
+                    )
+                    for index, objective in enumerate(orch.objectives)
+                }
+                if not orch.last_evaluation_ok:
+                    return EvaluationResult(
+                        status=EvaluationStatus.SOLVER_FAILED,
+                        error="Workflow 2 recovery evaluation incomplete",
+                        raw_metrics=raw_metrics,
+                        penalty_values=penalty_values,
+                    )
+                return EvaluationResult(
+                    status=EvaluationStatus.SUCCESS,
+                    raw_metrics=raw_metrics,
+                    objective_values=penalty_values,
+                    penalty_values=penalty_values,
+                )
+
+            if retry_handler is not None:
+                result, tier = retry_handler.execute(
+                    _recover_once,
+                    x_phys,
+                    output_iteration,
+                )
+                exhausted = tier.name == "EXHAUSTED"
+            else:
+                result = _recover_once(x_phys, output_iteration)
+                exhausted = False
+
+            if result.status == EvaluationStatus.SUCCESS:
+                raw = orch.last_raw_values
+                penalties = orch.last_penalties
+                objective_names = [
+                    objective.name for objective in orch.objectives
+                ]
+                assert raw is not None
+                assert penalties is not None
+                ckpt.mark_completed(
+                    checkpoint_index,
+                    raw_values=dict(zip(objective_names, raw)),
+                    penalties=dict(zip(objective_names, penalties)),
+                    solver_ok=orch.last_solvers_ok,
+                    phases=list(orch.last_completed_labels),
+                )
+                _pending_by_x.pop(_x_key(x_phys), None)
+                print(
+                    "  Recovery completed: "
+                    f"attempt={orch.last_attempt}, "
+                    f"penalties={penalties.tolist()}"
+                )
+            else:
+                recovery_failures += 1
+                phases_done = list(orch.last_completed_labels)
+                if phases_done:
+                    ckpt.mark_phase_done(
+                        checkpoint_index,
+                        phases=phases_done,
+                    )
+                ckpt.mark_failed(
+                    checkpoint_index,
+                    error=result.error,
+                    tier_exhausted=exhausted,
+                )
+                print(f"  Recovery failed: {result.error}")
+            ckpt.save()
+
+        if recovery_failures or ckpt.pending_count:
+            print(
+                "Recovery did not complete every pending evaluation; "
+                "new optimisation points will not be generated."
+            )
+            if retry_handler is not None:
+                retry_handler.close_all(force=True)
+            orch.close_all_connections(force=True)
+            _heartbeat_stop.set()
+            sys.exit(1)
+
+    if args.recovery_only:
+        if has_ckpt:
+            print(
+                "Recovery-only complete: "
+                f"{ckpt.completed_count} completed, "
+                f"{ckpt.pending_count} pending."
+            )
+        else:
+            print("Recovery-only complete: no checkpoint was found.")
+        if retry_handler is not None:
+            retry_handler.close_all(force=False)
+        orch.close_all_connections()
+        _heartbeat_stop.set()
+        return
+
     # ── 4.5 Resume partial evaluations (F2F done, F2W pending) ──────────────
-    if has_ckpt and args.auto_resume:
+    if False and has_ckpt and args.auto_resume:
         partial = ckpt.partial_records
         curves_dir = os.path.join(log_dir, "raw_curves")
         for rec in partial:

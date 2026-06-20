@@ -27,6 +27,11 @@ from cst_optimization.core.solver import SolverResult, SolverRunner
 from cst_optimization.diagnostics import CSTConnectionLostError, MessageLogger, OptimizationLogger
 from cst_optimization.parameters.base import ParameterSet
 from cst_optimization.objectives.base import ObjectiveFunction
+from workflows.rfgun_hom_antenna.recovery import (
+    WF2_INDEX_SCHEMA_VERSION,
+    parameter_hash,
+    replay_snapshot,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -134,15 +139,737 @@ class DualProjectOrchestrator:
         self._project_paths: dict[str, str] = {}
         self.last_raw_values: np.ndarray | None = None
         self.last_penalties: np.ndarray | None = None
+        self.last_solvers_ok: bool = False
+        self.last_postprocess_ok: bool = False
+        self.last_evaluation_ok: bool = False
         self.last_solver_ok: bool = False
         self.last_completed_labels: set[str] = set()  # for per-phase retry
         self.last_skipped_labels: set[str] = set()
+        self.last_phase_npz_path: str = ""
+        self.last_attempt: int = 0
+        self.last_source_iter: int | None = None
 
     # ------------------------------------------------------------------
     # Main entry point
     # ------------------------------------------------------------------
 
     def execute(
+        self,
+        params: np.ndarray,
+        iteration: int = 0,
+        start_phase: str = "f2f",
+        f2f_npz_path: str = "",
+        skip_phases: set[str] | None = None,
+        source_iter: int | None = None,
+        smoke_only: bool = False,
+    ) -> np.ndarray:
+        """Run Workflow 2 with replay-verified phase persistence.
+
+        Solver success alone is not a durable phase boundary.  Each phase is
+        post-processed and atomized before the next DesignEnvironment reset.
+        The cumulative snapshot is then the source of truth for final
+        objective evaluation and future crash recovery.
+        """
+        log_base = (
+            os.path.dirname(self._curves_db_dir)
+            if self._curves_db_dir
+            else "D:/Results"
+        )
+        if not log_base or log_base == ".":
+            log_base = "D:/Results"
+        terminal_path = os.path.join(log_base, "workflow_2_terminal.log")
+
+        def term_print(message: str) -> None:
+            print(message, flush=True)
+            try:
+                with open(terminal_path, "a", encoding="utf-8") as stream:
+                    stream.write(message + "\n")
+            except Exception:
+                pass
+
+        param_dict = self._params.to_dict(params)
+        term_print(
+            f"[iter {iteration}] "
+            + ", ".join(f"{key}={value:.4f}" for key, value in param_dict.items())
+        )
+        n_obj = len(self._objectives)
+        raw_values = np.full(n_obj, np.nan, dtype=float)
+        penalties = np.ones(n_obj, dtype=float)
+        completed_labels: set[str] = set(skip_phases or ())
+        solved_labels: set[str] = set(skip_phases or ())
+        skipped_labels: set[str] = set()
+        solver_errors: list[str] = []
+        postprocess_errors: list[str] = []
+        all_solvers_ok = True
+        pre_filter_rejected = False
+        opened: dict[str, CSTProject] = {}
+        phase_base_npz = f2f_npz_path if f2f_npz_path else ""
+        resume_reader: Any | None = None
+        started = time.perf_counter()
+
+        self.last_raw_values = raw_values.copy()
+        self.last_penalties = penalties.copy()
+        self.last_solvers_ok = False
+        self.last_postprocess_ok = False
+        self.last_evaluation_ok = False
+        self.last_solver_ok = False
+        self.last_completed_labels = set()
+        self.last_skipped_labels = set()
+        self.last_phase_npz_path = phase_base_npz
+        self.last_source_iter = (
+            source_iter if source_iter is not None else iteration
+        )
+        self.last_attempt = self._allocate_attempt(iteration)
+        self._gate_predictions = None
+
+        recording = bool(self._curves_db_dir)
+        if recording:
+            from cst_optimization.database import (
+                make_recording_reader,
+                start_recording_session,
+            )
+            start_recording_session()
+            make_reader = make_recording_reader
+        else:
+            make_reader = _make_reader_factory
+
+        f2f_label = next(
+            (spec.label for spec in self._specs if spec.is_pre_filter),
+            "",
+        )
+        conditional_specs = [
+            spec for spec in self._specs if spec.condition_trigger
+        ]
+
+        try:
+            if start_phase in {"f2w", "resume"}:
+                if not phase_base_npz or not os.path.isfile(phase_base_npz):
+                    raise FileNotFoundError(
+                        "saved phase snapshot missing for resume"
+                    )
+                from cst_optimization.database import VirtualResultReader
+                resume_reader = VirtualResultReader(phase_base_npz)
+                term_print(
+                    f"[start_phase={start_phase}] Replaying saved curves from "
+                    f"{os.path.basename(phase_base_npz)}"
+                )
+                completed_labels.add(f2f_label)
+                solved_labels.add(f2f_label)
+                replayed = replay_snapshot(
+                    phase_base_npz,
+                    self._objectives,
+                    self._obj_project_map,
+                    self._ref_project_map,
+                    completed_labels,
+                )
+                finite = np.isfinite(replayed.raw_values)
+                raw_values[finite] = replayed.raw_values[finite]
+                if not self._check_pre_filter(
+                    f2f_label,
+                    iteration,
+                    lambda: resume_reader,
+                ):
+                    pre_filter_rejected = True
+                    term_print(
+                        f"[start_phase={start_phase}] Pre-filter REJECTED - "
+                        "preserving F2F penalties"
+                    )
+                else:
+                    term_print(
+                        f"[start_phase={start_phase}] Pre-filter PASSED - "
+                        "entering remaining phases"
+                    )
+
+            if start_phase == "f2f":
+                f2f_ok = self._execute_phase_1(
+                    params,
+                    param_dict,
+                    iteration,
+                    opened,
+                    completed_labels,
+                    solver_errors,
+                    all_solvers_ok,
+                    make_reader,
+                    term_print,
+                    n_obj,
+                    raw_values,
+                )
+                if f2f_label in completed_labels:
+                    solved_labels.add(f2f_label)
+                    errors = self._capture_project_objectives(
+                        f2f_label,
+                        self._project_paths.get(f2f_label, ""),
+                        raw_values,
+                        make_reader,
+                    )
+                    postprocess_errors.extend(errors)
+                    if errors:
+                        completed_labels.discard(f2f_label)
+                    if not errors and recording:
+                        candidate = self._save_phase_npz(
+                            params=params,
+                            iteration=iteration,
+                            phase_label="f2f",
+                            completed_phases=self._checkpoint_phases(
+                                completed_labels
+                            ),
+                            base_npz_path="",
+                            source_iter=self.last_source_iter,
+                            smoke_only=smoke_only,
+                        )
+                        if candidate:
+                            phase_base_npz = candidate
+                            self.last_phase_npz_path = candidate
+                            term_print(
+                                "  [atomize] verified F2F snapshot "
+                                + os.path.basename(candidate)
+                            )
+                        else:
+                            completed_labels.discard(f2f_label)
+                            postprocess_errors.append(
+                                "frequency_domain: snapshot replay failed"
+                            )
+                if not f2f_ok:
+                    if solver_errors:
+                        all_solvers_ok = False
+                    elif f2f_label in solved_labels:
+                        pre_filter_rejected = True
+                    else:
+                        all_solvers_ok = False
+                        solver_errors.append(
+                            f"Solver '{f2f_label}' did not produce a "
+                            "completed frequency-domain phase"
+                        )
+                if f2f_label in completed_labels:
+                    term_print(
+                        f"  [cooldown] {self._cooldown_s:.0f}s before "
+                        "inter-pass reset"
+                    )
+                    time.sleep(self._cooldown_s)
+
+            if pre_filter_rejected:
+                skipped_labels.update(
+                    spec.label for spec in conditional_specs
+                )
+
+            missing_conditional = any(
+                spec.label not in completed_labels
+                for spec in conditional_specs
+            )
+            if (
+                not pre_filter_rejected
+                and conditional_specs
+                and (start_phase == "f2f" or missing_conditional)
+            ):
+                term_print(
+                    "[Inter-pass] Resetting DE before conditional projects"
+                )
+                self._reset_connection(
+                    cleanup_labels={
+                        spec.label for spec in conditional_specs
+                    }
+                )
+                term_print(f"[Inter-pass] New DE PID={self._conn.pid}")
+                opened.clear()
+
+            if conditional_specs:
+                term_print(
+                    f"[Phase 1.5] Conditional projects "
+                    f"({len(conditional_specs)})"
+                )
+            first_conditional = True
+            for spec in conditional_specs:
+                if pre_filter_rejected:
+                    term_print(
+                        f"  [{spec.label}] SKIP - pre-filter rejected"
+                    )
+                    continue
+                if spec.label in completed_labels:
+                    term_print(
+                        f"  [{spec.label}] SKIP - already completed in "
+                        "saved phase data"
+                    )
+                    continue
+
+                trigger_idx = next(
+                    (
+                        idx
+                        for idx, obj in enumerate(self._objectives)
+                        if obj.name == spec.condition_trigger
+                    ),
+                    None,
+                )
+                if trigger_idx is None:
+                    skipped_labels.add(spec.label)
+                    continue
+                trigger_project = self._obj_project_map[trigger_idx]
+                if trigger_project not in completed_labels:
+                    term_print(
+                        f"  [{spec.label}] SKIP - source project "
+                        f"'{trigger_project}' has no durable snapshot"
+                    )
+                    skipped_labels.add(spec.label)
+                    continue
+                trigger_raw = raw_values[trigger_idx]
+                trigger_penalty = 1.0
+                trigger_raw_text = "N/A"
+                if np.isfinite(trigger_raw):
+                    trigger_raw_text = f"{trigger_raw:.2f}"
+                    trigger_penalty = float(
+                        self._objectives[trigger_idx].mode.compute(
+                            float(trigger_raw)
+                        )
+                    )
+
+                should_run, gate_reason = self._conditional_gate_decision(
+                    params,
+                    trigger_penalty,
+                )
+                if not should_run:
+                    term_print(
+                        f"  [{spec.label}] SKIP - {spec.condition_trigger} "
+                        f"raw={trigger_raw_text} penalty={trigger_penalty:.3f}"
+                        f"{gate_reason}"
+                    )
+                    skipped_labels.add(spec.label)
+                    continue
+
+                term_print(
+                    f"  [{spec.label}] TRIGGER - {spec.condition_trigger} "
+                    f"raw={trigger_raw_text} penalty={trigger_penalty:.3f}"
+                    f"{gate_reason}"
+                )
+                if first_conditional:
+                    first_conditional = False
+                else:
+                    term_print(
+                        f"  [per-phase reset] new DE before {spec.label}"
+                    )
+                    self._reset_connection(cleanup_labels={spec.label})
+                    term_print(
+                        f"  [per-phase reset] DE PID={self._conn.pid}"
+                    )
+                    opened.clear()
+
+                try:
+                    project = self._conn.open_project(spec.cst_path)
+                    opened[spec.label] = project
+                    self._project_paths[spec.label] = project.filename
+                except Exception as exc:
+                    all_solvers_ok = False
+                    solver_errors.append(
+                        f"{spec.label}: project open failed: {exc}"
+                    )
+                    continue
+                try:
+                    project.update_parameters(
+                        param_dict,
+                        use_full_rebuild=True,
+                    )
+                except Exception:
+                    pass
+                self._msg.capture(project)
+                self._msg.clear()
+                result = self._run_solver_with_mesh_retry(project)
+                self._msg.capture(project)
+                if not result.success:
+                    all_solvers_ok = False
+                    solver_errors.append(
+                        f"Solver '{spec.label}' failed "
+                        f"[{result.error_type}]: "
+                        f"{result.error_message or 'unknown'}"
+                    )
+                    term_print(
+                        f"  [{spec.label}] FAIL [{result.error_type}] "
+                        f"({result.elapsed_s:.0f}s)"
+                    )
+                    self._msg.write(
+                        label=spec.label,
+                        iteration=iteration,
+                    )
+                    continue
+
+                solved_labels.add(spec.label)
+                term_print(
+                    f"  [{spec.label}] OK ({result.elapsed_s:.0f}s, "
+                    f"{result.mesh_cells or '?'} cells)"
+                )
+                try:
+                    project.save()
+                except Exception:
+                    pass
+                errors = self._capture_project_objectives(
+                    spec.label,
+                    self._project_paths.get(spec.label, ""),
+                    raw_values,
+                    make_reader,
+                    ref_npz_path=phase_base_npz,
+                )
+                postprocess_errors.extend(errors)
+                if not errors:
+                    completed_labels.add(spec.label)
+                    if recording:
+                        candidate = self._save_phase_npz(
+                            params=params,
+                            iteration=iteration,
+                            phase_label=spec.label,
+                            completed_phases=self._checkpoint_phases(
+                                completed_labels
+                            ),
+                            base_npz_path=phase_base_npz,
+                            source_iter=self.last_source_iter,
+                            smoke_only=smoke_only,
+                        )
+                        if candidate:
+                            phase_base_npz = candidate
+                            self.last_phase_npz_path = candidate
+                            replayed = replay_snapshot(
+                                candidate,
+                                self._objectives,
+                                self._obj_project_map,
+                                self._ref_project_map,
+                                completed_labels,
+                            )
+                            finite = np.isfinite(replayed.raw_values)
+                            raw_values[finite] = replayed.raw_values[finite]
+                            term_print(
+                                f"  [atomize] verified {spec.label} "
+                                f"snapshot {os.path.basename(candidate)}"
+                            )
+                        else:
+                            completed_labels.discard(spec.label)
+                            postprocess_errors.append(
+                                f"{spec.label}: snapshot replay failed"
+                            )
+                self._msg.write(label=spec.label, iteration=iteration)
+
+            term_print(f"[Phase 2] Evaluating {n_obj} objectives")
+            replay_errors: list[str] = []
+            if phase_base_npz and os.path.isfile(phase_base_npz):
+                replayed = replay_snapshot(
+                    phase_base_npz,
+                    self._objectives,
+                    self._obj_project_map,
+                    self._ref_project_map,
+                    completed_labels,
+                )
+                finite = np.isfinite(replayed.raw_values)
+                raw_values[finite] = replayed.raw_values[finite]
+                replay_errors.extend(replayed.errors)
+
+            for idx, obj in enumerate(self._objectives):
+                owner = self._obj_project_map[idx]
+                if np.isfinite(raw_values[idx]):
+                    penalties[idx] = float(
+                        obj.mode.compute(float(raw_values[idx]))
+                    )
+                elif owner in skipped_labels:
+                    if pre_filter_rejected:
+                        penalties[idx] = 1.0
+                    elif (
+                        self._gate_predictions is not None
+                        and obj.name in self._gate_predictions
+                    ):
+                        penalties[idx] = float(
+                            self._gate_predictions[obj.name]
+                        )
+                    else:
+                        penalties[idx] = 0.0
+                else:
+                    penalties[idx] = 1.0
+
+            missing = [
+                obj.name
+                for idx, obj in enumerate(self._objectives)
+                if (
+                    not np.isfinite(raw_values[idx])
+                    and self._obj_project_map[idx] not in skipped_labels
+                    and self._obj_project_map[idx] in solved_labels
+                )
+            ]
+            all_postprocess_errors = [
+                *postprocess_errors,
+                *replay_errors,
+            ]
+            postprocess_ok = not missing and not all_postprocess_errors
+            evaluation_ok = bool(
+                all_solvers_ok
+                and postprocess_ok
+                and np.all(np.isfinite(penalties))
+            )
+
+            self.last_raw_values = raw_values.copy()
+            self.last_penalties = penalties.copy()
+            self.last_solvers_ok = all_solvers_ok
+            self.last_postprocess_ok = postprocess_ok
+            self.last_evaluation_ok = evaluation_ok
+            self.last_solver_ok = all_solvers_ok
+            self.last_completed_labels = completed_labels.copy()
+            self.last_skipped_labels = skipped_labels.copy()
+            self.last_phase_npz_path = phase_base_npz
+
+            if self._adaptive_gate is not None and evaluation_ok:
+                gate_penalties = {
+                    obj.name: float(penalties[idx])
+                    for idx, obj in enumerate(self._objectives)
+                }
+                f2w_ran = "wakefield" in completed_labels
+                self._adaptive_gate.record_evaluation(
+                    params,
+                    gate_penalties,
+                    f2w_ran,
+                )
+                if self._adaptive_gate.should_validate() and f2w_ran:
+                    self._adaptive_gate.record_validation(
+                        self._gate_predictions or {},
+                        gate_penalties,
+                    )
+
+            objective_text = "  ".join(
+                f"{obj.name}="
+                + (
+                    f"{raw_values[idx]:.4g}"
+                    if np.isfinite(raw_values[idx])
+                    else "N/A"
+                )
+                for idx, obj in enumerate(self._objectives)
+            )
+            term_print(f"  objectives: {objective_text}")
+            errors = [*solver_errors, *all_postprocess_errors]
+            if self._opt_logger is not None:
+                self._opt_logger.log_evaluation(
+                    iteration=iteration,
+                    x=params,
+                    param_names=self._params.names,
+                    physics={
+                        obj.name: (
+                            float(raw_values[idx])
+                            if np.isfinite(raw_values[idx])
+                            else np.nan
+                        )
+                        for idx, obj in enumerate(self._objectives)
+                    },
+                    objective_values={
+                        obj.name: float(penalties[idx])
+                        for idx, obj in enumerate(self._objectives)
+                    },
+                    solver_ok=all_solvers_ok,
+                    error="; ".join(errors),
+                    elapsed_s=round(time.perf_counter() - started, 1),
+                )
+                term_print(
+                    f"  [log] written to {self._opt_logger.filepath} "
+                    f"({self._opt_logger.n_evaluations} evals)"
+                )
+
+            if recording:
+                self._write_evaluation_index(
+                    params=params,
+                    iteration=iteration,
+                    completed_labels=completed_labels,
+                    skipped_labels=skipped_labels,
+                    npz_path=phase_base_npz,
+                    objective_manifest=[
+                        obj.name
+                        for idx, obj in enumerate(self._objectives)
+                        if np.isfinite(raw_values[idx])
+                    ],
+                    solvers_ok=all_solvers_ok,
+                    postprocess_ok=postprocess_ok,
+                    evaluation_ok=evaluation_ok,
+                    errors=errors,
+                    source_iter=self.last_source_iter,
+                    smoke_only=smoke_only,
+                )
+
+            if missing or all_postprocess_errors:
+                detail = "; ".join(all_postprocess_errors) or ", ".join(
+                    missing
+                )
+                raise RuntimeError(
+                    "Objective post-processing incomplete for "
+                    f"{', '.join(missing)}: {detail}"
+                )
+            return penalties
+        finally:
+            self.last_raw_values = raw_values.copy()
+            self.last_penalties = penalties.copy()
+            self.last_completed_labels = completed_labels.copy()
+            self.last_skipped_labels = skipped_labels.copy()
+            if resume_reader is not None:
+                try:
+                    resume_reader.close()
+                except Exception:
+                    pass
+            import threading as _threading
+            for spec in self._specs:
+                project = opened.get(spec.label)
+                if project is None:
+                    continue
+                thread = _threading.Thread(
+                    target=self._safe_close_project,
+                    args=(project, spec.label),
+                    daemon=True,
+                )
+                thread.start()
+                thread.join(timeout=30.0)
+                if thread.is_alive():
+                    _logger.warning(
+                        "Phase 4: project.close() hung for '%s'",
+                        spec.label,
+                    )
+
+    def _conditional_gate_decision(
+        self,
+        params: np.ndarray,
+        trigger_penalty: float,
+    ) -> tuple[bool, str]:
+        """Return the Workflow 2 conditional-gate decision and log suffix."""
+        if self._adaptive_gate is None:
+            return True, ""
+        if self._adaptive_gate.is_warmup:
+            return True, " [WARMUP - force run]"
+        if self._adaptive_gate.should_validate_next():
+            return True, " [validate - force run]"
+        predictions = self._adaptive_gate.predict(params)
+        if self._adaptive_gate.should_run_conditional(
+            trigger_penalty,
+            predictions,
+        ):
+            return True, " [GP-gate: predicted good]"
+        self._gate_predictions = predictions
+        return False, " [GP-gate: predicted bad -> skip]"
+
+    def _allocate_attempt(self, iteration: int) -> int:
+        """Return the next non-overwriting attempt number for *iteration*."""
+        if not self._curves_db_dir:
+            return 1
+        from cst_optimization.database import load_index
+        index_path = os.path.join(self._curves_db_dir, "index.jsonl")
+        attempts = [
+            int(record.get("attempt", 0) or 0)
+            for record in load_index(index_path)
+            if record.get("iter") == iteration
+        ]
+        return (max(attempts) if attempts else 0) + 1
+
+    def _capture_project_objectives(
+        self,
+        project_label: str,
+        project_path: str,
+        raw_values: np.ndarray,
+        make_reader: Callable[[str], Callable[[], ResultReader]],
+        ref_npz_path: str = "",
+    ) -> list[str]:
+        """Read a phase's objectives before its live results can be cleaned."""
+        if not project_path:
+            return [f"{project_label}: project path unavailable"]
+        reader_factory = make_reader(project_path)
+        errors: list[str] = []
+        for idx, (obj, owner) in enumerate(
+            zip(self._objectives, self._obj_project_map)
+        ):
+            if owner != project_label:
+                continue
+            saved_ref = getattr(obj, "_ref_reader_factory", None)
+            ref_reader: Any | None = None
+            try:
+                ref_label = (
+                    self._ref_project_map[idx]
+                    if idx < len(self._ref_project_map)
+                    else ""
+                )
+                if ref_label:
+                    if not ref_npz_path or not os.path.isfile(ref_npz_path):
+                        raise RuntimeError(
+                            f"reference snapshot for '{ref_label}' unavailable"
+                        )
+                    from cst_optimization.database import VirtualResultReader
+                    ref_reader = VirtualResultReader(ref_npz_path)
+                    obj._ref_reader_factory = lambda vr=ref_reader: vr
+                raw = self._evaluate_objective(obj, reader_factory)
+                if not np.isfinite(raw):
+                    raise ValueError(f"non-finite raw value {raw}")
+                raw_values[idx] = float(raw)
+            except Exception as exc:
+                errors.append(f"{obj.name}: {exc}")
+            finally:
+                if hasattr(obj, "_ref_reader_factory"):
+                    obj._ref_reader_factory = saved_ref
+                if ref_reader is not None:
+                    ref_reader.close()
+        return errors
+
+    def _write_evaluation_index(
+        self,
+        *,
+        params: np.ndarray,
+        iteration: int,
+        completed_labels: set[str],
+        skipped_labels: set[str],
+        npz_path: str,
+        objective_manifest: list[str],
+        solvers_ok: bool,
+        postprocess_ok: bool,
+        evaluation_ok: bool,
+        errors: list[str],
+        source_iter: int | None,
+        smoke_only: bool,
+    ) -> None:
+        """Append one schema-v3 evaluation record."""
+        from cst_optimization.database import save_index_record
+        phases = self._checkpoint_phases(completed_labels)
+        phase_manifest = [
+            spec.label
+            for spec in self._specs
+            if spec.label in completed_labels
+        ]
+        save_index_record(
+            os.path.join(self._curves_db_dir, "index.jsonl"),
+            {
+                "iter": iteration,
+                "attempt": self.last_attempt,
+                "source_iter": source_iter,
+                "record_type": "evaluation",
+                "schema_version": WF2_INDEX_SCHEMA_VERSION,
+                "params": dict(
+                    zip(self._params.names, [float(value) for value in params])
+                ),
+                "params_hash": parameter_hash(self._params.names, params),
+                "npz_file": os.path.basename(npz_path) if npz_path else "",
+                "phase_manifest": phase_manifest,
+                "phases_done": phases,
+                "objective_manifest": list(objective_manifest),
+                "skipped_phases": sorted(skipped_labels),
+                "solver_ok": bool(solvers_ok),
+                "solvers_ok": bool(solvers_ok),
+                "postprocess_ok": bool(postprocess_ok),
+                "evaluation_ok": bool(evaluation_ok),
+                "error": "; ".join(error for error in errors if error),
+                "has_f2f": "f2f" in phases,
+                "has_f2w": "wakefield" in phases,
+                "has_f2wo": "wakefield_offset" in phases,
+                "smoke_only": bool(smoke_only),
+            },
+        )
+
+    @staticmethod
+    def _safe_close_project(project: CSTProject, label: str) -> None:
+        """Best-effort project save/close used by the cleanup thread."""
+        try:
+            project.save()
+        except Exception:
+            pass
+        try:
+            project.close()
+        except Exception:
+            _logger.debug(
+                "Failed to close project '%s'",
+                label,
+                exc_info=True,
+            )
+
+    def _execute_legacy(
         self, params: np.ndarray, iteration: int = 0,
         start_phase: str = "f2f",
         f2f_npz_path: str = "",
@@ -735,6 +1462,9 @@ class DualProjectOrchestrator:
                     "Failed to open project '%s' (%s): %s",
                     spec.label, spec.cst_path, exc,
                 )
+                solver_errors.append(
+                    f"Failed to open project '{spec.label}': {exc}"
+                )
                 if spec.is_pre_filter:
                     return False
                 continue
@@ -835,8 +1565,10 @@ class DualProjectOrchestrator:
         phase_label: str,
         completed_phases: list[str],
         base_npz_path: str = "",
+        source_iter: int | None = None,
+        smoke_only: bool = False,
     ) -> str:
-        """Save a cumulative phase .npz and return its file path.
+        """Save and replay-validate a cumulative phase NPZ.
 
         When recovering from an earlier atomized file, arrays from
         *base_npz_path* are merged with newly recorded curves so the newest
@@ -847,7 +1579,11 @@ class DualProjectOrchestrator:
         curves = collect_curves()
         if not curves:
             return ""
-        npz_name = f"eval_{iteration:04d}_{phase_label}.npz"
+        attempt = int(getattr(self, "last_attempt", 1))
+        npz_name = (
+            f"eval_{iteration:04d}_a{attempt:03d}_"
+            f"{phase_label}.npz"
+        )
         npz_path = os.path.join(self._curves_db_dir, npz_name)
         os.makedirs(self._curves_db_dir, exist_ok=True)
         save_curves_npz(npz_path, curves)
@@ -865,22 +1601,73 @@ class DualProjectOrchestrator:
                     {key: new_data[key] for key in new_data.files}
                 )
             np.savez_compressed(npz_path, **merged_payload)
+
+        durable_labels = {
+            phase
+            for phase in completed_phases
+            if phase in self._spec_by_label
+        }
+        phase_manifest = [
+            spec.label
+            for spec in self._specs
+            if spec.label in durable_labels
+        ]
+        replayed = replay_snapshot(
+            npz_path,
+            self._objectives,
+            self._obj_project_map,
+            self._ref_project_map,
+            durable_labels,
+        )
+        expected_objectives = {
+            obj.name
+            for obj, owner in zip(
+                self._objectives,
+                self._obj_project_map,
+            )
+            if owner in durable_labels
+        }
+        if (
+            replayed.errors
+            or not expected_objectives.issubset(
+                set(replayed.objective_manifest)
+            )
+        ):
+            _logger.error(
+                "Phase snapshot validation failed for %s: expected=%s "
+                "replayed=%s errors=%s",
+                npz_path,
+                sorted(expected_objectives),
+                replayed.objective_manifest,
+                replayed.errors,
+            )
+            return ""
+
         index_path = os.path.join(self._curves_db_dir, "index.jsonl")
         save_index_record(
             index_path,
             {
                 "iter": iteration,
+                "attempt": attempt,
+                "source_iter": source_iter,
                 "record_type": "phase",
-                "schema_version": 2,
+                "schema_version": WF2_INDEX_SCHEMA_VERSION,
                 "params": dict(
                     zip(self._params.names, [float(v) for v in params])
                 ),
+                "params_hash": parameter_hash(self._params.names, params),
                 "npz_file": npz_name,
+                "phase_manifest": phase_manifest,
+                "objective_manifest": replayed.objective_manifest,
                 "phases_done": list(completed_phases),
                 "solver_ok": True,
+                "solvers_ok": True,
+                "postprocess_ok": True,
+                "evaluation_ok": False,
                 "has_f2f": "f2f" in completed_phases,
                 "has_f2w": "wakefield" in completed_phases,
                 "has_f2wo": "wakefield_offset" in completed_phases,
+                "smoke_only": bool(smoke_only),
             },
         )
         if self._phase_checkpoint_callback is not None:
@@ -934,7 +1721,10 @@ class DualProjectOrchestrator:
             error_message=f"Mesh error persisted after rebuildlength {rl - 1}",
         )
 
-    def _reset_connection(self) -> None:
+    def _reset_connection(
+        self,
+        cleanup_labels: set[str] | None = None,
+    ) -> None:
         """Kill current DE, clean up, create a fresh connection.
 
         Used between Phase 1 (F2F) and Phase 1.5 (wakefield) to give the
@@ -964,8 +1754,17 @@ class DualProjectOrchestrator:
         kill_all_cst_processes()
         # Only clean conditional-project result folders — keep F2F results
         # so Phase 1.5 can read antenna S-parameters.
+        selected = (
+            set(cleanup_labels)
+            if cleanup_labels is not None
+            else {
+                spec.label
+                for spec in self._specs
+                if not spec.is_pre_filter
+            }
+        )
         for spec in self._specs:
-            if spec.is_pre_filter:
+            if spec.label not in selected:
                 continue
             try:
                 remove_result_folder(spec.cst_path)

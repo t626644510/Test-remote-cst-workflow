@@ -273,11 +273,18 @@ class TestRunModuleCLI:
 
     @staticmethod
     def test_no_extra_unexpected_flags():
-        """AST: run module has exactly the three expected flags (no unexpected
+        """AST: run module has exactly the expected flags (no unexpected
         new flags that would indicate a major CLI refactor)."""
         run_tree = _get_run_ast()
         flags = _find_add_argument_calls(run_tree)
-        expected = {"--auto-resume", "--heartbeat", "--warmup-from-db"}
+        expected = {
+            "--auto-resume",
+            "--heartbeat",
+            "--warmup-from-db",
+            "--config",
+            "--recovery-only",
+            "--smoke-only",
+        }
         assert set(flags) == expected, (
             f"Expected CLI flags {expected}, got {set(flags)}. "
             "If a new flag was intentionally added, update this assertion."

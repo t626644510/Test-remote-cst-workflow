@@ -608,6 +608,9 @@ class TestCheckpointCallbackCount:
             # Only set last_* state for the evaluator wrapper to read.
             orch.last_raw_values = raw.copy()
             orch.last_penalties = penalties.copy()
+            orch.last_solvers_ok = True
+            orch.last_postprocess_ok = True
+            orch.last_evaluation_ok = True
             orch.last_solver_ok = True
             orch.last_completed_labels = set()
             return penalties
@@ -930,6 +933,9 @@ class TestCheckpointCallbackCount:
             fake(*a, **kw)
             orch.last_raw_values = np.array([np.nan])
             orch.last_penalties = np.array([1.0])
+            orch.last_solvers_ok = False
+            orch.last_postprocess_ok = False
+            orch.last_evaluation_ok = False
             orch.last_solver_ok = False
             orch.last_completed_labels = set()
             return orch.last_penalties
@@ -1163,6 +1169,9 @@ class TestCompletedEvaluationCheckpoint:
             penalties = np.zeros(n_obj, dtype=float)
             orch.last_raw_values = raw.copy()
             orch.last_penalties = penalties.copy()
+            orch.last_solvers_ok = True
+            orch.last_postprocess_ok = True
+            orch.last_evaluation_ok = True
             orch.last_solver_ok = True
             orch.last_completed_labels = labels
             return penalties

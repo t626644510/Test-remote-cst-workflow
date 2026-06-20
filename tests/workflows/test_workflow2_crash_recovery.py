@@ -5,19 +5,68 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
+from cst_optimization.database import save_curves_npz
 from cst_optimization.optimization.conditional_gate import (
     AdaptiveConditionalGate,
     GateConfig,
 )
 from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator
+from workflows.rfgun_hom_antenna.recovery import (
+    build_recovery_seed,
+    infer_checkpoint_source_iterations,
+    parameter_hash,
+)
+from workflows.rfgun_hom_antenna.run import (
+    _mark_recovery_retryable,
+    _recovery_candidate_indices,
+    _should_load_warmup,
+)
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class _IdentityMode:
+    def compute(self, value: float) -> float:
+        return float(value)
+
+
+class _CurveObjective:
+    def __init__(
+        self,
+        name: str,
+        tree_path: str,
+        *,
+        use_reference: bool = False,
+    ) -> None:
+        self.name = name
+        self.tree_path = tree_path
+        self.mode = _IdentityMode()
+        self._reader_factory = None
+        if use_reference:
+            self._ref_reader_factory = None
+
+    def raw_value(self) -> float:
+        reader = self._reader_factory()
+        _, values = reader.get_1d_result(self.tree_path)
+        value = float(np.mean(values))
+        if hasattr(self, "_ref_reader_factory"):
+            ref_reader = self._ref_reader_factory()
+            _, reference = ref_reader.get_1d_result("ParticleBeam1/Z")
+            value += float(np.mean(reference))
+        return value
+
+
+def _curve(values: list[float]) -> dict[str, np.ndarray]:
+    return {
+        "xdata": np.arange(len(values), dtype=float),
+        "ydata_real": np.asarray(values, dtype=float),
+    }
 
 
 def test_gate_predict_handles_return_std_false_contract() -> None:
@@ -44,6 +93,18 @@ def test_phase_checkpoint_writes_physical_params_and_notifies(
     orch._curves_db_dir = str(tmp_path)
     orch._params = SimpleNamespace(names=["angle_deg", "height_mm"])
     orch._phase_checkpoint_callback = MagicMock()
+    orch._objectives = []
+    orch._obj_project_map = []
+    orch._ref_project_map = []
+    orch._spec_by_label = {
+        "frequency_domain": SimpleNamespace(),
+        "wakefield": SimpleNamespace(),
+    }
+    orch._specs = [
+        SimpleNamespace(label="frequency_domain"),
+        SimpleNamespace(label="wakefield"),
+    ]
+    orch.last_attempt = 1
 
     from cst_optimization.database import start_recording_session
     import cst_optimization.database as database
@@ -74,16 +135,362 @@ def test_phase_checkpoint_writes_physical_params_and_notifies(
         (tmp_path / "index.jsonl").read_text(encoding="utf-8").strip()
     )
     assert record["record_type"] == "phase"
-    assert record["schema_version"] == 2
+    assert record["schema_version"] == 3
     assert record["params"] == {"angle_deg": 75.0, "height_mm": 12.5}
+    assert record["attempt"] == 1
+    assert record["params_hash"]
+    assert record["postprocess_ok"] is True
+    assert record["evaluation_ok"] is False
     assert record["solver_ok"] is True
     assert record["has_f2f"] is True
     assert record["has_f2w"] is True
     assert record["has_f2wo"] is False
-    assert npz_path.endswith("eval_0007_wakefield.npz")
+    assert npz_path.endswith("eval_0007_a001_wakefield.npz")
     with np.load(npz_path, allow_pickle=True) as saved:
         np.testing.assert_allclose(saved["base_marker"], [9.0])
     orch._phase_checkpoint_callback.assert_called_once()
+
+
+def test_v2_parameter_matching_maps_checkpoint_zero_to_iter_22() -> None:
+    names = ["angle_deg", "height_mm"]
+    checkpoint_values = [
+        [float(index), float(index) + 0.5]
+        for index in range(8)
+    ]
+    index_records = [
+        {
+            "schema_version": 2,
+            "iter": 22 + index,
+            "params": dict(zip(names, values)),
+        }
+        for index, values in enumerate(checkpoint_values)
+        if index != 6
+    ]
+
+    mapping = infer_checkpoint_source_iterations(
+        checkpoint_values,
+        index_records,
+        names,
+    )
+
+    assert mapping == {index: 22 + index for index in range(8)}
+
+
+def test_recovery_seed_merges_same_params_but_does_not_claim_offset(
+    tmp_path,
+) -> None:
+    curves_dir = tmp_path / "raw_curves"
+    curves_dir.mkdir()
+    f2f_file = curves_dir / "eval_0022_frequency_domain.npz"
+    wake_file = curves_dir / "eval_0022_wakefield.npz"
+    unrelated_file = curves_dir / "eval_0099_wakefield_offset.npz"
+    save_curves_npz(
+        str(f2f_file),
+        {"S2": _curve([1.0, 2.0]), "S3": _curve([3.0, 4.0])},
+    )
+    save_curves_npz(
+        str(wake_file),
+        {"ParticleBeam1/Z": _curve([5.0, 6.0])},
+    )
+    save_curves_npz(
+        str(unrelated_file),
+        {
+            "ParticleBeam2/X": _curve([7.0]),
+            "ParticleBeam2/Y": _curve([8.0]),
+        },
+    )
+    names = ["angle_deg", "height_mm"]
+    target = [75.0, 12.5]
+    other = [80.0, 15.0]
+    records = [
+        {
+            "schema_version": 2,
+            "iter": 22,
+            "params": dict(zip(names, target)),
+            "npz_file": f2f_file.name,
+        },
+        {
+            "schema_version": 2,
+            "iter": 22,
+            "params": dict(zip(names, target)),
+            "npz_file": wake_file.name,
+        },
+        {
+            "schema_version": 2,
+            "iter": 99,
+            "params": dict(zip(names, other)),
+            "npz_file": unrelated_file.name,
+        },
+    ]
+    index_path = curves_dir / "index.jsonl"
+    index_path.write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n",
+        encoding="utf-8",
+    )
+    objectives = [
+        _CurveObjective("antenna_s2", "S2"),
+        _CurveObjective("antenna_s3", "S3"),
+        _CurveObjective("z_longitudinal", "ParticleBeam1/Z"),
+        _CurveObjective(
+            "z_transverse",
+            "ParticleBeam2/X",
+            use_reference=True,
+        ),
+    ]
+
+    seed = build_recovery_seed(
+        index_path=index_path,
+        curves_dir=curves_dir,
+        parameter_names=names,
+        parameter_values=target,
+        objectives=objectives,
+        obj_project_map=[
+            "frequency_domain",
+            "frequency_domain",
+            "wakefield",
+            "wakefield_offset",
+        ],
+        ref_project_map=["", "", "", "wakefield"],
+        phase_order=[
+            "frequency_domain",
+            "wakefield",
+            "wakefield_offset",
+        ],
+        output_iteration=30,
+    )
+
+    assert seed.source_iter == 22
+    assert seed.recovered_phases == ["frequency_domain", "wakefield"]
+    assert set(seed.objective_manifest) == {
+        "antenna_s2",
+        "antenna_s3",
+        "z_longitudinal",
+    }
+    assert seed.replay_values == {
+        "antenna_s2": 1.5,
+        "antenna_s3": 3.5,
+        "z_longitudinal": 5.5,
+    }
+    assert unrelated_file.resolve().as_posix() not in {
+        Path(path).resolve().as_posix() for path in seed.source_files
+    }
+    with np.load(seed.npz_path, allow_pickle=True) as saved:
+        assert not any("ParticleBeam2" in key for key in saved.files)
+
+
+def test_attempt_allocation_never_reuses_existing_attempt(tmp_path) -> None:
+    index_path = tmp_path / "index.jsonl"
+    index_path.write_text(
+        "\n".join(
+            [
+                json.dumps({"iter": 7, "attempt": 1}),
+                json.dumps({"iter": 7, "attempt": 3}),
+                json.dumps({"iter": 8, "attempt": 9}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._curves_db_dir = str(tmp_path)
+
+    assert orch._allocate_attempt(7) == 4
+    assert orch._allocate_attempt(9) == 1
+
+
+def test_production_recovery_ignores_smoke_only_sources(tmp_path) -> None:
+    npz_path = tmp_path / "smoke.npz"
+    save_curves_npz(str(npz_path), {"S2": _curve([1.0])})
+    index_path = tmp_path / "index.jsonl"
+    index_path.write_text(
+        json.dumps(
+            {
+                "iter": 1,
+                "params": {"angle_deg": 75.0},
+                "npz_file": npz_path.name,
+                "smoke_only": True,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    objective = _CurveObjective("antenna", "S2")
+    common = {
+        "index_path": index_path,
+        "curves_dir": tmp_path,
+        "parameter_names": ["angle_deg"],
+        "parameter_values": [75.0],
+        "objectives": [objective],
+        "obj_project_map": ["frequency_domain"],
+        "ref_project_map": [""],
+        "phase_order": ["frequency_domain"],
+    }
+
+    production = build_recovery_seed(**common, output_iteration=2)
+    smoke = build_recovery_seed(
+        **common,
+        output_iteration=3,
+        include_smoke_sources=True,
+        smoke_only=True,
+    )
+
+    assert production.npz_path == ""
+    assert smoke.recovered_phases == ["frequency_domain"]
+
+
+def test_phase_aware_reset_only_cleans_requested_project(tmp_path) -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._conn = SimpleNamespace(
+        pid=None,
+        close=MagicMock(),
+    )
+    orch._cooldown_s = 0.0
+    orch._library_path = "fake"
+    wake = SimpleNamespace(
+        label="wakefield",
+        cst_path=str(tmp_path / "wake.cst"),
+        is_pre_filter=False,
+    )
+    offset = SimpleNamespace(
+        label="wakefield_offset",
+        cst_path=str(tmp_path / "offset.cst"),
+        is_pre_filter=False,
+    )
+    orch._specs = [wake, offset]
+    new_connection = MagicMock()
+    new_connection.pid = 123
+
+    with (
+        patch(
+            "cst_optimization.core.cleanup.kill_all_cst_processes"
+        ),
+        patch(
+            "cst_optimization.core.cleanup.remove_result_folder"
+        ) as remove_results,
+        patch("cst_optimization.core.cleanup.remove_lock_file"),
+        patch(
+            "workflows.rfgun_hom_antenna.orchestrator.CSTConnection",
+            return_value=new_connection,
+        ),
+    ):
+        orch._reset_connection(cleanup_labels={"wakefield_offset"})
+
+    remove_results.assert_called_once_with(offset.cst_path)
+
+
+def test_schema_v3_separates_solver_postprocess_and_evaluation_status(
+    tmp_path,
+) -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._curves_db_dir = str(tmp_path)
+    orch._params = SimpleNamespace(names=["angle_deg"])
+    orch.last_attempt = 2
+    orch._specs = [
+        SimpleNamespace(label="frequency_domain", is_pre_filter=True),
+    ]
+
+    orch._write_evaluation_index(
+        params=np.array([75.0]),
+        iteration=31,
+        completed_labels={"frequency_domain"},
+        skipped_labels=set(),
+        npz_path=str(tmp_path / "eval_0031_a002_frequency_domain.npz"),
+        objective_manifest=["antenna"],
+        solvers_ok=True,
+        postprocess_ok=False,
+        evaluation_ok=False,
+        errors=["missing curve"],
+        source_iter=27,
+        smoke_only=True,
+    )
+
+    record = json.loads(
+        (tmp_path / "index.jsonl").read_text(encoding="utf-8")
+    )
+    assert record["schema_version"] == 3
+    assert record["params_hash"] == parameter_hash(["angle_deg"], [75.0])
+    assert record["phase_manifest"] == ["frequency_domain"]
+    assert record["phases_done"] == ["f2f", "frequency_domain"]
+    assert record["solver_ok"] is True
+    assert record["solvers_ok"] is True
+    assert record["postprocess_ok"] is False
+    assert record["evaluation_ok"] is False
+    assert record["source_iter"] == 27
+    assert record["smoke_only"] is True
+
+
+def test_prefilter_reject_preserves_f2f_penalty_and_skips_conditionals(
+    monkeypatch,
+) -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._curves_db_dir = ""
+    orch._params = SimpleNamespace(
+        names=["angle_deg"],
+        to_dict=lambda values: {"angle_deg": float(values[0])},
+    )
+    antenna = _CurveObjective("antenna", "unused")
+    conditional = _CurveObjective("z_longitudinal", "unused")
+    orch._objectives = [antenna, conditional]
+    orch._obj_project_map = ["frequency_domain", "wakefield"]
+    orch._ref_project_map = ["", ""]
+    f2f = SimpleNamespace(
+        label="frequency_domain",
+        is_pre_filter=True,
+        condition_trigger="",
+    )
+    wake = SimpleNamespace(
+        label="wakefield",
+        is_pre_filter=False,
+        condition_trigger="antenna",
+    )
+    orch._specs = [f2f, wake]
+    orch._spec_by_label = {
+        "frequency_domain": f2f,
+        "wakefield": wake,
+    }
+    orch._project_paths = {"frequency_domain": "unused.cst"}
+    orch._cooldown_s = 0.0
+    orch._adaptive_gate = None
+    orch._opt_logger = None
+    orch._gate_predictions = None
+
+    def fake_phase_one(
+        params,
+        param_dict,
+        iteration,
+        opened,
+        completed_labels,
+        solver_errors,
+        all_solvers_ok,
+        make_reader,
+        term_print,
+        n_obj,
+        raw_values,
+    ):
+        completed_labels.add("frequency_domain")
+        return False
+
+    def fake_capture(
+        project_label,
+        project_path,
+        raw_values,
+        make_reader,
+        ref_npz_path="",
+    ):
+        raw_values[0] = 0.25
+        return []
+
+    monkeypatch.setattr(orch, "_execute_phase_1", fake_phase_one)
+    monkeypatch.setattr(orch, "_capture_project_objectives", fake_capture)
+    monkeypatch.setattr("builtins.open", MagicMock())
+
+    penalties = orch.execute(np.array([75.0]), iteration=9)
+
+    np.testing.assert_allclose(penalties, [0.25, 1.0])
+    assert orch.last_solvers_ok is True
+    assert orch.last_postprocess_ok is True
+    assert orch.last_evaluation_ok is True
+    assert orch.last_skipped_labels == {"wakefield"}
 
 
 def test_partial_checkpoint_is_not_a_zero_penalty_warm_start(tmp_path) -> None:
@@ -101,6 +508,42 @@ def test_partial_checkpoint_is_not_a_zero_penalty_warm_start(tmp_path) -> None:
     X, y = ckpt.get_warm_xy()
     np.testing.assert_allclose(X, [[3.0, 4.0]])
     np.testing.assert_allclose(y, [0.4])
+
+
+def test_recovery_reopens_failed_permanent_and_keeps_failure_pending(
+    tmp_path,
+) -> None:
+    ckpt = CheckpointManager(str(tmp_path / "workflow_2"))
+    pending_idx = ckpt.add_pending(np.array([1.0]))
+    failed_idx = ckpt.add_pending(np.array([2.0]))
+    ckpt.mark_failed(
+        failed_idx,
+        error="prior process exhausted retries",
+        tier_exhausted=True,
+    )
+
+    assert _recovery_candidate_indices(ckpt) == [pending_idx, failed_idx]
+
+    _mark_recovery_retryable(
+        ckpt,
+        failed_idx,
+        error="this process also failed",
+        phases_done=["frequency_domain", "wakefield"],
+    )
+
+    record = ckpt.records[failed_idx]
+    assert record.status == "pending"
+    assert record.tier_exhausted is False
+    assert record.error == "this process also failed"
+    assert record.phases_done == ["frequency_domain", "wakefield"]
+
+
+def test_recovery_only_defers_cleaned_warmup_loading() -> None:
+    path = "D:/Results/wf2_warmup_cleaned/index.cleaned.jsonl"
+
+    assert _should_load_warmup(path, recovery_only=False) is True
+    assert _should_load_warmup(path, recovery_only=True) is False
+    assert _should_load_warmup("", recovery_only=False) is False
 
 
 def test_scheduler_uses_supported_recurring_trigger_contract() -> None:

@@ -95,6 +95,47 @@ def _load_workflow2_config(config_path: Path | None = None) -> dict:
 
     return wf2_cfg
 
+
+def _recovery_candidate_indices(ckpt: CheckpointManager) -> list[int]:
+    """Return checkpoint rows eligible for cross-process WF2 recovery.
+
+    ``failed_permanent`` remains meaningful for ordinary optimisation, but a
+    recovery campaign must be restartable after one process exhausts its local
+    retry budget.  Historical rows with that status are therefore reopened by
+    the Workflow 2 recovery runner.
+    """
+    return [
+        index
+        for index, record in enumerate(ckpt.records)
+        if record.status in {"pending", "failed_permanent"}
+    ]
+
+
+def _mark_recovery_retryable(
+    ckpt: CheckpointManager,
+    checkpoint_index: int,
+    *,
+    error: str,
+    phases_done: list[str],
+) -> None:
+    """Persist a failed recovery attempt without making it terminal."""
+    if phases_done:
+        ckpt.mark_phase_done(checkpoint_index, phases=phases_done)
+    ckpt.mark_failed(
+        checkpoint_index,
+        error=error,
+        tier_exhausted=False,
+    )
+
+
+def _should_load_warmup(
+    warmup_from_db: str,
+    *,
+    recovery_only: bool,
+) -> bool:
+    """Whether cleaned prior data is needed for this invocation."""
+    return bool(warmup_from_db) and not recovery_only
+
 # ── Ctrl+C handling ──────────────────────────────────────────────────────────
 # COM calls (run_solver, DesignEnvironment.close) block the main thread,
 # so Python cannot deliver KeyboardInterrupt until the call returns.
@@ -265,7 +306,18 @@ def main() -> None:
 
     # ── 2b. Warmup from 1D curves database (overrides checkpoint prior_data) ─
     next_db_iteration = 0
-    if args.warmup_from_db:
+    if args.warmup_from_db and not _should_load_warmup(
+        args.warmup_from_db,
+        recovery_only=args.recovery_only,
+    ):
+        print(
+            "Recovery-only mode: warmup database loading is deferred until "
+            "normal optimisation."
+        )
+    elif _should_load_warmup(
+        args.warmup_from_db,
+        recovery_only=args.recovery_only,
+    ):
         from cst_optimization.database import curves_to_warmup, load_index
         from cst_optimization.factory import _build_objectives
 
@@ -401,13 +453,18 @@ def main() -> None:
         ckpt.save()
 
     # ── 4. Build orchestrator + optimiser ───────────────────────────────────
+    recovery_indices = (
+        _recovery_candidate_indices(ckpt)
+        if has_ckpt and args.auto_resume
+        else []
+    )
     recovery_start_iteration = max(
         len(ckpt.records),
         next_db_iteration,
         next_output_iteration,
     )
     optimiser_start_iteration = recovery_start_iteration + (
-        ckpt.pending_count if has_ckpt and args.auto_resume else 0
+        len(recovery_indices)
     )
     orch, opt, evaluator, retry_handler = build_workflow_2(
         wf2_cfg,
@@ -428,7 +485,7 @@ def main() -> None:
     # new points. Historical files are selected by physical-parameter hash,
     # never by checkpoint-list position.
     recovery_failures = 0
-    if has_ckpt and args.auto_resume and ckpt.pending_records:
+    if recovery_indices:
         from cst_optimization.database import load_index
         from cst_optimization.workflows.recovery import (
             EvaluationResult,
@@ -452,9 +509,8 @@ def main() -> None:
         recovery_jobs: list[dict[str, object]] = []
         output_iteration = recovery_start_iteration
 
-        for checkpoint_index, record in enumerate(ckpt.records):
-            if record.status != "pending":
-                continue
+        for checkpoint_index in recovery_indices:
+            record = ckpt.records[checkpoint_index]
             x_phys = np.asarray(record.x, dtype=float)
             seed = build_recovery_seed(
                 index_path=index_path,
@@ -578,15 +634,13 @@ def main() -> None:
                 )
 
             if retry_handler is not None:
-                result, tier = retry_handler.execute(
+                result, _tier = retry_handler.execute(
                     _recover_once,
                     x_phys,
                     output_iteration,
                 )
-                exhausted = tier.name == "EXHAUSTED"
             else:
                 result = _recover_once(x_phys, output_iteration)
-                exhausted = False
 
             if result.status == EvaluationStatus.SUCCESS:
                 raw = orch.last_raw_values
@@ -612,20 +666,20 @@ def main() -> None:
             else:
                 recovery_failures += 1
                 phases_done = list(orch.last_completed_labels)
-                if phases_done:
-                    ckpt.mark_phase_done(
-                        checkpoint_index,
-                        phases=phases_done,
-                    )
-                ckpt.mark_failed(
+                _mark_recovery_retryable(
+                    ckpt,
                     checkpoint_index,
                     error=result.error,
-                    tier_exhausted=exhausted,
+                    phases_done=phases_done,
                 )
-                print(f"  Recovery failed: {result.error}")
+                print(
+                    "  Recovery failed; checkpoint remains retryable on the "
+                    f"next process start: {result.error}"
+                )
             ckpt.save()
 
-        if recovery_failures or ckpt.pending_count:
+        remaining_recovery = _recovery_candidate_indices(ckpt)
+        if recovery_failures or remaining_recovery:
             print(
                 "Recovery did not complete every pending evaluation; "
                 "new optimisation points will not be generated."

@@ -1,0 +1,154 @@
+"""Workflow 4 command-line entry point."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_SRC_DIR = str(_PROJECT_ROOT / "src")
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from .config import Workflow4Config, load_workflow4_config
+from .workflow import Workflow4Campaign
+
+DEFAULT_CONFIG = Path(__file__).resolve().with_name("config.yaml")
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Workflow 4 - RF gun HOM eigenmode batch calculation",
+    )
+    parser.add_argument(
+        "--config",
+        default=str(DEFAULT_CONFIG),
+        help="Workflow 4 YAML configuration",
+    )
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Validate input and write clusters/windows without launching CST",
+    )
+    parser.add_argument(
+        "--audit-results",
+        action="store_true",
+        help="Audit configured result-tree paths and external field files",
+    )
+    parser.add_argument(
+        "--offline-only",
+        metavar="RUN_DIR",
+        default="",
+        help="Re-run offline HDF5 post-processing in an existing campaign",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the latest or configured hash-matching campaign",
+    )
+    parser.add_argument(
+        "--window-id",
+        default="",
+        help="Run exactly one planned window; saturation follow-ups are deferred",
+    )
+    return parser
+
+
+def _latest_campaign(output_root: Path) -> Path:
+    candidates = sorted(
+        path
+        for path in output_root.glob("hom_campaign_*")
+        if (path / "campaign_state.json").is_file()
+    )
+    if not candidates:
+        raise FileNotFoundError(
+            f"no resumable Workflow 4 campaign under {output_root}"
+        )
+    return candidates[-1]
+
+
+def resolve_campaign_dir(
+    config: Workflow4Config,
+    *,
+    resume: bool,
+    offline_dir: str = "",
+) -> Path:
+    if offline_dir:
+        return Path(offline_dir).expanduser().resolve()
+    if config.campaign_dir is not None:
+        return config.campaign_dir
+    if resume:
+        return _latest_campaign(config.output_root)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return config.output_root / f"hom_campaign_{timestamp}"
+
+
+def _setup_logging(campaign_dir: Path) -> None:
+    campaign_dir.mkdir(parents=True, exist_ok=True)
+    handlers = [
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(
+            campaign_dir / "workflow_4_runtime.log",
+            encoding="utf-8",
+        ),
+    ]
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    config = load_workflow4_config(args.config)
+    campaign_dir = resolve_campaign_dir(
+        config,
+        resume=args.resume or bool(args.offline_only),
+        offline_dir=args.offline_only,
+    )
+    _setup_logging(campaign_dir)
+    campaign = Workflow4Campaign(
+        config,
+        campaign_dir,
+        resume=args.resume or bool(args.offline_only),
+    )
+
+    if args.offline_only:
+        campaign.initialize(require_template=True, allow_config_change=True)
+        modes = campaign.offline_reprocess()
+        print(f"Offline post-processing complete: {len(modes)} unique modes")
+        return 0
+
+    campaign.initialize(require_template=not args.plan_only)
+    if args.plan_only:
+        print(
+            f"Plan complete: {len(campaign.records)} rows -> "
+            f"{len(campaign.clusters)} clusters -> {len(campaign.windows)} windows"
+        )
+        print(campaign_dir)
+        return 0
+    if args.audit_results:
+        audit = campaign.audit_results()
+        print(
+            "Result contract audit complete: "
+            f"native_modes={audit['native_mode_count']}, "
+            f"complete={audit['template_contract_complete']}"
+        )
+        print(campaign_dir / "result_contract_audit.json")
+        return 0
+
+    modes = campaign.run(window_id=args.window_id)
+    print(f"Workflow 4 complete: {len(modes)} unique simulated modes")
+    print(campaign_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

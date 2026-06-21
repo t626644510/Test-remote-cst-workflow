@@ -1,0 +1,99 @@
+# Workflow 4 runtime configuration.
+#
+# Result-tree paths and field filenames are a template contract.  The entries
+# below use the previously audited result names as references.  Run
+# ``run_workflow_4.py --audit-results`` after the updated CST template has
+# produced results, then adjust only this file if the exact names differ.
+
+workflow_4:
+  input_csv: ../../HOMwork/eigenmode_frequency_targets.csv
+  template_path: D:/workflow4/F2F.cst
+  output_root: D:/Results/workflow4
+  campaign_dir: ""
+  parameter_name: fHOM
+  boundary_description: "Beam-pipe boundaries configured as open in the user-maintained CST template."
+
+  cst:
+    library_path: D:/CST2026/CST Studio Suite 2026/AMD64/python_cst_libraries
+    connect_mode: new
+
+  solver:
+    timeout_s: 10800
+    settle_s: 2
+    retry_attempts: 2
+    retry_cooldown_s: 10
+
+  planning:
+    search_half_width_mhz: 10
+    guard_mhz: 1
+    max_modes: 3
+    max_clusters_per_window: 3
+    split_overlap_mhz: 2
+
+  physics:
+    beta: 1
+    offset_mm: 2
+    native_crosscheck_relative_tolerance: 0.02
+
+  dedup:
+    frequency_tolerance_mhz: 0.5
+    field_correlation_threshold: 0.98
+    r_over_q_relative_tolerance: 0.05
+
+  matching:
+    half_width_mhz: 10
+
+  result_contract:
+    required:
+      - frequency
+      - r_over_q
+      - voltage
+      - total_energy
+    paths:
+      frequency: "Tables\\0D Results\\Frequency (Multiple Modes)\\Mode {mode}"
+      r_over_q: "Tables\\0D Results\\R over Q beta=1 (Multiple Modes)\\Mode {mode}"
+      voltage: "Tables\\0D Results\\Voltage beta=1 (Multiple Modes)\\Mode {mode}"
+      total_energy: "Tables\\0D Results\\Total Energy (Multiple Modes)\\Mode {mode}"
+      total_loss: "Tables\\0D Results\\Total Loss (Pert., Aver.) (Multiple Modes)\\Mode {mode}"
+      residual: "Tables\\0D Results\\Residual (Multiple Modes)\\Mode {mode}"
+      q_loaded: "1D Results\\Q Factors\\Total-Q\\Mode {mode}"
+      q0: ""
+    units:
+      frequency: MHz
+      r_over_q: ohm
+      voltage: V
+      total_energy: J
+      total_loss: W
+      residual: ""
+      q_loaded: ""
+      q0: ""
+    regional_q_paths:
+      loss_copper: "1D Results\\Q Factors\\Loss-Q per Material\\Copper (annealed)\\Mode {mode}"
+      loss_background: "1D Results\\Q Factors\\Loss-Q per Material\\[Background]\\Mode {mode}"
+      radiated: "1D Results\\Q Factors\\Radiated-Q\\Mode {mode}"
+      external_port1: "1D Results\\Q Factors\\External-Q\\port1\\Mode {mode}"
+      external_port2: "1D Results\\Q Factors\\External-Q\\port2\\Mode {mode}"
+      external_port3: "1D Results\\Q Factors\\External-Q\\port3\\Mode {mode}"
+      external_port4: "1D Results\\Q Factors\\External-Q\\port4\\Mode {mode}"
+      external_port5: "1D Results\\Q Factors\\External-Q\\port5\\Mode {mode}"
+      external_port6: "1D Results\\Q Factors\\External-Q\\port6\\Mode {mode}"
+    q0_components:
+      - loss_copper
+      - loss_background
+
+  field_contract:
+    export_dir: D:/workflow4/F2F/Export/3d
+    # Complex Ez trajectories are read directly from the CST 1D result tree
+    # and archived as campaign-local NPZ files after every solve.
+    line_result_paths:
+      center: "Tables\\1D Results\\e_Z (Z)_mode{mode}"
+      x_plus: "Tables\\1D Results\\e_Z (Z)_x+2_mode{mode}"
+      x_minus: "Tables\\1D Results\\e_Z (Z)_x-2_mode{mode}"
+      y_plus: "Tables\\1D Results\\e_Z (Z)_y+2_mode{mode}"
+      y_minus: "Tables\\1D Results\\e_Z (Z)_y-2_mode{mode}"
+    # Optional HDF5 fallbacks may be added here if line-result export changes.
+    patterns: {}
+    # Empty dataset paths enable conservative name discovery in HDF5.
+    field_dataset: ""
+    z_dataset: ""
+    field_component: z

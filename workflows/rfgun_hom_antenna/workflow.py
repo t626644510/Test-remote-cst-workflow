@@ -214,9 +214,15 @@ def build_workflow_2(
             gp_accuracy_threshold=float(gate_cfg_raw.get("gp_accuracy_threshold", 0.85)),
             pass_rate_critical=float(gate_cfg_raw.get("pass_rate_critical", 0.3)),
             gp_alpha=float(gate_cfg_raw.get("gp_alpha", 0.001)),
+            uncertainty_sigma=float(gate_cfg_raw.get("uncertainty_sigma", 2.0)),
+            calibration_evaluations=int(
+                gate_cfg_raw.get("calibration_evaluations", 2)
+            ),
         )
         adaptive_gate = AdaptiveConditionalGate(
-            gate_cfg, [o.name for o in objectives],
+            gate_cfg,
+            [o.name for o in objectives],
+            parameter_bounds=param_set.bounds,
         )
         _logger.info(
             "Adaptive conditional gate enabled (initial phase: %s)",

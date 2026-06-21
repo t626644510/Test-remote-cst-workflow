@@ -179,13 +179,28 @@ class CheckpointManager:
     # Warm-start helpers
     # ------------------------------------------------------------------
 
-    def get_warm_xy(self) -> tuple[np.ndarray, np.ndarray]:
+    def get_warm_xy(
+        self,
+        objective_names: list[str] | None = None,
+        weights: np.ndarray | list[float] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Return ``(X, y)`` arrays from completed records for SAO warm-start.
 
         Partial records are deliberately excluded: their missing objective
         penalties must be recovered from saved phase curves before they can be
         used as optimiser observations.  Treating an empty penalty mapping as
         zero would incorrectly make a partial evaluation look optimal.
+
+        Parameters
+        ----------
+        objective_names : list[str] or None
+            Ordered objective names for scalarisation.  When omitted, the
+            historical behaviour is preserved and all stored penalties are
+            summed.
+        weights : array-like or None
+            Scalarisation weights matching ``objective_names``.  Values are
+            normalised to sum to one.  Equal weights are used when objective
+            names are supplied without explicit weights.
         """
         usable = [
             r for r in self.records
@@ -193,8 +208,45 @@ class CheckpointManager:
         ]
         if not usable:
             return np.empty((0, 0)), np.empty((0,))
+
         X = np.array([r.x for r in usable], dtype=float)
-        y = np.array([sum(r.penalties.values()) if r.penalties else 0.0 for r in usable], dtype=float)
+        if objective_names is None:
+            y = np.array(
+                [sum(r.penalties.values()) for r in usable],
+                dtype=float,
+            )
+            return X, y
+
+        if not objective_names:
+            raise ValueError("objective_names must not be empty")
+        if weights is None:
+            resolved_weights = np.ones(len(objective_names), dtype=float)
+        else:
+            resolved_weights = np.asarray(weights, dtype=float).ravel()
+        if len(resolved_weights) != len(objective_names):
+            raise ValueError(
+                "weights length must match objective_names "
+                f"({len(resolved_weights)} != {len(objective_names)})"
+            )
+        if not np.all(np.isfinite(resolved_weights)):
+            raise ValueError("weights must contain only finite values")
+        if np.any(resolved_weights < 0):
+            raise ValueError("weights must be non-negative")
+        total = float(np.sum(resolved_weights))
+        if total <= 0:
+            raise ValueError("weights must have a positive sum")
+        resolved_weights = resolved_weights / total
+
+        penalty_rows = np.array(
+            [
+                [r.penalties.get(name, np.nan) for name in objective_names]
+                for r in usable
+            ],
+            dtype=float,
+        )
+        finite = np.all(np.isfinite(penalty_rows), axis=1)
+        X = X[finite]
+        y = np.dot(penalty_rows[finite], resolved_weights)
         return X, y
 
     @property

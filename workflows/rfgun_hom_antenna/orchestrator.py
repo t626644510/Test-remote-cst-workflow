@@ -123,6 +123,8 @@ class DualProjectOrchestrator:
         self._curves_db_dir = curves_db_dir
         self._adaptive_gate = adaptive_gate
         self._gate_predictions: dict[str, float] | None = None
+        self._gate_prediction_std: dict[str, float] | None = None
+        self._gate_validation_forced: bool = False
 
         self._specs = sorted(
             specs,
@@ -148,6 +150,24 @@ class DualProjectOrchestrator:
         self.last_phase_npz_path: str = ""
         self.last_attempt: int = 0
         self.last_source_iter: int | None = None
+
+    def bootstrap_adaptive_gate(
+        self,
+        X: np.ndarray,
+        penalty_matrix: np.ndarray,
+        measurement_mask: np.ndarray,
+        f2w_ran: np.ndarray,
+    ) -> bool:
+        """Seed the conditional gate from historical Workflow 2 data."""
+        if self._adaptive_gate is None:
+            return False
+        self._adaptive_gate.bootstrap(
+            X,
+            penalty_matrix,
+            measurement_mask,
+            f2w_ran,
+        )
+        return True
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -221,6 +241,8 @@ class DualProjectOrchestrator:
         )
         self.last_attempt = self._allocate_attempt(iteration)
         self._gate_predictions = None
+        self._gate_prediction_std = None
+        self._gate_validation_forced = False
 
         recording = bool(self._curves_db_dir)
         if recording:
@@ -613,17 +635,19 @@ class DualProjectOrchestrator:
                     obj.name: float(penalties[idx])
                     for idx, obj in enumerate(self._objectives)
                 }
+                measurement_mask = {
+                    obj.name: bool(np.isfinite(raw_values[idx]))
+                    for idx, obj in enumerate(self._objectives)
+                }
                 f2w_ran = "wakefield" in completed_labels
                 self._adaptive_gate.record_evaluation(
                     params,
                     gate_penalties,
                     f2w_ran,
+                    measurement_mask,
+                    was_validation=self._gate_validation_forced,
+                    predicted=self._gate_predictions,
                 )
-                if self._adaptive_gate.should_validate() and f2w_ran:
-                    self._adaptive_gate.record_validation(
-                        self._gate_predictions or {},
-                        gate_penalties,
-                    )
 
             objective_text = "  ".join(
                 f"{obj.name}="
@@ -729,15 +753,20 @@ class DualProjectOrchestrator:
             return True, ""
         if self._adaptive_gate.is_warmup:
             return True, " [WARMUP - force run]"
+        predictions, uncertainty = (
+            self._adaptive_gate.predict_with_uncertainty(params)
+        )
+        self._gate_predictions = predictions
+        self._gate_prediction_std = uncertainty
         if self._adaptive_gate.should_validate_next():
+            self._gate_validation_forced = True
             return True, " [validate - force run]"
-        predictions = self._adaptive_gate.predict(params)
         if self._adaptive_gate.should_run_conditional(
             trigger_penalty,
             predictions,
+            uncertainty,
         ):
             return True, " [GP-gate: predicted good]"
-        self._gate_predictions = predictions
         return False, " [GP-gate: predicted bad -> skip]"
 
     def _allocate_attempt(self, iteration: int) -> int:
@@ -1271,16 +1300,19 @@ class DualProjectOrchestrator:
                     obj.name: float(penalties[idx])
                     for idx, obj in enumerate(self._objectives)
                 }
+                measurement_mask = {
+                    obj.name: bool(np.isfinite(raw_values[idx]))
+                    for idx, obj in enumerate(self._objectives)
+                }
                 f2w_ran = "wakefield" in completed_labels
                 self._adaptive_gate.record_evaluation(
-                    params, penalty_dict_for_gate, f2w_ran,
+                    params,
+                    penalty_dict_for_gate,
+                    f2w_ran,
+                    measurement_mask,
+                    was_validation=self._gate_validation_forced,
+                    predicted=self._gate_predictions,
                 )
-                # Validation check: if gate requested validation, record it
-                if self._adaptive_gate.should_validate() and f2w_ran:
-                    predicted = self._gate_predictions or {}
-                    self._adaptive_gate.record_validation(
-                        predicted, penalty_dict_for_gate,
-                    )
 
             # ── Phase 3.5: Log ────────────────────────────────────────
             if self._opt_logger is not None:
@@ -1539,7 +1571,7 @@ class DualProjectOrchestrator:
                 if not passed:
                     _logger.info(
                         "Pre-filter REJECTED — antenna absorption > %.0f dB",
-                        self._pre_filter_threshold_db,
+                        self._active_pre_filter_threshold(),
                     )
                     return False  # caller returns all-1.0
 
@@ -1787,6 +1819,7 @@ class DualProjectOrchestrator:
         self, label: str, iteration: int, reader_factory: Callable[[], ResultReader],
     ) -> bool:
         """Evaluate pre-filter objectives; return True if candidate passes."""
+        threshold_db = self._active_pre_filter_threshold()
         for idx, (obj, proj_label) in enumerate(
             zip(self._objectives, self._obj_project_map)
         ):
@@ -1800,14 +1833,33 @@ class DualProjectOrchestrator:
                 )
                 return False
 
-            if np.isfinite(raw) and raw > self._pre_filter_threshold_db:
+            if np.isfinite(raw) and raw > threshold_db:
+                if (
+                    self._adaptive_gate is not None
+                    and not self._adaptive_gate.is_warmup
+                    and self._adaptive_gate.should_validate_next()
+                ):
+                    _logger.info(
+                        "Pre-filter validation bypass: '%s' = %.1f dB > "
+                        "%.0f dB",
+                        obj.name,
+                        raw,
+                        threshold_db,
+                    )
+                    continue
                 _logger.info(
                     "Pre-filter: '%s' = %.1f dB > %.0f dB → REJECT",
-                    obj.name, raw, self._pre_filter_threshold_db,
+                    obj.name, raw, threshold_db,
                 )
                 return False
 
         return True
+
+    def _active_pre_filter_threshold(self) -> float:
+        """Return the current dB threshold used by the live pre-filter."""
+        if self._adaptive_gate is not None:
+            return float(self._adaptive_gate.pre_filter_db_threshold)
+        return self._pre_filter_threshold_db
 
     @staticmethod
     def _evaluate_objective(

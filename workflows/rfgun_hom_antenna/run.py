@@ -5,7 +5,7 @@ Usage from project root::
     python run_workflow_2.py
     python run_workflow_2.py --auto-resume
     python run_workflow_2.py --auto-resume --heartbeat
-    python run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
+    python run_workflow_2.py --warmup-from-db D:/Results/wf2_warmup_total/index.total.jsonl
 
 The root entry point ``run_workflow_2.py`` is a compatibility shim that
 delegates here.  Use ``python run_workflow_2.py`` to run.
@@ -268,6 +268,17 @@ def main() -> None:
 
     ckpt = CheckpointManager(f"{log_dir}/workflow_2")
     has_ckpt = ckpt.load()
+    objective_names = [
+        entry["name"]
+        for entry in wf2_cfg.get("objectives", [])
+        if entry.get("enabled", True)
+    ]
+    from cst_optimization.factory import _resolve_named_weights
+
+    objective_weights = _resolve_named_weights(
+        wf2_cfg.get("optimization", {}).get("objective_weights"),
+        objective_names,
+    )
 
     # ── Heartbeat thread ────────────────────────────────────────────────────
     _heartbeat_stop = threading.Event()
@@ -289,8 +300,12 @@ def main() -> None:
 
     # ── Crash recovery: resume partial evaluations ─────────────────────────
     prior_data: tuple[np.ndarray, np.ndarray] | None = None
+    gate_prior: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
     if has_ckpt and ckpt.completed_count > 0:
-        prior_X, prior_y = ckpt.get_warm_xy()
+        prior_X, prior_y = ckpt.get_warm_xy(
+            objective_names,
+            objective_weights,
+        )
         if len(prior_X) > 0:
             prior_data = (prior_X, prior_y)
             print(f"Resuming from checkpoint: {ckpt.completed_count} completed, "
@@ -318,22 +333,17 @@ def main() -> None:
         args.warmup_from_db,
         recovery_only=args.recovery_only,
     ):
-        from cst_optimization.database import curves_to_warmup, load_index
+        from cst_optimization.database import load_index
         from cst_optimization.factory import _build_objectives
+        from workflows.rfgun_hom_antenna.warmup import (
+            load_workflow2_warmup,
+        )
 
         index_path = args.warmup_from_db
         print(f"Loading 1D curve database from: {index_path}")
         db_objectives, _, _ = _build_objectives(
             wf2_cfg.get("objectives", [])
         )
-
-        opt_cfg = wf2_cfg.get("optimization", {})
-        obj_weights = opt_cfg.get("objective_weights", None)
-        n_obj = len(db_objectives)
-        if obj_weights and len(obj_weights) == n_obj:
-            w = np.array(obj_weights, dtype=float) / np.sum(obj_weights)
-        else:
-            w = np.ones(n_obj) / n_obj
 
         index_records = load_index(index_path)
         db_iterations = [
@@ -344,9 +354,20 @@ def main() -> None:
         if db_iterations:
             next_db_iteration = max(db_iterations) + 1
 
-        X_db, y_db = curves_to_warmup(index_path, db_objectives, weights=w)
+        parameter_cfg = wf2_cfg.get("parameters", [])
+        parameter_names = [entry["name"] for entry in parameter_cfg]
+        warmup_data = load_workflow2_warmup(
+            index_path,
+            db_objectives,
+            weights=objective_weights,
+            parameter_names=parameter_names,
+        )
+        X_db = warmup_data.X
+        y_db = warmup_data.scalar_penalties
+        penalties_db = warmup_data.penalty_matrix
+        measurement_mask_db = warmup_data.measurement_mask
+        f2w_ran_db = warmup_data.f2w_ran
         if len(X_db) > 0:
-            parameter_cfg = wf2_cfg.get("parameters", [])
             lows = np.array([float(p["low"]) for p in parameter_cfg])
             highs = np.array([float(p["high"]) for p in parameter_cfg])
             finite = np.all(np.isfinite(X_db), axis=1) & np.isfinite(y_db)
@@ -355,6 +376,9 @@ def main() -> None:
             rejected = int(len(X_db) - np.count_nonzero(keep))
             X_db = X_db[keep]
             y_db = y_db[keep]
+            penalties_db = penalties_db[keep]
+            measurement_mask_db = measurement_mask_db[keep]
+            f2w_ran_db = f2w_ran_db[keep]
 
             unique_indices: list[int] = []
             seen: set[bytes] = set()
@@ -366,6 +390,9 @@ def main() -> None:
             duplicates = len(X_db) - len(unique_indices)
             X_db = X_db[unique_indices]
             y_db = y_db[unique_indices]
+            penalties_db = penalties_db[unique_indices]
+            measurement_mask_db = measurement_mask_db[unique_indices]
+            f2w_ran_db = f2w_ran_db[unique_indices]
             if rejected or duplicates:
                 print(
                     f"  filtered: {rejected} invalid/out-of-bounds, "
@@ -375,8 +402,19 @@ def main() -> None:
         print(f"  {n_valid} valid evaluations for warmup")
         if n_valid > 0:
             prior_data = (X_db, y_db)
+            gate_prior = (
+                X_db,
+                penalties_db,
+                measurement_mask_db,
+                f2w_ran_db,
+            )
             best_idx = int(np.argmin(y_db))
             print(f"  Best penalty: {float(y_db[best_idx]):.6f} (index {best_idx})")
+            measured_counts = {
+                name: int(np.count_nonzero(measurement_mask_db[:, index]))
+                for index, name in enumerate(objective_names)
+            }
+            print(f"  Gate measured targets: {measured_counts}")
 
     # Never overwrite an existing atomized curve file, even when the warmup
     # index was sanitized or renumbered independently of the output folder.
@@ -472,6 +510,20 @@ def main() -> None:
         phase_checkpoint_callback=_on_phase_completed,
         start_iteration=optimiser_start_iteration,
     )
+    if gate_prior is not None:
+        gate_bootstrapped = orch.bootstrap_adaptive_gate(*gate_prior)
+        if gate_bootstrapped:
+            calibration_count = int(
+                wf2_cfg.get("adaptive_gate", {}).get(
+                    "calibration_evaluations",
+                    2,
+                )
+            )
+            print(
+                "Adaptive gate bootstrapped from historical measurements; "
+                f"{calibration_count} live full evaluations will be forced "
+                "for calibration."
+            )
 
     print(f"Parameters: {orch.n_parameters}")
     print(f"Objectives: {orch.n_objectives}")
@@ -785,7 +837,10 @@ def main() -> None:
 
     # Refresh checkpoint priors after phase replay and merge them with any
     # sanitized curve-database warm start without duplicating parameter rows.
-    checkpoint_X, checkpoint_y = ckpt.get_warm_xy()
+    checkpoint_X, checkpoint_y = ckpt.get_warm_xy(
+        objective_names,
+        objective_weights,
+    )
     if len(checkpoint_X) > 0:
         if prior_data is None:
             prior_data = (checkpoint_X, checkpoint_y)

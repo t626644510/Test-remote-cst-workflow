@@ -65,6 +65,8 @@ class GateConfig:
 
     # ── GP model ─────────────────────────────────────────────────────
     gp_alpha: float = 1e-3          # GP noise level (regularisation)
+    uncertainty_sigma: float = 2.0  # skip only when lower confidence bound is bad
+    calibration_evaluations: int = 2  # forced live checks after historical bootstrap
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +85,28 @@ class AdaptiveConditionalGate:
         [antenna_absorption, antenna_absorption_db, z_longitudinal, z_transverse].
     """
 
-    def __init__(self, config: GateConfig, objective_names: list[str]) -> None:
+    def __init__(
+        self,
+        config: GateConfig,
+        objective_names: list[str],
+        parameter_bounds: np.ndarray | None = None,
+    ) -> None:
         self._cfg = config
         self._obj_names = list(objective_names)
         self._n_obj = len(objective_names)
+        self._parameter_bounds = (
+            None
+            if parameter_bounds is None
+            else np.asarray(parameter_bounds, dtype=float).copy()
+        )
+        if (
+            self._parameter_bounds is not None
+            and (
+                self._parameter_bounds.ndim != 2
+                or self._parameter_bounds.shape[1] != 2
+            )
+        ):
+            raise ValueError("parameter_bounds must have shape (n_parameters, 2)")
 
         # ── Phase state ──────────────────────────────────────────────
         self.phase: GatePhase = GatePhase.WARMUP
@@ -104,6 +124,10 @@ class AdaptiveConditionalGate:
         self._gps: list[GaussianProcessRegressor | None] = [None] * self._n_obj
         self._X: list[np.ndarray] = []     # training inputs
         self._Y: list[np.ndarray] = []     # training targets (penalties, n_obj columns)
+        self._models_dirty: bool = True
+        self._x_min: np.ndarray | None = None
+        self._x_max: np.ndarray | None = None
+        self._calibration_remaining: int = 0
 
         # ── Validation history ───────────────────────────────────────
         self._prediction_errors: list[float] = []
@@ -138,6 +162,7 @@ class AdaptiveConditionalGate:
         self,
         trigger_penalty: float,
         gp_predictions: dict[str, float] | None = None,
+        gp_uncertainty: dict[str, float] | None = None,
     ) -> bool:
         """Decide whether to run a conditional project (F2W / F2WO).
 
@@ -158,30 +183,26 @@ class AdaptiveConditionalGate:
             # Phase A: always run — unconditional pass
             return True
 
-        # For GP_GATED and FULL_4OBJ phases:
-        # the trigger objective penalty is the primary gate,
-        # augmented by GP predictions for wakefield objectives
-        if gp_predictions is None:
-            # No GP yet — fall back to trigger penalty only
-            return trigger_penalty < self._cfg.gp_skip_threshold
+        if not gp_predictions:
+            # Missing model evidence is uncertainty, not permission to skip.
+            return True
 
-        if self.phase == GatePhase.GP_GATED:
-            # Conservative: GP says "good" → run to verify
-            z_pred = gp_predictions.get("z_longitudinal", 0.0)
-            zt_pred = gp_predictions.get("z_transverse", 0.0)
-            return (
-                z_pred < self._cfg.gp_skip_threshold
-                and zt_pred < self._cfg.gp_skip_threshold
+        threshold = self._cfg.gp_skip_threshold
+        if self.phase == GatePhase.FULL_4OBJ:
+            threshold += 0.2
+
+        uncertainty = gp_uncertainty or {}
+        for name in ("z_longitudinal", "z_transverse"):
+            mean = gp_predictions.get(name, np.nan)
+            std = uncertainty.get(name, np.inf)
+            if not np.isfinite(mean) or not np.isfinite(std):
+                continue
+            lower_confidence_bound = (
+                float(mean) - self._cfg.uncertainty_sigma * float(std)
             )
-
-        # Phase FULL_4OBJ: aggressive — default is RUN; GP says "bad" → skip
-        # Use a stricter threshold to minimise false skips
-        bad_threshold = self._cfg.gp_skip_threshold + 0.2
-        z_pred = gp_predictions.get("z_longitudinal", 0.0)
-        zt_pred = gp_predictions.get("z_transverse", 0.0)
-        if z_pred >= bad_threshold and zt_pred >= bad_threshold:
-            return False  # GP highly confident both are bad → skip
-        return True  # otherwise run
+            if lower_confidence_bound >= threshold:
+                return False
+        return True
 
     # ------------------------------------------------------------------
     # Data ingestion
@@ -192,6 +213,10 @@ class AdaptiveConditionalGate:
         x: np.ndarray,
         penalties: dict[str, float],
         f2w_ran: bool,
+        measurement_mask: dict[str, bool] | None = None,
+        *,
+        was_validation: bool = False,
+        predicted: dict[str, float] | None = None,
     ) -> None:
         """Feed a completed evaluation into the gate for model updating.
 
@@ -209,13 +234,93 @@ class AdaptiveConditionalGate:
             self._f2w_pass_count += 1
         self._f2w_total += 1
 
-        # Store data point
-        y_vec = np.array([penalties.get(name, np.nan) for name in self._obj_names])
+        # Scalar optimisation may use finite penalties for skipped phases.
+        # Objective GPs must only ingest physically measured targets.
+        y_vec = np.array(
+            [
+                (
+                    penalties.get(name, np.nan)
+                    if measurement_mask is None
+                    or measurement_mask.get(name, False)
+                    else np.nan
+                )
+                for name in self._obj_names
+            ],
+            dtype=float,
+        )
         self._X.append(x.copy())
         self._Y.append(y_vec)
+        self._models_dirty = True
+
+        if was_validation and f2w_ran:
+            self.record_validation(predicted or {}, penalties)
+            if self._calibration_remaining > 0:
+                self._calibration_remaining -= 1
 
         # Phase transition checks
         self._maybe_transition()
+
+    def bootstrap(
+        self,
+        X: np.ndarray,
+        penalty_matrix: np.ndarray,
+        measurement_mask: np.ndarray,
+        f2w_ran: np.ndarray,
+        *,
+        calibration_evaluations: int | None = None,
+    ) -> None:
+        """Seed the gate from historical physical measurements.
+
+        Historical rows initialise GP training and pass-rate counters without
+        fabricating validation accuracy.  A small number of subsequent live
+        evaluations is forced for calibration.
+        """
+        X = np.asarray(X, dtype=float)
+        penalty_matrix = np.asarray(penalty_matrix, dtype=float)
+        measurement_mask = np.asarray(measurement_mask, dtype=bool)
+        f2w_ran = np.asarray(f2w_ran, dtype=bool).ravel()
+        if X.ndim != 2:
+            raise ValueError("X must have shape (n_samples, n_parameters)")
+        expected = (len(X), self._n_obj)
+        if penalty_matrix.shape != expected:
+            raise ValueError(
+                f"penalty_matrix shape must be {expected}, got "
+                f"{penalty_matrix.shape}"
+            )
+        if measurement_mask.shape != expected:
+            raise ValueError(
+                f"measurement_mask shape must be {expected}, got "
+                f"{measurement_mask.shape}"
+            )
+        if len(f2w_ran) != len(X):
+            raise ValueError("f2w_ran length must match X")
+
+        self._X = [row.copy() for row in X]
+        masked_penalties = np.where(measurement_mask, penalty_matrix, np.nan)
+        self._Y = [row.copy() for row in masked_penalties]
+        self._eval_count = len(X)
+        self._f2w_total = len(X)
+        self._f2w_pass_count = int(np.count_nonzero(f2w_ran))
+        self._prediction_errors = []
+        self.consecutive_pass = 0
+        self.consecutive_fail = 0
+        self.current_db_threshold = self._cfg.db_initial
+
+        requested_calibration = (
+            self._cfg.calibration_evaluations
+            if calibration_evaluations is None
+            else int(calibration_evaluations)
+        )
+        measured_per_objective = np.count_nonzero(measurement_mask, axis=0)
+        if len(X) >= 3 and np.all(measured_per_objective >= 3):
+            self.phase = GatePhase.GP_GATED
+            self._calibration_remaining = max(0, requested_calibration)
+            self._warmup_start_count = 0
+        else:
+            self.phase = GatePhase.WARMUP
+            self._calibration_remaining = 0
+            self._warmup_start_count = self._eval_count
+        self._rebuild_gps()
 
     # ------------------------------------------------------------------
     # GP prediction
@@ -226,17 +331,29 @@ class AdaptiveConditionalGate:
 
         Returns empty dict if GP models are not yet trained.
         """
+        means, _ = self.predict_with_uncertainty(x)
+        return means
+
+    def predict_with_uncertainty(
+        self,
+        x: np.ndarray,
+    ) -> tuple[dict[str, float], dict[str, float]]:
+        """Return GP means and standard deviations in penalty units."""
         if len(self._X) < 3:
-            return {}
+            return {}, {}
         self._ensure_gps_trained()
-        result: dict[str, float] = {}
-        X_new = x.reshape(1, -1)
+        means: dict[str, float] = {}
+        uncertainty: dict[str, float] = {}
+        X_new = self._normalise_inputs(
+            np.asarray(x, dtype=float).reshape(1, -1)
+        )
         for i, name in enumerate(self._obj_names):
             gp = self._gps[i]
             if gp is not None:
-                pred = gp.predict(X_new, return_std=False)
-                result[name] = float(pred[0])
-        return result
+                pred, std = gp.predict(X_new, return_std=True)
+                means[name] = float(pred[0])
+                uncertainty[name] = float(std[0])
+        return means, uncertainty
 
     # ------------------------------------------------------------------
     # Validation
@@ -254,6 +371,8 @@ class AdaptiveConditionalGate:
         """Return True if the NEXT evaluation should be unconditional validation."""
         if self.phase == GatePhase.WARMUP:
             return True  # all warmup evals are unconditional
+        if self._calibration_remaining > 0:
+            return True
         if self._cfg.validate_every_n <= 0:
             return False
         return (self._eval_count + 1) % self._cfg.validate_every_n == 0
@@ -354,13 +473,11 @@ class AdaptiveConditionalGate:
         """Train one GP per objective on all available data."""
         if len(self._X) < 3:
             return
+        if not self._models_dirty and any(gp is not None for gp in self._gps):
+            return
         X = np.vstack(self._X)
-        # Normalise inputs to [0, 1]
-        self._x_min = X.min(axis=0)
-        self._x_max = X.max(axis=0)
-        x_range = self._x_max - self._x_min
-        x_range[x_range == 0] = 1.0
-        X_norm = (X - self._x_min) / x_range
+        X_norm = self._normalise_inputs(X, fit=True)
+        self._gps = [None] * self._n_obj
 
         kernel = (
             ConstantKernel(1.0, constant_value_bounds=(1e-3, 1e3))
@@ -389,10 +506,33 @@ class AdaptiveConditionalGate:
                 self._gps[i] = gp
             except Exception:
                 _logger.warning("Failed to train GP for objective '%s'", self._obj_names[i])
+        self._models_dirty = False
+
+    def _normalise_inputs(
+        self,
+        X: np.ndarray,
+        *,
+        fit: bool = False,
+    ) -> np.ndarray:
+        """Use one physical-to-unit transform for both GP fit and predict."""
+        X = np.asarray(X, dtype=float)
+        if self._parameter_bounds is not None:
+            x_min = self._parameter_bounds[:, 0]
+            x_max = self._parameter_bounds[:, 1]
+        else:
+            if fit or self._x_min is None or self._x_max is None:
+                self._x_min = np.min(X, axis=0)
+                self._x_max = np.max(X, axis=0)
+            x_min = self._x_min
+            x_max = self._x_max
+        span = np.asarray(x_max - x_min, dtype=float)
+        span[span == 0] = 1.0
+        return (X - x_min) / span
 
     def _rebuild_gps(self) -> None:
         """Clear and retrain all GP models from scratch."""
         self._gps = [None] * self._n_obj
+        self._models_dirty = True
         if len(self._X) >= 3:
             self._ensure_gps_trained()
 
@@ -417,6 +557,7 @@ class AdaptiveConditionalGate:
             if (
                 self.f2w_pass_rate >= self._cfg.pass_rate_threshold
                 and self.prediction_accuracy >= self._cfg.gp_accuracy_threshold
+                and len(self._prediction_errors) >= self._cfg.trust_consecutive
                 and self._eval_count > self._cfg.warmup_n_evaluations + 10
             ):
                 _logger.info(

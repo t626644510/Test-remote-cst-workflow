@@ -282,3 +282,8 @@ workflow_2:
 
     # GP model
     gp_alpha: 0.001
+    uncertainty_sigma: 2.0
+
+    # Historical warm-up bootstrap: force two fresh complete evaluations
+    # before the first GP-controlled skip decision.
+    calibration_evaluations: 2

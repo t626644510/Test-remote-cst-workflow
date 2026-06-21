@@ -9,7 +9,7 @@ Usage::
     python run_workflow_2.py --auto-resume
     python run_workflow_2.py --auto-resume --recovery-only
     python run_workflow_2.py --auto-resume --heartbeat
-    python run_workflow_2.py --warmup-from-db D:/Results/raw_curves/index.jsonl
+    python run_workflow_2.py --warmup-from-db D:/Results/wf2_warmup_total/index.total.jsonl
     python run_workflow_2.py --config D:/smoke/config.yaml --smoke-only
 
 Reads ``workflows/rfgun_hom_antenna/config.yaml`` through the package runner,

@@ -14,6 +14,7 @@ from cst_optimization.database import save_curves_npz
 from cst_optimization.optimization.conditional_gate import (
     AdaptiveConditionalGate,
     GateConfig,
+    GatePhase,
 )
 from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator
 from workflows.rfgun_hom_antenna.recovery import (
@@ -69,20 +70,29 @@ def _curve(values: list[float]) -> dict[str, np.ndarray]:
     }
 
 
-def test_gate_predict_handles_return_std_false_contract() -> None:
+def test_gate_predict_normalises_input_and_reads_mean_std_contract() -> None:
     gate = AdaptiveConditionalGate(GateConfig(), ["z_longitudinal"])
     gate._X = [
         np.array([0.0]),
         np.array([1.0]),
         np.array([2.0]),
     ]
+    gate._Y = [
+        np.array([0.1]),
+        np.array([0.2]),
+        np.array([0.3]),
+    ]
+    gate._x_min = np.array([0.0])
+    gate._x_max = np.array([2.0])
+    gate._models_dirty = False
     gp = MagicMock()
-    gp.predict.return_value = np.array([0.25])
+    gp.predict.return_value = (np.array([0.25]), np.array([0.05]))
     gate._gps = [gp]
 
     assert gate.predict(np.array([1.5])) == {"z_longitudinal": 0.25}
     gp.predict.assert_called_once()
-    assert gp.predict.call_args.kwargs["return_std"] is False
+    np.testing.assert_allclose(gp.predict.call_args.args[0], [[0.75]])
+    assert gp.predict.call_args.kwargs["return_std"] is True
 
 
 def test_phase_checkpoint_writes_physical_params_and_notifies(
@@ -508,6 +518,132 @@ def test_partial_checkpoint_is_not_a_zero_penalty_warm_start(tmp_path) -> None:
     X, y = ckpt.get_warm_xy()
     np.testing.assert_allclose(X, [[3.0, 4.0]])
     np.testing.assert_allclose(y, [0.4])
+
+
+def test_checkpoint_warm_start_uses_normalised_named_weights(tmp_path) -> None:
+    ckpt = CheckpointManager(str(tmp_path / "workflow_2"))
+    idx = ckpt.add_pending(np.array([1.0, 2.0]))
+    ckpt.mark_completed(
+        idx,
+        raw_values={"a": 1.0, "b": 2.0},
+        penalties={"a": 0.2, "b": 0.8},
+    )
+
+    X, y = ckpt.get_warm_xy(["a", "b"], [1.0, 3.0])
+
+    np.testing.assert_allclose(X, [[1.0, 2.0]])
+    np.testing.assert_allclose(y, [0.65])
+
+
+def test_gate_bootstrap_masks_skipped_targets_and_forces_two_calibrations(
+    monkeypatch,
+) -> None:
+    gate = AdaptiveConditionalGate(
+        GateConfig(calibration_evaluations=2),
+        ["z_longitudinal", "z_transverse"],
+        parameter_bounds=np.array([[0.0, 10.0]]),
+    )
+    monkeypatch.setattr(gate, "_rebuild_gps", MagicMock())
+
+    gate.bootstrap(
+        np.array([[1.0], [2.0], [3.0]]),
+        np.array([[0.1, 0.2], [0.2, 1.0], [0.3, 0.4]]),
+        np.array([[True, True], [True, False], [True, True]]),
+        np.array([True, False, True]),
+    )
+
+    assert gate.phase.value == "warmup"
+    assert np.isnan(gate._Y[1][1])
+
+    full_mask = np.ones((3, 2), dtype=bool)
+    gate.bootstrap(
+        np.array([[1.0], [2.0], [3.0]]),
+        np.array([[0.1, 0.2], [0.2, 0.3], [0.3, 0.4]]),
+        full_mask,
+        np.array([True, True, True]),
+    )
+    assert gate.phase.value == "gp_gated"
+    assert gate.should_validate_next() is True
+    # Historical rows may already exceed the old absolute transition count.
+    # Two calibration samples alone must not jump directly to FULL_4OBJ.
+    gate._eval_count = 22
+
+    penalties = {"z_longitudinal": 0.2, "z_transverse": 0.3}
+    measured = {"z_longitudinal": True, "z_transverse": True}
+    gate.record_evaluation(
+        np.array([4.0]),
+        penalties,
+        True,
+        measured,
+        was_validation=True,
+        predicted=penalties,
+    )
+    assert gate.should_validate_next() is True
+    gate.record_evaluation(
+        np.array([5.0]),
+        penalties,
+        True,
+        measured,
+        was_validation=True,
+        predicted=penalties,
+    )
+    assert gate._calibration_remaining == 0
+    assert gate.phase is GatePhase.GP_GATED
+
+
+def test_gate_only_skips_when_bad_prediction_is_confident() -> None:
+    gate = AdaptiveConditionalGate(
+        GateConfig(gp_skip_threshold=0.5, uncertainty_sigma=2.0),
+        ["z_longitudinal", "z_transverse"],
+    )
+    gate.phase = GatePhase.GP_GATED
+
+    assert gate.should_run_conditional(
+        0.1,
+        {"z_longitudinal": 0.8, "z_transverse": 0.2},
+        {"z_longitudinal": 0.2, "z_transverse": 0.1},
+    ) is True
+    assert gate.should_run_conditional(
+        0.1,
+        {"z_longitudinal": 0.8, "z_transverse": 0.2},
+        {"z_longitudinal": 0.05, "z_transverse": 0.1},
+    ) is False
+
+
+def test_orchestrator_validation_captures_prediction_before_force_run() -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    gate = MagicMock()
+    gate.is_warmup = False
+    gate.predict_with_uncertainty.return_value = (
+        {"z_longitudinal": 0.2, "z_transverse": 0.3},
+        {"z_longitudinal": 0.1, "z_transverse": 0.1},
+    )
+    gate.should_validate_next.return_value = True
+    orch._adaptive_gate = gate
+    orch._gate_predictions = None
+    orch._gate_prediction_std = None
+    orch._gate_validation_forced = False
+
+    should_run, reason = orch._conditional_gate_decision(
+        np.array([1.0]),
+        0.2,
+    )
+
+    assert should_run is True
+    assert "validate" in reason
+    assert orch._gate_validation_forced is True
+    assert orch._gate_predictions == {
+        "z_longitudinal": 0.2,
+        "z_transverse": 0.3,
+    }
+
+
+def test_orchestrator_uses_gate_sliding_db_threshold() -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._pre_filter_threshold_db = -25.0
+    orch._adaptive_gate = SimpleNamespace(pre_filter_db_threshold=-29.0)
+
+    assert orch._active_pre_filter_threshold() == -29.0
 
 
 def test_recovery_reopens_failed_permanent_and_keeps_failure_pending(

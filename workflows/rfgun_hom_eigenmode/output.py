@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import statistics
 from pathlib import Path
 from typing import Any, Iterable
@@ -40,6 +41,9 @@ EIGENMODE_FIELDS = [
     "voltage_relative_error",
     "R_over_Q_relative_error",
     "data_availability_reason",
+    "warning_codes",
+    "boundary_sensitive",
+    "mode_count_censored",
     "duplicate_member_ids",
     "dedup_confidence",
     "field_paths_json",
@@ -50,11 +54,13 @@ EIGENMODE_FIELDS = [
 
 def _write_csv(path: Path, fieldnames: list[str], rows: Iterable[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
+    os.replace(temporary, path)
 
 
 def write_target_clusters(path: str | Path, clusters: Iterable[TargetCluster]) -> None:
@@ -117,10 +123,12 @@ def write_eigenmode_results(
     path: str | Path,
     candidates: Iterable[EigenmodeCandidate],
 ) -> None:
-    rows = []
-    for mode in candidates:
-        rows.append(
-            {
+    rows = [_eigenmode_row(mode) for mode in candidates]
+    _write_csv(Path(path), EIGENMODE_FIELDS, rows)
+
+
+def _eigenmode_row(mode: EigenmodeCandidate) -> dict[str, Any]:
+    return {
                 "mode_id": mode.mode_id,
                 "solver_window_id": mode.solver_window_id,
                 "attempt_id": mode.attempt_id,
@@ -168,14 +176,54 @@ def write_eigenmode_results(
                 "voltage_relative_error": mode.voltage_relative_error,
                 "R_over_Q_relative_error": mode.r_over_q_relative_error,
                 "data_availability_reason": mode.data_availability_reason,
+                "warning_codes": ";".join(mode.warning_codes),
+                "boundary_sensitive": str(mode.boundary_sensitive).lower(),
+                "mode_count_censored": str(mode.mode_count_censored).lower(),
                 "duplicate_member_ids": ";".join(mode.duplicate_member_ids),
                 "dedup_confidence": mode.dedup_confidence,
                 "field_paths_json": json.dumps(mode.field_paths, sort_keys=True),
                 "transverse_definition": "|grad(V_parallel)|^2/(omega*U)",
                 "normalization_convention": "1/(omega*U)",
             }
+
+
+def write_valid_seed(
+    path: str | Path,
+    candidates: Iterable[EigenmodeCandidate],
+    mappings: Iterable[dict[str, Any]],
+) -> None:
+    """Write one row per validated mode while preserving all target ambiguity."""
+
+    by_mode: dict[str, list[dict[str, Any]]] = {}
+    for mapping in mappings:
+        by_mode.setdefault(str(mapping["mode_id"]), []).append(mapping)
+    fields = [
+        *EIGENMODE_FIELDS,
+        "target_cluster_ids",
+        "target_match_statuses",
+        "seed_status",
+    ]
+    rows = []
+    for mode in candidates:
+        if not mode.derived_valid:
+            continue
+        mode_mappings = by_mode.get(mode.mode_id, [])
+        row = _eigenmode_row(mode)
+        row.update(
+            {
+                "target_cluster_ids": ";".join(
+                    str(item["target_cluster_id"]) for item in mode_mappings
+                ),
+                "target_match_statuses": ";".join(
+                    str(item["match_status"]) for item in mode_mappings
+                ),
+                "seed_status": (
+                    "target_candidate" if mode_mappings else "extra_discovery"
+                ),
+            }
         )
-    _write_csv(Path(path), EIGENMODE_FIELDS, rows)
+        rows.append(row)
+    _write_csv(Path(path), fields, rows)
 
 
 def build_mode_target_mapping(
@@ -299,6 +347,15 @@ def write_match_outputs(
                         "Q_measurement": q,
                         "Q_source": "baseline_residual_3db",
                         "match_status": match_status,
+                        "derived_valid": str(mode.derived_valid).lower(),
+                        "warning_codes": ";".join(mode.warning_codes),
+                        "boundary_sensitive": str(mode.boundary_sensitive).lower(),
+                        "mode_count_censored": str(
+                            mode.mode_count_censored
+                        ).lower(),
+                        "data_availability_reason": (
+                            mode.data_availability_reason
+                        ),
                         "longitudinal_R_over_Q_ohm": mode.r_over_q_ohm,
                         "R_parallel_from_measured_Q_ohm": (
                             mode.r_over_q_ohm * q
@@ -358,7 +415,11 @@ def write_match_outputs(
 
 
 def write_json(path: str | Path, payload: Any) -> None:
-    Path(path).write_text(
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    os.replace(temporary, destination)

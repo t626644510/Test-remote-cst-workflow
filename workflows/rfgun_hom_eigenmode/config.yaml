@@ -20,6 +20,15 @@ workflow_4:
   solver:
     timeout_s: 10800
     settle_s: 2
+    # Fast failures have no successful mesh and no mode table. They are cheap
+    # enough to retry from a fresh template-owned attempt project.
+    fast_retry_attempts: 4
+    fast_retry_backoff_s: [10, 30, 60]
+    # A window gets at most two attempts after a mesh/mode table exists.
+    long_retry_attempts: 2
+    long_attempt_threshold_s: 120
+    # Kept for backward-compatible config parsing; new recovery uses the
+    # phase-specific budgets above.
     retry_attempts: 2
     retry_cooldown_s: 10
 
@@ -83,6 +92,9 @@ workflow_4:
 
   field_contract:
     export_dir: D:/workflow4/F2F/Export/3d
+    mode_field_patterns:
+      e: "Mode {mode}_e.h5"
+      h: "Mode {mode}_h.h5"
     # Complex Ez trajectories are read directly from the CST 1D result tree
     # and archived as campaign-local NPZ files after every solve.
     line_result_paths:

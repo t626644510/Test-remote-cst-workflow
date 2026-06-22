@@ -52,9 +52,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Resume the latest or configured hash-matching campaign",
     )
     parser.add_argument(
+        "--resume-preview",
+        action="store_true",
+        help="Read state and print skip/run/avoid decisions plus ETA without CST",
+    )
+    parser.add_argument(
         "--window-id",
         default="",
         help="Run exactly one planned window; saturation follow-ups are deferred",
+    )
+    parser.add_argument(
+        "--force-retry",
+        action="store_true",
+        help="Allow one explicitly selected avoid_retry window to get fresh budgets",
     )
     return parser
 
@@ -88,15 +98,16 @@ def resolve_campaign_dir(
     return config.output_root / f"hom_campaign_{timestamp}"
 
 
-def _setup_logging(campaign_dir: Path) -> None:
-    campaign_dir.mkdir(parents=True, exist_ok=True)
-    handlers = [
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(
-            campaign_dir / "workflow_4_runtime.log",
-            encoding="utf-8",
-        ),
-    ]
+def _setup_logging(campaign_dir: Path, *, read_only: bool = False) -> None:
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    if not read_only:
+        campaign_dir.mkdir(parents=True, exist_ok=True)
+        handlers.append(
+            logging.FileHandler(
+                campaign_dir / "workflow_4_runtime.log",
+                encoding="utf-8",
+            )
+        )
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -107,18 +118,46 @@ def _setup_logging(campaign_dir: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if args.force_retry and not args.window_id:
+        raise SystemExit("--force-retry requires --window-id")
+    if args.force_retry and not (args.resume or args.resume_preview):
+        raise SystemExit("--force-retry requires --resume or --resume-preview")
     config = load_workflow4_config(args.config)
     campaign_dir = resolve_campaign_dir(
         config,
-        resume=args.resume or bool(args.offline_only),
+        resume=args.resume or args.resume_preview or bool(args.offline_only),
         offline_dir=args.offline_only,
     )
-    _setup_logging(campaign_dir)
+    _setup_logging(campaign_dir, read_only=args.resume_preview)
     campaign = Workflow4Campaign(
         config,
         campaign_dir,
-        resume=args.resume or bool(args.offline_only),
+        resume=args.resume or args.resume_preview or bool(args.offline_only),
     )
+
+    if args.resume_preview:
+        campaign.initialize(
+            require_template=True,
+            allow_config_change=True,
+            persist=False,
+        )
+        preview = campaign.resume_preview(
+            window_id=args.window_id,
+            force_retry=args.force_retry,
+        )
+        for row in preview["windows"]:
+            print(
+                f"{row['solver_window_id']}: {row['status']} -> "
+                f"{row['decision']} ({row['estimated_minutes']:.0f} min)"
+            )
+        low, high = preview["realistic_hours"]
+        print(
+            f"Resume preview: run={preview['run_count']}, "
+            f"skip={preview['skip_count']}, avoid={preview['avoid_count']}, "
+            f"ideal={preview['ideal_hours']:.1f} h, "
+            f"realistic={low:.1f}-{high:.1f} h"
+        )
+        return 0
 
     if args.offline_only:
         campaign.initialize(require_template=True, allow_config_change=True)
@@ -126,7 +165,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Offline post-processing complete: {len(modes)} unique modes")
         return 0
 
-    campaign.initialize(require_template=not args.plan_only)
+    campaign.initialize(
+        require_template=not args.plan_only,
+        allow_config_change=args.resume,
+    )
     if args.plan_only:
         print(
             f"Plan complete: {len(campaign.records)} rows -> "
@@ -144,7 +186,10 @@ def main(argv: list[str] | None = None) -> int:
         print(campaign_dir / "result_contract_audit.json")
         return 0
 
-    modes = campaign.run(window_id=args.window_id)
+    modes = campaign.run(
+        window_id=args.window_id,
+        force_retry=args.force_retry,
+    )
     print(f"Workflow 4 complete: {len(modes)} unique simulated modes")
     print(campaign_dir)
     return 0

@@ -179,6 +179,13 @@ class CSTConnection:
                         pid,
                     )
                     kill_all_cst_processes()
+                elif not verify_process_cleanup(pid, timeout_s=10.0):
+                    _logger.warning(
+                        "CST PID=%d still alive after force close; "
+                        "falling back to process sweep",
+                        pid,
+                    )
+                    kill_all_cst_processes()
             self._de = None
             return
 

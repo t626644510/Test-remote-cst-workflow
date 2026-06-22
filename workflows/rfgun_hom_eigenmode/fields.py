@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -85,6 +86,7 @@ def archive_changed_files(
     source_root: str | Path,
     destination_root: str | Path,
     fingerprints: Iterable[FileFingerprint],
+    path_base: str | Path | None = None,
 ) -> list[dict[str, Any]]:
     """Copy changed artifacts into an attempt-owned immutable directory."""
 
@@ -106,7 +108,13 @@ def archive_changed_files(
         archived.append(
             {
                 **fingerprint.to_dict(),
-                "archived_path": str(destination_path.resolve()),
+                "archived_path": (
+                    destination_path.resolve()
+                    .relative_to(Path(path_base).resolve())
+                    .as_posix()
+                    if path_base is not None
+                    else str(destination_path.resolve())
+                ),
             }
         )
     return archived
@@ -126,10 +134,14 @@ def write_artifact_index(
         "after_count": len(after),
         "archived": archived,
     }
-    Path(path).write_text(
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(
         json.dumps(payload, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    os.replace(temporary, destination)
 
 
 def _require_h5py() -> Any:

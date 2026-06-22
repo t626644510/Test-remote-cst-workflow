@@ -110,3 +110,40 @@ def test_pending_target_is_not_reported_as_physical_unmatched(
         row = next(csv.DictReader(handle))
 
     assert row["reason"] == "not_simulated"
+
+
+def test_condition_output_carries_validity_and_boundary_warnings(
+    tmp_path: Path,
+) -> None:
+    record = _record("SRC_WARNING")
+    mode = EigenmodeCandidate(
+        mode_id="MODE_WARN",
+        solver_window_id="WIN_1",
+        attempt_id="attempt_001",
+        mode_number=1,
+        frequency_hz=1e9,
+        derived_valid=False,
+        data_availability_reason="native_r_over_q_crosscheck_failed",
+        warning_codes=["propagating_port_modes_not_considered:1_4"],
+        boundary_sensitive=True,
+        mode_count_censored=True,
+    )
+
+    write_match_outputs(
+        tmp_path,
+        clusters=[_cluster(record)],
+        candidates=[mode],
+        match_half_width_mhz=10,
+    )
+    with (tmp_path / "hom_mode_condition_results.csv").open(
+        encoding="utf-8-sig"
+    ) as handle:
+        row = next(csv.DictReader(handle))
+
+    assert row["derived_valid"] == "false"
+    assert row["boundary_sensitive"] == "true"
+    assert row["mode_count_censored"] == "true"
+    assert "propagating_port_modes_not_considered" in row["warning_codes"]
+    assert row["data_availability_reason"] == (
+        "native_r_over_q_crosscheck_failed"
+    )

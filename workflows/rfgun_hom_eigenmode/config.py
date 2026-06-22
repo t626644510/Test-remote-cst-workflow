@@ -27,6 +27,7 @@ class ResultContractConfig:
 class FieldContractConfig:
     export_dir: Path
     patterns: dict[str, str]
+    mode_field_patterns: dict[str, str] = field(default_factory=dict)
     line_result_paths: dict[str, str] = field(default_factory=dict)
     field_dataset: str = ""
     z_dataset: str = ""
@@ -53,6 +54,10 @@ class Workflow4Config:
     solver_settle_s: float
     retry_attempts: int
     retry_cooldown_s: float
+    fast_retry_attempts: int
+    long_retry_attempts: int
+    fast_retry_backoff_s: tuple[float, ...]
+    long_attempt_threshold_s: float
     validation_tolerance: float
     dedup_frequency_tolerance_hz: float
     dedup_field_correlation: float
@@ -118,6 +123,15 @@ def load_workflow4_config(path: str | Path) -> Workflow4Config:
         solver_settle_s=float(solver.get("settle_s", 2.0)),
         retry_attempts=int(solver.get("retry_attempts", 2)),
         retry_cooldown_s=float(solver.get("retry_cooldown_s", 5.0)),
+        fast_retry_attempts=int(solver.get("fast_retry_attempts", 4)),
+        long_retry_attempts=int(solver.get("long_retry_attempts", 2)),
+        fast_retry_backoff_s=tuple(
+            float(value)
+            for value in solver.get("fast_retry_backoff_s", (10, 30, 60))
+        ),
+        long_attempt_threshold_s=float(
+            solver.get("long_attempt_threshold_s", 120.0)
+        ),
         validation_tolerance=float(
             physics.get("native_crosscheck_relative_tolerance", 0.02)
         ),
@@ -160,6 +174,16 @@ def load_workflow4_config(path: str | Path) -> Workflow4Config:
                 str(key): str(value)
                 for key, value in field_raw.get("patterns", {}).items()
             },
+            mode_field_patterns={
+                str(key): str(value)
+                for key, value in field_raw.get(
+                    "mode_field_patterns",
+                    {
+                        "e": "Mode {mode}_e.h5",
+                        "h": "Mode {mode}_h.h5",
+                    },
+                ).items()
+            },
             line_result_paths={
                 str(key): str(value)
                 for key, value in field_raw.get("line_result_paths", {}).items()
@@ -188,6 +212,14 @@ def _validate_config(config: Workflow4Config) -> None:
         raise ValueError("planning guard must be smaller than search half width")
     if config.retry_attempts < 1:
         raise ValueError("solver.retry_attempts must be at least 1")
+    if config.fast_retry_attempts < 1:
+        raise ValueError("solver.fast_retry_attempts must be at least 1")
+    if config.long_retry_attempts < 1:
+        raise ValueError("solver.long_retry_attempts must be at least 1")
+    if config.long_attempt_threshold_s <= 0:
+        raise ValueError("solver.long_attempt_threshold_s must be positive")
+    if any(value < 0 for value in config.fast_retry_backoff_s):
+        raise ValueError("solver.fast_retry_backoff_s must be non-negative")
     required_points = {"center", "x_plus", "x_minus", "y_plus", "y_minus"}
     available_points = set(config.field_contract.patterns) | set(
         config.field_contract.line_result_paths
@@ -197,6 +229,17 @@ def _validate_config(config: Workflow4Config) -> None:
         raise ValueError(
             "field_contract must configure HDF5 patterns or 1D result paths for: "
             + ", ".join(missing_patterns)
+        )
+    if set(config.field_contract.mode_field_patterns) != {"e", "h"}:
+        raise ValueError(
+            "field_contract.mode_field_patterns must define exactly e and h"
+        )
+    if any(
+        "{mode}" not in pattern
+        for pattern in config.field_contract.mode_field_patterns.values()
+    ):
+        raise ValueError(
+            "field_contract.mode_field_patterns entries require {mode}"
         )
     unknown_q0 = sorted(
         set(config.result_contract.q0_components)

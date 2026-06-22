@@ -260,6 +260,19 @@ def deduplicate_modes(
             members.append(other)
             consumed.add(other.mode_id)
         candidate.duplicate_member_ids = [item.mode_id for item in members]
+        candidate.warning_codes = sorted(
+            {
+                warning
+                for member in members
+                for warning in member.warning_codes
+            }
+        )
+        candidate.boundary_sensitive = any(
+            member.boundary_sensitive for member in members
+        )
+        candidate.mode_count_censored = any(
+            member.mode_count_censored for member in members
+        )
         candidate.dedup_confidence = (
             "high_field_correlation" if len(members) > 1 else "unique"
         )

@@ -9,13 +9,19 @@ from pathlib import Path
 from typing import Any
 
 
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 class CampaignState:
-    """JSON state store with atomic replacement after each status transition."""
+    """Versioned JSON state store with atomic status and attempt updates."""
+
+    SCHEMA_VERSION = 2
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.data: dict[str, Any] = {
-            "schema_version": 1,
+            "schema_version": self.SCHEMA_VERSION,
             "input_hash": "",
             "template_hash": "",
             "config_hash": "",
@@ -29,9 +35,16 @@ class CampaignState:
         self.data = json.loads(self.path.read_text(encoding="utf-8"))
         return True
 
-    def initialize(self, *, input_hash: str, template_hash: str, config_hash: str) -> None:
+    def initialize(
+        self,
+        *,
+        input_hash: str,
+        template_hash: str,
+        config_hash: str,
+    ) -> None:
         self.data.update(
             {
+                "schema_version": self.SCHEMA_VERSION,
                 "input_hash": input_hash,
                 "template_hash": template_hash,
                 "config_hash": config_hash,
@@ -52,21 +65,50 @@ class CampaignState:
         self,
         window_id: str,
         status: str,
+        *,
+        clear_active_error: bool = False,
+        persist: bool = True,
         **extra: Any,
     ) -> None:
         record = dict(self.data.setdefault("windows", {}).get(window_id, {}))
         record.update(extra)
+        if clear_active_error:
+            record.pop("error", None)
+            record.pop("failure_class", None)
         record["status"] = status
-        record["updated_at"] = datetime.now(timezone.utc).isoformat()
+        record["updated_at"] = utc_now()
         self.data["windows"][window_id] = record
-        self.save()
+        if persist:
+            self.save()
+
+    def record_attempt(
+        self,
+        window_id: str,
+        attempt: dict[str, Any],
+        *,
+        persist: bool = True,
+    ) -> None:
+        record = dict(self.data.setdefault("windows", {}).get(window_id, {}))
+        history = [
+            dict(item)
+            for item in record.get("attempt_history", [])
+            if item.get("attempt_id") != attempt.get("attempt_id")
+        ]
+        history.append(dict(attempt))
+        history.sort(key=lambda item: str(item.get("attempt_id", "")))
+        record["attempt_history"] = history
+        record["updated_at"] = utc_now()
+        self.data["windows"][window_id] = record
+        if persist:
+            self.save()
 
     def get_window(self, window_id: str) -> dict[str, Any]:
         return dict(self.data.get("windows", {}).get(window_id, {}))
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self.data["schema_version"] = self.SCHEMA_VERSION
+        self.data["updated_at"] = utc_now()
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(
             json.dumps(self.data, indent=2, ensure_ascii=False),

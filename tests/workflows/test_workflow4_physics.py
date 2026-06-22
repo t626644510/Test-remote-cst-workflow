@@ -113,6 +113,9 @@ def test_mode_dedup_requires_field_agreement_not_frequency_alone() -> None:
         mode_number=1,
         frequency_hz=1.0001e9,
         r_over_q_ohm=10.1,
+        warning_codes=["propagating_port_modes_not_considered:4"],
+        boundary_sensitive=True,
+        mode_count_censored=True,
     )
     different = EigenmodeCandidate(
         mode_id="M3",
@@ -137,4 +140,9 @@ def test_mode_dedup_requires_field_agreement_not_frequency_alone() -> None:
 
     assert len(result) == 2
     assert result[0].duplicate_member_ids == ["M1", "M2"]
+    assert result[0].warning_codes == [
+        "propagating_port_modes_not_considered:4"
+    ]
+    assert result[0].boundary_sensitive is True
+    assert result[0].mode_count_censored is True
     assert result[1].mode_id == "M3"

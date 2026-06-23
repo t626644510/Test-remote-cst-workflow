@@ -8,7 +8,10 @@ from workflows.rfgun_hom_eigenmode.models import (
     TargetCluster,
     TargetRecord,
 )
-from workflows.rfgun_hom_eigenmode.output import write_match_outputs
+from workflows.rfgun_hom_eigenmode.output import (
+    write_eigenmode_results,
+    write_match_outputs,
+)
 
 
 def _record(source_id: str, propagation: bool = False) -> TargetRecord:
@@ -147,3 +150,23 @@ def test_condition_output_carries_validity_and_boundary_warnings(
     assert row["data_availability_reason"] == (
         "native_r_over_q_crosscheck_failed"
     )
+
+
+def test_eigenmode_output_records_template_revision(tmp_path: Path) -> None:
+    mode = EigenmodeCandidate(
+        mode_id="MODE_REVISION",
+        solver_window_id="WIN_1",
+        attempt_id="attempt_001",
+        mode_number=1,
+        frequency_hz=1e9,
+        template_revision_id="TR_abc123",
+        template_hash="abc123",
+    )
+
+    path = tmp_path / "results.csv"
+    write_eigenmode_results(path, [mode])
+    with path.open(encoding="utf-8-sig") as handle:
+        row = next(csv.DictReader(handle))
+
+    assert row["template_revision_id"] == "TR_abc123"
+    assert row["template_hash"] == "abc123"

@@ -76,6 +76,7 @@ _COMPLETED_STATUSES = {
 _AVOID_STATUSES = {
     "avoid_retry",
     "avoid_retry_legacy",
+    "cleanup_incomplete",
 }
 _RUNNABLE_STATUSES = {
     "pending",
@@ -103,6 +104,14 @@ class AttemptFailure(RuntimeError):
         self.elapsed_s = float(elapsed_s)
         self.diagnostics = diagnostics
         self.attempt_dir = attempt_dir
+
+
+class CleanupIncompleteError(RuntimeError):
+    """Raised when a Workflow 4-owned CST PID cannot be verified as stopped."""
+
+
+def _template_revision_id(template_hash: str) -> str:
+    return f"TR_{template_hash[:12]}"
 
 
 def _git_commit(project_root: Path) -> str:
@@ -194,6 +203,54 @@ class Workflow4Campaign:
             "config_hash": sha256_file(self.config.source_config_path),
         }
 
+    def _ensure_template_revision_state(self) -> None:
+        revisions = list(self.state.data.get("template_revisions", []))
+        if not revisions:
+            initial_hash = str(self.state.data.get("template_hash", ""))
+            if initial_hash:
+                revisions.append(
+                    {
+                        "revision_id": _template_revision_id(initial_hash),
+                        "template_hash": initial_hash,
+                        "adopted_at": str(
+                            self.state.data.get("updated_at", "")
+                        ),
+                        "change_note": "initial campaign template",
+                    }
+                )
+        self.state.data["template_revisions"] = revisions
+        if revisions and not self.state.data.get(
+            "active_template_revision_id"
+        ):
+            self.state.data["active_template_revision_id"] = revisions[-1][
+                "revision_id"
+            ]
+
+    @property
+    def active_template_revision(self) -> dict[str, Any]:
+        self._ensure_template_revision_state()
+        active_id = str(
+            self.state.data.get("active_template_revision_id", "")
+        )
+        for revision in self.state.data.get("template_revisions", []):
+            if revision.get("revision_id") == active_id:
+                return dict(revision)
+        return {}
+
+    def _template_revision_for_metadata(
+        self, metadata: dict[str, Any]
+    ) -> dict[str, Any]:
+        revision_id = str(metadata.get("template_revision_id", ""))
+        state = getattr(self, "state", None)
+        revisions = list(
+            state.data.get("template_revisions", []) if state is not None else []
+        )
+        if revision_id:
+            for revision in revisions:
+                if revision.get("revision_id") == revision_id:
+                    return dict(revision)
+        return dict(revisions[0]) if revisions else {}
+
     def initialize(
         self,
         *,
@@ -230,10 +287,11 @@ class Workflow4Campaign:
                     raise RuntimeError(
                         "resume refused: input, template, or config hash changed"
                     )
-            # Migrate before the first schema-v2 save. CampaignState.save()
+            # Migrate before the first current-schema save. CampaignState.save()
             # stamps the current schema version, so saving a config-hash
             # update first would make a legacy campaign look already migrated.
             self._migrate_legacy_state(persist=False)
+            self._ensure_template_revision_state()
             self._migrate_stale_running(persist=persist)
             if persist:
                 self.state.save()
@@ -244,6 +302,8 @@ class Workflow4Campaign:
                 )
             if persist:
                 self.state.initialize(**hashes)
+                self._ensure_template_revision_state()
+                self.state.save()
 
         self._restore_dynamic_windows()
         if not persist:
@@ -260,6 +320,197 @@ class Workflow4Campaign:
                     long_attempt_count=0,
                     attempt_history=[],
                 )
+
+    def initialize_template_migration(self, *, persist: bool = False) -> None:
+        """Load a campaign while allowing only an explicit template mismatch."""
+
+        if not self.config.input_csv.is_file():
+            raise FileNotFoundError(f"input CSV not found: {self.config.input_csv}")
+        if not self.config.template_path.is_file():
+            raise FileNotFoundError(
+                f"CST template not found: {self.config.template_path}"
+            )
+        if not self.state.load():
+            raise FileNotFoundError(
+                f"campaign state is missing: {self.state.path}"
+            )
+        hashes = self.hashes
+        if self.state.data.get("input_hash") != hashes["input_hash"]:
+            raise RuntimeError(
+                "template migration refused: input CSV hash changed"
+            )
+        self._migrate_legacy_state(persist=False)
+        self._ensure_template_revision_state()
+        self._migrate_stale_running(persist=persist)
+        self._restore_dynamic_windows()
+        if persist:
+            self.state.data["config_hash"] = hashes["config_hash"]
+            self.state.save()
+
+    def template_migration_preview(
+        self,
+        *,
+        retry_scope: str = "long-related",
+    ) -> dict[str, Any]:
+        """Preview template adoption and retry-budget resets without writes."""
+
+        if retry_scope != "long-related":
+            raise ValueError(f"unsupported retry scope: {retry_scope}")
+        hashes = self.hashes
+        old_hash = str(self.state.data.get("template_hash", ""))
+        changed = old_hash != hashes["template_hash"]
+        reset_ids = sorted(
+            window_id
+            for window_id, record in self.state.data.get(
+                "windows", {}
+            ).items()
+            if record.get("status") in {"avoid_retry", "avoid_retry_legacy"}
+            and int(record.get("long_attempt_count", 0)) > 0
+        )
+        existing_runnable = sorted(
+            window_id
+            for window_id, record in self.state.data.get(
+                "windows", {}
+            ).items()
+            if record.get("status") in _RUNNABLE_STATUSES
+        )
+        pure_fast_avoid = sorted(
+            window_id
+            for window_id, record in self.state.data.get(
+                "windows", {}
+            ).items()
+            if record.get("status") in {"avoid_retry", "avoid_retry_legacy"}
+            and int(record.get("long_attempt_count", 0)) == 0
+        )
+        run_ids = sorted(set(reset_ids + existing_runnable)) if changed else []
+        by_id = {window.solver_window_id: window for window in self.windows}
+        ideal_hours = sum(
+            self._estimate_window_minutes(by_id[window_id]) / 60.0
+            for window_id in run_ids
+            if window_id in by_id
+        )
+        return {
+            "changed": changed,
+            "old_template_hash": old_hash,
+            "new_template_hash": hashes["template_hash"],
+            "old_revision_id": self.state.data.get(
+                "active_template_revision_id", ""
+            ),
+            "new_revision_id": _template_revision_id(
+                hashes["template_hash"]
+            ),
+            "retry_scope": retry_scope,
+            "reset_window_ids": reset_ids if changed else [],
+            "existing_runnable_ids": existing_runnable,
+            "pure_fast_avoid_ids": pure_fast_avoid,
+            "run_count_after_adoption": len(run_ids),
+            "skip_completed_count": sum(
+                record.get("status") in _COMPLETED_STATUSES
+                for record in self.state.data.get("windows", {}).values()
+            ),
+            "ideal_hours": round(ideal_hours, 1),
+            "realistic_hours": (
+                round(ideal_hours * 1.35, 1),
+                round(ideal_hours * 2.0, 1),
+            ),
+            "eta_basis": (
+                "conservative legacy-template frequency-band estimates; "
+                "recalibrate after new-template live smoke"
+            ),
+        }
+
+    def adopt_template_revision(
+        self,
+        *,
+        retry_scope: str,
+        change_note: str,
+    ) -> dict[str, Any]:
+        """Atomically adopt a new template and reset selected retry budgets."""
+
+        if not change_note.strip():
+            raise ValueError("template change note must not be empty")
+        preview = self.template_migration_preview(retry_scope=retry_scope)
+        if not preview["changed"]:
+            raise RuntimeError(
+                "template adoption refused: current template hash is unchanged"
+            )
+        now = utc_now()
+        old_revision_id = str(preview["old_revision_id"])
+        new_revision_id = str(preview["new_revision_id"])
+        revisions = list(self.state.data.get("template_revisions", []))
+        if any(
+            revision.get("template_hash") == preview["new_template_hash"]
+            for revision in revisions
+        ):
+            raise RuntimeError(
+                "template adoption refused: this template hash already exists "
+                "in campaign history"
+            )
+        for window_id in preview["reset_window_ids"]:
+            record = dict(self.state.data["windows"][window_id])
+            generation_history = list(
+                record.get("retry_generation_history", [])
+            )
+            generation_history.append(
+                {
+                    "retry_generation": int(
+                        record.get("retry_generation", 0)
+                    ),
+                    "template_revision_id": old_revision_id,
+                    "status": record.get("status", ""),
+                    "init_attempt_count": int(
+                        record.get("init_attempt_count", 0)
+                    ),
+                    "long_attempt_count": int(
+                        record.get("long_attempt_count", 0)
+                    ),
+                    "error": record.get("error", ""),
+                    "failure_class": record.get("failure_class", ""),
+                    "terminal_reason": record.get("terminal_reason", ""),
+                    "closed_at": now,
+                }
+            )
+            record.pop("error", None)
+            record.pop("failure_class", None)
+            record.update(
+                {
+                    "status": "retry_pending",
+                    "init_attempt_count": 0,
+                    "long_attempt_count": 0,
+                    "retry_generation": int(
+                        record.get("retry_generation", 0)
+                    )
+                    + 1,
+                    "retry_generation_history": generation_history,
+                    "template_revision_id": new_revision_id,
+                    "terminal_reason": "template_revision_retry_reset",
+                    "updated_at": now,
+                }
+            )
+            self.state.data["windows"][window_id] = record
+        revisions.append(
+            {
+                "revision_id": new_revision_id,
+                "template_hash": preview["new_template_hash"],
+                "template_path": str(self.config.template_path.resolve()),
+                "adopted_at": now,
+                "change_note": change_note.strip(),
+                "inherits_successful_results": True,
+                "retry_scope": retry_scope,
+                "reset_window_ids": list(preview["reset_window_ids"]),
+            }
+        )
+        self.state.data.update(
+            {
+                "template_hash": preview["new_template_hash"],
+                "config_hash": self.hashes["config_hash"],
+                "template_revisions": revisions,
+                "active_template_revision_id": new_revision_id,
+            }
+        )
+        self.state.save()
+        self._write_manifest()
+        return preview
 
     def _restore_dynamic_windows(self) -> None:
         known = {window.solver_window_id for window in self.windows}
@@ -428,7 +679,7 @@ class Workflow4Campaign:
     def _write_manifest(self) -> None:
         hashes = self.hashes
         payload = {
-            "schema_version": 2,
+            "schema_version": 3,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "workflow": "workflow_4_hom_eigenmode",
             "input_csv": str(self.config.input_csv.resolve()),
@@ -439,6 +690,12 @@ class Workflow4Campaign:
             ),
             "config_path": str(self.config.source_config_path.resolve()),
             **hashes,
+            "active_template_revision_id": self.state.data.get(
+                "active_template_revision_id", ""
+            ),
+            "template_revisions": self.state.data.get(
+                "template_revisions", []
+            ),
             "git_commit": _git_commit(self.project_root),
             "parameter": {
                 "name": self.config.parameter_name,
@@ -547,6 +804,48 @@ class Workflow4Campaign:
             write_json(manifest_path, payload)
         except Exception:
             _logger.warning("Could not record CST version", exc_info=True)
+
+    def _close_attempt_connection(
+        self,
+        connection: CSTConnection,
+        *,
+        window_id: str,
+        attempt_dir: Path,
+        phase: str,
+        recorded_pid: int | None,
+    ) -> None:
+        """Close one Workflow 4-owned CST process without a global sweep."""
+
+        result = connection.close_targeted(pid_override=recorded_pid)
+        metadata = self._read_attempt_metadata(attempt_dir)
+        cleanup_events = list(metadata.get("cleanup_events", []))
+        cleanup_events.append(
+            {
+                **result,
+                "phase": phase,
+                "recorded_at": utc_now(),
+            }
+        )
+        self._write_attempt_metadata(
+            window_id,
+            attempt_dir,
+            cleanup_events=cleanup_events,
+            last_cleanup=result,
+        )
+        if not result["success"]:
+            self.state.set_window(
+                window_id,
+                "cleanup_incomplete",
+                error=(
+                    f"targeted CST cleanup failed during {phase}: "
+                    f"{result.get('reason', '')}"
+                ),
+                failure_class="cleanup_incomplete",
+                terminal_reason="owned_cst_pid_not_verified_stopped",
+            )
+            raise CleanupIncompleteError(
+                f"Workflow 4 CST cleanup incomplete during {phase}: {result}"
+            )
 
     def _next_attempt_number(self, window: SolverWindow) -> int:
         root = self.campaign_dir / "windows" / window.solver_window_id
@@ -1078,6 +1377,8 @@ class Workflow4Campaign:
         raw_dir.mkdir(parents=True)
         attempt_project = self._attempt_project(attempt_dir)
         started_at = utc_now()
+        revision = self.active_template_revision
+        window_record = self.state.get_window(window.solver_window_id)
         metadata = {
             "window": window.to_dict(),
             "attempt_id": attempt_id,
@@ -1085,6 +1386,13 @@ class Workflow4Campaign:
             "ended_at": "",
             "phase": "prepare",
             "outcome": "running",
+            "template_revision_id": revision.get("revision_id", ""),
+            "template_hash": revision.get(
+                "template_hash", self.hashes["template_hash"]
+            ),
+            "retry_generation": int(
+                window_record.get("retry_generation", 0)
+            ),
             "attempt_project": attempt_project.relative_to(
                 self.campaign_dir
             ).as_posix(),
@@ -1182,6 +1490,17 @@ class Workflow4Campaign:
                 wall_elapsed_s=time.perf_counter() - t0,
             )
             return outcome
+        except CleanupIncompleteError:
+            self._write_attempt_metadata(
+                window.solver_window_id,
+                attempt_dir,
+                phase="cleanup",
+                outcome="failed",
+                ended_at=utc_now(),
+                wall_elapsed_s=time.perf_counter() - t0,
+                failure_class="cleanup_incomplete",
+            )
+            raise
         except KeyboardInterrupt:
             elapsed = time.perf_counter() - t0
             interrupted_phase = str(
@@ -1302,13 +1621,15 @@ class Workflow4Campaign:
         _safe_copy(self.config.template_path, attempt_project)
         connection: CSTConnection | None = None
         project = None
+        recorded_pid: int | None = None
         try:
             connection = self._new_connection()
+            recorded_pid = connection.pid
             self._write_attempt_metadata(
                 window.solver_window_id,
                 attempt_dir,
                 phase="rebuild",
-                prepare_pid=connection.pid,
+                prepare_pid=recorded_pid,
             )
             project = connection.open_project(str(attempt_project))
             updated = project.update_parameters(
@@ -1323,8 +1644,15 @@ class Workflow4Campaign:
                 raise RuntimeError("failed to save result-free rebuilt project")
             project.close(save=False)
             project = None
-            connection.close(force=False)
+            owned_connection = connection
             connection = None
+            self._close_attempt_connection(
+                owned_connection,
+                window_id=window.solver_window_id,
+                attempt_dir=attempt_dir,
+                phase="rebuild_close",
+                recorded_pid=recorded_pid,
+            )
             self._write_attempt_metadata(
                 window.solver_window_id,
                 attempt_dir,
@@ -1334,7 +1662,15 @@ class Workflow4Campaign:
             if project is not None:
                 project.close(save=False)
             if connection is not None:
-                connection.close(force=True)
+                owned_connection = connection
+                connection = None
+                self._close_attempt_connection(
+                    owned_connection,
+                    window_id=window.solver_window_id,
+                    attempt_dir=attempt_dir,
+                    phase="rebuild_failure_close",
+                    recorded_pid=recorded_pid,
+                )
 
     def _solve_attempt_project(
         self,
@@ -1348,13 +1684,15 @@ class Workflow4Campaign:
         project = None
         solver_result = None
         diagnostics = read_attempt_diagnostics(attempt_dir)
+        recorded_pid: int | None = None
         try:
             connection = self._new_connection()
+            recorded_pid = connection.pid
             self._write_attempt_metadata(
                 window.solver_window_id,
                 attempt_dir,
                 phase="solve",
-                solve_pid=connection.pid,
+                solve_pid=recorded_pid,
             )
             project = connection.open_project(str(attempt_project))
             solver = SolverRunner(
@@ -1407,14 +1745,29 @@ class Workflow4Campaign:
                 )
             project.close(save=False)
             project = None
-            connection.close(force=False)
+            owned_connection = connection
             connection = None
+            self._close_attempt_connection(
+                owned_connection,
+                window_id=window.solver_window_id,
+                attempt_dir=attempt_dir,
+                phase="solve_close",
+                recorded_pid=recorded_pid,
+            )
             return solver_result, diagnostics
         finally:
             if project is not None:
                 project.close(save=False)
             if connection is not None:
-                connection.close(force=True)
+                owned_connection = connection
+                connection = None
+                self._close_attempt_connection(
+                    owned_connection,
+                    window_id=window.solver_window_id,
+                    attempt_dir=attempt_dir,
+                    phase="solve_failure_close",
+                    recorded_pid=recorded_pid,
+                )
 
     def _extract_attempt(
         self,
@@ -1662,6 +2015,8 @@ class Workflow4Campaign:
         raw_dir = attempt_dir / "raw"
         candidates: list[EigenmodeCandidate] = []
         diagnostics = diagnostics or read_attempt_diagnostics(attempt_dir)
+        attempt_metadata = self._read_attempt_metadata(attempt_dir)
+        revision = self._template_revision_for_metadata(attempt_metadata)
         for native in native_modes:
             mode_id = (
                 f"MODE_{window.solver_window_id}_{attempt_id.upper()}"
@@ -1684,6 +2039,14 @@ class Workflow4Campaign:
                 warning_codes=list(diagnostics.warning_codes),
                 boundary_sensitive=diagnostics.boundary_sensitive,
                 mode_count_censored=mode_count_censored,
+                template_revision_id=str(
+                    attempt_metadata.get("template_revision_id")
+                    or revision.get("revision_id", "")
+                ),
+                template_hash=str(
+                    attempt_metadata.get("template_hash")
+                    or revision.get("template_hash", "")
+                ),
             )
             fields = {}
             field_contract_errors = []
@@ -1928,6 +2291,17 @@ class Workflow4Campaign:
             payload = json.loads(path.read_text(encoding="utf-8"))
             for item in payload:
                 candidate = EigenmodeCandidate.from_dict(item)
+                revision = self._template_revision_for_metadata(metadata)
+                if not candidate.template_revision_id:
+                    candidate.template_revision_id = str(
+                        metadata.get("template_revision_id")
+                        or revision.get("revision_id", "")
+                    )
+                if not candidate.template_hash:
+                    candidate.template_hash = str(
+                        metadata.get("template_hash")
+                        or revision.get("template_hash", "")
+                    )
                 if self._candidate_is_fresh(candidate, path.parent, window):
                     candidates.append(candidate)
         return candidates

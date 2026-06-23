@@ -153,6 +153,8 @@ class EigenmodeCandidate:
     warning_codes: list[str] = field(default_factory=list)
     boundary_sensitive: bool = False
     mode_count_censored: bool = False
+    template_revision_id: str = ""
+    template_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

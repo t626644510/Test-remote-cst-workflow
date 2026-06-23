@@ -10,6 +10,8 @@ frequencies and performs all transverse coupling calculations offline.
 .\.venv\Scripts\python.exe run_workflow_4.py --resume-preview
 .\.venv\Scripts\python.exe run_workflow_4.py --resume
 .\.venv\Scripts\python.exe run_workflow_4.py --resume --window-id WIN_0004 --force-retry
+.\.venv\Scripts\python.exe run_workflow_4.py --template-migration-preview
+.\.venv\Scripts\python.exe run_workflow_4.py --adopt-template-revision --template-change-note "disable adaptive meshing"
 .\.venv\Scripts\python.exe run_workflow_4.py --offline-only D:\Results\workflow4\hom_campaign_...
 ```
 
@@ -30,3 +32,18 @@ not guaranteed to be one-directional. In the audited template, port 1 warned
 from the lowest band and ports 4/5/6 from about 1.5 GHz. In particular,
 2.7--3.0 GHz loaded/external/radiated Q values remain diagnostic rather than
 final impedance evidence.
+
+Changing the template is never accepted by ordinary `--resume`. Use the
+read-only migration preview first, then explicitly adopt the new revision.
+Successful old-template windows remain traceable and long-related failed
+windows receive fresh retry budgets; purely fast-failed windows remain
+avoided. Every new attempt and result row records its template revision/hash.
+
+Workflow 4 owns dedicated `mode="new"` CST processes. After explicitly saving
+and closing a project, it terminates only the recorded process tree and
+verifies that PID exited. It never uses a machine-wide CST process sweep. A
+failed PID verification stops the campaign as `cleanup_incomplete`.
+
+Migration-preview ETA values deliberately retain the old frequency-band
+estimator and are conservative after solver/mesh changes. Recalibrate runtime
+after one low-frequency and one high-frequency live smoke window.

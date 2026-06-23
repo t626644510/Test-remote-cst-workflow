@@ -6,7 +6,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
+from workflows.rfgun_hom_eigenmode.config import _validate_config
 from workflows.rfgun_hom_eigenmode.fields import save_complex_line_npz
 from workflows.rfgun_hom_eigenmode.models import (
     ComplexLineField,
@@ -16,6 +18,7 @@ from workflows.rfgun_hom_eigenmode.models import (
 from workflows.rfgun_hom_eigenmode.state import CampaignState
 from workflows.rfgun_hom_eigenmode.workflow import (
     AttemptFailure,
+    CleanupIncompleteError,
     Workflow4Campaign,
 )
 
@@ -62,6 +65,11 @@ def _minimal_campaign(tmp_path: Path) -> Workflow4Campaign:
         attempt_history=[],
     )
     return campaign
+
+
+def test_workflow4_requires_a_dedicated_new_cst_connection() -> None:
+    with pytest.raises(ValueError, match="connect_mode='new'"):
+        _validate_config(SimpleNamespace(connect_mode="any"))
 
 
 def test_successful_transition_clears_active_error_but_keeps_history(
@@ -346,6 +354,146 @@ def test_config_hash_update_does_not_skip_legacy_migration(
     assert interrupted["long_attempt_count"] == 1
 
 
+def test_template_migration_preview_is_read_only_and_adoption_resets_only_long(
+    monkeypatch, tmp_path: Path
+) -> None:
+    input_csv = tmp_path / "input.csv"
+    template = tmp_path / "template.cst"
+    config_file = tmp_path / "config.yaml"
+    input_csv.write_text("input", encoding="utf-8")
+    template.write_text("old template", encoding="utf-8")
+    config_file.write_text("config", encoding="utf-8")
+    campaign = object.__new__(Workflow4Campaign)
+    campaign.config = SimpleNamespace(
+        input_csv=input_csv,
+        template_path=template,
+        source_config_path=config_file,
+        long_attempt_threshold_s=120.0,
+    )
+    campaign.campaign_dir = tmp_path
+    campaign.resume = True
+    campaign.state = CampaignState(tmp_path / "campaign_state.json")
+    old_hash = hashlib.sha256(b"old template").hexdigest()
+    campaign.state.initialize(
+        input_hash=hashlib.sha256(b"input").hexdigest(),
+        template_hash=old_hash,
+        config_hash=hashlib.sha256(b"config").hexdigest(),
+    )
+    campaign.windows = [
+        _window("DONE"),
+        _window("LONG"),
+        _window("FAST"),
+        _window("PENDING"),
+    ]
+    campaign.state.set_window(
+        "DONE",
+        "postprocessed",
+        window=_window("DONE").to_dict(),
+    )
+    campaign.state.set_window(
+        "LONG",
+        "avoid_retry",
+        window=_window("LONG").to_dict(),
+        init_attempt_count=1,
+        long_attempt_count=2,
+        error="old long failure",
+        failure_class="long_solve",
+    )
+    campaign.state.set_window(
+        "FAST",
+        "avoid_retry_legacy",
+        window=_window("FAST").to_dict(),
+        init_attempt_count=2,
+        long_attempt_count=0,
+    )
+    campaign.state.set_window(
+        "PENDING",
+        "pending",
+        window=_window("PENDING").to_dict(),
+        init_attempt_count=0,
+        long_attempt_count=0,
+    )
+    before = campaign.state.path.read_bytes()
+    template.write_text("new template", encoding="utf-8")
+
+    campaign.initialize_template_migration(persist=False)
+    preview = campaign.template_migration_preview()
+
+    assert campaign.state.path.read_bytes() == before
+    assert preview["changed"] is True
+    assert preview["reset_window_ids"] == ["LONG"]
+    assert preview["pure_fast_avoid_ids"] == ["FAST"]
+    assert preview["run_count_after_adoption"] == 2
+
+    monkeypatch.setattr(campaign, "_write_manifest", lambda: None)
+    campaign.adopt_template_revision(
+        retry_scope="long-related",
+        change_note="disable adaptive meshing",
+    )
+    reset = campaign.state.get_window("LONG")
+    assert reset["status"] == "retry_pending"
+    assert reset["init_attempt_count"] == 0
+    assert reset["long_attempt_count"] == 0
+    assert reset["retry_generation"] == 1
+    assert len(reset["retry_generation_history"]) == 1
+    assert reset["retry_generation_history"][0]["long_attempt_count"] == 2
+    assert "error" not in reset
+    assert campaign.state.get_window("FAST")["status"] == (
+        "avoid_retry_legacy"
+    )
+    assert campaign.state.get_window("DONE")["status"] == "postprocessed"
+    assert campaign.state.data["template_hash"] == hashlib.sha256(
+        b"new template"
+    ).hexdigest()
+    with pytest.raises(RuntimeError, match="hash is unchanged"):
+        campaign.adopt_template_revision(
+            retry_scope="long-related",
+            change_note="duplicate adoption",
+        )
+
+
+def test_cleanup_failure_enters_non_runnable_terminal_state(
+    tmp_path: Path,
+) -> None:
+    campaign = _minimal_campaign(tmp_path)
+    attempt = tmp_path / "windows" / "WIN_0001" / "attempt_001"
+    attempt.mkdir(parents=True)
+    (attempt / "attempt_metadata.json").write_text(
+        json.dumps(
+            {
+                "window": _window().to_dict(),
+                "attempt_id": "attempt_001",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FailedConnection:
+        def close_targeted(self, **_kwargs):
+            return {
+                "success": False,
+                "pid": 123,
+                "pid_source": "override",
+                "force_kill_ok": False,
+                "exit_verified": False,
+                "elapsed_s": 1.0,
+                "reason": "targeted_process_cleanup_failed",
+            }
+
+    with pytest.raises(CleanupIncompleteError):
+        campaign._close_attempt_connection(
+            FailedConnection(),  # type: ignore[arg-type]
+            window_id="WIN_0001",
+            attempt_dir=attempt,
+            phase="solve_close",
+            recorded_pid=123,
+        )
+
+    record = campaign.state.get_window("WIN_0001")
+    assert record["status"] == "cleanup_incomplete"
+    assert campaign._resume_decision(_window()) == "avoid"
+
+
 def _write_mode_artifacts(
     root: Path,
     *,
@@ -545,3 +693,34 @@ def test_corrupted_archived_hdf5_is_rejected(tmp_path: Path) -> None:
     corrupt.write_bytes(b"corrupt")
 
     assert campaign._load_all_candidates() == []
+
+
+def test_legacy_candidate_is_attributed_to_initial_template_revision(
+    tmp_path: Path,
+) -> None:
+    campaign = object.__new__(Workflow4Campaign)
+    campaign.campaign_dir = tmp_path
+    campaign.config = SimpleNamespace(max_modes=3)
+    campaign._artifact_validation_cache = {}
+    campaign.state = CampaignState(tmp_path / "campaign_state.json")
+    campaign.state.initialize(
+        input_hash="input",
+        template_hash="a" * 64,
+        config_hash="config",
+    )
+    _write_mode_artifacts(
+        tmp_path,
+        window_id="WIN_0001",
+        attempt_id="attempt_001",
+        mode_number=1,
+        frequency_hz=1e9,
+        reported_modes=(1,),
+        include_hdf5=True,
+        derived_valid=True,
+    )
+
+    candidates = campaign._load_all_candidates()
+
+    assert len(candidates) == 1
+    assert candidates[0].template_revision_id == "TR_aaaaaaaaaaaa"
+    assert candidates[0].template_hash == "a" * 64

@@ -200,6 +200,11 @@ def load_workflow4_config(path: str | Path) -> Workflow4Config:
 
 
 def _validate_config(config: Workflow4Config) -> None:
+    if config.connect_mode != "new":
+        raise ValueError(
+            "Workflow 4 requires cst.connect_mode='new' so each owned PID "
+            "can be closed without affecting another CST session"
+        )
     if config.max_modes != 3:
         raise ValueError("Workflow 4 v1 requires max_modes=3")
     if config.max_clusters_per_window < 1 or config.max_clusters_per_window > 3:

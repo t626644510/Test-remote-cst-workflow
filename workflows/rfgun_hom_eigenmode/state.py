@@ -16,7 +16,7 @@ def utc_now() -> str:
 class CampaignState:
     """Versioned JSON state store with atomic status and attempt updates."""
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -25,6 +25,8 @@ class CampaignState:
             "input_hash": "",
             "template_hash": "",
             "config_hash": "",
+            "template_revisions": [],
+            "active_template_revision_id": "",
             "windows": {},
             "updated_at": "",
         }
@@ -48,6 +50,15 @@ class CampaignState:
                 "input_hash": input_hash,
                 "template_hash": template_hash,
                 "config_hash": config_hash,
+                "template_revisions": [
+                    {
+                        "revision_id": f"TR_{template_hash[:12]}",
+                        "template_hash": template_hash,
+                        "adopted_at": utc_now(),
+                        "change_note": "initial campaign template",
+                    }
+                ],
+                "active_template_revision_id": f"TR_{template_hash[:12]}",
             }
         )
         self.save()

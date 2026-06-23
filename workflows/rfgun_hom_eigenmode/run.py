@@ -66,6 +66,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow one explicitly selected avoid_retry window to get fresh budgets",
     )
+    parser.add_argument(
+        "--template-migration-preview",
+        action="store_true",
+        help="Preview explicit template revision adoption without writing state",
+    )
+    parser.add_argument(
+        "--adopt-template-revision",
+        action="store_true",
+        help="Adopt the current template hash and reset selected retry budgets",
+    )
+    parser.add_argument(
+        "--retry-scope",
+        choices=("long-related",),
+        default="long-related",
+        help="Window set reset by template adoption",
+    )
+    parser.add_argument(
+        "--template-change-note",
+        default="",
+        help="Required provenance note for --adopt-template-revision",
+    )
     return parser
 
 
@@ -122,18 +143,72 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("--force-retry requires --window-id")
     if args.force_retry and not (args.resume or args.resume_preview):
         raise SystemExit("--force-retry requires --resume or --resume-preview")
+    if args.template_migration_preview and args.adopt_template_revision:
+        raise SystemExit(
+            "choose only one of --template-migration-preview and "
+            "--adopt-template-revision"
+        )
+    if args.adopt_template_revision and not args.template_change_note.strip():
+        raise SystemExit(
+            "--adopt-template-revision requires --template-change-note"
+        )
+    migration_action = (
+        args.template_migration_preview or args.adopt_template_revision
+    )
     config = load_workflow4_config(args.config)
     campaign_dir = resolve_campaign_dir(
         config,
-        resume=args.resume or args.resume_preview or bool(args.offline_only),
+        resume=(
+            args.resume
+            or args.resume_preview
+            or migration_action
+            or bool(args.offline_only)
+        ),
         offline_dir=args.offline_only,
     )
-    _setup_logging(campaign_dir, read_only=args.resume_preview)
+    _setup_logging(
+        campaign_dir,
+        read_only=args.resume_preview or args.template_migration_preview,
+    )
     campaign = Workflow4Campaign(
         config,
         campaign_dir,
-        resume=args.resume or args.resume_preview or bool(args.offline_only),
+        resume=(
+            args.resume
+            or args.resume_preview
+            or migration_action
+            or bool(args.offline_only)
+        ),
     )
+
+    if migration_action:
+        campaign.initialize_template_migration(persist=False)
+        if args.template_migration_preview:
+            preview = campaign.template_migration_preview(
+                retry_scope=args.retry_scope
+            )
+        else:
+            preview = campaign.adopt_template_revision(
+                retry_scope=args.retry_scope,
+                change_note=args.template_change_note,
+            )
+        low, high = preview["realistic_hours"]
+        print(
+            f"Template changed={preview['changed']}: "
+            f"{preview['old_template_hash']} -> "
+            f"{preview['new_template_hash']}"
+        )
+        print(
+            f"reset={len(preview['reset_window_ids'])}, "
+            f"run_after_adoption={preview['run_count_after_adoption']}, "
+            f"skip_completed={preview['skip_completed_count']}, "
+            f"historical_ideal={preview['ideal_hours']:.1f} h, "
+            f"historical_realistic={low:.1f}-{high:.1f} h"
+        )
+        print(f"ETA basis: {preview['eta_basis']}")
+        for window_id in preview["reset_window_ids"]:
+            print(f"reset long-related failure: {window_id}")
+        return 0
 
     if args.resume_preview:
         campaign.initialize(

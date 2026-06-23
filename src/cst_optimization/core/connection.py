@@ -225,6 +225,60 @@ class CSTConnection:
         # Phase 3 — always null the reference
         self._de = None
 
+    def close_targeted(
+        self,
+        *,
+        pid_override: int | None = None,
+        timeout_s: float = 15.0,
+    ) -> dict[str, Any]:
+        """Stop only this connection's recorded CST process tree.
+
+        This avoids the potentially hanging DesignEnvironment ``close`` COM
+        call and never falls back to a machine-wide CST process sweep.
+        It is intended for workflows that own a dedicated ``mode="new"``
+        DesignEnvironment and have already explicitly saved/closed projects.
+        """
+
+        from .cleanup import force_kill_cst
+
+        started = time.perf_counter()
+        if pid_override and pid_override > 0:
+            pid = pid_override
+            pid_source = "override"
+        else:
+            pid = self.pid
+            pid_source = "live"
+        self._de = None
+        if pid is None or pid <= 0:
+            return {
+                "success": False,
+                "strategy": "targeted_process_tree",
+                "com_close_attempted": False,
+                "global_sweep_attempted": False,
+                "pid": None,
+                "pid_source": "unavailable",
+                "force_kill_ok": False,
+                "exit_verified": False,
+                "elapsed_s": time.perf_counter() - started,
+                "reason": "pid_unavailable",
+            }
+        force_kill_ok = force_kill_cst(pid)
+        exit_verified = verify_process_cleanup(pid, timeout_s=timeout_s)
+        return {
+            "success": bool(force_kill_ok and exit_verified),
+            "strategy": "targeted_process_tree",
+            "com_close_attempted": False,
+            "global_sweep_attempted": False,
+            "pid": pid,
+            "pid_source": pid_source,
+            "force_kill_ok": force_kill_ok,
+            "exit_verified": exit_verified,
+            "elapsed_s": time.perf_counter() - started,
+            "reason": "" if force_kill_ok and exit_verified else (
+                "targeted_process_cleanup_failed"
+            ),
+        }
+
     def reconnect(self) -> None:
         """Close the current connection (if any) and establish a new one.
 

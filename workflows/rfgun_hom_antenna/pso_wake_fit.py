@@ -406,6 +406,7 @@ class WakeFitInput:
     peak_source_impedance: np.ndarray | None = None
     precomputed_peaks: tuple[PeakInfo, ...] | None = None
     peak_source_label: str = "sampled_impedance"
+    known_modes: tuple[KnownMode, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -417,6 +418,27 @@ class ModeFit:
     q: float
     r_over_q: float
     shunt_impedance: float
+
+
+@dataclass(frozen=True)
+class KnownMode:
+    """One fixed/known resonator mode not optimised by PSO.
+
+    The wake amplitude is derived from ``r_over_q_ohm`` using the same
+    form-factor convention as :func:`fit_wake_with_pso`::
+
+        amplitude = (R/Q) * form_factor(f, sigma_z) * 2*pi*f / wake_charge_scale
+
+    When ``include_in_reconstructed_impedance`` is True (default), the
+    known mode is included in the reconstructed impedance of the result.
+    """
+
+    label: str
+    frequency_hz: float
+    q: float
+    r_over_q_ohm: float
+    include_in_reconstructed_impedance: bool = True
+    frequency_tolerance_hz: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -439,6 +461,8 @@ class WakeFitResult:
     status: str = "ok"
     failure_reason: str = ""
     optimizer_info: dict[str, Any] = field(default_factory=dict)
+    known_modes: tuple[KnownMode, ...] = ()
+    known_mode_wake: np.ndarray | None = None
 
 
 OptimizerFn = Callable[
@@ -864,6 +888,39 @@ def _mark_selected_peaks(
     return tuple(marked)
 
 
+def _filter_known_mode_peaks(
+    peaks: Sequence[PeakInfo],
+    known_modes: tuple[KnownMode, ...],
+) -> tuple[tuple[PeakInfo, ...], tuple[PeakInfo, ...]]:
+    """Split *peaks* into unknown peaks and known-mode-matched peaks.
+
+    A peak is considered to match a known mode when its frequency is within
+    ``max(known.frequency_tolerance_hz, 1.0)`` Hz of the known mode's
+    ``frequency_hz``.  The 1 Hz floor prevents float-rounding mismatches
+    when the caller intends an exact-frequency match (tolerance = 0.0).
+
+    Returns ``(unknown_peaks, filtered_peaks)``.
+    """
+
+    if not known_modes:
+        return tuple(peaks), ()
+
+    unknown: list[PeakInfo] = []
+    filtered: list[PeakInfo] = []
+    for peak in peaks:
+        is_known = False
+        for km in known_modes:
+            tol = max(float(km.frequency_tolerance_hz), 1.0)
+            if abs(float(peak.frequency_hz) - float(km.frequency_hz)) <= tol:
+                is_known = True
+                break
+        if is_known:
+            filtered.append(peak)
+        else:
+            unknown.append(peak)
+    return tuple(unknown), tuple(filtered)
+
+
 def _validate_peak_settings(settings: PeakDetectionSettings) -> PeakDetectionSettings:
     strategy = str(settings.selection_strategy).strip().lower()
     if strategy not in ("all_visible", "top_amplitude"):
@@ -916,6 +973,52 @@ def wake_from_parameters(
     return wake
 
 
+def compute_known_mode_wake(
+    known_modes: tuple[KnownMode, ...],
+    t_s: np.ndarray,
+    direction: Direction,
+    sigma_z_m: float,
+    wake_charge_scale: float,
+) -> np.ndarray:
+    """Compute wake contribution from fixed known resonator modes.
+
+    Each known mode's ``r_over_q_ohm`` is converted to a wake amplitude
+    using the same form-factor convention as the PSO fit path::
+
+        amplitude = (R/Q) * form_factor(f, sigma_z) * 2*pi*f / wake_charge_scale
+
+    The resonator wake model is then evaluated on the time grid ``t_s``
+    and summed over all known modes.
+
+    Returns
+    -------
+    total_wake : ndarray
+        Total wake from all known modes, same shape as ``t_s`` and in the
+        same unit as the fitted wake (e.g. V/pC for longitudinal).
+        Zero array when ``known_modes`` is empty.
+    """
+
+    t_arr = _as_1d_float(t_s, "t_s")
+    direction_norm = _normalize_direction(direction)
+    if not known_modes:
+        return np.zeros_like(t_arr)
+
+    total_wake = np.zeros_like(t_arr, dtype=float)
+    for km in known_modes:
+        ff = _gaussian_form_factor(sigma_z_m, np.array([km.frequency_hz]))
+        amplitude = (
+            km.r_over_q_ohm
+            * float(ff[0])
+            * (2.0 * np.pi * km.frequency_hz)
+            / wake_charge_scale
+        )
+        params = np.array([amplitude, km.q])
+        fr = np.array([km.frequency_hz])
+        mode_wake = wake_from_parameters(params, fr, t_arr, direction_norm)
+        total_wake = total_wake + mode_wake
+    return total_wake
+
+
 def wake_objective(
     x: np.ndarray,
     resonant_frequency_hz: np.ndarray,
@@ -928,6 +1031,30 @@ def wake_objective(
     try:
         fit = wake_from_parameters(x, resonant_frequency_hz, t_s, direction)
         residual = fit.reshape(-1) - _as_1d_float(wake, "wake").reshape(-1)
+        value = float(np.sum(residual * residual))
+    except Exception:
+        return float(np.finfo(float).max)
+    return value if np.isfinite(value) else float(np.finfo(float).max)
+
+
+def _wake_objective_with_known(
+    x: np.ndarray,
+    resonant_frequency_hz: np.ndarray,
+    t_s: np.ndarray,
+    wake: np.ndarray,
+    direction: Direction,
+    known_wake: np.ndarray,
+) -> float:
+    """Sum-of-squares wake residual with fixed known-mode contribution.
+
+    The total model is ``known_wake + fitted_unknown_wake``; the residual
+    is ``total_model - target_wake``.
+    """
+
+    try:
+        unknown_fit = wake_from_parameters(x, resonant_frequency_hz, t_s, direction)
+        total_fit = unknown_fit + known_wake
+        residual = total_fit.reshape(-1) - _as_1d_float(wake, "wake").reshape(-1)
         value = float(np.sum(residual * residual))
     except Exception:
         return float(np.finfo(float).max)
@@ -1034,12 +1161,31 @@ def fit_wake_with_pso(
         )
     selected = _select_peaks_for_pso(peaks, fit_input.peak_settings)
     all_peaks = _mark_selected_peaks(peaks, selected)
-    if len(selected) < fit_input.peak_settings.min_peak_count:
-        raise WakeFitError(
-            "PSO wake fitting found "
-            f"{len(selected)} visible peak(s), below min_peak_count="
-            f"{fit_input.peak_settings.min_peak_count}."
+
+    # Filter out selected peaks that match a known mode's frequency.
+    has_known = bool(fit_input.known_modes)
+    if has_known:
+        selected_unknown, filtered_known = _filter_known_mode_peaks(
+            selected, fit_input.known_modes
         )
+        if filtered_known:
+            filtered_freqs = {round(float(p.frequency_hz), 6) for p in filtered_known}
+            all_peaks = tuple(
+                replace(p, use=False, status="KnownModeFiltered")
+                if round(float(p.frequency_hz), 6) in filtered_freqs and p.use
+                else p
+                for p in all_peaks
+            )
+        selected = selected_unknown
+
+    # Allow zero unknown peaks when known modes exist.
+    if len(selected) < fit_input.peak_settings.min_peak_count:
+        if not (has_known and len(selected) == 0):
+            raise WakeFitError(
+                "PSO wake fitting found "
+                f"{len(selected)} visible peak(s), below min_peak_count="
+                f"{fit_input.peak_settings.min_peak_count}."
+            )
 
     fit_data = prepare_wake_fit_data(
         fit_input.wake_s_m,
@@ -1048,45 +1194,104 @@ def fit_wake_with_pso(
         end_m=fit_input.fit_end_m,
         point_count=fit_input.fit_point_count,
     )
-    fr_hz = np.array([peak.frequency_hz for peak in selected], dtype=float)
-    lb, ub = fit_input.bounds.expand(len(fr_hz), direction)
+    target_wake = fit_data.wake
 
-    objective = lambda x: wake_objective(  # noqa: E731
-        x, fr_hz, fit_data.t_s, fit_data.wake, direction
-    )
-    run_optimizer = optimizer or _run_pymoo_pso
-    opt_result = run_optimizer(objective, lb, ub, fit_input.pso_settings)
-    if len(opt_result) == 2:
-        x_best, objective_value = opt_result  # type: ignore[misc]
-        optimizer_info: dict[str, Any] = {}
-    else:
-        x_best, objective_value, optimizer_info = opt_result  # type: ignore[misc]
-    x_best = _as_1d_float(x_best, "x_best")
-
-    wake_fit = wake_from_parameters(x_best, fr_hz, fit_data.t_s, direction)
-    denom = max(float(np.sum(fit_data.wake * fit_data.wake)), np.finfo(float).eps)
-    normalized_error = float(np.sum((wake_fit - fit_data.wake) ** 2) / denom)
-    wake_corr = _correlation_or_nan(fit_data.wake, wake_fit)
-
-    form_factor = _gaussian_form_factor(fit_input.sigma_z_m, fr_hz)
-    amplitudes = x_best[0::2]
-    q_values = x_best[1::2]
-    if np.any(form_factor <= 0.0):
-        raise WakeFitError("Form factor is zero for at least one fitted mode.")
-
-    r_over_q = (
-        amplitudes
-        / form_factor
-        / (2.0 * np.pi * fr_hz)
-        * float(fit_input.wake_charge_scale)
-    )
-    impedance_complex = resonator_sum(
-        fit_input.impedance_frequency_hz,
-        fr_hz,
-        q_values,
-        r_over_q,
+    # Compute known-mode wake (if any).
+    known_mode_wake_arr = compute_known_mode_wake(
+        fit_input.known_modes,
+        fit_data.t_s,
         direction,
+        fit_input.sigma_z_m,
+        fit_input.wake_charge_scale,
     )
+
+    if len(selected) == 0 and has_known:
+        # ---- zero unknown modes: known wake only ---------------------------
+        fr_hz = np.array([], dtype=float)
+        x_best = np.array([], dtype=float)
+        objective_value = 0.0
+        optimizer_info: dict[str, Any] = {}
+        wake_fit_unknown = np.zeros_like(fit_data.t_s, dtype=float)
+        amplitudes = np.array([], dtype=float)
+        q_values = np.array([], dtype=float)
+        r_over_q = np.array([], dtype=float)
+    else:
+        # ---- normal PSO path for unknown modes -----------------------------
+        fr_hz = np.array([peak.frequency_hz for peak in selected], dtype=float)
+        lb, ub = fit_input.bounds.expand(len(fr_hz), direction)
+
+        if has_known:
+            objective = lambda x: _wake_objective_with_known(  # noqa: E731
+                x, fr_hz, fit_data.t_s, target_wake, direction, known_mode_wake_arr,
+            )
+        else:
+            objective = lambda x: wake_objective(  # noqa: E731
+                x, fr_hz, fit_data.t_s, target_wake, direction,
+            )
+
+        run_optimizer = optimizer or _run_pymoo_pso
+        opt_result = run_optimizer(objective, lb, ub, fit_input.pso_settings)
+        if len(opt_result) == 2:
+            x_best, objective_value = opt_result  # type: ignore[misc]
+            optimizer_info = {}
+        else:
+            x_best, objective_value, optimizer_info = opt_result  # type: ignore[misc]
+        x_best = _as_1d_float(x_best, "x_best")
+
+        wake_fit_unknown = wake_from_parameters(x_best, fr_hz, fit_data.t_s, direction)
+
+        form_factor = _gaussian_form_factor(fit_input.sigma_z_m, fr_hz)
+        amplitudes = x_best[0::2]
+        q_values = x_best[1::2]
+        if np.any(form_factor <= 0.0):
+            raise WakeFitError("Form factor is zero for at least one fitted mode.")
+
+        r_over_q = (
+            amplitudes
+            / form_factor
+            / (2.0 * np.pi * fr_hz)
+            * float(fit_input.wake_charge_scale)
+        )
+
+    # ---- common: total wake and error metrics ------------------------------
+    wake_fit_total = wake_fit_unknown + known_mode_wake_arr
+    denom = max(float(np.sum(target_wake * target_wake)), np.finfo(float).eps)
+    normalized_error = float(np.sum((wake_fit_total - target_wake) ** 2) / denom)
+    wake_corr = _correlation_or_nan(target_wake, wake_fit_total)
+
+    # ---- common: impedance reconstruction -----------------------------------
+    if len(fr_hz) > 0:
+        impedance_complex = resonator_sum(
+            fit_input.impedance_frequency_hz,
+            fr_hz,
+            q_values,
+            r_over_q,
+            direction,
+        )
+    else:
+        impedance_complex = np.zeros_like(
+            fit_input.impedance_frequency_hz, dtype=complex
+        )
+
+    # Add known-mode contributions to reconstructed impedance when configured.
+    if has_known:
+        known_include = [
+            km for km in fit_input.known_modes
+            if km.include_in_reconstructed_impedance
+        ]
+        if known_include:
+            known_fr = np.array([km.frequency_hz for km in known_include], dtype=float)
+            known_q = np.array([km.q for km in known_include], dtype=float)
+            known_rq = np.array([km.r_over_q_ohm for km in known_include], dtype=float)
+            known_z = resonator_sum(
+                fit_input.impedance_frequency_hz,
+                known_fr,
+                known_q,
+                known_rq,
+                direction,
+            )
+            impedance_complex = impedance_complex + known_z
+
     impedance_abs = np.abs(impedance_complex)
     modes = tuple(
         ModeFit(
@@ -1130,8 +1335,8 @@ def fit_wake_with_pso(
         modes=modes,
         fit_s_m=fit_data.s_m,
         fit_t_s=fit_data.t_s,
-        fit_wake=fit_data.wake,
-        wake_fit=wake_fit,
+        fit_wake=target_wake,
+        wake_fit=wake_fit_total,
         impedance_frequency_hz=fit_input.impedance_frequency_hz.copy(),
         impedance_complex=impedance_complex,
         impedance_abs=impedance_abs,
@@ -1143,6 +1348,8 @@ def fit_wake_with_pso(
         status=status,
         failure_reason=failure_reason,
         optimizer_info=optimizer_info,
+        known_modes=fit_input.known_modes,
+        known_mode_wake=known_mode_wake_arr if has_known else None,
     )
 
 

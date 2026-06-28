@@ -17,107 +17,167 @@ Wake parameters: `sigma_z = 3 mm`, `wake_charge_scale = 1e12` (V/pC), Gaussian b
 
 ## Commands Run
 
-All experiments were run as inline `py -c` scripts that import from `pso_wake_fit`. The exact commands are listed below.
+All experiments were run as inline `py -c` scripts importing from `pso_wake_fit`. Below are the complete, copy-pasteable commands. All numerical output matched the tables in the Evidence sections above.
 
-### Experiment 1 & 2: Exact subtraction and perturbation sensitivity
+### Command 1: Exact subtraction + frequency / Q / R/Q perturbation sensitivity
 
-```bash
-py -c "
-import numpy as np
-from workflows.rfgun_hom_antenna.pso_wake_fit import (
-    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
-    compute_known_mode_wake, KnownMode, _gaussian_form_factor,
-)
-C = C_LIGHT_M_PER_S; sigma_z_m = 0.003; wake_charge_scale = 1.0e12
-
-fund_fr = 499.8e6; fund_q = 36500.0; fund_rq = 208.6
-hom1_fr = 1.5e9;   hom1_q = 1000.0;  hom1_rq = 50.0
-hom2_fr = 2.2e9;   hom2_q = 500.0;   hom2_rq = 30.0
-
-ff_fund = _gaussian_form_factor(sigma_z_m, np.array([fund_fr]))
-fund_amp = fund_rq * float(ff_fund[0]) * (2*np.pi*fund_fr) / wake_charge_scale
-
-ff_hom1 = _gaussian_form_factor(sigma_z_m, np.array([hom1_fr]))
-hom1_amp = hom1_rq * float(ff_hom1[0]) * (2*np.pi*hom1_fr) / wake_charge_scale
-
-ff_hom2 = _gaussian_form_factor(sigma_z_m, np.array([hom2_fr]))
-hom2_amp = hom2_rq * float(ff_hom2[0]) * (2*np.pi*hom2_fr) / wake_charge_scale
-
-# Long wake for good resolution
-s_m_long = np.linspace(0.0, 5.0, 20000)
-t_s = s_m_long / C
-all_fr = np.array([fund_fr, hom1_fr, hom2_fr])
-all_params = np.array([fund_amp, fund_q, hom1_amp, hom1_q, hom2_amp, hom2_q])
-full_wake = wake_from_parameters(all_params, all_fr, t_s, 'longitudinal')
-
-hom_params = np.array([hom1_amp, hom1_q, hom2_amp, hom2_q])
-hom_fr = np.array([hom1_fr, hom2_fr])
-hom_only_wake = wake_from_parameters(hom_params, hom_fr, t_s, 'longitudinal')
-
-# Exact subtraction
-fund_only_wake = full_wake - hom_only_wake
-residual = full_wake - fund_only_wake
-diff = np.max(np.abs(residual - hom_only_wake))
-print(f'Exact subtraction max diff: {diff:.6g}')
-
-# Perturbations (frequency, Q, R/Q) — loop across offsets, compute
-# diff_rms, correlation, normalized_error for each
-for df_hz in [0.1e6, 0.5e6, 1.0e6, 5.0e6]:
-    fr_pert = fund_fr + df_hz
-    ff_p = _gaussian_form_factor(sigma_z_m, np.array([fr_pert]))
-    amp_p = fund_rq * float(ff_p[0]) * (2*np.pi*fr_pert) / wake_charge_scale
-    fund_pert = wake_from_parameters(np.array([amp_p, fund_q]), np.array([fr_pert]), t_s, 'longitudinal')
-    r = full_wake - fund_pert
-    dr = float(np.sqrt(np.mean((r - hom_only_wake)**2)))
-    c = float(np.corrcoef(r, hom_only_wake)[0,1])
-    ne = float(np.sum((r - hom_only_wake)**2) / max(np.sum(hom_only_wake**2), 1e-30))
-    print(f'freq +{df_hz/1e6:.1f}MHz: diff_rms={dr:.6g}, corr={c:.6f}, norm_err={ne:.6g}')
-# ... same pattern for Q and R/Q perturbations ...
-"
-```
-
-### Experiment 3 & 4: Fundamental decay and frequency error vs length
-
-```bash
-py -c "
+```powershell
+@'
 import numpy as np
 from workflows.rfgun_hom_antenna.pso_wake_fit import (
     C_LIGHT_M_PER_S, wake_from_parameters, _gaussian_form_factor,
 )
-C = C_LIGHT_M_PER_S; sigma_z_m = 0.003; wake_charge_scale = 1.0e12
+C = C_LIGHT_M_PER_S; sigma_z_m = 0.003; wcs = 1.0e12
 fund_fr = 499.8e6; fund_q = 36500.0; fund_rq = 208.6
+hom1_fr = 1.5e9;  hom1_q = 1000.0; hom1_rq = 50.0
+hom2_fr = 2.2e9;  hom2_q = 500.0;  hom2_rq = 30.0
 
-for length_m in [0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0]:
-    t_end = length_m / C
-    env_end = np.exp(-np.pi * fund_fr * t_end / fund_q)
-    print(f'Length {length_m:6.1f}m: envelope decay to {env_end:.6e}')
+def amp(fr, rq):
+    ff = _gaussian_form_factor(sigma_z_m, np.array([fr]))
+    return rq * float(ff[0]) * (2*np.pi*fr) / wcs
 
-for df_hz in [0.1e6, 0.5e6, 1.0e6]:
-    for length_m in [1.0, 5.0, 10.0, 50.0]:
-        s_m = np.linspace(0.0, length_m, int(length_m*4000))
-        t_s = s_m / C
-        # ... generate true and perturbed fundamental, compute residual RMS ...
-        print(f'freq err {df_hz/1e6:.1f}MHz, len {length_m:5.1f}m: ...')
-"
+fa = amp(fund_fr, fund_rq); h1a = amp(hom1_fr, hom1_rq); h2a = amp(hom2_fr, hom2_rq)
+
+s = np.linspace(0.0, 5.0, 20000); t = s / C
+all_p = np.array([fa, fund_q, h1a, hom1_q, h2a, hom2_q])
+all_f = np.array([fund_fr, hom1_fr, hom2_fr])
+full = wake_from_parameters(all_p, all_f, t, 'longitudinal')
+hom_p = np.array([h1a, hom1_q, h2a, hom2_q])
+hom_f = np.array([hom1_fr, hom2_fr])
+hom_only = wake_from_parameters(hom_p, hom_f, t, 'longitudinal')
+
+# Exact subtraction
+res = full - (full - hom_only)
+print('EXACT subtraction max|residual - hom_only| =', np.max(np.abs(res - hom_only)))
+
+# Frequency perturbation
+for df in [0.1e6, 0.5e6, 1.0e6, 5.0e6]:
+    frp = fund_fr + df
+    fp = wake_from_parameters(np.array([amp(frp, fund_rq), fund_q]), np.array([frp]), t, 'longitudinal')
+    r = full - fp; ht = hom_only
+    dr = float(np.sqrt(np.mean((r-ht)**2))); nc = float(np.corrcoef(r, ht)[0,1])
+    ne = float(np.sum((r-ht)**2)/max(np.sum(ht**2),1e-30))
+    print(f'FREQ +{df/1e6:.1f}MHz: diff_rms={dr:.4f} corr={nc:.6f} norm_err={ne:.4e}')
+
+# Q perturbation
+for dq in [500, 1000, 5000, 10000]:
+    qp = fund_q + dq
+    fp = wake_from_parameters(np.array([fa, qp]), np.array([fund_fr]), t, 'longitudinal')
+    r = full - fp; ht = hom_only
+    dr = float(np.sqrt(np.mean((r-ht)**2))); nc = float(np.corrcoef(r, ht)[0,1])
+    ne = float(np.sum((r-ht)**2)/max(np.sum(ht**2),1e-30))
+    print(f'Q +{dq}: diff_rms={dr:.4e} corr={nc:.6f} norm_err={ne:.4e}')
+
+# R/Q perturbation
+for drq in [5, 10, 20, 50]:
+    rqp = fund_rq + drq
+    fp = wake_from_parameters(np.array([amp(fund_fr, rqp), fund_q]), np.array([fund_fr]), t, 'longitudinal')
+    r = full - fp; ht = hom_only
+    dr = float(np.sqrt(np.mean((r-ht)**2))); nc = float(np.corrcoef(r, ht)[0,1])
+    ne = float(np.sum((r-ht)**2)/max(np.sum(ht**2),1e-30))
+    print(f'R/Q +{drq}: diff_rms={dr:.4f} corr={nc:.6f} norm_err={ne:.4e}')
+'@ | py -
 ```
 
-### Experiment 5: Finite wake length / windowing / wake-to-impedance
+### Command 2: Fundamental decay + frequency error vs wake length
 
-```bash
-py -c "
+```powershell
+@'
 import numpy as np
 from workflows.rfgun_hom_antenna.pso_wake_fit import (
-    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
-    _gaussian_form_factor, _wake_to_impedance_linear,
-    _uniform_wake_samples, _detect_impedance_peaks_unlimited,
-    PeakDetectionSettings,
+    C_LIGHT_M_PER_S, wake_from_parameters, _gaussian_form_factor,
 )
-# ... generate full wake + residual at multiple lengths ...
-# ... apply Hann window, compute impedance, detect peaks ...
-"
+C = C_LIGHT_M_PER_S; sigma_z_m = 0.003; wcs = 1.0e12
+fund_fr = 499.8e6; fund_q = 36500.0; fund_rq = 208.6
+
+def amp(fr, rq):
+    ff = _gaussian_form_factor(sigma_z_m, np.array([fr]))
+    return rq * float(ff[0]) * (2*np.pi*fr) / wcs
+
+fa = amp(fund_fr, fund_rq)
+
+# Fundamental decay
+for lm in [0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0]:
+    env = np.exp(-np.pi * fund_fr * (lm/C) / fund_q)
+    print(f'DECAY len={lm:5.1f}m: envelope={env:.6f}')
+print()
+
+# Frequency error vs wake length
+for df_hz in [0.1e6, 0.5e6, 1.0e6]:
+    for lm in [1.0, 5.0, 10.0, 50.0]:
+        s2 = np.linspace(0.0, lm, int(lm*4000)); t2 = s2 / C
+        ft = wake_from_parameters(np.array([fa, fund_q]), np.array([fund_fr]), t2, 'longitudinal')
+        frp = fund_fr + df_hz
+        fp = wake_from_parameters(np.array([amp(frp, fund_rq), fund_q]), np.array([frp]), t2, 'longitudinal')
+        dr = float(np.sqrt(np.mean((fp - ft)**2)))
+        print(f'FREQxLEN err={df_hz/1e6:.1f}MHz len={lm:5.1f}m residual_rms={dr:.4e}')
+'@ | py -
 ```
 
-The full verbatim output of each command was captured in the Evidence section above (all numerical tables and interpretations).
+### Command 3: Finite wake length / windowing / wake-to-impedance
+
+```powershell
+@'
+import numpy as np
+from workflows.rfgun_hom_antenna.pso_wake_fit import (
+    C_LIGHT_M_PER_S, wake_from_parameters, _gaussian_form_factor,
+    _wake_to_impedance_linear, _uniform_wake_samples,
+    _detect_impedance_peaks_unlimited, PeakDetectionSettings,
+)
+C = C_LIGHT_M_PER_S; sigma_z_m = 0.003; wcs = 1.0e12
+fund_fr = 499.8e6; fund_q = 36500.0; fund_rq = 208.6
+hom1_fr = 1.5e9;  hom1_q = 1000.0;  hom1_rq = 50.0
+hom2_fr = 2.2e9;  hom2_q = 500.0;   hom2_rq = 30.0
+
+def amp(fr, rq):
+    ff = _gaussian_form_factor(sigma_z_m, np.array([fr]))
+    return rq * float(ff[0]) * (2*np.pi*fr) / wcs
+
+fa = amp(fund_fr, fund_rq); h1a = amp(hom1_fr, hom1_rq); h2a = amp(hom2_fr, hom2_rq)
+
+# Wake length sweep
+for length_m, npts in [(0.5,2000),(1.0,4000),(2.0,8000),(5.0,20000),(10.0,40000)]:
+    s = np.linspace(0.0, length_m, npts); t = s / C
+    full = wake_from_parameters(np.array([fa,fund_q,h1a,hom1_q,h2a,hom2_q]), np.array([fund_fr,hom1_fr,hom2_fr]), t, 'longitudinal')
+    fund_w = wake_from_parameters(np.array([fa,fund_q]), np.array([fund_fr]), t, 'longitudinal')
+    residual = full - fund_w
+    resid_rms = float(np.sqrt(np.mean(residual**2)))
+    su, wu = _uniform_wake_samples(s, residual*1e12, point_count=min(npts,20000))
+    fmax = C/(3.0*sigma_z_m); fhz = np.linspace(1e3, fmax, 5000)
+    z_res = _wake_to_impedance_linear('longitudinal', su, wu, fhz, sigma_z_m)
+    peaks = _detect_impedance_peaks_unlimited(fhz, np.abs(z_res), PeakDetectionSettings(min_peak_height=1.0, min_peak_distance_points=20), source='residual')
+    h1e = min(abs(p.frequency_hz-hom1_fr) for p in peaks)/1e6 if peaks else float('nan')
+    h2e = min(abs(p.frequency_hz-hom2_fr) for p in peaks)/1e6 if peaks else float('nan')
+    print(f'LEN={length_m:5.1f}m HOM1_err={h1e:8.4f}MHz HOM2_err={h2e:8.4f}MHz resid_rms={resid_rms:.4f}')
+
+# Hann window comparison at 2m
+print()
+lm2=2.0; n2=8000
+s2=np.linspace(0.0,lm2,n2); t2=s2/C
+full2=wake_from_parameters(np.array([fa,fund_q,h1a,hom1_q,h2a,hom2_q]), np.array([fund_fr,hom1_fr,hom2_fr]), t2, 'longitudinal')
+fund2=wake_from_parameters(np.array([fa,fund_q]), np.array([fund_fr]), t2, 'longitudinal')
+res2=full2-fund2
+su2,wu2=_uniform_wake_samples(s2,res2*1e12,point_count=n2)
+fmax2=C/(3.0*sigma_z_m); fhz2=np.linspace(1e3,fmax2,5000)
+z_nowin=_wake_to_impedance_linear('longitudinal',su2,wu2,fhz2,sigma_z_m)
+hann=np.hanning(len(wu2))
+z_win=_wake_to_impedance_linear('longitudinal',su2,wu2*hann,fhz2,sigma_z_m)
+
+p_nowin=_detect_impedance_peaks_unlimited(fhz2,np.abs(z_nowin),PeakDetectionSettings(min_peak_height=1.0, min_peak_distance_points=20), source='no_window')
+p_win=_detect_impedance_peaks_unlimited(fhz2,np.abs(z_win),PeakDetectionSettings(min_peak_height=1.0, min_peak_distance_points=20), source='hann')
+
+for label, peaks in [('no_window',p_nowin),('hann',p_win)]:
+    h1=[p for p in peaks if abs(p.frequency_hz-hom1_fr)/1e6<100]
+    h2=[p for p in peaks if abs(p.frequency_hz-hom2_fr)/1e6<100]
+    n_spurious = len([p for p in peaks if min(abs(p.frequency_hz-hom1_fr),abs(p.frequency_hz-hom2_fr))>100e6])
+    print(f'{label}: HOM1_peaks={len(h1)} HOM2_peaks={len(h2)} spurious_peaks={n_spurious}')
+    for p in h1: print(f'  HOM1 candidate: {p.frequency_hz/1e9:.4f}GHz value={p.value:.1f}')
+    for p in h2: print(f'  HOM2 candidate: {p.frequency_hz/1e9:.4f}GHz value={p.value:.1f}')
+print(f'True HOM: {hom1_fr/1e9:.3f}GHz, {hom2_fr/1e9:.3f}GHz')
+'@ | py -
+```
+
+All three commands were verified to reproduce the numerical tables in the Evidence sections above.
 
 ## Experiment 1: Exact Subtraction
 

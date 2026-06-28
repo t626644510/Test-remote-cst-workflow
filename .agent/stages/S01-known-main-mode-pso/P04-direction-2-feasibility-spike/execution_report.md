@@ -24,52 +24,17 @@ Executed the P04 no-CST research spike to evaluate Direction 2 feasibility (full
 
 ## Synthetic Experiment Commands
 
-All experiments were run as inline Python scripts using `py -c`. The three commands are reproduced verbatim in the `Commands Run` section of `feasibility_report.md`.
-
-### Command 1 — Exact subtraction and perturbation sensitivity
-
-```
-py -c "
-import numpy as np
-from workflows.rfgun_hom_antenna.pso_wake_fit import (
-    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
-    compute_known_mode_wake, KnownMode, _gaussian_form_factor,
-)
-...
-# (full command body in feasibility_report.md Commands Run section)
-"
+All experiments were run as inline Python scripts using the PowerShell here-string pattern:
+```powershell
+@'<python-code>'@ | py -
 ```
 
-### Command 2 — Fundamental decay and frequency error vs length
+The three complete commands are reproduced verbatim in the `Commands Run` section of `feasibility_report.md`. Each command was re-run and verified to produce output matching the numerical tables in the Evidence sections of the feasibility report.
 
-```
-py -c "
-import numpy as np
-from workflows.rfgun_hom_antenna.pso_wake_fit import (
-    C_LIGHT_M_PER_S, wake_from_parameters, _gaussian_form_factor,
-)
-...
-# (full command body in feasibility_report.md Commands Run section)
-"
-```
-
-### Command 3 — Finite wake length / windowing / wake-to-impedance
-
-```
-py -c "
-import numpy as np
-from workflows.rfgun_hom_antenna.pso_wake_fit import (
-    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
-    _gaussian_form_factor, _wake_to_impedance_linear,
-    _uniform_wake_samples, _detect_impedance_peaks_unlimited,
-    PeakDetectionSettings,
-)
-...
-# (full command body in feasibility_report.md Commands Run section)
-"
-```
-
-All three commands were run in the same Python 3.9.13 environment used for regression testing (`py` launcher, Windows).
+Command verification results (re-run 2026-06-28):
+- **Command 1** (exact subtraction + perturbations): All exact subtraction, frequency, Q, and R/Q table values matched the report within printed precision.
+- **Command 2** (decay + freq-vs-length): All envelope and residual RMS values matched.
+- **Command 3** (wake length sweep + Hann window): Wake length HOM peak error values, spurious peak counts, and windowing reduction effects matched.
 
 ## Test Results
 

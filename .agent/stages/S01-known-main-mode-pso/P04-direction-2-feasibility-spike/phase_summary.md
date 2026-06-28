@@ -1,7 +1,7 @@
 # Phase Summary: P04-direction-2-feasibility-spike
 
 ## Status
-ESCALATED
+PHASE_ACCEPTED
 
 ## Branch
 `phase/S01-P04-direction-2-feasibility-spike`
@@ -9,25 +9,27 @@ ESCALATED
 ## Commits
 - `e22ab36` Web phase plan
 - `24b600e` Web executor prompt
-- `24eb83e` Local feasibility and execution reports
+- `24eb83e` initial local feasibility and execution reports
 - `6b93e0e` Web review requiring report-only follow-up
 - `4ff11f7` Web follow-up prompt
-- `5933d81` Local follow-up report update
-- `8defcd1` Local follow-up commit/push field update
-- `6fc3032` Web follow-up review escalation
+- `5933d81` local follow-up report update
+- `8defcd1` local follow-up commit/push field update
+- `6fc3032` Web escalation review
+- `272c1f7` Web escalation summary
+- `8330632` Codex-authorized final report-only reproducibility fix
+- `c4b45ba` Web acceptance review
 
 ## Summary
-P04 executed the Direction 2 no-CST feasibility spike and produced a useful scientific conclusion: `CONDITIONAL-GO` for full-wake fundamental subtraction, gated by accurate CST fundamental frequency and sign/scale convention validation.
+P04 executed the Direction 2 no-CST feasibility spike and is accepted after Codex-authorized final report cleanup.
 
-The phase remained scope-compliant. No production code, tests, CST API, `src/cst_optimization/`, scalarization, `main`, or `stage/*` files were modified.
+The final report provides complete, copy-pasteable PowerShell here-string commands for all three synthetic experiment groups and records that they were re-run and verified against the numerical tables. The phase remained report-only and did not modify production code, tests, CST API, shared core, wakefield objective, scalarization, main, or stage branches.
 
-Web Phase Review did not accept the phase because the required exact inline Python command evidence remains incomplete after follow-up. The reports now contain a `Commands Run` section, fixed commit/push fields, and rerun regression result, but some command bodies still contain ellipses and omitted logic rather than fully copy-pasteable commands.
+The accepted scientific conclusion is `CONDITIONAL-GO` for Direction 2: full-wake fundamental subtraction is feasible only if the CST fundamental frequency can be determined to within `<0.1 MHz` and CST sign/scale conventions match the resonator model.
 
 ## Main Findings
 - Exact synthetic fundamental subtraction recovered the HOM-only residual to floating-point precision.
 - Fundamental frequency error is the dominant risk for Direction 2.
-- The report recommends `<0.1 MHz` CST fundamental-frequency accuracy before production implementation.
-- The high-Q fundamental (`Q=36500`) does not decay appreciably over practical wake lengths, so extending wake length cannot remove the main-mode risk.
+- The high-Q fundamental (`Q=36500`) does not decay appreciably over practical wake lengths.
 - Q perturbation is comparatively minor in the tested ranges.
 - R/Q perturbation creates linear residual amplitude error and must be bounded.
 - Finite wake truncation creates spectral leakage; Hann windowing improves residual impedance reconstruction but changes amplitudes.
@@ -40,7 +42,7 @@ Reported regression command:
 py -m pytest tests\workflows\test_workflow2_pso_wake_fit.py
 ```
 
-Reported result after follow-up:
+Reported result:
 
 ```text
 38 passed in 0.55s
@@ -59,10 +61,6 @@ Intentional non-changes:
 - No `main` or `stage/*` updates.
 
 ## Follow-up
-Escalated to Codex because the same phase failed Web Phase Review twice.
+P04 is complete and accepted.
 
-Codex should decide whether to:
-
-1. Accept P04 as scientifically sufficient despite incomplete exact-command reproducibility.
-2. Require one final report-only correction with full copy-pasteable commands.
-3. Relax the exact-command evidence requirement for this research spike and document why summary-level command evidence is sufficient.
+Next step: return to Codex for stage-level review / stage acceptance decision. Direction 2 should not be implemented until the accepted CST convention checklist is satisfied with exported or live CST data.

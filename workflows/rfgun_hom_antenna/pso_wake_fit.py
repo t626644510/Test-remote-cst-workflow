@@ -528,6 +528,11 @@ def _known_modes_from_config(
             raise WakeFitError(
                 f"{prefix}.q must be positive; got {q}."
             )
+        if _normalize_direction(fitting_direction) == "longitudinal" and q <= 0.5:
+            raise WakeFitError(
+                f"{prefix}.q must be > 0.5 for longitudinal known modes; "
+                f"got {q}."
+            )
         if not np.isfinite(r_over_q_ohm):
             raise WakeFitError(
                 f"{prefix}.r_over_q_ohm must be finite; got {r_over_q_ohm}."

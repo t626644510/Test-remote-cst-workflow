@@ -148,3 +148,40 @@ TestLongitudinalObjectiveWithKnownModes::test_no_known_modes_in_config_passes_em
 P02 is ready for review. The implementation is minimal: a config parser function in `pso_wake_fit.py` that returns a `tuple[KnownMode]` from the YAML-style dict, wired into the existing `build_wake_fit_input_from_config` entry point. Since the `LongitudinalImpedanceObjective._raw_value_from_pso_wake` already passes `pso_fit` config through to `build_wake_fit_input_from_config`, no objective changes were needed — the `known_modes` key flows through automatically.
 
 The branch has been pushed to remote for inspection.
+
+---
+
+## Follow-up: longitudinal Q validation
+
+### Problem
+The `_known_modes_from_config` docstring stated that longitudinal known-mode `q` must be `> 0.5`, but the parser only rejected `q <= 0.0`. A longitudinal known mode with `0 < q <= 0.5` would pass config parsing and fail later in `wake_from_parameters()`.
+
+### Fix
+Added parser-level validation in `_known_modes_from_config`: when `fitting_direction` is `"longitudinal"` and `q <= 0.5`, a `WakeFitError` is raised immediately with a message like:
+
+```
+pso_fit.known_modes[0].q must be > 0.5 for longitudinal known modes; got 0.5.
+```
+
+The existing `q <= 0.0` check is preserved for transverse-like generic rejection.
+
+### Tests
+Added `TestKnownModesFromConfigRequiredFields.test_longitudinal_known_mode_q_must_exceed_half`:
+- Config with `q = 0.5`, valid other fields, `direction="longitudinal"`.
+- Asserts `WakeFitError` raised by `build_wake_fit_input_from_config`.
+- Asserts error contains `known_modes`, `.q`, `> 0.5`, and the value `0.5`.
+
+### Test command and result
+```
+py -m pytest tests/workflows/test_workflow2_pso_wake_fit.py -v
+33 passed in 0.55s
+```
+
+### Scope compliance
+- Only phase branch: ✅
+- No main push: ✅
+- No merge: ✅
+- No stage_plan modification: ✅
+- No `wakefield_objective.py` modification: ✅
+- No CST API change: ✅
+- No Direction 2: ✅

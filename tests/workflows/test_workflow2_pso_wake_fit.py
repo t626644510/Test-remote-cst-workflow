@@ -1063,6 +1063,40 @@ class TestKnownModesFromConfigRequiredFields:
         assert "known_modes" in msg, f"Error should mention known_modes: {msg}"
         assert missing_key in msg, f"Error should mention {missing_key}: {msg}"
 
+    def test_longitudinal_known_mode_q_must_exceed_half(self) -> None:
+        """Longitudinal known mode with q=0.5 is rejected at config parsing."""
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [
+                {
+                    "frequency_hz": 1.0e9,
+                    "q": 0.5,
+                    "r_over_q_ohm": 50.0,
+                }
+            ],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+
+        with pytest.raises(WakeFitError) as exc_info:
+            build_wake_fit_input_from_config(
+                direction="longitudinal",
+                wake_s_m=s_m,
+                wake=np.zeros_like(s_m),
+                impedance_frequency_hz=f_hz,
+                impedance=np.ones_like(f_hz),
+                config=config,
+            )
+        msg = str(exc_info.value)
+        assert "known_modes" in msg, f"Error should mention known_modes: {msg}"
+        assert ".q" in msg, f"Error should mention .q: {msg}"
+        assert "> 0.5" in msg, f"Error should mention > 0.5: {msg}"
+        assert "0.5" in msg, f"Error should mention 0.5: {msg}"
+
 
 class TestKnownModesFromConfigDirectionValidation:
     """Direction mismatch raises a clear error."""

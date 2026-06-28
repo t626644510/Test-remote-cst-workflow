@@ -463,6 +463,9 @@ class WakeFitResult:
     optimizer_info: dict[str, Any] = field(default_factory=dict)
     known_modes: tuple[KnownMode, ...] = ()
     known_mode_wake: np.ndarray | None = None
+    unknown_mode_wake: np.ndarray | None = None
+    residual_wake: np.ndarray | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 OptimizerFn = Callable[
@@ -1330,7 +1333,6 @@ def fit_wake_with_pso(
         # ---- zero unknown modes: known wake only ---------------------------
         fr_hz = np.array([], dtype=float)
         x_best = np.array([], dtype=float)
-        objective_value = 0.0
         optimizer_info: dict[str, Any] = {}
         wake_fit_unknown = np.zeros_like(fit_data.t_s, dtype=float)
         amplitudes = np.array([], dtype=float)
@@ -1379,6 +1381,8 @@ def fit_wake_with_pso(
     denom = max(float(np.sum(target_wake * target_wake)), np.finfo(float).eps)
     normalized_error = float(np.sum((wake_fit_total - target_wake) ** 2) / denom)
     wake_corr = _correlation_or_nan(target_wake, wake_fit_total)
+    # objective_value is the residual sum-of-squares (SSE).
+    objective_value = float(np.sum((wake_fit_total - target_wake) ** 2))
 
     # ---- common: impedance reconstruction -----------------------------------
     if len(fr_hz) > 0:
@@ -1423,6 +1427,37 @@ def fit_wake_with_pso(
             shunt_impedance=float(qi * rq),
         )
         for fr, amplitude, qi, rq in zip(fr_hz, amplitudes, q_values, r_over_q)
+    )
+
+    # ---- common: additional result fields ----------------------------------
+    unknown_mode_wake_arr = wake_fit_unknown if has_known else None
+    residual_wake_arr = (target_wake - wake_fit_total).copy()
+
+    diagnostics: dict[str, Any] = {
+        "known_mode_count": len(fit_input.known_modes),
+        "fitted_mode_count": len(modes),
+        "known_mode_labels": [km.label for km in fit_input.known_modes],
+    }
+    if len(target_wake) > 0:
+        diagnostics["target_wake_rms"] = float(np.sqrt(np.mean(target_wake ** 2)))
+    else:
+        diagnostics["target_wake_rms"] = 0.0
+    if has_known and len(known_mode_wake_arr) > 0:
+        diagnostics["known_mode_wake_rms"] = float(
+            np.sqrt(np.mean(known_mode_wake_arr ** 2))
+        )
+    else:
+        diagnostics["known_mode_wake_rms"] = 0.0
+    diagnostics["unknown_mode_wake_rms"] = float(
+        np.sqrt(np.mean(wake_fit_unknown ** 2))
+    ) if len(wake_fit_unknown) > 0 else 0.0
+    diagnostics["residual_wake_rms"] = float(
+        np.sqrt(np.mean(residual_wake_arr ** 2))
+    ) if len(residual_wake_arr) > 0 else 0.0
+    diagnostics["normalized_error"] = normalized_error
+    diagnostics["wake_corr"] = wake_corr
+    diagnostics["known_mode_filtered_peak_count"] = len(
+        [p for p in all_peaks if p.status == "KnownModeFiltered"]
     )
 
     status = "ok"
@@ -1471,6 +1506,9 @@ def fit_wake_with_pso(
         optimizer_info=optimizer_info,
         known_modes=fit_input.known_modes,
         known_mode_wake=known_mode_wake_arr if has_known else None,
+        unknown_mode_wake=unknown_mode_wake_arr,
+        residual_wake=residual_wake_arr,
+        diagnostics=diagnostics,
     )
 
 

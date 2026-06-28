@@ -1299,3 +1299,276 @@ class TestLongitudinalObjectiveWithKnownModes:
         assert len(captured_inputs) == 1
         fit_input = captured_inputs[0]
         assert fit_input.known_modes == ()
+
+
+# ---------------------------------------------------------------------------
+# P03: diagnostics and stage validation
+# ---------------------------------------------------------------------------
+
+
+def test_known_mode_result_diagnostics_separate_known_unknown_residual() -> None:
+    """WakeFitResult diagnostics correctly separate known, unknown, and residual."""
+    direction = "longitudinal"
+    sigma_z_m = 0.003
+    wake_charge_scale = 1.0e12
+    s_m = np.linspace(0.01, 0.25, 400)
+    t_s = s_m / C_LIGHT_M_PER_S
+
+    # Fundamental (known)
+    fund_fr, fund_q, fund_rq = 500.0e6, 100.0, 50.0
+    ff_fund = _gaussian_form_factor(sigma_z_m, np.array([fund_fr]))
+    fund_amp = (
+        fund_rq * float(ff_fund[0]) * (2.0 * np.pi * fund_fr) / wake_charge_scale
+    )
+
+    # HOM (fitted)
+    hom_fr, hom_q, hom_amp = 1.5e9, 50.0, 10.0
+
+    # Combined synthetic target
+    all_fr = np.array([fund_fr, hom_fr])
+    all_params = np.array([fund_amp, fund_q, hom_amp, hom_q])
+    target = wake_from_parameters(all_params, all_fr, t_s, direction)
+
+    # Impedance covering both peaks
+    f_hz = np.linspace(0.3e9, 1.8e9, 1501)
+    impedance = np.abs(resonator_sum(
+        f_hz,
+        np.array([fund_fr, hom_fr]),
+        np.array([fund_q, hom_q]),
+        np.array([fund_rq, 100.0]),
+        direction,
+    ))
+
+    known = KnownMode(
+        label="fundamental", frequency_hz=fund_fr, q=fund_q,
+        r_over_q_ohm=fund_rq, frequency_tolerance_hz=1.0e6,
+    )
+    fit_input = WakeFitInput(
+        direction=direction,
+        wake_s_m=s_m,
+        wake=target,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        sigma_z_m=sigma_z_m,
+        fit_start_m=float(s_m[0]),
+        fit_end_m=float(s_m[-1]),
+        fit_point_count=len(s_m),
+        bounds=PSOBounds(
+            amplitude_min=5.0, amplitude_max=15.0,
+            q_min=20.0, q_max=100.0,
+        ),
+        peak_settings=PeakDetectionSettings(
+            min_peak_height=1.0, freq_min_hz=0.3e9, freq_max_hz=1.8e9,
+        ),
+        pso_settings=PSOSettings(seed=42),
+        known_modes=(known,),
+    )
+
+    x_hom = np.array([hom_amp, hom_q])
+    result = fit_wake_with_pso(fit_input, optimizer=_exact_optimizer(x_hom))
+
+    # --- known/fitted mode separation ---
+    assert len(result.known_modes) == 1
+    assert result.known_modes[0].label == "fundamental"
+    assert len(result.modes) == 1
+    assert result.modes[0].frequency_hz == pytest.approx(hom_fr, rel=1e-4)
+
+    # --- known_mode_wake ---
+    assert result.known_mode_wake is not None
+    assert result.known_mode_wake.shape == s_m.shape
+    assert np.max(np.abs(result.known_mode_wake)) > 0.01
+
+    # --- unknown_mode_wake ---
+    assert result.unknown_mode_wake is not None
+    assert result.unknown_mode_wake.shape == s_m.shape
+    assert np.max(np.abs(result.unknown_mode_wake)) > 0.01
+
+    # --- wake_fit = known + unknown ---
+    np.testing.assert_allclose(
+        result.wake_fit,
+        result.known_mode_wake + result.unknown_mode_wake,
+    )
+
+    # --- residual ---
+    assert result.residual_wake is not None
+    assert result.residual_wake.shape == s_m.shape
+    np.testing.assert_allclose(
+        result.residual_wake,
+        result.fit_wake - result.wake_fit,
+    )
+
+    # --- diagnostics fields ---
+    diag = result.diagnostics
+    assert diag["known_mode_count"] == 1
+    assert diag["fitted_mode_count"] == 1
+    assert diag["known_mode_labels"] == ["fundamental"]
+    assert diag["known_mode_wake_rms"] > 0.0
+    assert diag["unknown_mode_wake_rms"] > 0.0
+    assert diag["residual_wake_rms"] < 1e-8  # near-zero for exact match
+    assert diag["normalized_error"] < 1e-24
+    assert diag["wake_corr"] == pytest.approx(1.0, abs=1e-12)
+    assert diag["target_wake_rms"] > 0.0
+    # The fundamental peak should be filtered
+    assert diag["known_mode_filtered_peak_count"] >= 1
+
+
+def test_known_only_objective_value_reports_residual_sse() -> None:
+    """Known-only imperfect fit reports meaningful objective_value."""
+    direction = "longitudinal"
+    sigma_z_m = 0.003
+    wake_charge_scale = 1.0e12
+    s_m = np.linspace(0.01, 0.25, 160)
+    t_s = s_m / C_LIGHT_M_PER_S
+
+    # Known mode definition
+    km = KnownMode(label="fund", frequency_hz=1.0e9, q=30.0, r_over_q_ohm=20.0)
+
+    # Generate target with DIFFERENT q (imperfect match)
+    ff = _gaussian_form_factor(sigma_z_m, np.array([km.frequency_hz]))
+    amp = km.r_over_q_ohm * float(ff[0]) * (2.0 * np.pi * km.frequency_hz) / wake_charge_scale
+    target_q = km.q * 1.5  # intentionally different Q
+    target = wake_from_parameters(
+        np.array([amp, target_q]), np.array([km.frequency_hz]), t_s, direction
+    )
+
+    f_hz = np.linspace(0.7e9, 1.3e9, 301)
+    impedance = np.abs(resonator_sum(
+        f_hz, np.array([km.frequency_hz]), np.array([km.q]),
+        np.array([km.r_over_q_ohm]), direction,
+    ))
+
+    # Use _raises_optimizer to ensure PSO is never called
+    fit_input = WakeFitInput(
+        direction=direction,
+        wake_s_m=s_m,
+        wake=target,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        sigma_z_m=sigma_z_m,
+        fit_start_m=float(s_m[0]),
+        fit_end_m=float(s_m[-1]),
+        fit_point_count=len(s_m),
+        bounds=PSOBounds(
+            amplitude_min=0.0, amplitude_max=0.0,
+            q_min=10.0, q_max=50.0,
+        ),
+        peak_settings=PeakDetectionSettings(
+            min_peak_height=1.0, freq_min_hz=0.8e9, freq_max_hz=1.2e9,
+        ),
+        pso_settings=PSOSettings(seed=7),
+        known_modes=(km,),
+    )
+
+    result = fit_wake_with_pso(fit_input, optimizer=_raises_optimizer)
+
+    assert len(result.modes) == 0  # zero fitted modes
+    assert result.known_mode_wake is not None
+    assert result.residual_wake is not None
+    # Residual should be non-zero (imperfect match)
+    assert np.max(np.abs(result.residual_wake)) > 1e-6
+    # objective_value should equal the sum-of-squares of the residual
+    expected_sse = float(np.sum(result.residual_wake ** 2))
+    assert result.objective_value == pytest.approx(expected_sse, rel=1e-12)
+    assert result.normalized_error > 0.0
+
+
+def test_longitudinal_objective_exposes_pso_wake_known_mode_diagnostics(
+    monkeypatch,
+) -> None:
+    """LongitudinalImpedanceObjective.last_fit_result contains known-mode
+    diagnostics when pso_wake path is used."""
+    captured_inputs = []
+
+    def _capture_fit(fit_input):
+        captured_inputs.append(fit_input)
+        return WakeFitResult(
+            modes=(),
+            fit_s_m=np.linspace(0, 0.1, 10),
+            fit_t_s=np.linspace(0, 3.3e-10, 10),
+            fit_wake=np.zeros(10),
+            wake_fit=np.zeros(10),
+            impedance_frequency_hz=np.array([0.9e9, 1.0e9, 1.1e9]),
+            impedance_complex=np.array([0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]),
+            impedance_abs=np.array([0.0, 0.0, 0.0]),
+            normalized_error=0.0,
+            wake_corr=1.0,
+            objective_value=0.0,
+            selected_peaks=(),
+            all_peaks=(),
+            known_modes=(KnownMode(
+                label="fundamental", frequency_hz=499.8e6,
+                q=36500, r_over_q_ohm=208.6,
+            ),),
+            known_mode_wake=np.zeros(10),
+            unknown_mode_wake=np.zeros(10),
+            residual_wake=np.zeros(10),
+            diagnostics={
+                "known_mode_count": 1,
+                "fitted_mode_count": 0,
+                "known_mode_labels": ["fundamental"],
+                "target_wake_rms": 0.1,
+                "known_mode_wake_rms": 0.05,
+                "unknown_mode_wake_rms": 0.0,
+                "residual_wake_rms": 0.0,
+                "normalized_error": 0.0,
+                "wake_corr": 1.0,
+                "known_mode_filtered_peak_count": 0,
+            },
+        )
+
+    monkeypatch.setattr(
+        wake_obj_mod, "fit_wake_with_pso", _capture_fit,
+    )
+
+    s_m = np.linspace(0, 0.1, 10)
+    wake = np.zeros_like(s_m)
+    f_hz = np.array([0.8e9, 1.0e9, 1.2e9])
+    impedance = np.array([1.0, 10.0, 2.0])
+
+    reader = _DictReader({
+        WAKE_PATH: (s_m, wake, "Distance / m"),
+        Z_PATH: (f_hz, impedance, "Frequency / Hz"),
+    })
+
+    obj = LongitudinalImpedanceObjective(
+        lambda: reader,
+        strategy="peak_exceedance",
+        z_threshold_ohm=0.0,
+        freq_min_hz=0.8e9,
+        freq_max_hz=1.2e9,
+        fit_source="pso_wake",
+        pso_fit={
+            "wake_tree_path": WAKE_PATH,
+            "wake_x_unit": "m",
+            "wake_y_unit": "V/pC",
+            "peak_source": "cst_impedance",
+            "sigma_z_m": 0.003,
+            "fit_start_m": float(s_m[0]),
+            "fit_end_m": float(s_m[-1]),
+            "fit_point_count": len(s_m),
+            "bounds": {
+                "amplitude_min": 1.0,
+                "amplitude_max": 10.0,
+                "q_min": 1.0,
+                "q_max": 100.0,
+            },
+            "known_modes": [
+                {
+                    "label": "fundamental",
+                    "frequency_hz": 499.8e6,
+                    "q": 36500,
+                    "r_over_q_ohm": 208.6,
+                }
+            ],
+        },
+    )
+
+    raw = obj.raw_value()
+    assert obj.last_fit_result is not None
+    assert len(obj.last_fit_result.known_modes) == 1
+    assert obj.last_fit_result.known_modes[0].label == "fundamental"
+    assert obj.last_fit_result.unknown_mode_wake is not None
+    assert obj.last_fit_result.residual_wake is not None
+    diag = obj.last_fit_result.diagnostics
+    assert diag["known_mode_count"] == 1
+    assert diag["known_mode_labels"] == ["fundamental"]

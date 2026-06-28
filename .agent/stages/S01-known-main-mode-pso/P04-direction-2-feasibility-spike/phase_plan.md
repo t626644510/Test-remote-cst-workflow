@@ -1,7 +1,7 @@
 # Phase Plan: P04-direction-2-feasibility-spike
 
 ## Status
-DRAFT
+CODEX_APPROVED
 
 ## Parent Stage
 S01-known-main-mode-pso

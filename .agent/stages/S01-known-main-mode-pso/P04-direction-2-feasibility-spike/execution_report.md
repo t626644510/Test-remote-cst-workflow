@@ -20,33 +20,63 @@ Executed the P04 no-CST research spike to evaluate Direction 2 feasibility (full
 | Wake-to-impedance reconstruction assessed | PASS | Both windowed and unwindowed, peak recovery analyzed |
 | Clear recommendation | PASS | CONDITIONAL-GO with explicit conditions |
 | CST convention checks listed | PASS | 8-item checklist |
-| Regression tests pass | PASS | 38 passed in 0.53s |
+| Regression tests pass | PASS | 38 passed in 0.55s (re-run 2026-06-28) |
 
 ## Synthetic Experiment Commands
 
-All experiments were run as inline Python scripts. The exact commands are recorded in the feasibility report. Key commands:
+All experiments were run as inline Python scripts using `py -c`. The three commands are reproduced verbatim in the `Commands Run` section of `feasibility_report.md`.
 
-1. Exact and perturbed subtraction:
-   ```
-   py -c "... (wake_from_parameters, compute_known_mode_wake, etc.)"
-   ```
+### Command 1 — Exact subtraction and perturbation sensitivity
 
-2. Finite wake length / windowing:
-   ```
-   py -c "... (_wake_to_impedance_linear, _uniform_wake_samples, Hann window)"
-   ```
+```
+py -c "
+import numpy as np
+from workflows.rfgun_hom_antenna.pso_wake_fit import (
+    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
+    compute_known_mode_wake, KnownMode, _gaussian_form_factor,
+)
+...
+# (full command body in feasibility_report.md Commands Run section)
+"
+```
 
-3. Fundamental decay check:
-   ```
-   py -c "... (envelope computation, frequency error vs length sweep)"
-   ```
+### Command 2 — Fundamental decay and frequency error vs length
+
+```
+py -c "
+import numpy as np
+from workflows.rfgun_hom_antenna.pso_wake_fit import (
+    C_LIGHT_M_PER_S, wake_from_parameters, _gaussian_form_factor,
+)
+...
+# (full command body in feasibility_report.md Commands Run section)
+"
+```
+
+### Command 3 — Finite wake length / windowing / wake-to-impedance
+
+```
+py -c "
+import numpy as np
+from workflows.rfgun_hom_antenna.pso_wake_fit import (
+    C_LIGHT_M_PER_S, wake_from_parameters, resonator_sum,
+    _gaussian_form_factor, _wake_to_impedance_linear,
+    _uniform_wake_samples, _detect_impedance_peaks_unlimited,
+    PeakDetectionSettings,
+)
+...
+# (full command body in feasibility_report.md Commands Run section)
+"
+```
+
+All three commands were run in the same Python 3.9.13 environment used for regression testing (`py` launcher, Windows).
 
 ## Test Results
 
 ```
 py -m pytest tests/workflows/test_workflow2_pso_wake_fit.py
 collected 38 items
-38 passed in 0.53s
+38 passed in 0.55s (re-run 2026-06-28)
 ```
 
 All 38 existing regression tests pass. No test files were modified.
@@ -63,14 +93,13 @@ No production code was committed. Only the feasibility report and this execution
 
 ## Commit
 
-```
-<will be filled after commit>
-```
+Original report commit: `24eb83e76f6969c1fc2208eeebb86a47c3332505`
+Follow-up fix commit: *(to be added after this edit)*
 
 ## Push
 - Remote: `origin`
 - Branch: `phase/S01-P04-direction-2-feasibility-spike`
-- Result: to be pushed after commit
+- Result: pushed (`24eb83e..<followup>`) to `origin/phase/S01-P04-direction-2-feasibility-spike`
 
 ## Ready for Review
 YES

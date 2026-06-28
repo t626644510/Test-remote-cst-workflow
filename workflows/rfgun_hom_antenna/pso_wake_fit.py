@@ -471,6 +471,121 @@ OptimizerFn = Callable[
 ]
 
 
+def _known_modes_from_config(
+    cfg: dict[str, Any],
+    fitting_direction: Direction,
+) -> tuple[KnownMode, ...]:
+    """Parse ``known_modes`` from a ``pso_fit`` config block.
+
+    Expected per-mode keys (under ``cfg["known_modes"]``):
+
+    ===============================  =========  ================================
+    Key                              Required   Notes
+    ===============================  =========  ================================
+    ``frequency_hz``                 Yes        Positive, in Hz.
+    ``q``                            Yes        Positive; >0.5 for longitudinal.
+    ``r_over_q_ohm``                 Yes        Finite, in ohm.
+    ``label``                        No         Defaults to ``"known_<index>"``.
+    ``direction``                    No         Must match *fitting_direction*
+                                               when provided.
+    ``frequency_tolerance_hz``       No         Non-negative; default 0.0.
+    ``include_in_reconstructed_      No         Default True.
+     impedance``
+    ===============================  =========  ================================
+
+    Returns an empty tuple when ``known_modes`` is absent or empty.
+    """
+
+    raw_list = cfg.get("known_modes")
+    if not raw_list:
+        return ()
+    if not isinstance(raw_list, (list, tuple)):
+        raise WakeFitError(
+            "pso_fit.known_modes must be a list of mode definitions."
+        )
+
+    direction_norm = _normalize_direction(fitting_direction)
+    parsed: list[KnownMode] = []
+    for i, entry in enumerate(raw_list):
+        if not isinstance(entry, dict):
+            raise WakeFitError(
+                f"pso_fit.known_modes[{i}] must be a dict, "
+                f"got {type(entry).__name__}."
+            )
+
+        prefix = f"pso_fit.known_modes[{i}]"
+
+        # --- required fields ---
+        frequency_hz = _get_known_required_float(entry, "frequency_hz", prefix)
+        q = _get_known_required_float(entry, "q", prefix)
+        r_over_q_ohm = _get_known_required_float(entry, "r_over_q_ohm", prefix)
+
+        if frequency_hz <= 0.0:
+            raise WakeFitError(
+                f"{prefix}.frequency_hz must be positive; got {frequency_hz}."
+            )
+        if q <= 0.0:
+            raise WakeFitError(
+                f"{prefix}.q must be positive; got {q}."
+            )
+        if not np.isfinite(r_over_q_ohm):
+            raise WakeFitError(
+                f"{prefix}.r_over_q_ohm must be finite; got {r_over_q_ohm}."
+            )
+
+        # --- optional fields ---
+        label = str(entry.get("label", f"known_{i}"))
+        entry_direction_raw = entry.get("direction", direction_norm)
+        if entry_direction_raw is not None:
+            entry_direction = _normalize_direction(str(entry_direction_raw))
+            if entry_direction != direction_norm:
+                raise WakeFitError(
+                    f"{prefix}.direction={entry_direction!r} does not match "
+                    f"fitting direction {direction_norm!r}.  Only "
+                    f"'{direction_norm}' known modes are supported in this "
+                    "fitting path."
+                )
+
+        tolerance = float(entry.get("frequency_tolerance_hz", 0.0))
+        if tolerance < 0.0:
+            raise WakeFitError(
+                f"{prefix}.frequency_tolerance_hz must be non-negative; "
+                f"got {tolerance}."
+            )
+
+        include = bool(entry.get("include_in_reconstructed_impedance", True))
+
+        parsed.append(KnownMode(
+            label=label,
+            frequency_hz=frequency_hz,
+            q=q,
+            r_over_q_ohm=r_over_q_ohm,
+            include_in_reconstructed_impedance=include,
+            frequency_tolerance_hz=tolerance,
+        ))
+    return tuple(parsed)
+
+
+def _get_known_required_float(entry: dict[str, Any], key: str, prefix: str) -> float:
+    """Extract a required float field from a known-mode config entry."""
+    value = entry.get(key)
+    if value is None:
+        raise WakeFitError(
+            f"{prefix}.{key} is required but missing."
+        )
+    try:
+        fv = float(value)
+    except (TypeError, ValueError) as exc:
+        raise WakeFitError(
+            f"{prefix}.{key} must be a float; got {value!r}."
+        ) from exc
+    if not np.isfinite(fv):
+        raise WakeFitError(
+            f"{prefix}.{key} must be finite; got {fv}."
+        )
+    return fv
+
+
 def build_wake_fit_input_from_config(
     *,
     direction: Direction,
@@ -567,6 +682,7 @@ def build_wake_fit_input_from_config(
         ),
         precomputed_peaks=precomputed_peaks,
         peak_source_label=str(peak_source_label),
+        known_modes=_known_modes_from_config(cfg, direction),
     )
 
 

@@ -20,6 +20,7 @@ from workflows.rfgun_hom_antenna.pso_wake_fit import (
     C_LIGHT_M_PER_S,
     KnownMode,
     ModeFit,
+    WakeFitError,
     _filter_known_mode_peaks,
     _gaussian_form_factor,
     PeakDetectionSettings,
@@ -920,3 +921,347 @@ def test_known_mode_plus_hom_peak_filtering() -> None:
         and abs(p.frequency_hz - hom_fr) < 1.0e6
     ]
     assert len(hom_selected) >= 1
+
+
+# ---------------------------------------------------------------------------
+# P02: known_modes config parsing and objective integration
+# ---------------------------------------------------------------------------
+
+
+def test_known_modes_from_config_parses_full_valid_entry() -> None:
+    """build_wake_fit_input_from_config parses known_modes correctly."""
+    config = {
+        "sigma_z_m": 0.003,
+        "bounds": {
+            "amplitude_min": 0.0, "amplitude_max": 5.0,
+            "q_min": 1.0, "q_max": 50.0,
+        },
+        "known_modes": [
+            {
+                "label": "fundamental",
+                "direction": "longitudinal",
+                "frequency_hz": 499.8e6,
+                "q": 36500,
+                "r_over_q_ohm": 208.6,
+                "frequency_tolerance_hz": 0.5e6,
+                "include_in_reconstructed_impedance": True,
+            }
+        ],
+    }
+    s_m = np.linspace(0.0, 0.1, 50)
+    f_hz = np.linspace(0.3e9, 1.8e9, 100)
+    fit_input = build_wake_fit_input_from_config(
+        direction="longitudinal",
+        wake_s_m=s_m,
+        wake=np.zeros_like(s_m),
+        impedance_frequency_hz=f_hz,
+        impedance=np.ones_like(f_hz),
+        config=config,
+    )
+
+    assert len(fit_input.known_modes) == 1
+    km = fit_input.known_modes[0]
+    assert km.label == "fundamental"
+    assert km.frequency_hz == pytest.approx(499.8e6)
+    assert km.q == pytest.approx(36500)
+    assert km.r_over_q_ohm == pytest.approx(208.6)
+    assert km.frequency_tolerance_hz == pytest.approx(0.5e6)
+    assert km.include_in_reconstructed_impedance is True
+
+
+def test_known_modes_from_config_default_fields() -> None:
+    """Optional fields get sensible defaults."""
+    config = {
+        "sigma_z_m": 0.003,
+        "bounds": {
+            "amplitude_min": 0.0, "amplitude_max": 5.0,
+            "q_min": 1.0, "q_max": 50.0,
+        },
+        "known_modes": [
+            {
+                "frequency_hz": 1.0e9,
+                "q": 100.0,
+                "r_over_q_ohm": 50.0,
+            }
+        ],
+    }
+    s_m = np.linspace(0.0, 0.1, 50)
+    f_hz = np.linspace(0.3e9, 1.8e9, 100)
+    fit_input = build_wake_fit_input_from_config(
+        direction="longitudinal",
+        wake_s_m=s_m,
+        wake=np.zeros_like(s_m),
+        impedance_frequency_hz=f_hz,
+        impedance=np.ones_like(f_hz),
+        config=config,
+    )
+
+    assert len(fit_input.known_modes) == 1
+    km = fit_input.known_modes[0]
+    # label defaults to known_0
+    assert km.label == "known_0"
+    # tolerance defaults to 0.0
+    assert km.frequency_tolerance_hz == pytest.approx(0.0)
+    # include defaults to True
+    assert km.include_in_reconstructed_impedance is True
+
+
+def test_known_modes_from_config_empty_when_absent() -> None:
+    """Known_modes defaults to () when not in config."""
+    config = {
+        "sigma_z_m": 0.003,
+        "bounds": {
+            "amplitude_min": 0.0, "amplitude_max": 5.0,
+            "q_min": 1.0, "q_max": 50.0,
+        },
+    }
+    s_m = np.linspace(0.0, 0.1, 50)
+    f_hz = np.linspace(0.3e9, 1.8e9, 100)
+    fit_input = build_wake_fit_input_from_config(
+        direction="longitudinal",
+        wake_s_m=s_m,
+        wake=np.zeros_like(s_m),
+        impedance_frequency_hz=f_hz,
+        impedance=np.ones_like(f_hz),
+        config=config,
+    )
+    assert fit_input.known_modes == ()
+
+
+class TestKnownModesFromConfigRequiredFields:
+    """Each missing required field raises a clear WakeFitError."""
+
+    @pytest.mark.parametrize("missing_key", ["frequency_hz", "q", "r_over_q_ohm"])
+    def test_missing_required_field(self, missing_key: str) -> None:
+        base = {
+            "frequency_hz": 1.0e9,
+            "q": 100.0,
+            "r_over_q_ohm": 50.0,
+        }
+        del base[missing_key]
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [base],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+
+        with pytest.raises(WakeFitError) as exc_info:
+            build_wake_fit_input_from_config(
+                direction="longitudinal",
+                wake_s_m=s_m,
+                wake=np.zeros_like(s_m),
+                impedance_frequency_hz=f_hz,
+                impedance=np.ones_like(f_hz),
+                config=config,
+            )
+        msg = str(exc_info.value)
+        assert "known_modes" in msg, f"Error should mention known_modes: {msg}"
+        assert missing_key in msg, f"Error should mention {missing_key}: {msg}"
+
+
+class TestKnownModesFromConfigDirectionValidation:
+    """Direction mismatch raises a clear error."""
+
+    def test_transverse_known_mode_in_longitudinal_fit(self) -> None:
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [
+                {
+                    "frequency_hz": 1.0e9,
+                    "q": 100.0,
+                    "r_over_q_ohm": 50.0,
+                    "direction": "transverse",
+                }
+            ],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+
+        with pytest.raises(WakeFitError) as exc_info:
+            build_wake_fit_input_from_config(
+                direction="longitudinal",
+                wake_s_m=s_m,
+                wake=np.zeros_like(s_m),
+                impedance_frequency_hz=f_hz,
+                impedance=np.ones_like(f_hz),
+                config=config,
+            )
+        msg = str(exc_info.value)
+        assert "longitudinal" in msg
+        assert "transverse" in msg
+
+    def test_known_mode_direction_matches_fitting_direction(self) -> None:
+        """Explicit matching direction should not raise."""
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [
+                {
+                    "frequency_hz": 1.0e9,
+                    "q": 100.0,
+                    "r_over_q_ohm": 50.0,
+                    "direction": "longitudinal",
+                }
+            ],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+        fit_input = build_wake_fit_input_from_config(
+            direction="longitudinal",
+            wake_s_m=s_m,
+            wake=np.zeros_like(s_m),
+            impedance_frequency_hz=f_hz,
+            impedance=np.ones_like(f_hz),
+            config=config,
+        )
+        assert len(fit_input.known_modes) == 1
+
+
+class TestLongitudinalObjectiveWithKnownModes:
+    """LongitudinalImpedanceObjective passes known_modes to fit_wake_with_pso."""
+
+    def _make_fake_fit_result(self):
+        return WakeFitResult(
+            modes=(),
+            fit_s_m=np.linspace(0, 0.1, 10),
+            fit_t_s=np.linspace(0, 3.3e-10, 10),
+            fit_wake=np.zeros(10),
+            wake_fit=np.zeros(10),
+            impedance_frequency_hz=np.array([0.9e9, 1.0e9, 1.1e9]),
+            impedance_complex=np.array([0.0 + 0.0j, 0.0 + 0.0j, 0.0 + 0.0j]),
+            impedance_abs=np.array([0.0, 0.0, 0.0]),
+            normalized_error=0.0,
+            wake_corr=1.0,
+            objective_value=0.0,
+            selected_peaks=(),
+            all_peaks=(),
+        )
+
+    def test_known_modes_in_config_reaches_fit_input(self, monkeypatch) -> None:
+        """When known_modes is in pso_fit config, the WakeFitInput.known_modes
+        is populated and reaches fit_wake_with_pso."""
+
+        captured_inputs = []
+
+        def _capture_fit(fit_input):
+            captured_inputs.append(fit_input)
+            return self._make_fake_fit_result()
+
+        # Patch fit_wake_with_pso in wakefield_objective's namespace (it was
+        # imported via "from ... import fit_wake_with_pso").
+        monkeypatch.setattr(
+            wake_obj_mod, "fit_wake_with_pso", _capture_fit
+        )
+
+        s_m = np.linspace(0, 0.1, 10)
+        wake = np.zeros_like(s_m)
+        f_hz = np.array([0.8e9, 1.0e9, 1.2e9])
+        impedance = np.array([1.0, 10.0, 2.0])
+
+        reader = _DictReader({
+            WAKE_PATH: (s_m, wake, "Distance / m"),
+            Z_PATH: (f_hz, impedance, "Frequency / Hz"),
+        })
+
+        obj = LongitudinalImpedanceObjective(
+            lambda: reader,
+            strategy="peak_exceedance",
+            z_threshold_ohm=0.0,
+            freq_min_hz=0.8e9,
+            freq_max_hz=1.2e9,
+            fit_source="pso_wake",
+            pso_fit={
+                "wake_tree_path": WAKE_PATH,
+                "wake_x_unit": "m",
+                "wake_y_unit": "V/pC",
+                "peak_source": "cst_impedance",
+                "sigma_z_m": 0.003,
+                "fit_start_m": float(s_m[0]),
+                "fit_end_m": float(s_m[-1]),
+                "fit_point_count": len(s_m),
+                "bounds": {
+                    "amplitude_min": 1.0,
+                    "amplitude_max": 10.0,
+                    "q_min": 1.0,
+                    "q_max": 100.0,
+                },
+                "known_modes": [
+                    {
+                        "label": "fundamental",
+                        "frequency_hz": 499.8e6,
+                        "q": 36500,
+                        "r_over_q_ohm": 208.6,
+                    }
+                ],
+            },
+        )
+
+        raw = obj.raw_value()
+        assert len(captured_inputs) == 1
+        fit_input = captured_inputs[0]
+        assert len(fit_input.known_modes) == 1
+        km = fit_input.known_modes[0]
+        assert km.label == "fundamental"
+        assert km.frequency_hz == pytest.approx(499.8e6)
+
+    def test_no_known_modes_in_config_passes_empty(self, monkeypatch) -> None:
+        """Without known_modes in config, WakeFitInput.known_modes is empty."""
+
+        captured_inputs = []
+
+        def _capture_fit(fit_input):
+            captured_inputs.append(fit_input)
+            return self._make_fake_fit_result()
+
+        monkeypatch.setattr(
+            wake_obj_mod, "fit_wake_with_pso", _capture_fit
+        )
+
+        _, x_best, s_m, wake, f_hz, impedance = _single_mode_synthetic()
+
+        reader = _DictReader({
+            WAKE_PATH: (s_m, wake, "Distance / m"),
+            Z_PATH: (f_hz, impedance, "Frequency / Hz"),
+        })
+
+        obj = LongitudinalImpedanceObjective(
+            lambda: reader,
+            strategy="peak_exceedance",
+            z_threshold_ohm=0.0,
+            freq_min_hz=0.8e9,
+            freq_max_hz=1.2e9,
+            fit_source="pso_wake",
+            pso_fit={
+                "wake_tree_path": WAKE_PATH,
+                "wake_x_unit": "m",
+                "wake_y_unit": "V/pC",
+                "peak_source": "cst_impedance",
+                "sigma_z_m": 0.003,
+                "fit_start_m": float(s_m[0]),
+                "fit_end_m": float(s_m[-1]),
+                "fit_point_count": len(s_m),
+                "bounds": {
+                    "amplitude_min": 1.0,
+                    "amplitude_max": 10.0,
+                    "q_min": 1.0,
+                    "q_max": 100.0,
+                },
+            },
+        )
+
+        raw = obj.raw_value()
+        assert len(captured_inputs) == 1
+        fit_input = captured_inputs[0]
+        assert fit_input.known_modes == ()

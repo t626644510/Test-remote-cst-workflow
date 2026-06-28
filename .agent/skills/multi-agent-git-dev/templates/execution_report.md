@@ -16,8 +16,9 @@ Briefly describe what was changed.
 
 ## Tests Run
 
-bash
+```bash
 command here
+```
 
 ## Test Results
 Describe the results.
@@ -32,5 +33,13 @@ State whether any files outside the allowed scope were modified.
 ## Commit
 Commit hash here.
 
+## Push
+- Remote: `origin`
+- Branch: `phase/Sxx-Pyy-short-name`
+- Result: pushed / not pushed
+
 ## Ready for Review
 YES / NO
+
+## Blockers
+State any blocker report path, or `None`.

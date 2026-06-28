@@ -1097,6 +1097,40 @@ class TestKnownModesFromConfigRequiredFields:
         assert "> 0.5" in msg, f"Error should mention > 0.5: {msg}"
         assert "0.5" in msg, f"Error should mention 0.5: {msg}"
 
+    def test_frequency_tolerance_must_be_finite(self) -> None:
+        """Known-mode frequency tolerance rejects NaN instead of silently
+        disabling peak filtering."""
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [
+                {
+                    "frequency_hz": 1.0e9,
+                    "q": 100.0,
+                    "r_over_q_ohm": 50.0,
+                    "frequency_tolerance_hz": float("nan"),
+                }
+            ],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+
+        with pytest.raises(WakeFitError) as exc_info:
+            build_wake_fit_input_from_config(
+                direction="longitudinal",
+                wake_s_m=s_m,
+                wake=np.zeros_like(s_m),
+                impedance_frequency_hz=f_hz,
+                impedance=np.ones_like(f_hz),
+                config=config,
+            )
+        msg = str(exc_info.value)
+        assert "frequency_tolerance_hz" in msg
+        assert "finite" in msg
+
 
 class TestKnownModesFromConfigDirectionValidation:
     """Direction mismatch raises a clear error."""
@@ -1130,6 +1164,40 @@ class TestKnownModesFromConfigDirectionValidation:
                 config=config,
             )
         msg = str(exc_info.value)
+        assert "longitudinal" in msg
+        assert "transverse" in msg
+
+    def test_known_modes_are_not_implicitly_enabled_for_transverse_fit(self) -> None:
+        """Stage S01 known-mode config is longitudinal-only even when the
+        per-mode direction is omitted."""
+        config = {
+            "sigma_z_m": 0.003,
+            "bounds": {
+                "amplitude_min": 0.0, "amplitude_max": 5.0,
+                "q_min": 1.0, "q_max": 50.0,
+            },
+            "known_modes": [
+                {
+                    "frequency_hz": 1.0e9,
+                    "q": 100.0,
+                    "r_over_q_ohm": 50.0,
+                }
+            ],
+        }
+        s_m = np.linspace(0.0, 0.1, 50)
+        f_hz = np.linspace(0.3e9, 1.8e9, 100)
+
+        with pytest.raises(WakeFitError) as exc_info:
+            build_wake_fit_input_from_config(
+                direction="transverse",
+                wake_s_m=s_m,
+                wake=np.zeros_like(s_m),
+                impedance_frequency_hz=f_hz,
+                impedance=np.ones_like(f_hz),
+                config=config,
+            )
+        msg = str(exc_info.value)
+        assert "known_modes" in msg
         assert "longitudinal" in msg
         assert "transverse" in msg
 

@@ -489,9 +489,8 @@ def _known_modes_from_config(
     ``q``                            Yes        Positive; >0.5 for longitudinal.
     ``r_over_q_ohm``                 Yes        Finite, in ohm.
     ``label``                        No         Defaults to ``"known_<index>"``.
-    ``direction``                    No         Must match *fitting_direction*
-                                               when provided.
-    ``frequency_tolerance_hz``       No         Non-negative; default 0.0.
+    ``direction``                    No         Must be longitudinal when provided.
+    ``frequency_tolerance_hz``       No         Finite, non-negative; default 0.0.
     ``include_in_reconstructed_      No         Default True.
      impedance``
     ===============================  =========  ================================
@@ -508,6 +507,14 @@ def _known_modes_from_config(
         )
 
     direction_norm = _normalize_direction(fitting_direction)
+    if direction_norm != "longitudinal":
+        raise WakeFitError(
+            "pso_fit.known_modes currently supports only longitudinal fitting. "
+            f"Got fitting direction {direction_norm!r}; remove known_modes from "
+            "transverse PSO config until transverse known-mode physics is "
+            "validated."
+        )
+
     parsed: list[KnownMode] = []
     for i, entry in enumerate(raw_list):
         if not isinstance(entry, dict):
@@ -531,7 +538,7 @@ def _known_modes_from_config(
             raise WakeFitError(
                 f"{prefix}.q must be positive; got {q}."
             )
-        if _normalize_direction(fitting_direction) == "longitudinal" and q <= 0.5:
+        if q <= 0.5:
             raise WakeFitError(
                 f"{prefix}.q must be > 0.5 for longitudinal known modes; "
                 f"got {q}."
@@ -554,10 +561,16 @@ def _known_modes_from_config(
                     "fitting path."
                 )
 
-        tolerance = float(entry.get("frequency_tolerance_hz", 0.0))
-        if tolerance < 0.0:
+        try:
+            tolerance = float(entry.get("frequency_tolerance_hz", 0.0))
+        except (TypeError, ValueError) as exc:
             raise WakeFitError(
-                f"{prefix}.frequency_tolerance_hz must be non-negative; "
+                f"{prefix}.frequency_tolerance_hz must be a finite, "
+                f"non-negative float; got {entry.get('frequency_tolerance_hz')!r}."
+            ) from exc
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise WakeFitError(
+                f"{prefix}.frequency_tolerance_hz must be finite and non-negative; "
                 f"got {tolerance}."
             )
 

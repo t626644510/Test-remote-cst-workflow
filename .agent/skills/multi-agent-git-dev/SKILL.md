@@ -36,6 +36,11 @@ Each agent must stay within its authority.
 5. If an agent finds unclear requirements, architecture conflict, or repeated failure, it must stop and escalate.
 6. Do not silently expand scope.
 7. Do not modify workflow files belonging to another role unless explicitly instructed.
+8. Web Phase Planner writes workflow documents through remote Git changes under `.agent/`; it must not edit implementation files.
+9. Local execution agents must fetch and fast-forward pull the assigned `phase/*` branch before reading local workflow files.
+10. Local execution agents must make phase work reviewable through Git before requesting review: write the execution report, commit the allowed phase changes, and push only the current `phase/*` branch.
+11. If a required phase pull, commit, or push fails, the local execution agent must stop and write a blocker report instead of asking Web ChatGPT to review an invisible or stale local diff.
+12. Prompts and reports should reference shared templates instead of restating long formats. Add phase-specific evidence requirements only when the template is insufficient.
 
 ## Branching Model
 
@@ -46,6 +51,8 @@ Use the following branch pattern:
 - `phase/Sxx-Pyy-short-name`
 
 Local execution agents may work only on `phase/*` branches.
+Local execution agents may push only the current `phase/*` branch. They must not push `main`, `stage/*`, tags, or unrelated branches.
+Web Phase Planner may create or update remote `phase/*` branches for workflow documentation under `.agent/`, but must not edit implementation files.
 
 ## Phase Status
 

@@ -122,3 +122,24 @@ P03 is ready for review. The diagnostics added are:
 The zero-unknown-mode `objective_value` fix (from `0.0` to actual SSE) addresses the P01 review note. The existing `last_fit_result` on `LongitudinalImpedanceObjective` carries all new fields without any objective-layer changes.
 
 The branch has been pushed to remote for inspection.
+
+## Codex Follow-up: config boundary and workflow documentation
+
+After Codex audit, this branch was updated with two small config hardening fixes and workflow-documentation cleanup:
+
+- `pso_fit.known_modes` config is now longitudinal-only for this stage. Transverse PSO fitting rejects `known_modes`, including entries where `direction` is omitted.
+- `frequency_tolerance_hz` now rejects non-finite values such as `NaN`.
+- Missing workflow templates and phase documents were added under `.agent/`.
+- Multi-agent rules were updated so Web Phase Planner writes workflow docs through remote Git and Local Execution Agent fetches/fast-forward-pulls before reading `executor_prompt.md`.
+
+Additional validation:
+
+```powershell
+py -m pytest tests\workflows\test_workflow2_pso_wake_fit.py
+```
+
+Result:
+
+```text
+38 passed in 0.64s
+```

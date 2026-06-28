@@ -1,71 +1,50 @@
 # Phase Review: P04-direction-2-feasibility-spike
 
 ## Verdict
-ESCALATE_TO_CODEX
+PHASE_ACCEPTED
 
 ## Branch And Commits
 - Branch: `phase/S01-P04-direction-2-feasibility-spike`
 - Commits reviewed:
   - `e22ab36` Web phase plan
   - `24b600e` Web executor prompt
-  - `24eb83e` Local feasibility and execution reports
+  - `24eb83e` initial local feasibility and execution reports
   - `6b93e0e` Web review requiring report-only follow-up
   - `4ff11f7` Web follow-up prompt
-  - `5933d81` Local follow-up report update
-  - `8defcd1` Local follow-up commit/push field update
+  - `5933d81` local follow-up report update
+  - `8defcd1` local follow-up commit/push field update
+  - `6fc3032` Web escalation review
+  - `272c1f7` Web escalation summary
+  - `8330632` Codex-authorized final report-only reproducibility fix
 
 ## Review Summary
-P04 remains scientifically useful and appears scope-compliant, but it cannot be marked `PHASE_ACCEPTED` by Web Phase Review because the required reproducibility evidence is still incomplete after follow-up.
+P04 is accepted after the Codex-authorized final report-only fix.
 
-The follow-up fixed the execution-report commit, push, and regression-test evidence. The report now records:
+Codex required one final report-only correction and did not relax the evidence standard. The final local commit `8330632` replaced abbreviated command evidence with complete, copy-pasteable PowerShell here-string commands in `feasibility_report.md` and updated `execution_report.md` with verification evidence.
 
-- Original report commit: `24eb83e76f6969c1fc2208eeebb86a47c3332505`.
-- Follow-up fix commit: `5933d81`.
-- Push result: `4ff11f7..5933d81` pushed to `origin/phase/S01-P04-direction-2-feasibility-spike`.
-- Regression rerun: `38 passed in 0.55s`.
-
-However, the follow-up did not fully satisfy the requested exact inline-command evidence. The `feasibility_report.md` `Commands Run` section still contains abbreviated command bodies with ellipses and comments such as:
-
-- `# ... same pattern for Q and R/Q perturbations ...`
-- `# ... generate true and perturbed fundamental, compute residual RMS ...`
-- `# ... generate full wake + residual at multiple lengths ...`
-- `# ... apply Hann window, compute impedance, detect peaks ...`
-
-The `execution_report.md` also summarizes commands with `...` and points to the feasibility report for the full command body, but that full body is not actually present for all experiments.
-
-Because this is the second review failure for the same phase, Web Phase Review should not issue another follow-up prompt. Per the workflow escalation rule, this phase is escalated to Codex for judgment on whether to accept the spike despite incomplete command reproducibility, relax the exact-command requirement, or require one final report-only correction.
+The phase remains a no-CST research spike. No production code, tests, CST API, shared core, wakefield objective, scalarization, main, or stage branch changes were observed.
 
 ## Acceptance Criteria Check
 
 | Criterion | Status | Evidence |
 |---|---|---|
-| `feasibility_report.md` is written in the P04 phase folder | PASS | Report exists and contains the Direction 2 feasibility analysis. |
-| `execution_report.md` is written using the shared report structure | PASS | Commit, push, blocker, and test fields are now filled. |
-| Phase remains a research spike and does not modify production code/tests/CST/scalarization | PASS | Compared against P03 branch; changes are limited to P04 `.agent` files. |
-| No-CST synthetic wake with known fundamental plus multiple HOMs | PASS | Synthetic table includes fundamental plus HOM1 and HOM2. |
-| Exact fundamental subtraction evaluated against HOM-only truth | PASS | Exact subtraction residual reaches floating-point precision. |
-| Frequency, Q, and R/Q perturbation sensitivity quantified | PASS | Report includes separate quantitative tables for frequency, Q, and R/Q perturbations. |
-| Finite wake length and windowing/truncation effects evaluated | PASS | Report discusses finite wake length, spectral leakage, and Hann window behavior. |
-| Wake-to-impedance reconstruction behavior assessed | PASS | Report compares unwindowed and Hann-windowed residual reconstruction. |
-| Clear `GO`, `NO-GO`, or `CONDITIONAL-GO` recommendation | PASS | Recommendation is `CONDITIONAL-GO`. |
-| Concrete conditions before production Direction 2 implementation | PASS | Report includes an 8-item CST convention checklist. |
-| Required regression command passes or blocker documented | PASS | Execution report records `38 passed in 0.55s`. |
-| Exact inline Python synthetic experiment commands recorded | FAIL | Feasibility/execution reports still use abbreviated command bodies with `...` and omitted loops/logic. |
+| Feasibility report exists | PASS | `feasibility_report.md` is present in the P04 phase folder. |
+| Execution report exists | PASS | `execution_report.md` is present in the P04 phase folder. |
+| Scope stayed report-only | PASS | Diff from P03 shows only P04 `.agent` workflow/report files. |
+| Synthetic wake includes fundamental plus HOMs | PASS | Mode table includes fundamental, HOM1, and HOM2. |
+| Exact subtraction evaluated | PASS | Report records floating-point-level exact subtraction. |
+| Frequency/Q/RQ sensitivity quantified | PASS | Report includes frequency, Q, and R/Q perturbation tables. |
+| Finite wake/windowing evaluated | PASS | Report covers wake length, truncation leakage, Hann windowing, and reconstruction behavior. |
+| Wake-to-impedance reconstruction assessed | PASS | Report assesses unwindowed and windowed residual reconstruction. |
+| Recommendation given | PASS | Recommendation is `CONDITIONAL-GO`. |
+| CST preconditions listed | PASS | Report includes the required CST convention checklist. |
+| Regression passes | PASS | Execution report records `38 passed in 0.55s`. |
+| Complete command evidence recorded | PASS | Final report contains three complete here-string commands and no omitted loop bodies in the command evidence. |
 
 ## Scope Compliance
 PASS.
 
-Reviewed diff from `phase/S01-P03-diagnostics-and-stage-validation` to `phase/S01-P04-direction-2-feasibility-spike` shows only P04 `.agent` files were added or updated:
-
-- `phase_plan.md`
-- `executor_prompt.md`
-- `codex_phase_plan_review.md`
-- `feasibility_report.md`
-- `execution_report.md`
-- `phase_review.md`
-- `followup_prompt.md`
-
-No production code, tests, CST API, `src/cst_optimization/`, scalarization, `main`, or `stage/*` changes were observed.
+Compared with `phase/S01-P03-diagnostics-and-stage-validation`, the P04 branch changes are limited to P04 `.agent` files, including phase docs, Codex decision/prompt, reports, reviews, and summary.
 
 ## Tests Reviewed
 Reported command:
@@ -80,25 +59,26 @@ Reported result:
 38 passed in 0.55s
 ```
 
-## Scientific Findings Reviewed
-The scientific result is adequate for a research spike, pending Codex judgment on reproducibility evidence:
+The execution report also states the three synthetic experiment commands were re-run and verified to reproduce the numerical tables.
 
-- Exact synthetic fundamental subtraction recovers HOM-only wake to floating-point precision.
+## Scientific Findings Accepted
+- Exact synthetic fundamental subtraction recovers the HOM-only residual to floating-point precision.
 - Fundamental frequency error is the dominant risk; the report recommends `<0.1 MHz` accuracy before production Direction 2 work.
-- Q perturbation is comparatively negligible for the tested wake lengths because Q=36500 decays extremely slowly.
-- R/Q perturbation creates linear amplitude residuals and is manageable only within bounded error.
-- The fundamental does not decay appreciably over practical wake lengths, so extending wake length cannot solve fundamental subtraction error.
-- Finite wake truncation creates spectral leakage; Hann windowing improves residual impedance reconstruction but reduces peak amplitudes.
-- The report correctly gates production Direction 2 behind CST sign/scale/phase/frequency/Q/RQ/noise validation.
+- Q perturbation is comparatively small over the tested wake lengths because `Q=36500` decays very slowly.
+- R/Q perturbation creates linear residual amplitude error and must be bounded.
+- The high-Q fundamental does not decay appreciably over practical wake lengths, so extending wake length cannot solve main-mode subtraction error.
+- Finite wake truncation creates spectral leakage; Hann windowing improves residual impedance reconstruction but changes amplitudes.
+- Any production Direction 2 implementation must be gated by CST sign, scale, bunch form factor, time-zero, fundamental frequency, R/Q definition, loading/Q, and numerical noise-floor checks.
+
+## Review Notes
+The execution report's commit/push section still names `5933d81` as the follow-up fix commit, but Web Phase Review independently verified the final Codex-authorized commit `8330632` and the branch diff. This is not blocking because Codex's final completion standard focused on command completeness, rerun verification, and report-only scope.
 
 ## Findings Or Follow-up
-No further Web-generated follow-up prompt is issued because this is the second review failure for the same phase.
+None for P04.
 
-Codex should decide one of:
-
-1. Accept P04 as scientifically sufficient despite incomplete exact-command reproduction.
-2. Require one final report-only correction with full copy-pasteable inline commands or a committed artifact-free command transcript.
-3. Relax the exact-command evidence requirement for this research spike and document why summary-level command evidence is sufficient.
+Future work must not implement Direction 2 until the CST convention checklist is satisfied with exported or live CST data.
 
 ## Result
-Escalated to Codex. P04 is not marked `PHASE_ACCEPTED` by Web Phase Review.
+P04-direction-2-feasibility-spike is accepted.
+
+Next allowed step: return to Codex for stage-level review / stage acceptance decision.

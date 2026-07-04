@@ -64,6 +64,11 @@ workflow_2:
     seed: 42
     acquisition_function: ei
     acquisition_xi: 0.01
+    objective_weights:
+      z_longitudinal: 6.0
+      z_transverse: 1.0
+      antenna_absorption: 1.5
+      antenna_absorption_db: 1.5
     solver:
       stagnation_timeout_s: 7200.0
     retry:
@@ -203,18 +208,15 @@ workflow_2:
     description: inner_r < -5.44
   objectives:
   - name: z_longitudinal
-    mode: less_than_soft
-    mode_params:
-      threshold: 0.0
-      scale: 0.008
-      power: 1.0
+    mode: minimize
     obj_params:
-      strategy: threshold_exceedance_integral
+      strategy: soft_quadratic_peak_barrier
       z_threshold_ohm: 2000.0
+      peak_barrier_scale_ohm: 500.0
+      integral_weight: 0.2
       reference_beam: ParticleBeam1
       freq_min_hz: 550000000.0
       project: wakefield
-      normalize: true
   - name: z_transverse
     enabled: true
     mode: less_than_soft

@@ -81,6 +81,7 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
         - ``threshold_exceedance_integral`` -> ohm*Hz
         - ``peak_exceedance``             -> ohm
         - ``composite``                   -> dimensionless
+        - ``quadratic_peak_barrier``      -> dimensionless
 
     Typical mode: ``less_than`` with ``threshold=0``.
 
@@ -118,6 +119,9 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
         freq_max_hz: float | None = None,
         normalize: bool = False,
         square_exceedance: bool = False,
+        peak_barrier_scale_ohm: float | None = None,
+        peak_barrier_scale: float | None = None,
+        integral_weight: float = 0.0,
         **kwargs,
     ) -> None:
         super().__init__(reader_factory, mode)
@@ -129,6 +133,11 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
         self._freq_max_hz = float(freq_max_hz) if freq_max_hz is not None else None
         self._normalize = bool(normalize)
         self._square_exceedance = bool(square_exceedance)
+        scale = peak_barrier_scale_ohm
+        if scale is None:
+            scale = peak_barrier_scale
+        self._peak_barrier_scale = float(scale) if scale is not None else None
+        self._integral_weight = float(integral_weight)
 
     def raw_value(self) -> float:
         reader = self._reader_factory()
@@ -157,6 +166,8 @@ class LongitudinalImpedanceObjective(ObjectiveFunction):
                 freq_max_hz=self._freq_max_hz,
                 normalize=self._normalize,
                 square_exceedance=self._square_exceedance,
+                peak_barrier_scale=self._peak_barrier_scale,
+                integral_weight=self._integral_weight,
             )
         )
 
@@ -189,6 +200,7 @@ class TransverseImpedanceObjective(ObjectiveFunction):
         - ``threshold_exceedance_integral`` -> ohm/m*Hz
         - ``peak_exceedance``             -> ohm/m
         - ``composite``                   -> dimensionless
+        - ``quadratic_peak_barrier``      -> dimensionless
 
     Typical mode: ``less_than`` with ``threshold=0``.
 
@@ -227,6 +239,9 @@ class TransverseImpedanceObjective(ObjectiveFunction):
         freq_max_hz: float | None = None,
         normalize: bool = False,
         square_exceedance: bool = False,
+        peak_barrier_scale_ohm_per_m: float | None = None,
+        peak_barrier_scale: float | None = None,
+        integral_weight: float = 0.0,
         **kwargs,
     ) -> None:
         super().__init__(reader_factory, mode)
@@ -239,6 +254,11 @@ class TransverseImpedanceObjective(ObjectiveFunction):
         self._freq_max_hz = float(freq_max_hz) if freq_max_hz is not None else None
         self._normalize = bool(normalize)
         self._square_exceedance = bool(square_exceedance)
+        scale = peak_barrier_scale_ohm_per_m
+        if scale is None:
+            scale = peak_barrier_scale
+        self._peak_barrier_scale = float(scale) if scale is not None else None
+        self._integral_weight = float(integral_weight)
         self._ref_reader_factory = ref_reader_factory
 
         # Parse offset beam configs
@@ -298,6 +318,8 @@ class TransverseImpedanceObjective(ObjectiveFunction):
                 freq_max_hz=self._freq_max_hz,
                 normalize=self._normalize,
                 square_exceedance=self._square_exceedance,
+                peak_barrier_scale=self._peak_barrier_scale,
+                integral_weight=self._integral_weight,
             )
             scalar_values.append(val)
 

@@ -410,7 +410,11 @@ def compute_transverse_impedance(
 # ---------------------------------------------------------------------------
 
 StrategyName = Literal[
-    "threshold_exceedance_integral", "peak_exceedance", "composite"
+    "threshold_exceedance_integral",
+    "peak_exceedance",
+    "composite",
+    "quadratic_peak_barrier",
+    "soft_quadratic_peak_barrier",
 ]
 
 
@@ -458,6 +462,8 @@ def scalarize(
     freq_max_hz: float | None = None,
     normalize: bool = False,
     square_exceedance: bool = False,
+    peak_barrier_scale: float | None = None,
+    integral_weight: float = 0.0,
 ) -> float:
     """Map a 1D impedance curve to a scalar exceedance metric.
 
@@ -471,7 +477,8 @@ def scalarize(
         Maximum allowed impedance in the same unit as *impedance*.
     strategy : str
         ``"threshold_exceedance_integral"``, ``"peak_exceedance"``,
-        or ``"composite"``.
+        ``"composite"``, ``"quadratic_peak_barrier"``, or
+        ``"soft_quadratic_peak_barrier"``.
     weights : tuple[float, float, float]
         Only used for ``"composite"``.  Order: (w_integral, w_peak, w_margin).
     freq_min_hz : float or None
@@ -496,10 +503,28 @@ def scalarize(
         return _scalarize_peak(z, z_threshold)
     elif strategy == "composite":
         return _scalarize_composite(f, z, z_threshold, weights, normalize=normalize)
+    elif strategy == "quadratic_peak_barrier":
+        return _scalarize_quadratic_peak_barrier(
+            f,
+            z,
+            z_threshold,
+            peak_barrier_scale=peak_barrier_scale,
+            integral_weight=integral_weight,
+        )
+    elif strategy == "soft_quadratic_peak_barrier":
+        raw_barrier = _scalarize_quadratic_peak_barrier(
+            f,
+            z,
+            z_threshold,
+            peak_barrier_scale=peak_barrier_scale,
+            integral_weight=integral_weight,
+        )
+        return float(raw_barrier / (1.0 + raw_barrier))
     else:
         raise ValueError(
             f"Unknown strategy '{strategy}'.  "
-            f"Available: threshold_exceedance_integral, peak_exceedance, composite"
+            "Available: threshold_exceedance_integral, peak_exceedance, "
+            "composite, quadratic_peak_barrier, soft_quadratic_peak_barrier"
         )
 
 
@@ -575,6 +600,46 @@ def _scalarize_composite(
     margin = n_violations / len(impedance)
 
     return float(w_i * i_norm + w_p * p_norm + w_m * margin)
+
+
+def _scalarize_quadratic_peak_barrier(
+    frequencies: np.ndarray,
+    impedance: np.ndarray,
+    z_threshold: float,
+    peak_barrier_scale: float | None = None,
+    integral_weight: float = 0.0,
+) -> float:
+    """Dimensionless quadratic barrier for impedance peaks above threshold.
+
+    The peak term is ``((max(Z) - Z_th) / scale)^2`` when the selected-band
+    peak exceeds ``Z_th`` and zero otherwise.  ``scale`` has the same unit as
+    *impedance* (ohm for longitudinal impedance, ohm/m for transverse).  The
+    optional area tie breaker is the normalised integral of exceedance over
+    frequency in Hz, divided by ``Z_th * frequency_span``.
+    """
+    threshold = float(z_threshold)
+    if threshold <= 0.0:
+        raise ValueError("quadratic_peak_barrier requires z_threshold > 0")
+
+    scale = threshold if peak_barrier_scale is None else float(peak_barrier_scale)
+    if scale <= 0.0 or not np.isfinite(scale):
+        raise ValueError("peak_barrier_scale must be finite and > 0")
+
+    peak_excess = max(0.0, float(np.max(impedance)) - threshold)
+    peak_term = (peak_excess / scale) ** 2
+
+    area_weight = max(float(integral_weight), 0.0)
+    if area_weight == 0.0:
+        return float(peak_term)
+
+    area_term = _scalarize_integral(
+        frequencies,
+        impedance,
+        threshold,
+        normalize=True,
+        square_exceedance=False,
+    )
+    return float(peak_term + area_weight * area_term)
 
 
 # ---------------------------------------------------------------------------

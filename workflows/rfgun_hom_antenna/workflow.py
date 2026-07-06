@@ -23,7 +23,11 @@ from cst_optimization.parameters.base import ParameterSet
 from cst_optimization.objectives.base import ObjectiveFunction
 
 # ── WF2 local ─────────────────────────────────────────────────────────────
-from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator, ProjectSpec
+from workflows.rfgun_hom_antenna.orchestrator import (
+    AttemptProjectManager,
+    DualProjectOrchestrator,
+    ProjectSpec,
+)
 
 # ── Optimisers ──────────────────────────────────────────────────────────────
 from cst_optimization.optimization.base import BaseOptimizer
@@ -150,6 +154,11 @@ def build_workflow_2(
             condition_trigger=p.get("condition_trigger", ""),
             condition_max_penalty=float(p.get("condition_max_penalty", 0.2)),
         ))
+    project_file_cfg = config.get("project_file_mode", {}) or {}
+    project_file_manager = AttemptProjectManager(
+        mode=project_file_cfg.get("mode", "direct"),
+        workspace_dir=project_file_cfg.get("workspace_dir", ""),
+    )
 
     # ── Message logger ───────────────────────────────────────────────
     msg_cfg = config.get("message_log", {})
@@ -268,6 +277,7 @@ def build_workflow_2(
         library_path=library_path,
         cooldown_s=float(retry_cfg_raw.get("cooldown_s", 5.0)) if retry_cfg_raw else 5.0,
         adaptive_gate=adaptive_gate,
+        project_file_manager=project_file_manager,
     )
 
     # ── Extra result paths for retry-handler cleanup ─────────────────
@@ -288,6 +298,7 @@ def build_workflow_2(
         retry_handler = _build_retry_handler(
             conn, specs[0].cst_path, library_path, retry_cfg_raw,
             config, extra_result_paths,
+            result_paths_provider=orchestrator.current_project_paths,
         )
         if retry_handler is not None:
             retry_handler._on_reconnect = lambda new_conn: setattr(

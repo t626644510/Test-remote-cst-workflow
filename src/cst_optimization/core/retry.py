@@ -102,6 +102,7 @@ class EvaluationRetryHandler:
         on_reconnect: Callable[[CSTConnection], None] | None = None,
         connection_factory: Callable[[], CSTConnection] | None = None,
         extra_result_paths: list[str] | None = None,
+        result_paths_provider: Callable[[], list[str]] | None = None,
     ) -> None:
         self._conn = connection
         self._project_path = project_path
@@ -111,6 +112,7 @@ class EvaluationRetryHandler:
         self._connection_factory = connection_factory
         self._evaluation_timeout_s = self._config.evaluation_timeout_s
         self._extra_result_paths = list(extra_result_paths) if extra_result_paths else []
+        self._result_paths_provider = result_paths_provider
         self._all_connections: list[CSTConnection] = [connection]
 
     @property
@@ -323,14 +325,19 @@ class EvaluationRetryHandler:
 
     def _clean_all_result_folders(self) -> None:
         """Remove result folders for the primary project and all extras."""
-        remove_result_folder(self._project_path)
-        remove_lock_file(os.path.dirname(self._project_path))
-        for p in self._extra_result_paths:
+        for p in self._current_result_paths():
+            if not p:
+                continue
             remove_result_folder(p)
             try:
                 remove_lock_file(os.path.dirname(p))
             except Exception:
                 pass
+
+    def _current_result_paths(self) -> list[str]:
+        if self._result_paths_provider is not None:
+            return list(self._result_paths_provider())
+        return [self._project_path, *self._extra_result_paths]
 
     def _graceful_clean_and_reconnect(self) -> None:
         """Graceful close + clean result folder + reconnect (Tier 2).
@@ -381,7 +388,9 @@ class EvaluationRetryHandler:
             pass
 
         kill_all_cst_processes()
-        remove_lock_file(os.path.dirname(self._project_path))
+        for path in self._current_result_paths():
+            if path:
+                remove_lock_file(os.path.dirname(path))
 
         self._conn = self._make_new_connection()
         if self._on_reconnect is not None:

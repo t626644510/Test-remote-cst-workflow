@@ -39,6 +39,12 @@ workflow_2:
   evaluation:
     pre_eval_cleanup: false
     post_eval_recovery: ""
+  project_file_mode:
+    # Set mode: direct to keep opening and modifying projects.*.cst_path.
+    # template_copy treats those paths as fixed templates and runs per-attempt
+    # working copies under workspace_dir.
+    mode: template_copy
+    workspace_dir: D:/Results/wf2_project_copies
   pre_filter:
     enabled: true
     absorption_threshold_db: -25.0

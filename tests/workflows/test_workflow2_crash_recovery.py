@@ -10,13 +10,19 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from cst_optimization.checkpoint import CheckpointManager
+from cst_optimization.core.retry import EvaluationRetryHandler, RetryConfig
+from cst_optimization.core.solver import SolverResult
 from cst_optimization.database import save_curves_npz
 from cst_optimization.optimization.conditional_gate import (
     AdaptiveConditionalGate,
     GateConfig,
     GatePhase,
 )
-from workflows.rfgun_hom_antenna.orchestrator import DualProjectOrchestrator
+from workflows.rfgun_hom_antenna.orchestrator import (
+    AttemptProjectManager,
+    DualProjectOrchestrator,
+    ProjectSpec,
+)
 from workflows.rfgun_hom_antenna.recovery import (
     build_recovery_seed,
     infer_checkpoint_source_iterations,
@@ -386,6 +392,204 @@ def test_phase_aware_reset_only_cleans_requested_project(tmp_path) -> None:
         orch._reset_connection(cleanup_labels={"wakefield_offset"})
 
     remove_results.assert_called_once_with(offset.cst_path)
+
+
+def test_attempt_project_manager_copies_template_per_attempt(tmp_path) -> None:
+    template = tmp_path / "F2W.cst"
+    template.write_bytes(b"template-cst")
+    manager = AttemptProjectManager(
+        mode="template_copy",
+        workspace_dir=str(tmp_path / "copies"),
+    )
+    manager.begin_attempt(iteration=7, attempt=2)
+    spec = ProjectSpec(cst_path=str(template), label="wakefield")
+
+    working = Path(manager.project_path(spec))
+
+    assert working.name == "F2W_working.cst"
+    assert working.parts[-5:] == (
+        "eval_0007",
+        "attempt_002",
+        "wakefield",
+        "model",
+        "F2W_working.cst",
+    )
+    assert working.read_bytes() == b"template-cst"
+    assert manager.cleanup_path(spec) == str(working)
+    assert manager.prepared_paths() == [str(working)]
+
+
+def test_attempt_project_manager_direct_mode_keeps_config_path(tmp_path) -> None:
+    project = tmp_path / "direct.cst"
+    manager = AttemptProjectManager(mode="direct", workspace_dir=str(tmp_path))
+    manager.begin_attempt(iteration=7, attempt=2)
+    spec = ProjectSpec(cst_path=str(project), label="frequency_domain")
+
+    assert manager.project_path(spec) == str(project)
+    assert manager.cleanup_path(spec) == str(project)
+    assert manager.prepared_paths() == []
+
+
+def test_template_copy_phase_opens_working_copy_not_template(
+    tmp_path,
+) -> None:
+    template = tmp_path / "F2F.cst"
+    template.write_bytes(b"template-cst")
+    manager = AttemptProjectManager(
+        mode="template_copy",
+        workspace_dir=str(tmp_path / "copies"),
+    )
+    manager.begin_attempt(iteration=3, attempt=1)
+    spec = ProjectSpec(
+        cst_path=str(template),
+        label="frequency_domain",
+        is_pre_filter=True,
+    )
+    opened_paths: list[str] = []
+
+    def open_project(path: str):
+        opened_paths.append(path)
+        return SimpleNamespace(
+            filename=path,
+            update_parameters=lambda *args, **kwargs: True,
+            save=MagicMock(),
+        )
+
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._conn = SimpleNamespace(open_project=open_project)
+    orch._specs = [spec]
+    orch._spec_by_label = {spec.label: spec}
+    orch._project_paths = {}
+    orch._project_file_manager = manager
+    orch._pre_filter_enabled = False
+    orch._solver = SimpleNamespace(
+        run=lambda project: SolverResult(success=True, elapsed_s=1.0)
+    )
+    orch._msg = SimpleNamespace(
+        capture=MagicMock(),
+        clear=MagicMock(),
+        has_history_failure=lambda: False,
+        write=MagicMock(),
+        write_now=MagicMock(),
+    )
+
+    with (
+        patch(
+            "cst_optimization.core.cleanup.remove_result_folder"
+        ) as remove_results,
+        patch("cst_optimization.core.cleanup.remove_lock_file"),
+    ):
+        ok = orch._execute_phase_1(
+            params=np.array([1.0]),
+            param_dict={"x": 1.0},
+            iteration=3,
+            opened={},
+            completed_labels=set(),
+            solver_errors=[],
+            all_solvers_ok=True,
+            _mk_reader=MagicMock(),
+            _term_print=MagicMock(),
+            n_obj=0,
+            raw_values=np.array([]),
+        )
+
+    assert ok is True
+    assert opened_paths
+    assert opened_paths[0] != str(template)
+    assert opened_paths[0].endswith("F2F_working.cst")
+    remove_results.assert_called_once_with(opened_paths[0])
+
+
+def test_template_copy_reset_cleans_working_copy_not_template(
+    tmp_path,
+) -> None:
+    template = tmp_path / "offset.cst"
+    template.write_bytes(b"template-cst")
+    working = tmp_path / "copies" / "offset_working.cst"
+    manager = AttemptProjectManager(
+        mode="template_copy",
+        workspace_dir=str(tmp_path / "copies"),
+    )
+    manager._current_paths = {"wakefield_offset": str(working)}
+
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._conn = SimpleNamespace(pid=None, close=MagicMock())
+    orch._cooldown_s = 0.0
+    orch._library_path = "fake"
+    orch._project_file_manager = manager
+    orch._specs = [
+        SimpleNamespace(
+            label="wakefield_offset",
+            cst_path=str(template),
+            is_pre_filter=False,
+        ),
+    ]
+    new_connection = MagicMock()
+    new_connection.pid = 123
+
+    with (
+        patch("cst_optimization.core.cleanup.kill_all_cst_processes"),
+        patch(
+            "cst_optimization.core.cleanup.remove_result_folder"
+        ) as remove_results,
+        patch("cst_optimization.core.cleanup.remove_lock_file"),
+        patch(
+            "workflows.rfgun_hom_antenna.orchestrator.CSTConnection",
+            return_value=new_connection,
+        ),
+    ):
+        orch._reset_connection(cleanup_labels={"wakefield_offset"})
+
+    remove_results.assert_called_once_with(str(working))
+
+
+def test_retry_dynamic_result_paths_provider_overrides_static_paths(
+    tmp_path,
+) -> None:
+    static = tmp_path / "template.cst"
+    working = tmp_path / "work" / "copy.cst"
+    handler = EvaluationRetryHandler(
+        connection=SimpleNamespace(),
+        project_path=str(static),
+        library_path="fake",
+        config=RetryConfig(),
+        result_paths_provider=lambda: [str(working)],
+    )
+
+    with (
+        patch(
+            "cst_optimization.core.retry.remove_result_folder"
+        ) as remove_results,
+        patch("cst_optimization.core.retry.remove_lock_file") as remove_lock,
+    ):
+        handler._clean_all_result_folders()
+
+    remove_results.assert_called_once_with(str(working))
+    remove_lock.assert_called_once_with(str(working.parent))
+
+
+def test_attempt_allocation_increments_without_index_record(tmp_path) -> None:
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._curves_db_dir = str(tmp_path)
+    orch._iteration_attempt_counts = {}
+
+    assert orch._allocate_attempt(11) == 1
+    assert orch._allocate_attempt(11) == 2
+
+
+def test_attempt_allocation_skips_existing_template_copy_dirs(
+    tmp_path,
+) -> None:
+    (tmp_path / "eval_0011" / "attempt_003").mkdir(parents=True)
+    orch = object.__new__(DualProjectOrchestrator)
+    orch._curves_db_dir = ""
+    orch._iteration_attempt_counts = {}
+    orch._project_file_manager = AttemptProjectManager(
+        mode="template_copy",
+        workspace_dir=str(tmp_path),
+    )
+
+    assert orch._allocate_attempt(11) == 4
 
 
 def test_schema_v3_separates_solver_postprocess_and_evaluation_status(

@@ -278,6 +278,7 @@ def _build_retry_handler(
     retry_cfg_raw: dict[str, Any] | None,
     config: dict[str, Any],
     extra_result_paths: list[str] | None = None,
+    result_paths_provider: Callable[[], list[str]] | None = None,
 ) -> Any | None:
     """Build an ``EvaluationRetryHandler`` from workflow-2 config."""
     if not retry_cfg_raw or not retry_cfg_raw.get("enabled", True):
@@ -305,6 +306,7 @@ def _build_retry_handler(
         config=retry_config,
         on_reconnect=None,  # set after orchestrator creation
         extra_result_paths=extra_result_paths or [],
+        result_paths_provider=result_paths_provider,
     )
 
     _logger.info(

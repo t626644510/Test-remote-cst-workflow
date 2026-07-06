@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import logging
 import os
+import hashlib
+import shutil
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, TYPE_CHECKING
@@ -61,6 +63,104 @@ class ProjectSpec:
     condition_max_penalty: float = 0.2
 
 
+class AttemptProjectManager:
+    """Resolve WF2 project paths for direct or per-attempt template copies."""
+
+    def __init__(self, mode: str = "direct", workspace_dir: str = "") -> None:
+        normalized = (mode or "direct").strip().lower()
+        if normalized not in {"direct", "template_copy"}:
+            raise ValueError(
+                "project_file_mode.mode must be 'direct' or 'template_copy'"
+            )
+        self.mode = normalized
+        self.workspace_dir = workspace_dir
+        self._iteration = 0
+        self._attempt = 1
+        self._current_paths: dict[str, str] = {}
+
+    @property
+    def enabled(self) -> bool:
+        return self.mode == "template_copy"
+
+    def begin_attempt(self, iteration: int, attempt: int) -> None:
+        self._iteration = int(iteration)
+        self._attempt = int(attempt)
+        self._current_paths = {}
+
+    def project_path(self, spec: ProjectSpec) -> str:
+        if not self.enabled:
+            return spec.cst_path
+        if not self.workspace_dir:
+            raise ValueError(
+                "project_file_mode.workspace_dir is required for template_copy"
+            )
+        src = os.path.abspath(spec.cst_path)
+        if not os.path.isfile(src):
+            raise FileNotFoundError(f"CST template not found: {spec.cst_path}")
+        stem = os.path.splitext(os.path.basename(src))[0]
+        dst = os.path.abspath(
+            os.path.join(
+                self.workspace_dir,
+                f"eval_{self._iteration:04d}",
+                f"attempt_{self._attempt:03d}",
+                spec.label,
+                "model",
+                f"{stem}_working.cst",
+            )
+        )
+        self._copy_template(src, dst)
+        self._current_paths[spec.label] = dst
+        return dst
+
+    def cleanup_path(self, spec: ProjectSpec) -> str:
+        if not self.enabled:
+            return spec.cst_path
+        return self._current_paths.get(spec.label, "")
+
+    def prepared_paths(self) -> list[str]:
+        return list(self._current_paths.values())
+
+    def max_existing_attempt(self, iteration: int) -> int:
+        if not self.enabled or not self.workspace_dir:
+            return 0
+        eval_dir = os.path.join(self.workspace_dir, f"eval_{int(iteration):04d}")
+        if not os.path.isdir(eval_dir):
+            return 0
+        attempts: list[int] = []
+        for name in os.listdir(eval_dir):
+            if not name.startswith("attempt_"):
+                continue
+            try:
+                attempts.append(int(name.removeprefix("attempt_")))
+            except ValueError:
+                continue
+        return max(attempts) if attempts else 0
+
+    @classmethod
+    def _copy_template(cls, src: str, dst: str) -> None:
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        if os.path.exists(dst):
+            if not cls._same_file_content(src, dst):
+                raise FileExistsError(
+                    "CST working copy already exists with different content: "
+                    f"{dst}"
+                )
+            return
+        shutil.copy2(src, dst)
+
+    @staticmethod
+    def _same_file_content(left: str, right: str) -> bool:
+        return AttemptProjectManager._sha256(left) == AttemptProjectManager._sha256(right)
+
+    @staticmethod
+    def _sha256(path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -96,6 +196,7 @@ class DualProjectOrchestrator:
         curves_db_dir: str = "",
         cooldown_s: float = 5.0,
         adaptive_gate: Any | None = None,
+        project_file_manager: AttemptProjectManager | None = None,
     ) -> None:
         if len(specs) < 1:
             raise ValueError("At least one ProjectSpec is required")
@@ -122,9 +223,13 @@ class DualProjectOrchestrator:
         self._phase_checkpoint_callback = phase_checkpoint_callback
         self._curves_db_dir = curves_db_dir
         self._adaptive_gate = adaptive_gate
+        self._project_file_manager = (
+            project_file_manager or AttemptProjectManager()
+        )
         self._gate_predictions: dict[str, float] | None = None
         self._gate_prediction_std: dict[str, float] | None = None
         self._gate_validation_forced: bool = False
+        self._iteration_attempt_counts: dict[int, int] = {}
 
         self._specs = sorted(
             specs,
@@ -240,6 +345,10 @@ class DualProjectOrchestrator:
             source_iter if source_iter is not None else iteration
         )
         self.last_attempt = self._allocate_attempt(iteration)
+        self._active_project_manager().begin_attempt(
+            iteration,
+            self.last_attempt,
+        )
         self._gate_predictions = None
         self._gate_prediction_std = None
         self._gate_validation_forced = False
@@ -474,7 +583,8 @@ class DualProjectOrchestrator:
                     opened.clear()
 
                 try:
-                    project = self._conn.open_project(spec.cst_path)
+                    project_path = self._project_path_for(spec)
+                    project = self._conn.open_project(project_path)
                     opened[spec.label] = project
                     self._project_paths[spec.label] = project.filename
                 except Exception as exc:
@@ -771,16 +881,46 @@ class DualProjectOrchestrator:
 
     def _allocate_attempt(self, iteration: int) -> int:
         """Return the next non-overwriting attempt number for *iteration*."""
-        if not self._curves_db_dir:
-            return 1
+        memory = getattr(self, "_iteration_attempt_counts", {})
+        existing_max = int(memory.get(int(iteration), 0))
+        existing_max = max(
+            existing_max,
+            self._active_project_manager().max_existing_attempt(iteration),
+        )
         from cst_optimization.database import load_index
-        index_path = os.path.join(self._curves_db_dir, "index.jsonl")
-        attempts = [
-            int(record.get("attempt", 0) or 0)
-            for record in load_index(index_path)
-            if record.get("iter") == iteration
-        ]
-        return (max(attempts) if attempts else 0) + 1
+        if self._curves_db_dir:
+            index_path = os.path.join(self._curves_db_dir, "index.jsonl")
+            attempts = [
+                int(record.get("attempt", 0) or 0)
+                for record in load_index(index_path)
+                if record.get("iter") == iteration
+            ]
+            if attempts:
+                existing_max = max(existing_max, max(attempts))
+        attempt = existing_max + 1
+        memory[int(iteration)] = attempt
+        self._iteration_attempt_counts = memory
+        return attempt
+
+    def _active_project_manager(self) -> AttemptProjectManager:
+        manager = getattr(self, "_project_file_manager", None)
+        if manager is None:
+            manager = AttemptProjectManager()
+            self._project_file_manager = manager
+        return manager
+
+    def _project_path_for(self, spec: ProjectSpec) -> str:
+        return self._active_project_manager().project_path(spec)
+
+    def _cleanup_path_for(self, spec: ProjectSpec) -> str:
+        return self._active_project_manager().cleanup_path(spec)
+
+    def current_project_paths(self) -> list[str]:
+        """Return concrete project paths prepared for the current attempt."""
+        manager = self._active_project_manager()
+        if manager.enabled:
+            return manager.prepared_paths()
+        return [spec.cst_path for spec in self._specs]
 
     def _capture_project_objectives(
         self,
@@ -1169,7 +1309,8 @@ class DualProjectOrchestrator:
                     _term_print(f"  [per-phase reset] DE PID={self._conn.pid}")
 
                 try:
-                    proj = self._conn.open_project(spec.cst_path)
+                    project_path = self._project_path_for(spec)
+                    proj = self._conn.open_project(project_path)
                     opened[spec.label] = proj
                     self._project_paths[spec.label] = proj.filename
                 except Exception as exc:
@@ -1469,7 +1610,7 @@ class DualProjectOrchestrator:
         for spec in self._specs:
             if spec.is_pre_filter and spec.label in completed_labels:
                 _term_print(f"  [{spec.label}] SKIP — already completed in prior retry attempt")
-                self._project_paths[spec.label] = spec.cst_path
+                self._project_paths[spec.label] = self._cleanup_path_for(spec)
                 f2f_ok = True
                 return True
 
@@ -1481,18 +1622,19 @@ class DualProjectOrchestrator:
 
             # Pre-solve cleanup: ensure clean result folder before each solve
             from cst_optimization.core.cleanup import remove_result_folder, remove_lock_file
-            remove_result_folder(spec.cst_path)
-            remove_lock_file(os.path.splitext(spec.cst_path)[0])
+            project_path = self._project_path_for(spec)
+            remove_result_folder(project_path)
+            remove_lock_file(os.path.splitext(project_path)[0])
 
             # Open project
             try:
-                proj = self._conn.open_project(spec.cst_path)
+                proj = self._conn.open_project(project_path)
                 opened[spec.label] = proj
                 self._project_paths[spec.label] = proj.filename
             except Exception as exc:
                 _logger.error(
                     "Failed to open project '%s' (%s): %s",
-                    spec.label, spec.cst_path, exc,
+                    spec.label, project_path, exc,
                 )
                 solver_errors.append(
                     f"Failed to open project '{spec.label}': {exc}"
@@ -1798,12 +1940,15 @@ class DualProjectOrchestrator:
         for spec in self._specs:
             if spec.label not in selected:
                 continue
+            project_path = self._cleanup_path_for(spec)
+            if not project_path:
+                continue
             try:
-                remove_result_folder(spec.cst_path)
+                remove_result_folder(project_path)
             except Exception:
                 pass
             try:
-                remove_lock_file(os.path.splitext(spec.cst_path)[0])
+                remove_lock_file(os.path.splitext(project_path)[0])
             except Exception:
                 pass
 

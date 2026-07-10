@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,12 @@ REVIEW_STATUSES = {
     "needs_more_evidence",
 }
 MERGEABLE_REVIEW_STATUSES = {"accepted", "accepted_as_soft_only"}
+MUTABLE_REVIEW_FIELDS = {
+    "human_review_status",
+    "review_note",
+    "reviewer",
+    "reviewed_at",
+}
 
 SEMANTIC_ITEM_SECTIONS = (
     "named_features",
@@ -47,6 +54,17 @@ class LiteratureSemanticsError(ValueError):
 
 class PriorDraftError(ValueError):
     """Raised when an expert prior draft cannot be merged."""
+
+
+def canonical_sha256(value: object) -> str:
+    """Return a deterministic SHA-256 digest for JSON-compatible data."""
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
 def read_structured_file(path: Path) -> dict[str, Any]:

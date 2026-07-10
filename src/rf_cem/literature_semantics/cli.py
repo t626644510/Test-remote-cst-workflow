@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from pathlib import Path
 from typing import Sequence
 
+from .arxiv_ingest import (
+    ArxivClient,
+    ArxivIngestError,
+    build_source_manifest,
+    write_source_manifest,
+)
 from .audit import write_audit_html
+from .corpus_audit import CorpusAuditError, write_corpus_audit_html
+from .pdf_evidence import PdfEvidenceError, render_pdf_pages
 from .prior_mapper import build_draft_prior, merge_draft_prior, read_prior_yaml
-from .types import PriorDraftError, write_yaml
+from .types import PriorDraftError, write_json, write_yaml
 from .validator import has_errors, load_semantic_package, validate_semantic_package
 
 
@@ -26,15 +35,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     draft_parser.add_argument("--out", type=Path, required=True)
 
     merge_parser = subparsers.add_parser("merge-prior", help="Merge a reviewed draft into an expert_prior.v0 YAML file.")
+    merge_parser.add_argument("--package", type=Path, required=True)
     merge_parser.add_argument("--base-prior", type=Path, required=True)
     merge_parser.add_argument("--draft-prior", type=Path, required=True)
     merge_parser.add_argument("--out", type=Path, required=True)
-    merge_parser.add_argument("--require-reviewed", action="store_true")
+    review_group = merge_parser.add_mutually_exclusive_group()
+    review_group.add_argument("--require-reviewed", dest="require_reviewed", action="store_true")
+    review_group.add_argument("--allow-unreviewed", dest="require_reviewed", action="store_false")
+    merge_parser.set_defaults(require_reviewed=True)
 
     audit_parser = subparsers.add_parser("audit", help="Write an HTML audit report.")
     audit_parser.add_argument("--package", type=Path, required=True)
     audit_parser.add_argument("--draft-prior", type=Path, required=True)
     audit_parser.add_argument("--out", type=Path, required=True)
+
+    search_parser = subparsers.add_parser(
+        "arxiv-search",
+        help="Discover arXiv metadata candidates without assigning applicability.",
+    )
+    search_parser.add_argument("--query", required=True)
+    search_parser.add_argument("--max-results", type=int, default=10)
+    search_parser.add_argument("--out", type=Path, required=True)
+
+    fetch_parser = subparsers.add_parser(
+        "arxiv-fetch",
+        help="Fetch one explicitly versioned arXiv source and immutable manifest.",
+    )
+    fetch_parser.add_argument("--id", dest="arxiv_id", required=True)
+    fetch_parser.add_argument("--out-dir", type=Path, required=True)
+
+    render_parser = subparsers.add_parser(
+        "render-evidence",
+        help="Render selected one-based PDF pages to PNG evidence with Poppler.",
+    )
+    render_parser.add_argument("--pdf", type=Path, required=True)
+    render_parser.add_argument("--pages", type=int, nargs="+", required=True)
+    render_parser.add_argument("--out-dir", type=Path, required=True)
+    render_parser.add_argument("--pdftoppm", default="pdftoppm")
+    render_parser.add_argument("--dpi", type=int, default=150)
+
+    corpus_parser = subparsers.add_parser(
+        "corpus-audit",
+        help="Build one self-contained audit HTML from a corpus manifest.",
+    )
+    corpus_parser.add_argument("--bundle-root", type=Path, required=True)
+    corpus_parser.add_argument("--manifest", type=Path, required=True)
+    corpus_parser.add_argument("--out", type=Path, required=True)
 
     args = parser.parse_args(argv)
     if args.command == "validate":
@@ -60,10 +106,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "merge-prior":
+        package = load_semantic_package(args.package)
         base_prior = read_prior_yaml(args.base_prior)
         draft_prior = read_prior_yaml(args.draft_prior)
         try:
-            merged = merge_draft_prior(base_prior, draft_prior, require_reviewed=args.require_reviewed)
+            merged = merge_draft_prior(
+                base_prior,
+                draft_prior,
+                semantic_package=package,
+                require_reviewed=args.require_reviewed,
+            )
         except PriorDraftError as exc:
             print(f"ERROR: {exc}")
             return 1
@@ -76,6 +128,78 @@ def main(argv: Sequence[str] | None = None) -> int:
         draft_prior = read_prior_yaml(args.draft_prior)
         write_audit_html(args.out, package, draft_prior)
         print(f"Wrote literature semantics audit to {args.out}")
+        return 0
+
+    if args.command == "arxiv-search":
+        try:
+            candidates = ArxivClient().search(args.query, max_results=args.max_results)
+        except (ArxivIngestError, OSError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
+        write_json(
+            args.out,
+            {
+                "schema_version": "rf_cem.arxiv_search_candidates.v1",
+                "query": args.query,
+                "candidates": [asdict(candidate) for candidate in candidates],
+                "warning": (
+                    "Search rank is discovery metadata only; a human must review "
+                    "relevance, authority, and RF-CEM applicability."
+                ),
+            },
+        )
+        print(f"Wrote {len(candidates)} arXiv candidates to {args.out}")
+        return 0
+
+    if args.command == "arxiv-fetch":
+        client = ArxivClient()
+        try:
+            metadata = client.fetch_metadata(args.arxiv_id)
+            pdf = client.download_pdf(args.arxiv_id, args.out_dir / "source.pdf")
+            manifest = build_source_manifest(metadata, pdf, pdf_path="source.pdf")
+            manifest_path = write_source_manifest(
+                args.out_dir / "source_manifest.json",
+                manifest,
+            )
+        except (ArxivIngestError, OSError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
+        print(f"Wrote pinned arXiv source manifest to {manifest_path}")
+        return 0
+
+    if args.command == "render-evidence":
+        try:
+            artifacts = render_pdf_pages(
+                args.pdf,
+                args.pages,
+                args.out_dir,
+                pdftoppm=args.pdftoppm,
+                dpi=args.dpi,
+            )
+        except (PdfEvidenceError, OSError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
+        output_root = args.out_dir.resolve()
+        manifest_entries = []
+        for artifact in artifacts:
+            entry = dict(artifact)
+            entry["path"] = Path(entry["path"]).resolve().relative_to(output_root).as_posix()
+            manifest_entries.append(entry)
+        write_json(args.out_dir / "render_manifest.json", manifest_entries)
+        print(f"Rendered {len(artifacts)} evidence pages to {args.out_dir}")
+        return 0
+
+    if args.command == "corpus-audit":
+        try:
+            write_corpus_audit_html(
+                args.out,
+                args.bundle_root,
+                args.manifest,
+            )
+        except (CorpusAuditError, OSError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
+        print(f"Wrote literature corpus audit to {args.out}")
         return 0
 
     parser.error(f"unknown command {args.command!r}")

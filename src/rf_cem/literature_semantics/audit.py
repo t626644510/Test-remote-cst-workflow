@@ -9,6 +9,8 @@ from typing import Any, Mapping
 
 import yaml
 
+from .types import REVIEW_STATUSES
+
 
 def build_audit_html(package: Mapping[str, Any], draft_prior: Mapping[str, Any]) -> str:
     """Build a self-contained audit HTML report."""
@@ -147,7 +149,7 @@ def _candidate_gallery(draft_prior: Mapping[str, Any]) -> str:
 
 
 def _review_controls(draft_prior: Mapping[str, Any]) -> str:
-    statuses = ["accept", "accept_as_soft_only", "reject", "needs_more_evidence"]
+    statuses = sorted(REVIEW_STATUSES - {"pending"})
     controls = " ".join(f"<code>{escape(status)}</code>" for status in statuses)
     return (
         "<section><h2>Review controls</h2>"

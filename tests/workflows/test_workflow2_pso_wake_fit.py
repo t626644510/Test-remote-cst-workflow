@@ -23,6 +23,7 @@ from workflows.rfgun_hom_antenna.pso_wake_fit import (
     WakeFitError,
     _filter_known_mode_peaks,
     _gaussian_form_factor,
+    FrequencyFitSettings,
     PeakDetectionSettings,
     PSOBounds,
     PSOSettings,
@@ -116,6 +117,30 @@ def test_detect_impedance_peaks_uses_sampled_grid_only() -> None:
     assert [peak.frequency_hz for peak in peaks] == [2.0e9]
 
 
+def test_detect_impedance_peaks_can_filter_by_estimated_q() -> None:
+    f_hz = np.linspace(0.8e9, 1.3e9, 5001)
+    broad = 10.0 / (1.0 + ((f_hz - 0.95e9) / 50.0e6) ** 2)
+    narrow = 0.8 / (1.0 + ((f_hz - 1.15e9) / 0.8e6) ** 2)
+    z = broad + narrow
+
+    peaks = detect_impedance_peaks(
+        f_hz,
+        z,
+        PeakDetectionSettings(
+            min_peak_height=None,
+            min_peak_distance_points=50,
+            min_estimated_q=100.0,
+        ),
+    )
+
+    assert len(peaks) == 1
+    assert peaks[0].frequency_hz == pytest.approx(1.15e9, rel=1e-4)
+    assert peaks[0].estimated_q is not None
+    assert peaks[0].estimated_q > 100.0
+    assert peaks[0].width_hz is not None
+    assert peaks[0].q_estimate_status == "ok"
+
+
 def test_fit_wake_with_pso_reconstructs_synthetic_mode_with_fixed_optimizer() -> None:
     _, x_best, s_m, wake, f_hz, impedance = _single_mode_synthetic()
     fit_input = WakeFitInput(
@@ -152,6 +177,137 @@ def test_fit_wake_with_pso_reconstructs_synthetic_mode_with_fixed_optimizer() ->
     assert result.modes[0].amplitude == pytest.approx(2.5)
     assert result.modes[0].q == pytest.approx(30.0)
     assert len(result.impedance_abs) == len(f_hz)
+    assert result.diagnostics["frequency_fit_enabled"] is False
+    assert result.diagnostics["frequency_shift_hz"] == [0.0]
+
+
+def test_frequency_fit_moves_hom_frequency_within_configured_window() -> None:
+    direction = "longitudinal"
+    sigma_z_m = 0.003
+    true_fr = 1.5e9
+    detected_fr = 1.49e9
+    hom_amp = 4.0
+    hom_q = 45.0
+    s_m = np.linspace(0.01, 0.25, 180)
+    t_s = s_m / C_LIGHT_M_PER_S
+    wake = wake_from_parameters(
+        np.array([hom_amp, hom_q]), np.array([true_fr]), t_s, direction
+    )
+    f_hz = np.linspace(1.4e9, 1.6e9, 401)
+    impedance = np.abs(
+        resonator_sum(
+            f_hz,
+            np.array([detected_fr]),
+            np.array([hom_q]),
+            np.array([50.0]),
+            direction,
+        )
+    )
+    expected = np.array([true_fr, hom_amp, hom_q])
+    captured: dict[str, np.ndarray] = {}
+
+    def _capture_optimizer(objective, lb, ub, settings):
+        captured["lb"] = lb.copy()
+        captured["ub"] = ub.copy()
+        assert np.all(expected >= lb)
+        assert np.all(expected <= ub)
+        return expected.copy(), objective(expected), {"algorithm": "test_frequency_fit"}
+
+    fit_input = WakeFitInput(
+        direction=direction,
+        wake_s_m=s_m,
+        wake=wake,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        sigma_z_m=sigma_z_m,
+        fit_start_m=float(s_m[0]),
+        fit_end_m=float(s_m[-1]),
+        fit_point_count=len(s_m),
+        bounds=PSOBounds(
+            amplitude_min=1.0,
+            amplitude_max=6.0,
+            q_min=20.0,
+            q_max=80.0,
+        ),
+        peak_settings=PeakDetectionSettings(
+            freq_min_hz=1.45e9,
+            freq_max_hz=1.55e9,
+        ),
+        pso_settings=PSOSettings(seed=7),
+        precomputed_peaks=(pso_wake_fit.PeakInfo(0, detected_fr, 10.0),),
+        frequency_fit=FrequencyFitSettings(enabled=True, half_width_hz=20.0e6),
+    )
+
+    result = fit_wake_with_pso(fit_input, optimizer=_capture_optimizer)
+
+    assert result.status == "ok"
+    assert len(result.modes) == 1
+    assert result.modes[0].frequency_hz == pytest.approx(true_fr)
+    assert result.modes[0].amplitude == pytest.approx(hom_amp)
+    assert result.modes[0].q == pytest.approx(hom_q)
+    np.testing.assert_allclose(captured["lb"], np.array([1.47e9, 1.0, 20.0]))
+    np.testing.assert_allclose(captured["ub"], np.array([1.51e9, 6.0, 80.0]))
+    diag = result.diagnostics
+    assert diag["frequency_fit_enabled"] is True
+    assert diag["initial_peak_frequency_hz"] == [pytest.approx(detected_fr)]
+    assert diag["fitted_frequency_hz"] == [pytest.approx(true_fr)]
+    assert diag["frequency_shift_hz"] == [pytest.approx(true_fr - detected_fr)]
+
+
+def test_frequency_fit_rejects_overlapping_windows() -> None:
+    _, _, s_m, wake, f_hz, impedance = _single_mode_synthetic()
+    fit_input = WakeFitInput(
+        direction="longitudinal",
+        wake_s_m=s_m,
+        wake=wake,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        sigma_z_m=0.003,
+        fit_start_m=float(s_m[0]),
+        fit_end_m=float(s_m[-1]),
+        fit_point_count=len(s_m),
+        bounds=PSOBounds(
+            amplitude_min=0.0,
+            amplitude_max=5.0,
+            q_min=10.0,
+            q_max=50.0,
+        ),
+        peak_settings=PeakDetectionSettings(freq_min_hz=0.9e9, freq_max_hz=1.2e9),
+        precomputed_peaks=(
+            pso_wake_fit.PeakInfo(0, 1.0e9, 10.0),
+            pso_wake_fit.PeakInfo(1, 1.005e9, 9.0),
+        ),
+        frequency_fit=FrequencyFitSettings(enabled=True, half_width_hz=10.0e6),
+    )
+
+    with pytest.raises(WakeFitError, match="overlap"):
+        fit_wake_with_pso(fit_input, optimizer=_raises_optimizer)
+
+
+def test_frequency_fit_rejects_transverse_direction() -> None:
+    _, _, s_m, wake, f_hz, impedance = _single_mode_synthetic("transverse")
+    fit_input = WakeFitInput(
+        direction="transverse",
+        wake_s_m=s_m,
+        wake=wake,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        sigma_z_m=0.003,
+        fit_start_m=float(s_m[0]),
+        fit_end_m=float(s_m[-1]),
+        fit_point_count=len(s_m),
+        bounds=PSOBounds(
+            amplitude_min=0.0,
+            amplitude_max=5.0,
+            q_min=10.0,
+            q_max=50.0,
+        ),
+        peak_settings=PeakDetectionSettings(min_peak_height=1.0),
+        frequency_fit=FrequencyFitSettings(enabled=True, half_width_hz=5.0e6),
+    )
+
+    with pytest.raises(WakeFitError, match="longitudinal"):
+        fit_wake_with_pso(fit_input, optimizer=_raises_optimizer)
 
 
 def test_fit_window_config_uses_tail_only_with_units() -> None:
@@ -182,6 +338,41 @@ def test_fit_window_config_uses_tail_only_with_units() -> None:
 
     assert fit_input.fit_start_m == pytest.approx(float(s_m[50]))
     assert fit_input.fit_end_m == pytest.approx(float(s_m[-1]))
+
+
+def test_frequency_fit_config_reaches_wake_fit_input() -> None:
+    _, _, s_m, wake, f_hz, impedance = _single_mode_synthetic()
+
+    fit_input = build_wake_fit_input_from_config(
+        direction="longitudinal",
+        wake_s_m=s_m,
+        wake=wake,
+        impedance_frequency_hz=f_hz,
+        impedance=impedance,
+        config={
+            "sigma_z_m": 0.003,
+            "fit_point_count": len(s_m),
+            "bounds": {
+                "amplitude_min": 0.0,
+                "amplitude_max": 5.0,
+                "q_min": 1.0,
+                "q_max": 50.0,
+            },
+            "peak_settings": {
+                "min_estimated_q": 100.0,
+            },
+            "frequency_fit": {
+                "enabled": True,
+                "half_width_hz": 5.0e6,
+                "overlap_policy": "reject",
+            },
+        },
+    )
+
+    assert fit_input.peak_settings.min_estimated_q == pytest.approx(100.0)
+    assert fit_input.frequency_fit.enabled is True
+    assert fit_input.frequency_fit.half_width_hz == pytest.approx(5.0e6)
+    assert fit_input.frequency_fit.overlap_policy == "reject"
 
 
 def test_fit_peak_range_is_independent_from_scalarization_defaults() -> None:

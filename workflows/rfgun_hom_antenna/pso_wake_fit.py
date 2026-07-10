@@ -49,6 +49,9 @@ class PeakInfo:
     refined_frequency_hz: float | None = None
     coarse_index: int | None = None
     source: str = "sampled_impedance"
+    width_hz: float | None = None
+    estimated_q: float | None = None
+    q_estimate_status: str = "not_estimated"
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,7 @@ class PeakDetectionSettings:
     min_peak_count: int = 1
     selection_strategy: Literal["all_visible", "top_amplitude"] = "all_visible"
     max_selected_modes: int | None = None
+    min_estimated_q: float | None = None
 
     @classmethod
     def from_config(
@@ -142,6 +146,9 @@ class PeakDetectionSettings:
                     "selected_count",
                     default=None,
                 )
+            ),
+            min_estimated_q=_optional_float(
+                _get_any(cfg, "min_estimated_q", "minEstimatedQ", default=None)
             ),
         )
 
@@ -371,6 +378,57 @@ class PSOSettings:
 
 
 @dataclass(frozen=True)
+class FrequencyFitSettings:
+    """Optional PSO frequency fitting around detected HOM peak centers.
+
+    Frequencies use Hz.  When enabled, unknown HOM variables are packed as
+    ``[f1, A1, Q1, f2, A2, Q2, ...]``.  Known modes remain fixed inputs.
+    """
+
+    enabled: bool = False
+    half_width_hz: float = 0.0
+    overlap_policy: Literal["reject"] = "reject"
+
+    @classmethod
+    def from_config(cls, config: dict[str, Any] | None) -> "FrequencyFitSettings":
+        cfg = config or {}
+        raw = _get_any(cfg, "frequency_fit", "frequencyFit", default={})
+        if raw in (None, False, "") or raw == {}:
+            return cls()
+        if raw is True:
+            source: dict[str, Any] = {"enabled": True}
+        elif isinstance(raw, dict):
+            source = raw
+        else:
+            raise WakeFitError("pso_fit.frequency_fit must be a dict or bool.")
+
+        enabled = bool(_get_any(source, "enabled", default=True))
+        if not enabled:
+            return cls()
+        half_width_hz = float(
+            _get_any(source, "half_width_hz", "halfWidth_Hz", default=0.0)
+        )
+        if not np.isfinite(half_width_hz) or half_width_hz <= 0.0:
+            raise WakeFitError(
+                "pso_fit.frequency_fit.half_width_hz must be positive when "
+                "frequency fitting is enabled."
+            )
+        overlap_policy = str(
+            _get_any(source, "overlap_policy", "overlapPolicy", default="reject")
+        ).strip().lower()
+        if overlap_policy != "reject":
+            raise WakeFitError(
+                "pso_fit.frequency_fit.overlap_policy currently supports only "
+                "'reject'."
+            )
+        return cls(
+            enabled=True,
+            half_width_hz=half_width_hz,
+            overlap_policy="reject",
+        )
+
+
+@dataclass(frozen=True)
 class PreparedWakeFitData:
     """Wake samples used in the PSO objective."""
 
@@ -407,6 +465,7 @@ class WakeFitInput:
     precomputed_peaks: tuple[PeakInfo, ...] | None = None
     peak_source_label: str = "sampled_impedance"
     known_modes: tuple[KnownMode, ...] = ()
+    frequency_fit: FrequencyFitSettings = field(default_factory=FrequencyFitSettings)
 
 
 @dataclass(frozen=True)
@@ -704,6 +763,7 @@ def build_wake_fit_input_from_config(
         precomputed_peaks=precomputed_peaks,
         peak_source_label=str(peak_source_label),
         known_modes=_known_modes_from_config(cfg, direction),
+        frequency_fit=FrequencyFitSettings.from_config(cfg),
     )
 
 
@@ -926,6 +986,62 @@ def detect_impedance_peaks(
     return peaks[: cfg.max_peaks]
 
 
+def _estimate_peak_width_q(
+    frequency_hz: np.ndarray,
+    impedance_abs: np.ndarray,
+    peak_index: int,
+) -> tuple[float | None, float | None, str]:
+    """Estimate 3-dB peak width and apparent Q on a sampled impedance grid."""
+
+    f_hz = _as_1d_float(frequency_hz, "frequency_hz")
+    z_abs = _as_1d_magnitude(impedance_abs, "impedance_abs")
+    idx = int(peak_index)
+    if idx < 0 or idx >= len(f_hz):
+        return None, None, "peak_index_out_of_range"
+    peak_value = float(z_abs[idx])
+    peak_frequency = float(f_hz[idx])
+    if not np.isfinite(peak_value) or peak_value <= 0.0:
+        return None, None, "nonpositive_peak"
+    if not np.isfinite(peak_frequency) or peak_frequency <= 0.0:
+        return None, None, "nonpositive_frequency"
+
+    threshold = peak_value / np.sqrt(2.0)
+    left = _find_threshold_crossing(f_hz, z_abs, idx, -1, threshold)
+    right = _find_threshold_crossing(f_hz, z_abs, idx, 1, threshold)
+    if left is None and right is None:
+        return None, None, "missing_3db_crossings"
+    if left is None:
+        return None, None, "missing_left_3db_crossing"
+    if right is None:
+        return None, None, "missing_right_3db_crossing"
+
+    width_hz = float(right - left)
+    if not np.isfinite(width_hz) or width_hz <= 0.0:
+        return None, None, "nonpositive_width"
+    return width_hz, float(peak_frequency / width_hz), "ok"
+
+
+def _find_threshold_crossing(
+    frequency_hz: np.ndarray,
+    impedance_abs: np.ndarray,
+    peak_index: int,
+    step: Literal[-1, 1],
+    threshold: float,
+) -> float | None:
+    idx = int(peak_index)
+    while 0 <= idx + int(step) < len(impedance_abs):
+        nxt = idx + int(step)
+        y0 = float(impedance_abs[idx])
+        y1 = float(impedance_abs[nxt])
+        if y1 <= threshold <= y0 or y0 <= threshold <= y1:
+            if y1 == y0:
+                return float(frequency_hz[nxt])
+            frac = (float(threshold) - y0) / (y1 - y0)
+            return float(frequency_hz[idx] + frac * (frequency_hz[nxt] - frequency_hz[idx]))
+        idx = nxt
+    return None
+
+
 def _detect_impedance_peaks_unlimited(
     frequency_hz: np.ndarray,
     impedance: np.ndarray,
@@ -958,24 +1074,42 @@ def _detect_impedance_peaks_unlimited(
 
     locs_global = global_idx[locs_sub]
     order = np.argsort(f_hz[locs_global])
+    locs_sub = locs_sub[order]
     locs_global = locs_global[order]
     pks = pks[order]
 
-    if cfg.delete_first_n > 0:
-        locs_global = locs_global[cfg.delete_first_n :]
-        pks = pks[cfg.delete_first_n :]
-    return tuple(
-        PeakInfo(
-            index=int(idx),
-            frequency_hz=float(f_hz[idx]),
-            value=float(pk),
-            coarse_frequency_hz=float(f_hz[idx]),
-            refined_frequency_hz=float(f_hz[idx]),
-            coarse_index=int(idx),
-            source=source,
+    peak_records: list[PeakInfo] = []
+    for loc_sub, idx, pk in zip(locs_sub, locs_global, pks):
+        width_hz, estimated_q, q_status = _estimate_peak_width_q(
+            f_sub, z_sub, int(loc_sub)
         )
-        for idx, pk in zip(locs_global, pks)
-    )
+        if (
+            cfg.min_estimated_q is not None
+            and (
+                estimated_q is None
+                or not np.isfinite(estimated_q)
+                or estimated_q < float(cfg.min_estimated_q)
+            )
+        ):
+            continue
+        peak_records.append(
+            PeakInfo(
+                index=int(idx),
+                frequency_hz=float(f_hz[idx]),
+                value=float(pk),
+                coarse_frequency_hz=float(f_hz[idx]),
+                refined_frequency_hz=float(f_hz[idx]),
+                coarse_index=int(idx),
+                source=source,
+                width_hz=width_hz,
+                estimated_q=estimated_q,
+                q_estimate_status=q_status,
+            )
+        )
+
+    if cfg.delete_first_n > 0:
+        peak_records = peak_records[cfg.delete_first_n :]
+    return tuple(peak_records)
 
 
 def _select_peaks_for_pso(
@@ -1064,6 +1198,14 @@ def _validate_peak_settings(settings: PeakDetectionSettings) -> PeakDetectionSet
         raise WakeFitError(
             "peak_selection.strategy must be 'all_visible' or 'top_amplitude'."
         )
+    if (
+        settings.min_estimated_q is not None
+        and (
+            not np.isfinite(float(settings.min_estimated_q))
+            or float(settings.min_estimated_q) <= 0.0
+        )
+    ):
+        raise WakeFitError("peak_settings.min_estimated_q must be positive.")
     if strategy == settings.selection_strategy:
         return settings
     return replace(settings, selection_strategy=strategy)  # type: ignore[arg-type]
@@ -1198,6 +1340,114 @@ def _wake_objective_with_known(
     return value if np.isfinite(value) else float(np.finfo(float).max)
 
 
+def _unpack_frequency_fit_solution(x: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    params = _as_1d_float(x, "frequency_fit_x")
+    if len(params) % 3 != 0:
+        raise WakeFitError("Frequency-fit parameter vector length must be 3 * n_modes.")
+    return params[0::3], params[1::3], params[2::3]
+
+
+def _pack_amplitude_q(amplitudes: np.ndarray, q_values: np.ndarray) -> np.ndarray:
+    amp = _as_1d_float(amplitudes, "amplitudes")
+    q_arr = _as_1d_float(q_values, "q_values")
+    if len(amp) != len(q_arr):
+        raise WakeFitError("amplitudes and q_values must have the same length.")
+    out = np.empty(2 * len(amp), dtype=float)
+    out[0::2] = amp
+    out[1::2] = q_arr
+    return out
+
+
+def _wake_from_frequency_fit_parameters(
+    x: np.ndarray,
+    t_s: np.ndarray,
+    direction: Direction,
+) -> np.ndarray:
+    fr_hz, amplitudes, q_values = _unpack_frequency_fit_solution(x)
+    return wake_from_parameters(
+        _pack_amplitude_q(amplitudes, q_values),
+        fr_hz,
+        t_s,
+        direction,
+    )
+
+
+def _wake_objective_frequency_fit(
+    x: np.ndarray,
+    t_s: np.ndarray,
+    wake: np.ndarray,
+    direction: Direction,
+    known_wake: np.ndarray | None = None,
+) -> float:
+    """Sum-of-squares objective for ``[f,A,Q]`` unknown HOM variables."""
+
+    try:
+        unknown_fit = _wake_from_frequency_fit_parameters(x, t_s, direction)
+        total_fit = unknown_fit if known_wake is None else unknown_fit + known_wake
+        residual = total_fit.reshape(-1) - _as_1d_float(wake, "wake").reshape(-1)
+        value = float(np.sum(residual * residual))
+    except Exception:
+        return float(np.finfo(float).max)
+    return value if np.isfinite(value) else float(np.finfo(float).max)
+
+
+def _frequency_fit_bounds(
+    selected_peaks: Sequence[PeakInfo],
+    settings: FrequencyFitSettings,
+    peak_settings: PeakDetectionSettings,
+    bounds: PSOBounds,
+    direction: Direction,
+) -> tuple[np.ndarray, np.ndarray, list[tuple[float, float]]]:
+    """Build ``[f,A,Q]`` bounds for selected unknown HOM peaks."""
+
+    direction_norm = _normalize_direction(direction)
+    if settings.enabled and direction_norm != "longitudinal":
+        raise WakeFitError(
+            "pso_fit.frequency_fit currently supports only longitudinal fitting."
+        )
+    n_modes = len(selected_peaks)
+    amp_q_lb, amp_q_ub = bounds.expand(n_modes, direction_norm)
+    freq_windows: list[tuple[float, float]] = []
+    freq_lo_limit = peak_settings.freq_min_hz
+    freq_hi_limit = peak_settings.freq_max_hz
+    for peak in selected_peaks:
+        lo = float(peak.frequency_hz) - float(settings.half_width_hz)
+        hi = float(peak.frequency_hz) + float(settings.half_width_hz)
+        if freq_lo_limit is not None:
+            lo = max(lo, float(freq_lo_limit))
+        if freq_hi_limit is not None:
+            hi = min(hi, float(freq_hi_limit))
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+            raise WakeFitError(
+                "Frequency-fit window is empty for peak "
+                f"{float(peak.frequency_hz):.6g} Hz."
+            )
+        freq_windows.append((lo, hi))
+
+    if settings.overlap_policy == "reject" and len(freq_windows) > 1:
+        ordered = sorted(zip(selected_peaks, freq_windows), key=lambda item: item[1][0])
+        for (left_peak, left_window), (right_peak, right_window) in zip(
+            ordered[:-1], ordered[1:]
+        ):
+            if left_window[1] > right_window[0]:
+                raise WakeFitError(
+                    "Frequency-fit windows overlap between peaks "
+                    f"{left_peak.frequency_hz:.6g} Hz and "
+                    f"{right_peak.frequency_hz:.6g} Hz."
+                )
+
+    lb = np.empty(3 * n_modes, dtype=float)
+    ub = np.empty(3 * n_modes, dtype=float)
+    for i, (lo, hi) in enumerate(freq_windows):
+        lb[3 * i] = lo
+        ub[3 * i] = hi
+        lb[3 * i + 1] = amp_q_lb[2 * i]
+        ub[3 * i + 1] = amp_q_ub[2 * i]
+        lb[3 * i + 2] = amp_q_lb[2 * i + 1]
+        ub[3 * i + 2] = amp_q_ub[2 * i + 1]
+    return lb, ub, freq_windows
+
+
 def calc_form_factor(
     tau_s: np.ndarray,
     normalized_density: np.ndarray,
@@ -1272,11 +1522,18 @@ def fit_wake_with_pso(
 ) -> WakeFitResult:
     """Fit wake data and reconstruct the impedance curve.
 
-    Frequencies are fixed to visible peaks in the supplied impedance curve;
-    PSO optimizes only amplitude ``A`` and quality factor ``Q`` for each mode.
+    By default, unknown HOM frequencies are fixed to visible impedance peaks,
+    and PSO optimizes only amplitude ``A`` and quality factor ``Q``.  When
+    ``frequency_fit`` is enabled, unknown HOM variables are packed as
+    ``[f, A, Q]`` and each frequency is optimized inside its configured
+    peak-centered window.  Known modes remain fixed inputs.
     """
 
     direction = _normalize_direction(fit_input.direction)
+    if fit_input.frequency_fit.enabled and direction != "longitudinal":
+        raise WakeFitError(
+            "pso_fit.frequency_fit currently supports only longitudinal fitting."
+        )
     if fit_input.precomputed_peaks is not None:
         peaks = tuple(fit_input.precomputed_peaks)
     else:
@@ -1341,6 +1598,10 @@ def fit_wake_with_pso(
         fit_input.sigma_z_m,
         fit_input.wake_charge_scale,
     )
+    initial_peak_frequency_hz = np.array(
+        [peak.frequency_hz for peak in selected], dtype=float
+    )
+    frequency_windows: list[tuple[float, float]] = []
 
     if len(selected) == 0 and has_known:
         # ---- zero unknown modes: known wake only ---------------------------
@@ -1353,17 +1614,33 @@ def fit_wake_with_pso(
         r_over_q = np.array([], dtype=float)
     else:
         # ---- normal PSO path for unknown modes -----------------------------
-        fr_hz = np.array([peak.frequency_hz for peak in selected], dtype=float)
-        lb, ub = fit_input.bounds.expand(len(fr_hz), direction)
-
-        if has_known:
-            objective = lambda x: _wake_objective_with_known(  # noqa: E731
-                x, fr_hz, fit_data.t_s, target_wake, direction, known_mode_wake_arr,
+        if fit_input.frequency_fit.enabled:
+            lb, ub, frequency_windows = _frequency_fit_bounds(
+                selected,
+                fit_input.frequency_fit,
+                fit_input.peak_settings,
+                fit_input.bounds,
+                direction,
+            )
+            objective = lambda x: _wake_objective_frequency_fit(  # noqa: E731
+                x,
+                fit_data.t_s,
+                target_wake,
+                direction,
+                known_mode_wake_arr if has_known else None,
             )
         else:
-            objective = lambda x: wake_objective(  # noqa: E731
-                x, fr_hz, fit_data.t_s, target_wake, direction,
-            )
+            fr_hz = initial_peak_frequency_hz.copy()
+            lb, ub = fit_input.bounds.expand(len(fr_hz), direction)
+
+            if has_known:
+                objective = lambda x: _wake_objective_with_known(  # noqa: E731
+                    x, fr_hz, fit_data.t_s, target_wake, direction, known_mode_wake_arr,
+                )
+            else:
+                objective = lambda x: wake_objective(  # noqa: E731
+                    x, fr_hz, fit_data.t_s, target_wake, direction,
+                )
 
         run_optimizer = optimizer or _run_pymoo_pso
         opt_result = run_optimizer(objective, lb, ub, fit_input.pso_settings)
@@ -1374,11 +1651,18 @@ def fit_wake_with_pso(
             x_best, objective_value, optimizer_info = opt_result  # type: ignore[misc]
         x_best = _as_1d_float(x_best, "x_best")
 
-        wake_fit_unknown = wake_from_parameters(x_best, fr_hz, fit_data.t_s, direction)
+        if fit_input.frequency_fit.enabled:
+            fr_hz, amplitudes, q_values = _unpack_frequency_fit_solution(x_best)
+            wake_params = _pack_amplitude_q(amplitudes, q_values)
+        else:
+            amplitudes = x_best[0::2]
+            q_values = x_best[1::2]
+            wake_params = x_best
+        wake_fit_unknown = wake_from_parameters(
+            wake_params, fr_hz, fit_data.t_s, direction
+        )
 
         form_factor = _gaussian_form_factor(fit_input.sigma_z_m, fr_hz)
-        amplitudes = x_best[0::2]
-        q_values = x_best[1::2]
         if np.any(form_factor <= 0.0):
             raise WakeFitError("Form factor is zero for at least one fitted mode.")
 
@@ -1472,6 +1756,29 @@ def fit_wake_with_pso(
     diagnostics["known_mode_filtered_peak_count"] = len(
         [p for p in all_peaks if p.status == "KnownModeFiltered"]
     )
+    if not frequency_windows:
+        frequency_windows = [
+            (float(freq), float(freq)) for freq in initial_peak_frequency_hz
+        ]
+    diagnostics["frequency_fit_enabled"] = bool(fit_input.frequency_fit.enabled)
+    diagnostics["frequency_window_hz"] = [
+        [float(lo), float(hi)] for lo, hi in frequency_windows
+    ]
+    diagnostics["initial_peak_frequency_hz"] = [
+        float(freq) for freq in initial_peak_frequency_hz
+    ]
+    diagnostics["fitted_frequency_hz"] = [float(freq) for freq in fr_hz]
+    if len(initial_peak_frequency_hz) == len(fr_hz):
+        diagnostics["frequency_shift_hz"] = [
+            float(fitted - initial)
+            for initial, fitted in zip(initial_peak_frequency_hz, fr_hz)
+        ]
+    else:
+        diagnostics["frequency_shift_hz"] = []
+    diagnostics["peak_estimated_q"] = [
+        None if peak.estimated_q is None else float(peak.estimated_q)
+        for peak in selected
+    ]
 
     status = "ok"
     failure_reason = ""
@@ -1711,6 +2018,7 @@ def _refine_coarse_peaks(
             local_idx = np.flatnonzero(mask)
             idx = int(local_idx[int(np.argmax(z_ref[local_idx]))])
         refined_freq = float(f_ref[idx])
+        width_hz, estimated_q, q_status = _estimate_peak_width_q(f_ref, z_ref, idx)
         out.append(
             PeakInfo(
                 index=idx,
@@ -1722,6 +2030,9 @@ def _refine_coarse_peaks(
                 refined_frequency_hz=refined_freq,
                 coarse_index=coarse.index,
                 source="wake_derived_refined",
+                width_hz=width_hz,
+                estimated_q=estimated_q,
+                q_estimate_status=q_status,
             )
         )
     return tuple(sorted(out, key=lambda peak: peak.frequency_hz))

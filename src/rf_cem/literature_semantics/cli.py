@@ -82,6 +82,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     corpus_parser.add_argument("--manifest", type=Path, required=True)
     corpus_parser.add_argument("--out", type=Path, required=True)
 
+    review_parser = subparsers.add_parser(
+        "review-gui",
+        help="Serve the authenticated no-CST literature/geometry review GUI.",
+    )
+    review_parser.add_argument("--bundle-root", type=Path, required=True)
+    review_parser.add_argument(
+        "--manifest", type=Path, default=Path("corpus_manifest.json")
+    )
+    review_parser.add_argument("--paper-id", default="sls2")
+    review_parser.add_argument("--session-root", type=Path, required=True)
+    review_parser.add_argument("--port", type=int, default=0)
+    review_parser.add_argument("--deflection-mm", type=float, default=0.5)
+
     args = parser.parse_args(argv)
     if args.command == "validate":
         package = load_semantic_package(args.package)
@@ -200,6 +213,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"ERROR: {exc}")
             return 1
         print(f"Wrote literature corpus audit to {args.out}")
+        return 0
+
+    if args.command == "review-gui":
+        from .review_app import Sls2LiteratureReviewApp
+
+        try:
+            app = Sls2LiteratureReviewApp(
+                bundle_root=args.bundle_root,
+                corpus_manifest=args.manifest,
+                session_root=args.session_root,
+                paper_id=args.paper_id,
+                deflection_mm=args.deflection_mm,
+            )
+            launch = app.prepare_server(port=args.port)
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            return 1
+        print(f"Review URL: {launch.review_url}", flush=True)
+        print(f"Review HTML: {launch.html_path}", flush=True)
+        print(f"Initial STEP: {launch.initial_step_path}", flush=True)
+        print(
+            "Preview-only; live CST and production-prior mutation are disabled.",
+            flush=True,
+        )
+        try:
+            launch.server.serve_forever()
+        except KeyboardInterrupt:
+            print("Review server stopped.", flush=True)
         return 0
 
     parser.error(f"unknown command {args.command!r}")

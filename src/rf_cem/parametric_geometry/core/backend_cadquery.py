@@ -31,13 +31,55 @@ class CadQueryGeometryBackend:
         profile_segments: list[dict] | None = None,
         deflection_mm: float,
     ) -> dict:
+        """Rebuild a profile while retaining metrics from a seed STEP."""
+        return self._run_worker(
+            step_file=step_file,
+            output_step=output_step,
+            axis=axis,
+            body_index=body_index,
+            profile_points=profile_points,
+            profile_segments=profile_segments,
+            deflection_mm=deflection_mm,
+        )
+
+    def generate(
+        self,
+        *,
+        output_step: Path,
+        axis: str,
+        profile_points: list[tuple[float, float]],
+        profile_segments: list[dict] | None = None,
+        deflection_mm: float,
+    ) -> dict:
+        """Generate a profile without importing a seed STEP."""
+        return self._run_worker(
+            step_file=None,
+            output_step=output_step,
+            axis=axis,
+            body_index=0,
+            profile_points=profile_points,
+            profile_segments=profile_segments,
+            deflection_mm=deflection_mm,
+        )
+
+    def _run_worker(
+        self,
+        *,
+        step_file: Path | None,
+        output_step: Path,
+        axis: str,
+        body_index: int,
+        profile_points: list[tuple[float, float]],
+        profile_segments: list[dict] | None,
+        deflection_mm: float,
+    ) -> dict:
         with tempfile.TemporaryDirectory(prefix="rf_cem_cq_") as temp_dir:
             request_path = Path(temp_dir) / "request.json"
             report_path = Path(temp_dir) / "kernel_report.json"
             request_path.write_text(
                 json.dumps(
                     {
-                        "step_file": str(step_file),
+                        "step_file": str(step_file) if step_file is not None else None,
                         "output_step": str(output_step),
                         "axis": axis,
                         "body_index": body_index,

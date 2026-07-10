@@ -1,35 +1,12 @@
-"""Shared evaluation types used by all workflows.
-
-Phase 11: ``RecoveryWorkflowEvaluator`` moved to
-``workflows/rfgun_recovery/evaluator.py`` (WF3 package).
-"""
+"""Stable evaluation contracts shared by workflow branches."""
 
 from __future__ import annotations
 
-import copy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 import numpy as np
-
-# ── Lazy re-export for backward compat ─────────────────────────────────
-_RecoveryWorkflowEvaluator = None
-_clone_metric_specs = None
-
-
-def _lazy_import_evaluator():
-    """Deferred import to avoid circular: recovery → rfgun_recovery.evaluator."""
-    global _RecoveryWorkflowEvaluator, _clone_metric_specs
-    if _RecoveryWorkflowEvaluator is None:
-        from workflows.rfgun_recovery.evaluator import (  # noqa: E402
-            RecoveryWorkflowEvaluator as _RWE,
-            clone_metric_specs as _CMS,
-        )
-        _RecoveryWorkflowEvaluator = _RWE
-        _clone_metric_specs = _CMS
-    return _RecoveryWorkflowEvaluator, _clone_metric_specs
-
 
 @dataclass
 class MetricSpec:

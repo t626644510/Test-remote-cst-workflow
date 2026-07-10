@@ -18,7 +18,7 @@ from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     is_schema_compatible,
 )
-from workflows.rfgun_sao.stage_search import (
+from cst_optimization.evaluation.stage_observation import (
     StageCandidateStatus,
     StageObservation,
 )

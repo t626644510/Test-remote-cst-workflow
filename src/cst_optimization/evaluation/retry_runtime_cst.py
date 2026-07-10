@@ -24,7 +24,7 @@ from cst_optimization.evaluation.retry_runtime import (
     RetryRuntimeConfig,
     resolve_retry_runtime_config,
 )
-from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+from cst_optimization.workflows.recovery import EvaluationResult, EvaluationStatus
 
 
 # ---------------------------------------------------------------------------

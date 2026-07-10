@@ -497,11 +497,7 @@ function applyColors(){
 function recolorFaces(faceIds){
   const ids=[...new Set(faceIds)].filter(id=>traceIndex[id]!==undefined);
   if(!ids.length)return;
-  if(!fastModeEnabled){
-    applyColors();
-    return;
-  }
-  ids.forEach(id=>Plotly.restyle(plot,{color:faceColor(id)},[traceIndex[id]]));
+  applyColors();
 }
 function applyFilter(){
   const value=filter.value;

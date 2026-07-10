@@ -1,34 +1,23 @@
-"""Factory functions that build optimisers and workflow evaluators from YAML config.
+"""Shared config-to-object builders for workflow branches.
 
-Usage::
-
-    import yaml
-    from cst_optimization.factory import build_workflow_2
-
-    with open("config/default.yaml") as fh:
-        cfg = yaml.safe_load(fh)
-
-    orch, opt, evaluator, retry_handler = build_workflow_2(cfg["workflow_2"])
-    result = opt.optimize(evaluator=evaluator)
-
-Config-to-object builder helpers are defined locally in this module.
+Concrete workflow builders belong to their workflow packages.  This module
+contains only the stable parameter, objective, optimiser, and weight builders
+that are reused by more than one workflow branch.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
-from .core.retry import EvaluationRetryHandler, RetryConfig
 from .objectives import field       # noqa: F401
 from .objectives import frequency   # noqa: F401
 from .objectives import modes       # noqa: F401  — @register_mode side-effects
 from .objectives import quality     # noqa: F401
 from .objectives.base import ObjectiveFunction
 from .objectives.registry import get_objective, get_mode
-from .optimization.base import BaseOptimizer
 from .optimization.sao import SurrogateAssistedOptimizer
 from .parameters.base import ParameterSet, ParamRange
 from .parameters.geometry import GeometryParameter
@@ -39,53 +28,6 @@ from .optimization.acquisition import (
 )
 
 _logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Top-level entry points
-# ---------------------------------------------------------------------------
-
-
-def build_workflow_2(
-    config: dict[str, Any],
-    checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None]
-    | None = None,
-    phase_checkpoint_callback: Callable[
-        [np.ndarray, int, list[str], str], None
-    ] | None = None,
-    start_iteration: int = 0,
-) -> tuple[
-    Any,
-    BaseOptimizer,
-    Callable[[np.ndarray], Any],
-    EvaluationRetryHandler | None,
-]:
-    """Build the Phase-2 multi-project orchestrator and optimiser from config.
-
-    W2-4B compatibility wrapper: delegates to
-    ``workflows.rfgun_hom_antenna.workflow.build_workflow_2``.
-    """
-    from workflows.rfgun_hom_antenna.workflow import build_workflow_2 as _wf2_build
-
-    return _wf2_build(
-        config,
-        checkpoint_callback=checkpoint_callback,
-        phase_checkpoint_callback=phase_checkpoint_callback,
-        start_iteration=start_iteration,
-    )
-
-
-def build_workflow_3(
-    config: dict[str, Any],
-    resume_jsonl_path: str = "",
-    checkpoint_callback: Callable[[np.ndarray, np.ndarray, np.ndarray, bool, str], None] | None = None,
-) -> tuple[Any, BaseOptimizer, Callable[[np.ndarray], Any]]:
-    """Build the workflow-3 recovery optimiser (delegates to rfgun_recovery)."""
-    from workflows.rfgun_recovery.workflow import build_workflow_3 as _wf3_build
-    return _wf3_build(config, resume_jsonl_path=resume_jsonl_path,
-                      checkpoint_callback=checkpoint_callback)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -264,54 +206,3 @@ def _resolve_named_weights(
     if total <= 0:
         raise ValueError(f"objective_weights sum to non-positive: {total}")
     return raw / total
-
-
-# ---------------------------------------------------------------------------
-# Retry handler builder
-# ---------------------------------------------------------------------------
-
-
-def _build_retry_handler(
-    connection: Any,
-    project_path: str,
-    library_path: str,
-    retry_cfg_raw: dict[str, Any] | None,
-    config: dict[str, Any],
-    extra_result_paths: list[str] | None = None,
-    result_paths_provider: Callable[[], list[str]] | None = None,
-) -> Any | None:
-    """Build an ``EvaluationRetryHandler`` from workflow-2 config."""
-    if not retry_cfg_raw or not retry_cfg_raw.get("enabled", True):
-        _logger.info("Workflow 2 retry handler: disabled")
-        return None
-
-    retry_config = RetryConfig(
-        enabled=True,
-        max_tier1=int(retry_cfg_raw.get("max_tier1", 0)),
-        max_tier2=int(retry_cfg_raw.get("max_tier2", 2)),
-        max_tier3=int(retry_cfg_raw.get("max_tier3", 2)),
-        evaluation_timeout_s=float(
-            retry_cfg_raw.get(
-                "evaluation_timeout_s",
-                config.get("solver", {}).get("evaluation_timeout_s", 600.0),
-            )
-        ),
-        cooldown_s=float(retry_cfg_raw.get("cooldown_s", 5.0)),
-    )
-
-    handler = EvaluationRetryHandler(
-        connection=connection,
-        project_path=project_path,
-        library_path=library_path,
-        config=retry_config,
-        on_reconnect=None,  # set after orchestrator creation
-        extra_result_paths=extra_result_paths or [],
-        result_paths_provider=result_paths_provider,
-    )
-
-    _logger.info(
-        "Workflow 2 retry handler: enabled (tier1=%d, tier2=%d, tier3=%d, timeout=%.0fs)",
-        retry_config.max_tier1, retry_config.max_tier2, retry_config.max_tier3,
-        retry_config.evaluation_timeout_s,
-    )
-    return handler

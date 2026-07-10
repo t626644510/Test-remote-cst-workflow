@@ -18,7 +18,7 @@ from cst_optimization.evaluation.evaluation_database_schema import (
     ParameterIdentity,
     current_schema_version,
 )
-from workflows.rfgun_sao.types import EvaluationResult, EvaluationStatus
+from cst_optimization.workflows.recovery import EvaluationResult, EvaluationStatus
 
 _logger = logging.getLogger(__name__)
 

@@ -40,3 +40,18 @@ wf3-campaign/
 *.db
 *.sqlite
 *.sqlite3
+
+# Local CST inputs, campaign outputs, and generated analysis artifacts
+/.codex_tmp/
+/Appendix/
+/Results*/
+/analysis_outputs/
+*.cst
+*.ckpt
+*.jsonl
+*.npz
+*.h5
+*.rar
+*.zip
+*.pdf
+*.docx

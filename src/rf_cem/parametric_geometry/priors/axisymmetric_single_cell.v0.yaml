@@ -1,0 +1,362 @@
+schema_version: expert_prior.v0
+model_family: axisymmetric_single_cell_rf_vacuum
+units:
+  length: mm
+target_body:
+  selection_mode: manual_index
+  body_index: 0
+  fallback_policy: fail_if_low_confidence
+axis:
+  preferred: z
+  verification_policy: helper2_bbox_symmetry
+feature_mappings:
+  RFVacuumVolume:
+    rule_id: feature.rf_vacuum_volume
+    human_description: The reviewed RFVacuumVolume solid identifies the vacuum body and the global cavity span.
+    consumes: solid refs and model bbox
+    defines:
+    - cell_length
+    - half_cell_span_left
+    - half_cell_span_right
+    parameter_ids:
+    - cell_length
+    segment_ids:
+    - seg_equator
+    extraction: bbox_span
+    confidence: 0.9
+    required: true
+    affects_generated_step: true
+    affects_translator: true
+    fallback_policy: manual_target_body_index
+  BeamPipeLeft:
+    rule_id: feature.beam_pipe_left
+    human_description: Left beam pipe faces provide the inlet cylindrical radius and z-span.
+    consumes: cylindrical face radius and z span
+    defines:
+    - beam_pipe_radius_left
+    - beam_pipe_length_left
+    parameter_ids:
+    - beam_pipe_radius_left
+    - beam_pipe_length_left
+    segment_ids:
+    - seg_beam_pipe_left
+    extraction: median_radius_and_max_z_span
+    confidence: 0.9
+    required: true
+    affects_generated_step: true
+    affects_translator: false
+    fallback_policy: fail_required_mapping
+  BeamPipeRight:
+    rule_id: feature.beam_pipe_right
+    human_description: Right beam pipe faces provide the outlet cylindrical radius and z-span.
+    consumes: cylindrical face radius and z span
+    defines:
+    - beam_pipe_radius_right
+    - beam_pipe_length_right
+    parameter_ids:
+    - beam_pipe_radius_right
+    - beam_pipe_length_right
+    segment_ids:
+    - seg_beam_pipe_right
+    extraction: median_radius_and_max_z_span
+    confidence: 0.9
+    required: true
+    affects_generated_step: true
+    affects_translator: false
+    fallback_policy: fail_required_mapping
+  BeamAperture:
+    rule_id: feature.beam_aperture
+    human_description: Aperture face gives the beam opening radius used as the first iris estimate.
+    consumes: terminal circular face radius
+    defines:
+    - iris_radius
+    parameter_ids:
+    - iris_radius
+    segment_ids:
+    - seg_beam_pipe_left
+    extraction: median_radius
+    confidence: 0.85
+    required: true
+    affects_generated_step: false
+    affects_translator: false
+    fallback_policy: share_beam_radius
+  BeamExit:
+    rule_id: feature.beam_exit
+    human_description: Exit face gives the opposite beam opening radius and cross-checks iris_radius.
+    consumes: terminal circular face radius
+    defines:
+    - iris_radius
+    parameter_ids:
+    - iris_radius
+    segment_ids:
+    - seg_beam_pipe_right
+    extraction: median_radius
+    confidence: 0.85
+    required: true
+    affects_generated_step: false
+    affects_translator: false
+    fallback_policy: share_beam_radius
+  EquatorRegion:
+    rule_id: feature.equator
+    human_description: Equator faces provide the maximum RF cavity radius.
+    consumes: maximum radial extent of tagged equator faces
+    defines:
+    - equator_radius
+    parameter_ids:
+    - equator_radius
+    segment_ids:
+    - seg_equator
+    extraction: max_radial_extent
+    confidence: 0.9
+    required: true
+    affects_generated_step: true
+    affects_translator: false
+    fallback_policy: use_model_bbox_radius
+  NoseCone:
+    rule_id: feature.nose_cone
+    human_description: Nose faces represent a smooth RF nose protrusion near the beam pipe. The exact interpretation uses a 10 mm semicircle from the pipe, a reversed 10 mm quarter circle, then a tangent bridge back to the conductive wall.
+    consumes: tagged small torus faces around the pipe, interpreted as smooth semicircle and reverse-quarter nose construction evidence
+    defines:
+    - nose_radius_left
+    - nose_radius_right
+    parameter_ids:
+    - nose_radius_left
+    - nose_radius_right
+    segment_ids:
+    - seg_nose_left_inner_semicircle
+    - seg_nose_left_outer_quarter
+    - seg_nose_right_outer_quarter
+    - seg_nose_right_inner_semicircle
+    extraction: half_local_radial_span
+    fit_strategy: smooth_semicircle_then_reverse_quarter_arc
+    confidence: 0.85
+    required: true
+    affects_generated_step: true
+    affects_translator: false
+    fallback_policy: local_nurbs_smooth_fallback
+  TransitionBlend:
+    rule_id: feature.transition_blend
+    human_description: Transition/blend faces provide blend radii and the intermediate transition control radius.
+    consumes: local radial span and inner radial bounds of tagged blend faces
+    defines:
+    - blend_radius_left
+    - blend_radius_right
+    - transition_radius
+    parameter_ids:
+    - blend_radius_left
+    - blend_radius_right
+    segment_ids:
+    - seg_blend_left
+    - seg_blend_right
+    extraction: half_local_radial_span
+    fit_strategy: local_spline
+    confidence: 0.85
+    required: true
+    affects_generated_step: true
+    affects_translator: false
+    fallback_policy: local_spline_fallback
+  ConductingWall:
+    rule_id: feature.conducting_wall
+    human_description: Conducting wall features are kept for semantic mapping; v0 does not assign face-level CST boundaries.
+    consumes: conducting wall face refs
+    defines: []
+    parameter_ids: []
+    segment_ids: []
+    extraction: semantic_only
+    confidence: 0.8
+    required: false
+    affects_generated_step: false
+    affects_translator: false
+    fallback_policy: report_only
+grammar:
+  variant_policy:
+    default_selected_variant: free_equator_smooth
+    enabled_variants:
+    - iris_torus_exact
+    - expanded_smooth_nose
+    - free_equator_smooth
+    - manual_equator_inset_3mm
+    - manual_equator_bulge_3mm
+    - manual_equator_wide_soft
+    curve_selection:
+      nose:
+        iris_torus_exact: smooth_semicircle_then_reverse_quarter_arc
+        expanded_smooth_nose: local_nurbs_smooth_fallback
+        free_equator_smooth: local_nurbs_smooth_fallback
+        manual_equator_inset_3mm: local_nurbs_smooth_fallback
+        manual_equator_bulge_3mm: local_nurbs_smooth_fallback
+        manual_equator_wide_soft: local_nurbs_smooth_fallback
+      equator:
+        iris_torus_exact: cylinder
+        expanded_smooth_nose: cylinder
+        free_equator_smooth: local_nurbs_crown
+        manual_equator_inset_3mm: local_nurbs_crown
+        manual_equator_bulge_3mm: local_nurbs_crown
+        manual_equator_wide_soft: local_nurbs_crown
+    curve_parameters:
+      equator:
+        free_equator_smooth:
+          crown_radius_delta_mm: 0.0
+          crown_z_mid_mm: 0.0
+          shoulder_z_abs_mm: 30.0
+        manual_equator_inset_3mm:
+          crown_radius_delta_mm: -3.0
+          crown_z_mid_mm: 0.0
+          shoulder_z_abs_mm: 28.0
+        manual_equator_bulge_3mm:
+          crown_radius_delta_mm: 3.0
+          crown_z_mid_mm: 0.0
+          shoulder_z_abs_mm: 28.0
+        manual_equator_wide_soft:
+          crown_radius_delta_mm: -1.5
+          crown_z_mid_mm: 0.0
+          shoulder_z_abs_mm: 44.0
+  profile_controls:
+    zmin:
+      source: bbox.zmin
+    zmax:
+      source: bbox.zmax
+    beam_radius:
+      source: parameter
+      parameter: beam_pipe_radius_left
+    transition_radius:
+      source: radial_inner_bound_above
+      feature_types:
+      - EquatorRegion
+      - TransitionBlend
+      above_parameter: beam_pipe_radius_left
+      fallback_scale_of: equator_radius
+      fallback_scale: 0.68
+    equator_radius:
+      source: parameter
+      parameter: equator_radius
+  segment_order:
+  - seg_beam_pipe_left
+  - seg_blend_left
+  - seg_nose_left
+  - seg_equator
+  - seg_nose_right
+  - seg_blend_right
+  - seg_beam_pipe_right
+  segment_templates:
+    seg_beam_pipe_left:
+      kind: line
+      start: [zmin, beam_radius]
+      end: [-200.0, beam_radius]
+      feature_refs: [BeamPipeLeft]
+      confidence: 0.9
+    seg_blend_left:
+      kind: local_spline
+      start: [-200.0, beam_radius]
+      end: [-135.0, transition_radius]
+      feature_refs: [TransitionBlend]
+      confidence: 0.8
+    seg_nose_left:
+      kind: local_spline
+      start: [-135.0, transition_radius]
+      end: [-60.0, equator_radius]
+      feature_refs: [NoseCone]
+      confidence: 0.8
+    seg_equator:
+      kind: line
+      start: [-60.0, equator_radius]
+      end: [60.0, equator_radius]
+      feature_refs: [EquatorRegion]
+      confidence: 0.9
+    seg_nose_right:
+      kind: local_spline
+      start: [60.0, equator_radius]
+      end: [135.0, transition_radius]
+      feature_refs: [NoseCone]
+      confidence: 0.8
+    seg_blend_right:
+      kind: local_spline
+      start: [135.0, transition_radius]
+      end: [200.0, beam_radius]
+      feature_refs: [TransitionBlend]
+      confidence: 0.8
+    seg_beam_pipe_right:
+      kind: line
+      start: [200.0, beam_radius]
+      end: [zmax, beam_radius]
+      feature_refs: [BeamPipeRight]
+      confidence: 0.9
+  nose_design_rules:
+    iris_torus_exact:
+      description: From pipe, draw a 10 mm semicircle into the nose, then a reversed 10 mm quarter circle, then return tangent to the conductive wall before the large blend.
+      left_sequence:
+      - segment_id: seg_nose_left_inner_semicircle
+        feature_type: NoseCone
+        source_face_role: inner small torus
+        arc_direction: pipe_to_wall_semicircle
+      - segment_id: seg_nose_left_outer_quarter
+        feature_type: NoseCone
+        source_face_role: outer small torus
+        arc_direction: reverse_quarter_to_wall_tangent
+      - segment_id: seg_nose_left_bridge_02
+        feature_type: TransitionBlend
+        source_face_role: bridge plane to large blend
+        continuity: tangent_preferred
+      right_sequence:
+      - segment_id: seg_nose_right_bridge_02
+        feature_type: TransitionBlend
+        source_face_role: bridge plane from large blend
+        continuity: tangent_preferred
+      - segment_id: seg_nose_right_outer_quarter
+        feature_type: NoseCone
+        source_face_role: outer small torus
+        arc_direction: reverse_quarter_from_wall
+      - segment_id: seg_nose_right_inner_semicircle
+        feature_type: NoseCone
+        source_face_role: inner small torus
+        arc_direction: wall_to_pipe_semicircle
+  equator_design_rules:
+    cylinder:
+      description: Keep the conventional 500 MHz equator as a constant-radius cylindrical section between the two large blend arcs.
+      segment_id: seg_equator
+      feature_type: EquatorRegion
+    local_nurbs_crown:
+      description: Replace the constant-radius equator cylinder with a smooth configurable crown curve while preserving blend endpoints and maximum equator radius evidence.
+      segment_id: seg_equator_free_crown
+      feature_type: EquatorRegion
+      control_policy: endpoints_fixed_midpoint_radial_crown
+      default_crown_z_mid: 0.0
+      default_crown_radius_scale: 1.0
+      default_crown_radius_delta_mm: 0.0
+      default_shoulder_z_abs_mm: 30.0
+      max_control_points: 5
+fit_policy:
+  fitting_ladder:
+  - exact_inheritance
+  - line
+  - arc
+  - ellipse
+  - local_spline_fallback
+  local_spline:
+    max_degree: 3
+    max_control_points: 6
+    endpoints_fixed: true
+validation:
+  purpose: exploratory_shape_generation
+  bbox_abs_error_mm: 0.3
+  bbox_rel_error: 0.002
+  volume_rel_error: 0.01
+  surface_area_rel_error: 0.01
+  profile_rms_error_mm: 0.15
+  profile_max_error_mm: 0.5
+  baseline_difference_policy:
+    bbox: warning
+    volume: warning
+    surface_area: warning
+  hard_gate_policy:
+    brep_valid: blocking
+    profile_simple: blocking
+    all_r_ge_0: blocking
+interface_policy:
+  unknown_fields: preserve
+  missing_required_mapping: fail
+  deprecated_keys: warn
+human_notes:
+  purpose: Expert prior v0 tells RF-CEM how reviewed features should be interpreted as parametric geometry.
+  not_a_geometry_truth_source: STEP remains an export artifact; parametric_geometry.v0.json is the run truth source.
+  natural_language_usage: Human notes are for experts and LLM conversion; they do not drive calculations.

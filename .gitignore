@@ -58,3 +58,4 @@ wf3-campaign/
 
 # Source copies were inventoried/archived before excluding local artifacts.
 /artifacts/
+/hom_campaign_*/

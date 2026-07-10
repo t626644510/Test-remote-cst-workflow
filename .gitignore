@@ -55,3 +55,4 @@ wf3-campaign/
 *.zip
 *.pdf
 *.docx
+/hom_campaign_*/

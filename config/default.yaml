@@ -1,0 +1,655 @@
+cst:
+  library_path: D:/CST2026/CST Studio Suite 2026/AMD64/python_cst_libraries
+  connect_mode: any_or_new
+  result_cache: true
+solver:
+  stagnation_timeout_s: 300.0
+  settle_s: 2.0
+logging:
+  enabled: true
+  output_dir: D:/Results
+  auto_flush_interval: 1
+project:
+  cst_path: F:/workflow_elgun/PickupDesign_2026.cst
+
+evaluation:
+  post_eval_recovery: tier2
+
+optimization:
+  algorithm: sao
+  n_initial_samples: 20
+  n_iterations: 100
+  acquisition_function: ei
+  acquisition_xi: 0.01
+  acquisition_kappa: 2.0
+  seed: 42
+  retry:
+    enabled: true
+    max_tier1: 0
+    max_tier2: 2
+    max_tier3: 2
+    cooldown_s: 5.0
+parameters:
+- name: R_cell_3
+  display_name: Cell 3 Equator Radius
+  unit: mm
+  low: 10.779
+  high: 10.785
+  log_scale: false
+- name: R_between_cell_3_cutoff
+  display_name: Iris Radius Cell 3 to Cutoff
+  unit: mm
+  low: 4.035
+  high: 4.041
+  log_scale: false
+- name: R_between_cell_2_3
+  display_name: Iris Radius Between Cell 2 and 3
+  unit: mm
+  low: 3.279
+  high: 3.285
+  log_scale: false
+- name: R_bend_cell3_left
+  display_name: Bend Radius Cell 3 Left
+  unit: mm
+  low: 2.443
+  high: 2.449
+  log_scale: false
+- name: PickUpDeep
+  display_name: Pick Up Depth
+  unit: mm
+  low: 0.259
+  high: 0.265
+  log_scale: false
+- name: length1
+  display_name: Coupler Length
+  unit: mm
+  low: 1.026
+  high: 1.032
+  log_scale: false
+- name: e_x
+  display_name: Ellipse X
+  unit: mm
+  low: 1.779
+  high: 1.785
+  log_scale: false
+- name: e
+  display_name: Ellipse E
+  unit: mm
+  low: 1.561
+  high: 1.567
+  log_scale: false
+- name: esp_e_cell3_left
+  display_name: Ellipse E Cell 3 Left
+  unit: mm
+  low: 2.622
+  high: 2.628
+  log_scale: false
+- name: esp_e_cell3_right
+  display_name: Ellipse E Cell 3 Right
+  unit: mm
+  low: 2.808
+  high: 2.814
+  log_scale: false
+- name: cell_3_vertical_left
+  display_name: Cell 3 Vertical Left
+  unit: mm
+  low: 0.927
+  high: 0.933
+  log_scale: false
+- name: cell_3_vertical_right
+  display_name: Cell 3 Vertical Right
+  unit: mm
+  low: 0.928
+  high: 0.934
+  log_scale: false
+- name: bend1
+  display_name: Coupler Bend Parameter 1
+  unit: mm
+  low: 1.554
+  high: 1.560
+  log_scale: false
+objectives:
+- name: resonant_freq
+  mode: tolerance
+  mode_params:
+    target: 11.424
+    sigma: 0.00333
+- name: coupling_beta
+  mode: tolerance
+  mode_params:
+    target: 3.0
+    sigma: 1.0
+- name: peak_e_field
+  mode: maximize
+- name: q0
+  mode: maximize
+- name: max_modified_poynting
+  mode: less_than
+  mode_params:
+    threshold: 5000000000000.0
+    sigma: 1000000000000.0
+  obj_params:
+    project_dir: F:/workflow_elgun/PickupDesign_2026
+    gc: 0.125
+    e_target: 200000000.0
+- name: field_flatness
+  mode: tolerance
+  mode_params:
+    target: 0.0
+    sigma: 0.0085
+- name: pulsed_heating
+  mode: less_than
+  mode_params:
+    threshold: 10.0
+    sigma: 2.0
+  obj_params:
+    project_dir: F:/workflow_elgun/PickupDesign_2026
+    pulse_width_ns: 300
+    e_target: 200000000.0
+
+
+tolerance:
+  min_samples: 30
+  max_samples: 100
+  batch_size: 10
+  convergence_rtol: 0.01
+  retry:
+    enabled: true
+    max_tier1: 0
+    max_tier2: 2
+    max_tier3: 2
+    cooldown_s: 5.0
+    evaluation_timeout_s: 600.0
+  watchdog:
+    enabled: false
+    max_restarts: 5
+    cooldown_s: 30.0
+  seed: 42
+  project_path: D:/ModelData/AllParaVer1_E2test.cst
+  parameters:
+  - name: offset1
+    nominal: 0.0
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Beam axis offset X
+  - name: offset2
+    nominal: 0.0
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Beam axis offset Y
+  - name: offset3
+    nominal: 0.0
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Beam axis offset Z / tilt
+  - name: a
+    nominal: 10.61545850401
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Incoupler Radius
+  - name: length1
+    nominal: 1.029
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Coupler Penetration Length
+  - name: PickUpDeep
+    nominal: 0.262
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Pick Up Depth
+  - name: R_cell_1
+    nominal: 11.2565
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 1 Equator Radius
+  - name: R_cell_2
+    nominal: 11.0049
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 2 Equator Radius
+  - name: R_cell_3
+    nominal: 10.782
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 3 Equator Radius
+  - name: R_bend_cell1
+    nominal: 1.527
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Bend radius cell 1
+  - name: R_bend_cell2_left
+    nominal: 1.4423
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Bend radius cell 2 left
+  - name: R_bend_cell3_left
+    nominal: 2.446
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Bend radius cell 3 left
+  - name: R_between_cell_1_2
+    nominal: 4.0253
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Iris radius between cell 1-2
+  - name: R_between_cell_2_3
+    nominal: 3.282
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Iris radius between cell 2-3
+  - name: R_between_cell_3_cutoff
+    nominal: 4.038
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Iris radius cell 3 to cutoff
+  - name: cell_1_vertical_length
+    nominal: 1.4338
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 1 vertical segment
+  - name: cell_2_vertical_left
+    nominal: 0.7719
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 2 vertical left
+  - name: cell_2_vertical_right
+    nominal: 0.5761
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 2 vertical right
+  - name: cell_3_vertical_left
+    nominal: 0.930
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 3 vertical left
+  - name: cell_3_vertical_right
+    nominal: 0.931
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Cell 3 vertical right
+  - name: bend1
+    nominal: 1.557
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Coupler bend parameter 1
+  - name: e
+    nominal: 1.564
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse parameter e
+  - name: e_x
+    nominal: 1.782
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: True
+    description: Ellipse x
+  - name: esp_e_cell2_left
+    nominal: 2.742
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse e cell2 left
+  - name: esp_e_cell2_right
+    nominal: 2.7473
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse e cell2 right
+  - name: esp_e_cell3_left
+    nominal: 2.625
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse e cell3 left
+  - name: esp_e_cell3_right
+    nominal: 2.811
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse e cell3 right
+  - name: esp_y_cell_1_2_e
+    nominal: 2.242
+    tolerance_abs: 0.003
+    unit: mm
+    enabled: False
+    description: Ellipse y e cell 1-2
+  outputs:
+  - name: f0_ghz
+    enabled: true
+    description: Resonant frequency (GHz)
+  - name: q_loaded
+    enabled: true
+    description: Loaded Q
+  - name: coupling_beta
+    enabled: true
+    description: Coupling parameter Beta
+  - name: q0
+    enabled: true
+    description: Intrinsic quality factor
+  - name: e_peak
+    enabled: true
+    description: Peak E-field from MaxE_Z0 (V/m)
+  - name: s11_db
+    enabled: true
+    description: '|S11| at resonance (dB)'
+  - name: p_input_mw
+    enabled: true
+    description: Input power at 200 MV/m (MW)
+  - name: MaxE_Z0
+    enabled: false
+    description: Max E-field Cell 1 (V/m)
+  - name: MaxE_Z1
+    enabled: false
+    description: Max E-field Cell 2 (V/m)
+  - name: MaxE_Z2
+    enabled: false
+    description: Max E-field Cell 3 (V/m)
+  - name: e_field_0d
+    enabled: false
+    description: E-field 0D scalar from template
+  - name: h_field_0d
+    enabled: false
+    description: H-field 0D scalar from template
+  - name: S11_balance
+    enabled: false
+    description: S11 energy balance
+  - name: Power_Accepted
+    enabled: false
+    description: Power accepted at port 1 (W)
+  - name: Power_Outgoing
+    enabled: false
+    description: Power outgoing all ports (W)
+  - name: Power_Stimulated
+    enabled: false
+    description: Power stimulated (W)
+  - name: Loss_in_Dielectrics
+    enabled: false
+    description: Loss in dielectrics (W)
+  - name: Loss_in_Metals
+    enabled: false
+    description: Loss in metals (W)
+  - name: Sc_max
+    enabled: true
+    description: Max modified Poynting vector (W/m^2)
+  - name: DeltaT_K
+    enabled: true
+    description: Pulsed heating temperature rise (K)
+  - name: field_flatness
+    enabled: true
+    description: Cell-to-cell field flatness (0=perfect)
+
+
+workflow_2:
+  enabled: true
+  result_paths:
+    s11: "1D Results\\S-Parameters\\S1,1"
+    s21: "1D Results\\S-Parameters\\S2,1"
+    s31: "1D Results\\S-Parameters\\S3,1"
+  evaluation:
+    pre_eval_cleanup: false
+    post_eval_recovery: ""
+  pre_filter:
+    enabled: true
+    absorption_threshold_db: -25.0
+  projects:
+    frequency_domain:
+      cst_path: D:/workflow2/F2F.cst
+      is_pre_filter: true
+    wakefield:
+      cst_path: D:/workflow2/F2W.cst
+      condition_trigger: antenna_absorption
+      condition_max_penalty: 0.9
+    wakefield_offset:
+      cst_path: D:/workflow2/F2W_offset.cst
+      condition_trigger: z_longitudinal
+      condition_max_penalty: 0.9
+  message_log:
+    enabled: true
+    output_dir: D:/Results/cst_messages
+  optimization:
+    algorithm: sao
+    n_initial: 10
+    n_iterations: 50
+    seed: 42
+    acquisition_function: ei
+    acquisition_xi: 0.01
+    solver:
+      stagnation_timeout_s: 7200.0
+    retry:
+      enabled: true
+      max_tier1: 0
+      max_tier2: 0
+      max_tier3: 2
+      cooldown_s: 15.0
+      evaluation_timeout_s: 10800.0
+  parameters:
+  - name: selfangle1
+    display_name: Self Angle 1
+    unit: deg
+    low: 0.0
+    high: 180.0
+    log_scale: false
+  - name: selfangle2
+    display_name: Self Angle 2
+    unit: deg
+    low: 0.0
+    high: 180.0
+    log_scale: false
+  - name: inner_angle
+    display_name: Inner Angle
+    unit: deg
+    low: -90
+    high: 0
+    log_scale: false
+  - name: inner_angle3
+    display_name: Inner Angle 3
+    unit: deg
+    low: 0.0
+    high: 90.0
+    log_scale: false
+  - name: FolkHeight
+    display_name: Folk Height
+    unit: mm
+    low: 1.0
+    high: 50.0
+    log_scale: false
+  - name: FolkHeight2
+    display_name: Folk Height 2
+    unit: mm
+    low: 1.0
+    high: 50.0
+    log_scale: false
+  - name: UpperHeight1
+    display_name: Upper Height 1
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: UpperHeight2
+    display_name: Upper Height 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: DownHeight1
+    display_name: Down Height 1
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: DownHeight2
+    display_name: Down Height 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: Lin2
+    display_name: Lin 2
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: inner_r2
+    display_name: Inner Radius 2
+    unit: mm
+    low: 1.0
+    high: 15.0
+    log_scale: false
+  - name: Lin
+    display_name: Lin
+    unit: mm
+    low: 1.0
+    high: 30.0
+    log_scale: false
+  - name: inner_r
+    display_name: Inner Radius
+    unit: mm
+    low: -15.0
+    high: -1.0
+    log_scale: false
+  constraints:
+  - type: gt
+    a: Lin
+    b: DownHeight1
+    description: Lin > DownHeight1
+  - type: gt
+    a: Lin2
+    b: DownHeight2
+    description: Lin2 > DownHeight2
+  - type: sin_times_r_lt
+    angle: inner_angle
+    radius: inner_r
+    threshold: 9.785
+    description: (1-cos(inner_angle)) * -inner_r < 9.785
+    formula: 1-cos
+    negate_radius: true
+  - type: sin_times_r_lt
+    angle: inner_angle3
+    radius: inner_r2
+    threshold: 9.785
+    description: (1-cos(inner_angle3)) * inner_r2 < 9.785
+    formula: 1-cos
+  - type: sin_times_r_gt
+    angle: inner_angle
+    radius: inner_r
+    threshold: 2.75
+    description: (1-cos(inner_angle)) * -inner_r > 2.75
+    formula: 1-cos
+    negate_radius: true
+  - type: sin_times_r_gt
+    angle: inner_angle3
+    radius: inner_r2
+    threshold: 2.75
+    description: (1-cos(inner_angle3)) * inner_r2 > 2.75
+    formula: 1-cos
+  - type: gt
+    a: inner_r2
+    b: 5.44
+    description: inner_r2 > 5.44
+  - type: gt
+    a: -5.44
+    b: inner_r
+    description: inner_r < -5.44
+  objectives:
+  - name: z_longitudinal
+    mode: less_than_soft
+    mode_params:
+      threshold: 0.0
+      scale: 0.008
+      power: 1.0
+    obj_params:
+      strategy: threshold_exceedance_integral
+      z_threshold_ohm: 2000.0
+      reference_beam: ParticleBeam1
+      freq_min_hz: 550000000.0
+      project: wakefield
+      normalize: true
+  - name: z_transverse
+    enabled: true
+    mode: less_than_soft
+    mode_params:
+      threshold: 0.0
+      scale: 0.0015
+      power: 1.0
+    obj_params:
+      strategy: threshold_exceedance_integral
+      z_threshold_ohm_per_m: 50000.0
+      aggregation: worst_case
+      reference_beam: ParticleBeam1
+      offset_beams:
+      - name: ParticleBeam2
+        offset_x_mm: 2.0
+        offset_y_mm: 0.0
+      project: wakefield_offset
+      ref_project: wakefield
+      normalize: true
+      square_exceedance: true
+  - name: antenna_absorption
+    mode: less_than
+    mode_params:
+      threshold: -29.0
+      sigma: 2.0
+    obj_params:
+      antenna_port: 2
+      tree_path: "1D Results\\S-Parameters\\S2,1"
+      search_freq_ghz: 0.5
+      search_width_ghz: 0.01
+      project: frequency_domain
+  - name: antenna_absorption_db
+    mode: less_than
+    mode_params:
+      threshold: -29.0
+      sigma: 2.0
+    obj_params:
+      antenna_port: 3
+      tree_path: "1D Results\\S-Parameters\\S3,1"
+      search_freq_ghz: 0.5
+      search_width_ghz: 0.01
+      project: frequency_domain
+
+  # ── Adaptive conditional gate (three-phase + TCP sliding window) ──
+  adaptive_gate:
+    # Phase A: unconditional F2W/F2WO passes for initial GP training data
+    warmup_n_evaluations: 10
+
+    # Phase B: GP-gated
+    gp_skip_threshold: 0.5       # theta_skip: predicted penalty below this → run F2W
+    validate_every_n: 5          # K: unconditional validation every K evaluations
+    trust_consecutive: 5         # N_trust: tighten window after this many consecutive passes
+    max_consecutive_fail: 3      # N_max_fail: rebuild GP after this many consecutive failures
+    prediction_error_epsilon: 0.15  # epsilon_trust: max |pred - meas| for pass
+
+    # TCP sliding window
+    delta_db: 2.0                # delta_dB: step size for tighten/loosen
+    db_initial: -25.0            # initial dB threshold (permissive)
+    db_min: -31.0                # tightest dB threshold
+
+    # Phase transition thresholds
+    pass_rate_threshold: 0.6     # F2W pass rate for B→C transition
+    gp_accuracy_threshold: 0.85  # prediction accuracy for B→C transition
+    pass_rate_critical: 0.3      # F2W pass rate triggering emergency fallback
+
+    # GP model
+    gp_alpha: 0.001              # GP noise regularisation

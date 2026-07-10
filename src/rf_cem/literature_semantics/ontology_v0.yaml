@@ -69,6 +69,46 @@ supported_variants:
   - manual_equator_inset_3mm
   - manual_equator_bulge_3mm
   - manual_equator_wide_soft
+executable_branch_rules:
+  srf_elliptical:
+    operating_regime: superconducting
+    cavity_family: elliptical
+    cell_count: single
+    geometry_scope: axisymmetric_single_cell_rf_vacuum
+    preferred_variants:
+      - free_equator_smooth
+      - expanded_smooth_nose
+      - manual_equator_inset_3mm
+    curve_region: equator
+    curve_variant: free_equator_smooth
+    curve_value: local_nurbs_crown
+  nc_elliptical:
+    operating_regime: normal_conducting
+    cavity_family: elliptical
+    cell_count: single
+    geometry_scope: axisymmetric_single_cell_rf_vacuum
+    preferred_variants:
+      - free_equator_smooth
+      - manual_equator_inset_3mm
+      - manual_equator_bulge_3mm
+      - expanded_smooth_nose
+    curve_region: equator
+    curve_variant: free_equator_smooth
+    curve_value: local_nurbs_crown
+  nc_reentrant:
+    operating_regime: normal_conducting
+    cavity_families:
+      - reentrant
+      - nose_cone
+    cell_count: single
+    geometry_scope: axisymmetric_single_cell_rf_vacuum
+    preferred_variants:
+      - iris_torus_exact
+      - expanded_smooth_nose
+      - free_equator_smooth
+    curve_region: nose
+    curve_variant: iris_torus_exact
+    curve_value: smooth_semicircle_then_reverse_quarter_arc
 supported_curve_parameters:
   equator:
     - crown_radius_delta_mm

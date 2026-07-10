@@ -68,6 +68,7 @@ def validate_semantic_package(package: Mapping[str, Any], ontology: Mapping[str,
     _validate_request_context(package, ontology, issues)
     _validate_evidence(package, issues)
     _validate_classification(package, ontology, issues)
+    _validate_executable_branch(package, ontology, issues)
     evidence_index = _evidence_index(package)
     for section in SEMANTIC_ITEM_SECTIONS:
         values = package.get(section, [])
@@ -77,7 +78,7 @@ def validate_semantic_package(package: Mapping[str, Any], ontology: Mapping[str,
             issues.append(_error(section, "semantic section must be a list"))
             continue
         for idx, item in enumerate(values):
-            _validate_semantic_item(section, idx, item, ontology, evidence_index, issues)
+            _validate_semantic_item(section, idx, item, package, ontology, evidence_index, issues)
     _find_forbidden_keys(package, "", issues)
     return issues
 
@@ -119,6 +120,8 @@ def _validate_evidence(package: Mapping[str, Any], issues: list[ValidationIssue]
     if not isinstance(evidence_sources, list) or not evidence_sources:
         issues.append(_error("evidence_sources", "must be a non-empty list"))
         return
+    seen_ids: set[str] = set()
+    source_ids: set[str] = set()
     for idx, source in enumerate(evidence_sources):
         path = f"evidence_sources[{idx}]"
         if not isinstance(source, Mapping):
@@ -127,6 +130,35 @@ def _validate_evidence(package: Mapping[str, Any], issues: list[ValidationIssue]
         for key in ("id", "source_type"):
             if not source.get(key):
                 issues.append(_error(f"{path}.{key}", "missing required evidence source field"))
+        source_id = str(source.get("id", ""))
+        if source_id:
+            if source_id in seen_ids:
+                issues.append(_error(f"{path}.id", f"duplicate evidence id {source_id!r}"))
+            seen_ids.add(source_id)
+            source_ids.add(source_id)
+
+    for section in ("text_evidence", "image_evidence"):
+        values = package.get(section, []) or []
+        if not isinstance(values, list):
+            issues.append(_error(section, "evidence section must be a list"))
+            continue
+        for idx, evidence in enumerate(values):
+            path = f"{section}[{idx}]"
+            if not isinstance(evidence, Mapping):
+                issues.append(_error(path, "evidence item must be a mapping"))
+                continue
+            evidence_id = str(evidence.get("id", ""))
+            if not evidence_id:
+                issues.append(_error(f"{path}.id", "missing evidence id"))
+            elif evidence_id in seen_ids:
+                issues.append(_error(f"{path}.id", f"duplicate evidence id {evidence_id!r}"))
+            else:
+                seen_ids.add(evidence_id)
+            parent_id = str(evidence.get("paper_id") or evidence.get("source_id") or "")
+            if not parent_id:
+                issues.append(_error(path, "evidence item must reference paper_id or source_id"))
+            elif parent_id not in source_ids:
+                issues.append(_error(path, f"unknown parent evidence source {parent_id!r}"))
 
 
 def _validate_classification(package: Mapping[str, Any], ontology: Mapping[str, Any], issues: list[ValidationIssue]) -> None:
@@ -154,10 +186,76 @@ def _validate_classification(package: Mapping[str, Any], ontology: Mapping[str, 
                 issues.append(_error("classification.evidence_refs", f"unknown evidence ref {ref!r}"))
 
 
+def executable_branch_matches(
+    package: Mapping[str, Any],
+    ontology: Mapping[str, Any] | None = None,
+) -> list[tuple[str, Mapping[str, Any]]]:
+    """Return current-grammar branch rules matching a semantic package.
+
+    An empty result is valid for audit-only literature. It means the paper does
+    not map safely to the current axisymmetric single-cell executable grammar.
+    """
+    ontology = ontology or load_ontology()
+    context = package.get("request_context", {})
+    classification = package.get("classification", {})
+    if not isinstance(context, Mapping) or not isinstance(classification, Mapping):
+        return []
+    observed = {
+        "operating_regime": context.get("operating_regime"),
+        "cavity_family": classification.get("cavity_family"),
+        "cell_count": classification.get("cell_count"),
+        "geometry_scope": context.get("geometry_scope"),
+    }
+    matches: list[tuple[str, Mapping[str, Any]]] = []
+    rules = ontology.get("executable_branch_rules", {}) or {}
+    if not isinstance(rules, Mapping):
+        return matches
+    for branch_id, rule in rules.items():
+        if not isinstance(rule, Mapping):
+            continue
+        families = rule.get("cavity_families") or [rule.get("cavity_family")]
+        if observed["cavity_family"] not in set(families):
+            continue
+        if any(
+            rule.get(key) is not None and observed[key] != rule.get(key)
+            for key in ("operating_regime", "cell_count", "geometry_scope")
+        ):
+            continue
+        curve_region = str(rule.get("curve_region", ""))
+        curve_priors = package.get("curve_priors", []) or []
+        if not curve_region or not isinstance(curve_priors, list):
+            continue
+        if not any(
+            isinstance(item, Mapping) and item.get("curve_region") == curve_region
+            for item in curve_priors
+        ):
+            continue
+        matches.append((str(branch_id), rule))
+    return matches
+
+
+def _validate_executable_branch(
+    package: Mapping[str, Any],
+    ontology: Mapping[str, Any],
+    issues: list[ValidationIssue],
+) -> None:
+    matches = executable_branch_matches(package, ontology)
+    if len(matches) > 1:
+        issues.append(_error("classification", "multiple executable grammar branches match this package"))
+    elif not matches:
+        issues.append(
+            _warning(
+                "classification",
+                "no current executable grammar branch matches regime/family/cell_count; package is audit-only",
+            )
+        )
+
+
 def _validate_semantic_item(
     section: str,
     idx: int,
     item: object,
+    package: Mapping[str, Any],
     ontology: Mapping[str, Any],
     evidence_index: Mapping[str, Mapping[str, Any]],
     issues: list[ValidationIssue],
@@ -182,9 +280,41 @@ def _validate_semantic_item(
         issues.append(_error(f"{path}.human_review_status", f"unsupported review status {status!r}"))
     if "applicability" in item and item.get("applicability") in (None, "", {}):
         issues.append(_error(f"{path}.applicability", "must describe where this rule applies"))
+    elif "applicability" in item and not isinstance(item.get("applicability"), Mapping):
+        issues.append(_error(f"{path}.applicability", "must be a mapping"))
+    if "scope" in item and item.get("scope") in (None, "", {}):
+        issues.append(_error(f"{path}.scope", "must be non-empty"))
+    _validate_applicability(path, item, package, issues)
     _validate_ontology_names(section, idx, item, ontology, issues)
     _validate_numeric_evidence_policy(section, idx, item, evidence_index, issues)
     _validate_out_of_scope(section, idx, item, ontology, issues)
+
+
+def _validate_applicability(
+    path: str,
+    item: Mapping[str, Any],
+    package: Mapping[str, Any],
+    issues: list[ValidationIssue],
+) -> None:
+    applicability = item.get("applicability")
+    if not isinstance(applicability, Mapping):
+        return
+    context = package.get("request_context", {})
+    classification = package.get("classification", {})
+    expected = {
+        "operating_regime": context.get("operating_regime") if isinstance(context, Mapping) else None,
+        "geometry_scope": context.get("geometry_scope") if isinstance(context, Mapping) else None,
+        "cavity_family": classification.get("cavity_family") if isinstance(classification, Mapping) else None,
+        "cell_count": classification.get("cell_count") if isinstance(classification, Mapping) else None,
+    }
+    for key, value in applicability.items():
+        if key in expected and value not in (None, "unknown", expected[key]):
+            issues.append(
+                _error(
+                    f"{path}.applicability.{key}",
+                    f"conflicts with package value {expected[key]!r}",
+                )
+            )
 
 
 def _validate_ontology_names(

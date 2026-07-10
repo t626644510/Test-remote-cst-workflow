@@ -1,0 +1,104 @@
+schema_version: literature_semantics_ontology.v0
+model_family: axisymmetric_single_cell_rf_vacuum
+operating_regimes:
+  - superconducting
+  - normal_conducting
+  - unknown
+cavity_families:
+  - elliptical
+  - reentrant
+  - nose_cone
+  - qwr
+  - hwr
+  - spoke
+  - unknown
+cell_counts:
+  - single
+  - multi
+  - unknown
+beta_classes:
+  - beta_1
+  - low_beta
+  - medium_beta
+  - unknown
+geometry_scopes:
+  - axisymmetric_single_cell_rf_vacuum
+feature_aliases:
+  nose:
+    - nose
+    - nose_cone
+    - reentrant_nose
+  iris:
+    - iris
+    - beam_aperture
+    - Rir
+    - iris aperture
+  equator:
+    - equator
+    - Req
+    - equator radius
+  blend:
+    - blend
+    - transition
+    - transition_blend
+  beam_pipe:
+    - beam_pipe
+    - beam tube
+    - beam_tube
+curve_regions:
+  - nose
+  - iris
+  - equator
+  - blend
+  - transition
+  - beam_pipe
+  - wall
+curve_types:
+  - arc
+  - ellipse
+  - local_spline
+  - nurbs
+  - cylinder
+  - smooth_semicircle_then_reverse_quarter_arc
+  - local_nurbs_smooth_fallback
+  - local_nurbs_crown
+supported_variants:
+  - iris_torus_exact
+  - expanded_smooth_nose
+  - free_equator_smooth
+  - manual_equator_inset_3mm
+  - manual_equator_bulge_3mm
+  - manual_equator_wide_soft
+supported_curve_parameters:
+  equator:
+    - crown_radius_delta_mm
+    - crown_z_mid_mm
+    - shoulder_z_abs_mm
+parameter_aliases:
+  Req: equator_radius
+  Rir: iris_radius
+  wall_angle: wall_angle_deg
+  alpha: wall_angle_deg
+  d: equator_straight_d
+  crown_radius_delta_mm: crown_radius_delta_mm
+  shared_equator_crown_delta_r_mm: crown_radius_delta_mm
+  shared_equator_crown_z_mid_mm: crown_z_mid_mm
+  shared_equator_crown_shoulder_z_abs_mm: shoulder_z_abs_mm
+objectives:
+  - reduce_epk_over_eacc
+  - reduce_bpk_over_eacc
+  - improve_r_over_q
+  - improve_shunt_impedance
+  - improve_transit_time_factor
+  - maintain_frequency
+  - improve_cleaning
+  - improve_mechanical_margin
+out_of_scope_terms:
+  - HOM
+  - coupler
+  - wakefield
+  - thermal
+  - structural
+  - multipacting
+  - cooling
+  - tuner

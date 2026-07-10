@@ -411,7 +411,14 @@ backup/pre-strict-reorg-20260710-homwork
 backup/pre-strict-reorg-20260710-cst-step
 backup/pre-strict-reorg-20260710-wf2-closure
 backup/pre-clean-wf2-closure-20260710
+backup/pre-strict-reorg-20260710-wf2-worktree
+backup/pre-strict-reorg-20260710-stale-workflows
+backup/post-backup-cst-step-assistant-changes-20260710
 ```
+
+其中后三条分别保留旧 WF2 worktree、旧 WF1/WF3 同源分支，以及初始归档后
+才提交的 CST/STEP assistant 改动。对应旧 `codex/*`、`phase/*` 和过时
+`workflow/*` 开发 ref 已在确认这些备份可达后清理；WF2 收口兼容 ref 除外。
 
 不要直接覆盖当前 worktree。恢复时先克隆到新目录：
 

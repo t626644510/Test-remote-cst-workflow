@@ -21,7 +21,10 @@ def main() -> None:
     try:
         request = json.loads(args.request.read_text(encoding="utf-8"))
         report = _recover(request)
-        args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        with args.output.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         sys.stdout.flush()
         sys.stderr.flush()
         os._exit(0)
@@ -35,14 +38,18 @@ def _recover(request: dict) -> dict:
     import cadquery as cq
     from OCP.BRepCheck import BRepCheck_Analyzer
 
-    step_file = Path(request["step_file"])
     output_step = Path(request["output_step"])
     output_step.parent.mkdir(parents=True, exist_ok=True)
-    imported = cq.importers.importStep(str(step_file)).val()
-    solids = list(imported.Solids())
-    body_index = int(request["body_index"])
-    body = solids[body_index] if solids else imported
-    baseline = _metrics(body, BRepCheck_Analyzer)
+    step_value = request.get("step_file")
+    body_index = int(request.get("body_index") or 0)
+    body = None
+    solids: list[object] = []
+    baseline = None
+    if step_value:
+        imported = cq.importers.importStep(str(Path(step_value))).val()
+        solids = list(imported.Solids())
+        body = solids[body_index] if solids else imported
+        baseline = _metrics(body, BRepCheck_Analyzer)
 
     profile_points = [(float(z), float(r)) for z, r in request["profile_points"]]
     if len(profile_points) < 2:
@@ -52,10 +59,16 @@ def _recover(request: dict) -> dict:
     generated = generated_wp.val()
     cq.exporters.export(generated_wp, str(output_step))
 
-    tess_vertices, tess_triangles = body.tessellate(float(request.get("deflection_mm") or 0.25))
-    envelope = _radial_envelope(tess_vertices)
     generated_metrics = _metrics(generated, BRepCheck_Analyzer)
     generated_vertices, generated_triangles = generated.tessellate(float(request.get("deflection_mm") or 0.25))
+    if body is not None:
+        tess_vertices, tess_triangles = body.tessellate(float(request.get("deflection_mm") or 0.25))
+        envelope = _radial_envelope(tess_vertices)
+        tessellation_source = "seed_step"
+    else:
+        tess_vertices, tess_triangles = generated_vertices, generated_triangles
+        envelope = _radial_envelope(generated_vertices)
+        tessellation_source = "generated"
     return {
         "schema_version": "cadquery_recovery_kernel.v0",
         "reader": {
@@ -67,13 +80,15 @@ def _recover(request: dict) -> dict:
             ],
         },
         "body_selection": {
-            "body_index": body_index,
+            "mode": "seed_step" if body is not None else "generated_without_seed",
+            "body_index": body_index if body is not None else None,
             "solid_count": len(solids),
         },
         "baseline": baseline,
         "generated": generated_metrics,
         "generated_mesh": _mesh_payload(generated_vertices, generated_triangles),
         "tessellation": {
+            "source": tessellation_source,
             "deflection_mm": float(request.get("deflection_mm") or 0.25),
             "vertex_count": len(tess_vertices),
             "triangle_count": len(tess_triangles),
@@ -91,6 +106,7 @@ def _build_generated_workplane(cq, profile_points: list[tuple[float, float]], pr
             return _workplane_from_segments(cq, profile_segments), {
                 "mode": "cadquery_curve_segments",
                 "fallbacks": [],
+                "approximations": _segment_approximation_reports(profile_segments),
             }
         except Exception as exc:
             return _workplane_from_polyline(cq, profile_points), {
@@ -120,14 +136,53 @@ def _workplane_from_segments(cq, profile_segments: list[dict]):
                 raise ValueError(f"arc segment {segment.get('id')} is missing curve.mid")
             wp = wp.threePointArc((float(mid["r"]), float(mid["z"])), (float(end["r"]), float(end["z"])))
         elif kind == "nurbs":
-            points = [(float(point["r"]), float(point["z"])) for point in segment.get("curve", {}).get("control_points", [])]
+            curve = segment.get("curve", {})
+            sampled = curve.get("sampled_points") or []
+            point_payload = sampled or curve.get("control_points", [])
+            points = [(float(point["r"]), float(point["z"])) for point in point_payload]
+            if sampled and points and _same_point(points[0], (float(segment["start"]["r"]), float(segment["start"]["z"]))):
+                points = points[1:]
             if len(points) < 2:
-                raise ValueError(f"nurbs segment {segment.get('id')} has fewer than two control points")
-            wp = wp.splineApprox(points, maxDeg=3, includeCurrent=True)
+                raise ValueError(f"nurbs segment {segment.get('id')} has fewer than two usable points")
+            max_degree = int(curve.get("degree_max") or 3)
+            if not 1 <= max_degree <= 5:
+                raise ValueError(
+                    f"nurbs segment {segment.get('id')} degree_max must be from 1 to 5"
+                )
+            wp = wp.splineApprox(points, maxDeg=max_degree, includeCurrent=True)
         else:
             wp = wp.lineTo(float(end["r"]), float(end["z"]))
     last = profile_segments[-1]["end"]
     return wp.lineTo(0.0, float(last["z"])).close().revolve()
+
+
+def _same_point(
+    left: tuple[float, float],
+    right: tuple[float, float],
+    tolerance: float = 1e-12,
+) -> bool:
+    return abs(left[0] - right[0]) <= tolerance and abs(left[1] - right[1]) <= tolerance
+
+
+def _segment_approximation_reports(profile_segments: list[dict]) -> list[dict]:
+    reports = []
+    for segment in profile_segments:
+        if str(segment.get("kind")) != "nurbs":
+            continue
+        curve = segment.get("curve", {})
+        sampled = curve.get("sampled_points") or []
+        controls = curve.get("control_points") or []
+        reports.append(
+            {
+                "segment_id": str(segment.get("id", "")),
+                "method": "cadquery.Workplane.splineApprox",
+                "input_source": "sampled_points" if sampled else "control_points",
+                "input_point_count": len(sampled or controls),
+                "max_degree": int(curve.get("degree_max") or 3),
+                "declared_source_curve": curve.get("source_curve"),
+            }
+        )
+    return reports
 
 
 def _metrics(shape, analyzer_cls) -> dict:

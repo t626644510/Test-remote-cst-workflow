@@ -259,6 +259,20 @@ class CSTConnection:
         prj = self._de.open_project(path)
         return CSTProject(prj)
 
+    def new_mws_project(self) -> CSTProject:
+        """Create a new CST Microwave Studio project.
+
+        Uses the documented ``DesignEnvironment.new_mws()`` interface exposed
+        by CST 2026's Python automation library.
+        """
+        if not self.is_connected:
+            raise CSTConnectionLostError("Not connected to a CST DesignEnvironment")
+
+        from .project import CSTProject  # lazy — avoids circular import
+
+        prj = self._de.new_mws()
+        return CSTProject(prj)
+
     def get_open_projects(self, pattern: str = ".*") -> list[Any]:
         """Return open projects matching a regex pattern."""
         if not self.is_connected:

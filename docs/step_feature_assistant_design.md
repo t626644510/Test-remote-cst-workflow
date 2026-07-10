@@ -10,6 +10,9 @@ geometry facts from engineering semantics:
 - `feature_graph_draft.json` records candidate semantic labels such as
   `BeamPipeLeft`, `ConductingWall`, `Iris`, `CathodeSurface`, or
   `UnknownSidePort`.
+- `geometry_graph.json`, `feature_candidates.json`, and
+  `udsg_geometry_layer.json` expose the same Helper2 facts as a geometry-only
+  partial UDSG layer for CSTTranslator planning.
 - `resolved_feature_graph.json` is produced only after human review labels are
   merged.
 
@@ -110,10 +113,35 @@ face independently and the main process creates
 `preview/model_review.html`.  The Plotly JavaScript runtime is embedded, so the
 reviewer works offline.
 
-Unassigned faces are red.  Clicking a face displays its id, geometry facts,
-adjacency, rule candidates, and optional experimental classifier suggestions.
-The reviewer can confirm/reject candidates, create manual face groups, and
+The reviewer is a three-layer Helper2 audit console:
+
+- `Geometry` reviews the geometry index, surface classes, selected-face facts,
+  measurement confidence, axis-symmetry flags, adjacency, isolated faces, and
+  optional topology adjacency overlay.
+- `Features` reviews deterministic feature candidates, confidence/evidence,
+  geometry references, overlap warnings, and low-confidence warnings.
+- `UDSG` reviews the geometry-only partial UDSG nodes, feature bindings, and
+  validation warnings.  Bindings marked `requires_review` can be accepted,
+  rejected, kept as requiring review, edited, deleted, or restored in the
+  browser audit session.  These edits are audit overrides recorded in
+  `review_session.json`; they do not rewrite the original
+  `udsg_geometry_layer.json`.
+
+Unassigned faces remain highlighted in the feature view.  Clicking a face
+displays its id, geometry facts, adjacency, rule candidates, and optional
+experimental classifier suggestions.  The reviewer can confirm/reject
+candidates, create manual face groups, edit candidate geometry references, and
 download `reviewed_feature_labels.yaml`.
+
+The reviewer can also download `review_session.json`, which preserves browser
+review state, geometry audit status, UDSG binding audit status, UDSG binding
+edit/delete overrides, and reviewer notes for audit.  The resolver consumes
+`reviewed_feature_labels.yaml`; `review_session.json` is not a replacement for
+reviewed labels.
+
+The 3D toolbar defaults to a fast drag mode: labels, topology lines, and hover
+text are disabled until requested, and the WebGL pixel ratio is reduced so
+rotation and panning update interactively on larger tessellated models.
 
 ## Rule Calibration And Classifier Boundary
 

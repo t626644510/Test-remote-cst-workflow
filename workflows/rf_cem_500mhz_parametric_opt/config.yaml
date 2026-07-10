@@ -1,0 +1,74 @@
+appendix: Appendix/500MHz_baseline
+baseline_parametric_geometry: runs/parametric_geometry_500mhz/metadata/parametric_geometry.v0.json
+output_dir: runs/rf_cem_500mhz_parametric_opt
+selected_variant: free_equator_smooth
+
+target_frequency_mhz: 501.350915258
+frequency_window_mhz: [490.0, 510.0]
+q_soft_floor: 30000.0
+
+parameter_preset: exploratory_12d
+parameters: []
+quick_scan_count: 6
+quick_scan_seed: 42
+
+bounds:
+  equator_crown_delta_r_mm: [-8.0, 8.0]
+  equator_crown_z_mid_mm: [-15.0, 15.0]
+  equator_left_shoulder_z_abs_mm: [15.0, 55.0]
+  equator_right_shoulder_z_abs_mm: [15.0, 55.0]
+  equator_left_shoulder_delta_r_mm: [-6.0, 8.0]
+  equator_right_shoulder_delta_r_mm: [-6.0, 8.0]
+  nose_left_inner_delta_r_mm: [-5.0, 8.0]
+  nose_right_inner_delta_r_mm: [-5.0, 8.0]
+  nose_left_inner_delta_z_mm: [-8.0, 8.0]
+  nose_right_inner_delta_z_mm: [-8.0, 8.0]
+  blend_left_radius_delta_mm: [-8.0, 12.0]
+  blend_right_radius_delta_mm: [-8.0, 12.0]
+
+scan_points:
+  - equator_crown_delta_r_mm: -5.0
+    equator_left_shoulder_z_abs_mm: 22.0
+    equator_right_shoulder_z_abs_mm: 38.0
+    nose_left_inner_delta_r_mm: 3.0
+    blend_right_radius_delta_mm: 6.0
+  - equator_crown_delta_r_mm: 6.0
+    equator_crown_z_mid_mm: 8.0
+    equator_left_shoulder_delta_r_mm: 5.0
+    equator_right_shoulder_delta_r_mm: -3.0
+    nose_right_inner_delta_z_mm: -5.0
+  - equator_left_shoulder_z_abs_mm: 50.0
+    equator_right_shoulder_z_abs_mm: 18.0
+    nose_left_inner_delta_z_mm: 6.0
+    nose_right_inner_delta_r_mm: 5.0
+    blend_left_radius_delta_mm: 9.0
+
+objectives:
+  frequency_mhz:
+    target: 500.0
+    window: [490.0, 510.0]
+    mode: target
+    unit: MHz
+  r_over_q_ohm:
+    mode: maximize
+    unit: Ohm
+  q_factor:
+    mode: soft_constraint
+    floor: 30000.0
+    unit: dimensionless
+  shunt_impedance_ohm:
+    expression: r_over_q_ohm * q_factor
+    mode: maximize
+    unit: Ohm
+  novelty:
+    mode: reward
+    weight: 0.1
+    unit: normalized
+
+sao_exploratory:
+  n_initial_min: 36
+  n_initial_per_dimension: 3
+  n_iterations: 120
+  acquisition: expected_improvement
+  xi: 0.01
+  seed: 42

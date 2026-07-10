@@ -13,6 +13,7 @@ import yaml
 from .cadquery_reader import build_geometry_manifest_for_backend
 from .classifier import SklearnFeatureScorer
 from .feature_candidate_generator import generate_feature_graph_draft
+from .layer_builders import build_feature_candidates, build_geometry_graph, build_udsg_geometry_layer
 from .model_profiles import load_model_profile
 from .report_writer import build_face_coloring_legend, build_review_report, write_face_inventory_csv
 from .review_merger import load_review_yaml, merge_reviewed_labels, write_review_template
@@ -45,6 +46,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--classifier-model", type=Path, default=None, help="Optional experimental classifier.joblib.")
     parser.add_argument("--hints", type=Path, default=None, help="Optional YAML hints for feature labeling.")
     parser.add_argument("--reviewed-labels", type=Path, default=None, help="Optional reviewed labels YAML to resolve graph.")
+    parser.add_argument(
+        "--legacy-only",
+        action="store_true",
+        help="Write only legacy Helper2 outputs and omit UDSG-facing geometry-layer files.",
+    )
     args = parser.parse_args(argv)
 
     output_dir = args.output_dir
@@ -72,6 +78,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hints=hints,
         rules=profile,
     )
+    geometry_graph = None
+    feature_candidates = None
+    udsg_geometry_layer = None
+    if not args.legacy_only:
+        geometry_graph = build_geometry_graph(geometry_manifest, adjacency_graph)
+        feature_candidates = build_feature_candidates(feature_graph_draft)
+        udsg_geometry_layer = build_udsg_geometry_layer(
+            geometry_graph,
+            feature_candidates,
+            feature_graph_draft.get("face_groups", []),
+        )
     classifier_suggestions = None
     if args.classifier_model is not None:
         classifier_suggestions = SklearnFeatureScorer(args.classifier_model).score_manifest(geometry_manifest)
@@ -87,6 +104,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     write_face_inventory_csv(output_dir / "face_inventory.csv", face_rows)
     _write_json(output_dir / "adjacency_graph.json", adjacency_graph)
     _write_json(output_dir / "feature_graph_draft.json", feature_graph_draft)
+    if not args.legacy_only:
+        _write_json(output_dir / "geometry_graph.json", geometry_graph)
+        _write_json(output_dir / "feature_candidates.json", feature_candidates)
+        _write_json(output_dir / "udsg_geometry_layer.json", udsg_geometry_layer)
     _write_json(preview_dir / "face_coloring_legend.json", legend)
     write_review_template(output_dir / "reviewed_feature_labels.template.yaml", feature_graph_draft)
     _write_text(output_dir / "review_report.md", report)
@@ -101,6 +122,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             geometry_manifest,
             feature_graph_draft,
             classifier_suggestions,
+            geometry_graph=geometry_graph,
+            feature_candidates=feature_candidates,
+            udsg_geometry_layer=udsg_geometry_layer,
         )
     elif reviewer_path.exists():
         reviewer_path.unlink()

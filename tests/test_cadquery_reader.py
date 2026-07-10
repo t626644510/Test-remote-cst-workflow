@@ -46,6 +46,11 @@ def test_cadquery_reader_builds_kernel_manifest_for_bare_cavity(tmp_path):
     write_interactive_reviewer(html_path, mesh_path, manifest, draft)
     html = html_path.read_text(encoding="utf-8")
     assert "Download reviewed labels YAML" in html
+    assert "Download review_session.json" in html
+    assert "Geometry" in html
+    assert "Features" in html
+    assert "UDSG" in html
+    assert "Review" in html
     assert "Add selected faces" in html
     assert "data-remove-ref" in html
     assert "candidateRefs" in html

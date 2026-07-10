@@ -180,13 +180,16 @@ class CSTProject:
         except Exception:
             return "<error>"
 
-    def execute_vba(self, vba_code: str, header: str = "") -> None:
+    def execute_vba(self, vba_code: str, header: str = "", timeout: float | None = None) -> None:
         """Execute a VBA snippet via ``Model3D.add_to_history()``."""
         if self._model3d is None:
             raise RuntimeError("No 3D modeler available")
         if not vba_code.strip():
             return
-        self._model3d.add_to_history(header or "VBA command", vba_code)
+        if timeout is None:
+            self._model3d.add_to_history(header or "VBA command", vba_code)
+        else:
+            self._model3d.add_to_history(header or "VBA command", vba_code, timeout=timeout)
 
     # ------------------------------------------------------------------
     # Lifecycle

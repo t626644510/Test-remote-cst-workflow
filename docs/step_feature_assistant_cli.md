@@ -20,8 +20,10 @@ Review priority:
 2. `review_report.md`
 3. `face_inventory.csv`
 4. `feature_graph_draft.json`
-5. `geometry_manifest.json` and `adjacency_graph.json` for machine auditing
-6. `resolved_feature_graph.json` is the CSTTranslator input
+5. `geometry_graph.json`, `feature_candidates.json`, and
+   `udsg_geometry_layer.json` for UDSG-facing machine auditing
+6. `geometry_manifest.json` and `adjacency_graph.json` for raw geometry auditing
+7. `resolved_feature_graph.json` is the CSTTranslator input after human review
 
 ## Main Options
 
@@ -43,6 +45,8 @@ Review priority:
 - `--reviewed-labels`: validated human labels used to create the resolved graph.
 - `--rules`: reviewed YAML override for model-profile thresholds.
 - `--classifier-model`: experimental classifier used only for suggestions.
+- `--legacy-only`: omit UDSG-facing helper outputs and write only legacy
+  artifacts.
 
 `--model-type` changes semantic candidates and thresholds.  It does not change
 the CadQuery geometry manifest or face inventory.
@@ -51,6 +55,28 @@ the CadQuery geometry manifest or face inventory.
 
 Each run creates `reviewed_feature_labels.template.yaml`.  The interactive
 reviewer can also download a populated `reviewed_feature_labels.yaml`.
+The HTML reviewer has four tabs:
+
+- `Geometry`: geometry index facts, surface classes, selected-face facts, and
+  optional topology adjacency overlay.  Review surface classification,
+  measurement confidence, axis-symmetry flags, adjacency, isolated faces, and
+  other geometry checks.
+- `Features`: deterministic feature candidates, confidence/evidence, geometry
+  refs, overlap and low-confidence warnings, and confirm/reject/ref edits.
+- `UDSG`: geometry-only partial UDSG nodes, bindings, and validation warnings.
+  Mark each binding as accepted, rejected, or still requiring review.  You can
+  also edit/delete/restore a binding as a review-session override without
+  rewriting the original `udsg_geometry_layer.json`.
+- `Review`: review summary plus exports.
+
+The toolbar includes drag-mode controls and a `Fast drag` switch.  Fast drag
+keeps face IDs, topology lines, and hover text off by default so rotate/pan
+stays responsive on large tessellated STEP imports.
+
+`reviewed_feature_labels.yaml` remains the authoritative input for
+`--reviewed-labels`.  `review_session.json` is an optional audit snapshot of the
+browser review state, UDSG binding overrides, and notes; it is not consumed by
+the resolver.
 
 ```powershell
 .venv\Scripts\python.exe -m step_feature_assistant `

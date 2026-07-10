@@ -46,6 +46,7 @@ wf3-campaign/
 /Appendix/
 /Results*/
 /analysis_outputs/
+/.agent/
 *.cst
 *.ckpt
 *.jsonl

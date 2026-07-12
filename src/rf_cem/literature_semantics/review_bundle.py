@@ -17,13 +17,15 @@ from typing import Any, Mapping, Optional, Union
 import yaml
 
 from .types import SEMANTIC_ITEM_SECTIONS, canonical_sha256
-from .validator import validate_semantic_package
+from .semantic_view import build_semantic_candidate_view
+from .validator import load_ontology, validate_semantic_package
 
 
 CORPUS_SCHEMA_VERSION = "literature_corpus_audit.v0"
 REVIEW_PAYLOAD_SCHEMA_VERSION = "literature_review_payload.v1"
 MAX_STRUCTURED_BYTES = 4 * 1024 * 1024
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_SOURCE_PDF_BYTES = 64 * 1024 * 1024
 
 
 class ReviewBundleError(ValueError):
@@ -52,52 +54,52 @@ class ReviewBundleLoader:
         paper_id: str,
         geometry_projection: Optional[Mapping[str, Any]] = None,
     ) -> dict[str, Any]:
-        """Return a detached payload for the interactive literature reviewer."""
+        """Return one paper-scoped payload for the interactive reviewer.
+
+        A review session is deliberately confined to one paper and one RF
+        operating regime.  Corpus-level comparison belongs in a separate
+        index/audit and must not leak claims into this OK/reject surface.
+        """
         manifest = self._load_manifest(corpus_manifest)
-        self._select_paper(manifest, paper_id)
+        selected_manifest = self._select_paper(manifest, paper_id)
         projection = deepcopy(dict(geometry_projection or {}))
-        papers: list[dict[str, Any]] = []
-        review_items: list[dict[str, Any]] = []
-        paper_bindings: dict[str, dict[str, str]] = {}
-        active_semantics: dict[str, Any] = {}
-        seen_ids: set[str] = set()
-        for index, raw_manifest in enumerate(manifest["papers"]):
-            if not isinstance(raw_manifest, Mapping):
-                raise ReviewBundleError(f"corpus papers[{index}] must be a mapping")
-            entry = deepcopy(dict(raw_manifest))
-            entry_id = str(entry.get("id") or "").strip()
-            if not entry_id or entry_id in seen_ids:
-                raise ReviewBundleError(
-                    f"corpus paper id must be non-empty and unique: {entry_id!r}"
-                )
-            seen_ids.add(entry_id)
-            loaded = self._load_paper_payload(entry_id, entry)
-            papers.append(loaded["paper"])
-            review_items.extend(
-                self._review_items(
-                    entry_id,
-                    loaded["semantics"],
-                    loaded["draft"],
-                    loaded["gallery"],
-                    projection if entry_id == paper_id else {},
-                )
-            )
-            paper_bindings[entry_id] = {
-                "semantics_sha256": canonical_sha256(loaded["semantics"]),
-                "draft_sha256": canonical_sha256(loaded["draft"]),
-            }
-            if entry_id == paper_id:
-                active_semantics = loaded["semantics"]
+        entry_id = str(selected_manifest.get("id") or "").strip()
+        if not entry_id:
+            raise ReviewBundleError("selected corpus paper id must be non-empty")
+        loaded = self._load_paper_payload(entry_id, selected_manifest)
+        active_semantics = loaded["semantics"]
+        review_items = self._review_items(
+            entry_id,
+            active_semantics,
+            loaded["draft"],
+            loaded["gallery"],
+            projection,
+        )
+        context = active_semantics.get("request_context", {})
+        classification = active_semantics.get("classification", {})
+        operating_regime = (
+            context.get("operating_regime") if isinstance(context, Mapping) else None
+        )
+        paper_title = str(
+            loaded["paper"].get("title") or selected_manifest.get("title") or entry_id
+        )
         payload: dict[str, Any] = {
             "schema_version": REVIEW_PAYLOAD_SCHEMA_VERSION,
-            "title": str(manifest.get("title") or "RF-CEM Literature Review"),
+            "title": f"{paper_title} · {operating_regime or 'unclassified'} review",
             "generated_at": manifest.get("generated_at"),
             "active_paper_id": paper_id,
-            "corpus": {
-                "cross_paper_findings": deepcopy(manifest.get("cross_paper_findings", [])),
-                "warnings": deepcopy(manifest.get("warnings", [])),
+            "review_scope": {
+                "paper_id": entry_id,
+                "operating_regime": operating_regime,
+                "cavity_family": classification.get("cavity_family")
+                if isinstance(classification, Mapping)
+                else None,
+                "cell_count": classification.get("cell_count")
+                if isinstance(classification, Mapping)
+                else None,
+                "strictly_isolated": True,
             },
-            "papers": papers,
+            "papers": [loaded["paper"]],
             "semantic_candidates": self._semantic_candidates(active_semantics),
             "geometry_projection": projection,
             "review_items": review_items,
@@ -110,11 +112,51 @@ class ReviewBundleLoader:
         }
         payload["source_binding"] = {
             "active_paper_id": paper_id,
-            "papers": paper_bindings,
+            "papers": {
+                entry_id: {
+                    "semantics_sha256": canonical_sha256(active_semantics),
+                    "draft_sha256": canonical_sha256(loaded["draft"]),
+                }
+            },
             "geometry_projection_sha256": canonical_sha256(projection),
         }
         payload["payload_sha256"] = canonical_sha256(payload)
         return payload
+
+    def read_paper_pdf(
+        self,
+        corpus_manifest: ManifestInput,
+        *,
+        paper_id: str,
+    ) -> Optional[bytes]:
+        """Return the selected, checksum-verified source PDF when available."""
+        manifest = self._load_manifest(corpus_manifest)
+        paper = self._select_paper(manifest, paper_id)
+        reference = paper.get("source_manifest")
+        if not reference:
+            return None
+        manifest_path = self._safe_path(reference, "source manifest")
+        source_manifest = self._read_path(manifest_path, {".json", ".yaml", ".yml"})
+        pdf = source_manifest.get("pdf")
+        if not isinstance(pdf, Mapping) or not pdf.get("path"):
+            return None
+        pdf_path = self._safe_path_from(
+            pdf.get("path"), manifest_path.parent, "source PDF"
+        )
+        if pdf_path.suffix.lower() != ".pdf" or not pdf_path.is_file():
+            raise ReviewBundleError("source PDF is missing or not a PDF")
+        size = pdf_path.stat().st_size
+        if size <= 0 or size > MAX_SOURCE_PDF_BYTES:
+            raise ReviewBundleError("source PDF size is outside the allowed range")
+        raw = pdf_path.read_bytes()
+        if not raw.startswith(b"%PDF-"):
+            raise ReviewBundleError("source PDF signature is invalid")
+        expected = str(pdf.get("sha256") or paper.get("pdf_sha256") or "")
+        expected = expected.removeprefix("sha256:").lower()
+        actual = hashlib.sha256(raw).hexdigest()
+        if expected and expected != actual:
+            raise ReviewBundleError("source PDF checksum mismatch")
+        return raw
 
     def _load_paper_payload(
         self, paper_id: str, paper_manifest: Mapping[str, Any]
@@ -172,6 +214,14 @@ class ReviewBundleLoader:
                 "evidence": evidence_cards,
                 "evidence_layers": evidence_layers,
                 "validation": validation,
+                "source_document": {
+                    "available": bool(
+                        isinstance(source_manifest.get("pdf"), Mapping)
+                        and source_manifest["pdf"].get("path")
+                    ),
+                    "url": "/api/paper-source",
+                    "mime_type": "application/pdf",
+                },
             },
         }
 
@@ -255,6 +305,18 @@ class ReviewBundleLoader:
             raise ReviewBundleError(f"{label} path escapes bundle root: {reference}") from exc
         return resolved
 
+    def _safe_path_from(self, reference: object, base: Path, label: str) -> Path:
+        if not isinstance(reference, (str, Path)):
+            raise ReviewBundleError(f"{label} path must be a string")
+        path = Path(reference)
+        candidate = path if path.is_absolute() else base / path
+        resolved = candidate.resolve(strict=False)
+        try:
+            resolved.relative_to(self.root)
+        except ValueError as exc:
+            raise ReviewBundleError(f"{label} path escapes bundle root: {reference}") from exc
+        return resolved
+
     def _load_gallery_image(self, entry: Mapping[str, Any], *, index: int) -> dict[str, Any]:
         result = deepcopy(dict(entry))
         result.setdefault("id", f"evidence:gallery:{index + 1}")
@@ -299,6 +361,19 @@ class ReviewBundleLoader:
         geometry_projection: Mapping[str, Any],
     ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
+        request_context = semantics.get("request_context", {})
+        request_context = (
+            dict(request_context) if isinstance(request_context, Mapping) else {}
+        )
+        classification_context = semantics.get("classification", {})
+        classification_context = (
+            dict(classification_context)
+            if isinstance(classification_context, Mapping)
+            else {}
+        )
+        ontology = load_ontology()
+        feature_aliases = ontology.get("feature_aliases", {})
+        parameter_aliases = ontology.get("parameter_aliases", {})
         for section in ("text_evidence", "image_evidence"):
             for index, value in enumerate(semantics.get(section, [])):
                 if isinstance(value, Mapping):
@@ -311,25 +386,54 @@ class ReviewBundleLoader:
             )
         classification = semantics.get("classification")
         if isinstance(classification, Mapping):
-            items.append(
-                self._review_item(
-                    paper_id, "semantics", "classification", 0, classification
-                )
+            item = self._review_item(
+                paper_id, "semantics", "classification", 0, classification
             )
+            item["semantic_candidate_view"] = build_semantic_candidate_view(
+                "classification",
+                classification,
+                paper_id=paper_id,
+                semantic_path=item["semantic_path"],
+                request_context=request_context,
+                classification=classification_context,
+                feature_aliases=feature_aliases,
+                parameter_aliases=parameter_aliases,
+            )
+            items.append(item)
         for section in SEMANTIC_ITEM_SECTIONS:
             for index, value in enumerate(semantics.get(section, [])):
                 if isinstance(value, Mapping):
-                    items.append(
-                        self._review_item(paper_id, "semantics", section, index, value)
+                    item = self._review_item(
+                        paper_id, "semantics", section, index, value
                     )
+                    item["semantic_candidate_view"] = build_semantic_candidate_view(
+                        section,
+                        value,
+                        paper_id=paper_id,
+                        semantic_path=item["semantic_path"],
+                        request_context=request_context,
+                        classification=classification_context,
+                        feature_aliases=feature_aliases,
+                        parameter_aliases=parameter_aliases,
+                    )
+                    items.append(item)
         patch_items = draft.get("review", {}).get("patch_items", [])
         for index, value in enumerate(patch_items):
             if isinstance(value, Mapping):
-                items.append(
-                    self._review_item(
-                        paper_id, "semantics", "draft_prior_patch", index, value
-                    )
+                item = self._review_item(
+                    paper_id, "semantics", "draft_prior_patch", index, value
                 )
+                item["semantic_candidate_view"] = build_semantic_candidate_view(
+                    "draft_prior_patch",
+                    value,
+                    paper_id=paper_id,
+                    semantic_path=item["semantic_path"],
+                    request_context=request_context,
+                    classification=classification_context,
+                    feature_aliases=feature_aliases,
+                    parameter_aliases=parameter_aliases,
+                )
+                items.append(item)
         if geometry_projection:
             projection_review = {
                 "id": geometry_projection.get("id")
@@ -369,7 +473,7 @@ class ReviewBundleLoader:
         else:
             label = _first_label(value) or original_id
             semantic_path = f"{section}[{index}]"
-        return {
+        result = {
             "id": item_id,
             "original_id": original_id,
             "paper_id": paper_id,
@@ -384,6 +488,17 @@ class ReviewBundleLoader:
             ),
             "content": deepcopy(dict(value)),
         }
+        if layer == "evidence":
+            result["source_locator"] = {
+                "paper_id": paper_id,
+                "page": value.get("page"),
+                "section": value.get("section") or value.get("figure_id"),
+                "evidence_id": original_id,
+                "bbox": deepcopy(value.get("bbox")),
+                "text_anchor": deepcopy(value.get("text_anchor")),
+                "crop_ref": value.get("crop_ref") or value.get("path"),
+            }
+        return result
 
 
 def _first_label(value: Mapping[str, Any]) -> str:

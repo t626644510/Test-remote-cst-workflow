@@ -51,11 +51,23 @@ def test_review_payload_has_three_layers_images_and_small_session_seed(tmp_path:
     )
     assert payload["safety"]["live_cst"] is False
     assert payload["safety"]["production_prior_mutated"] is False
+    assert payload["review_scope"] == {
+        "paper_id": "sls2",
+        "operating_regime": "normal_conducting",
+        "cavity_family": "elliptical",
+        "cell_count": "single",
+        "strictly_isolated": True,
+    }
     classification = next(
         item for item in payload["review_items"] if item["section"] == "classification"
     )
     assert classification["label"] == "classification: elliptical / single / beta_1"
     assert classification["semantic_path"] == "classification"
+    equator = next(
+        item for item in payload["review_items"] if item["section"] == "named_features"
+    )
+    assert equator["semantic_candidate_view"]["subject"]["canonical_id"] == "equator"
+    assert equator["semantic_candidate_view"]["claim"]["kind"] == "feature_presence"
     assert seed["review_scope"]["payload_sha256"] == payload["payload_sha256"]
     assert "data_uri" not in json.dumps(seed)
 
@@ -84,7 +96,41 @@ def test_review_bundle_requires_exact_paper_id(tmp_path: Path):
         ReviewBundleLoader(tmp_path).build_payload(manifest, paper_id="missing")
 
 
-def test_review_bundle_keeps_all_corpus_papers_with_isolated_ids(tmp_path: Path):
+def test_review_bundle_reads_only_checksum_verified_confined_pdf(tmp_path: Path):
+    manifest = _write_bundle(tmp_path)
+    pdf = b"%PDF-1.4\nfixture\n%%EOF\n"
+    (tmp_path / "paper" / "source.pdf").write_bytes(pdf)
+    source_path = tmp_path / "paper" / "source.json"
+    source_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "rf_cem.arxiv_source_manifest.v1",
+                "pdf": {
+                    "path": "source.pdf",
+                    "sha256": hashlib.sha256(pdf).hexdigest(),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loader = ReviewBundleLoader(tmp_path)
+    assert loader.read_paper_pdf(manifest, paper_id="sls2") == pdf
+
+    source_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "rf_cem.arxiv_source_manifest.v1",
+                "pdf": {"path": "../../outside.pdf"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ReviewBundleError, match="escapes bundle root"):
+        loader.read_paper_pdf(manifest, paper_id="sls2")
+
+
+def test_review_bundle_strictly_isolates_selected_paper(tmp_path: Path):
     manifest = _write_bundle(tmp_path)
     comparison = dict(manifest["papers"][0])
     comparison["id"] = "tesla"
@@ -95,11 +141,12 @@ def test_review_bundle_keeps_all_corpus_papers_with_isolated_ids(tmp_path: Path)
         manifest, paper_id="sls2", geometry_projection={"id": "candidate-1"}
     )
 
-    assert [paper["id"] for paper in payload["papers"]] == ["tesla", "sls2"]
+    assert [paper["id"] for paper in payload["papers"]] == ["sls2"]
     ids = [item["id"] for item in payload["review_items"]]
     assert len(ids) == len(set(ids))
-    assert any(item_id.startswith("tesla::semantics::") for item_id in ids)
+    assert not any(item_id.startswith("tesla::") for item_id in ids)
     assert any(item_id.startswith("sls2::geometry::") for item_id in ids)
+    assert set(payload["source_binding"]["papers"]) == {"sls2"}
 
 
 def _write_bundle(root: Path) -> dict:

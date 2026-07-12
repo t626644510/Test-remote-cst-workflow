@@ -81,6 +81,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     corpus_parser.add_argument("--bundle-root", type=Path, required=True)
     corpus_parser.add_argument("--manifest", type=Path, required=True)
     corpus_parser.add_argument("--out", type=Path, required=True)
+    corpus_parser.add_argument(
+        "--paper-id",
+        help="Write one strictly isolated paper audit instead of a combined corpus report.",
+    )
 
     review_parser = subparsers.add_parser(
         "review-gui",
@@ -208,6 +212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.out,
                 args.bundle_root,
                 args.manifest,
+                paper_id=args.paper_id,
             )
         except (CorpusAuditError, OSError, ValueError) as exc:
             print(f"ERROR: {exc}")

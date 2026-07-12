@@ -68,7 +68,7 @@ def write_interactive_reviewer(
     )
     review_issues = detect_review_issues(feature_candidates, udsg_geometry_layer)
 
-    payload = _build_payload(
+    payload = build_reviewer_payload(
         mesh_payload,
         geometry_manifest,
         feature_graph_draft,
@@ -87,7 +87,7 @@ def write_interactive_reviewer(
     path.write_text(html, encoding="utf-8")
 
 
-def _build_payload(
+def build_reviewer_payload(
     mesh_payload: dict,
     geometry_manifest: dict,
     feature_graph_draft: dict,
@@ -97,7 +97,15 @@ def _build_payload(
     udsg_geometry_layer: dict,
     review_issues: dict,
     review_session: dict,
+    *,
+    include_traces: bool = True,
 ) -> dict:
+    """Build the shared Helper2 reviewer view model.
+
+    ``include_traces=False`` is intended for an embedding GUI that already
+    carries the face mesh.  It reuses the exact face classifications, colours,
+    issue detection and review-state contract without duplicating mesh data.
+    """
     face_map = {face["face_id"]: face for face in geometry_manifest.get("faces", [])}
     memberships = _feature_memberships(feature_graph_draft)
     unassigned = set(feature_graph_draft.get("unassigned_faces", []))
@@ -118,33 +126,34 @@ def _build_payload(
         feature_color = "#d64045" if face_id in unassigned else PALETTE.get(feature_type, "#8a9aa5")
         surface_type = str(face.get("surface_type", "unknown"))
         geometry_color = SURFACE_PALETTE.get(surface_type, SURFACE_PALETTE["unknown"])
-        traces.append(
-            {
-                "type": "mesh3d",
-                "name": face_id,
-                "meta": {
-                    "face_id": face_id,
-                    "feature_color": feature_color,
-                    "geometry_color": geometry_color,
-                    "udsg_color": _udsg_face_color(face_id, udsg_geometry_layer),
-                    "feature_type": feature_type,
-                },
-                "x": [point[0] for point in vertices],
-                "y": [point[1] for point in vertices],
-                "z": [point[2] for point in vertices],
-                "i": [triangle[0] for triangle in triangles],
-                "j": [triangle[1] for triangle in triangles],
-                "k": [triangle[2] for triangle in triangles],
-                "color": feature_color,
-                "opacity": 0.88,
-                "flatshading": False,
-                "hovertemplate": (
-                    f"<b>{face_id}</b><br>{surface_type}"
-                    f"<br>area={_fmt(face.get('area'))}<extra></extra>"
-                ),
-                "showscale": False,
-            }
-        )
+        if include_traces:
+            traces.append(
+                {
+                    "type": "mesh3d",
+                    "name": face_id,
+                    "meta": {
+                        "face_id": face_id,
+                        "feature_color": feature_color,
+                        "geometry_color": geometry_color,
+                        "udsg_color": _udsg_face_color(face_id, udsg_geometry_layer),
+                        "feature_type": feature_type,
+                    },
+                    "x": [point[0] for point in vertices],
+                    "y": [point[1] for point in vertices],
+                    "z": [point[2] for point in vertices],
+                    "i": [triangle[0] for triangle in triangles],
+                    "j": [triangle[1] for triangle in triangles],
+                    "k": [triangle[2] for triangle in triangles],
+                    "color": feature_color,
+                    "opacity": 0.88,
+                    "flatshading": False,
+                    "hovertemplate": (
+                        f"<b>{face_id}</b><br>{surface_type}"
+                        f"<br>area={_fmt(face.get('area'))}<extra></extra>"
+                    ),
+                    "showscale": False,
+                }
+            )
         face_data[face_id] = {
             **face,
             "feature_memberships": feature_entries,
@@ -158,29 +167,46 @@ def _build_payload(
             },
         }
 
-    traces.append(_adjacency_trace(geometry_manifest))
-    traces.append(
-        {
-            "type": "scatter3d",
-            "name": "__labels__",
-            "mode": "text",
-            "x": [face.get("centroid", [0, 0, 0])[0] for face in geometry_manifest.get("faces", [])],
-            "y": [face.get("centroid", [0, 0, 0])[1] for face in geometry_manifest.get("faces", [])],
-            "z": [face.get("centroid", [0, 0, 0])[2] for face in geometry_manifest.get("faces", [])],
-            "text": [face["face_id"] for face in geometry_manifest.get("faces", [])],
-            "textfont": {"size": 10, "color": "#111827"},
-            "hoverinfo": "skip",
-            "visible": False,
-            "showlegend": False,
-        }
-    )
+    if include_traces:
+        traces.append(_adjacency_trace(geometry_manifest))
+        traces.append(
+            {
+                "type": "scatter3d",
+                "name": "__labels__",
+                "mode": "text",
+                "x": [
+                    face.get("centroid", [0, 0, 0])[0]
+                    for face in geometry_manifest.get("faces", [])
+                ],
+                "y": [
+                    face.get("centroid", [0, 0, 0])[1]
+                    for face in geometry_manifest.get("faces", [])
+                ],
+                "z": [
+                    face.get("centroid", [0, 0, 0])[2]
+                    for face in geometry_manifest.get("faces", [])
+                ],
+                "text": [
+                    face["face_id"] for face in geometry_manifest.get("faces", [])
+                ],
+                "textfont": {"size": 10, "color": "#111827"},
+                "hoverinfo": "skip",
+                "visible": False,
+                "showlegend": False,
+            }
+        )
 
     feature_types = sorted({entry["type"] for entries in memberships.values() for entry in entries})
     return {
         "traces": traces,
-        "faceTraceCount": len(mesh_payload.get("faces", [])),
-        "adjacencyTraceIndex": len(mesh_payload.get("faces", [])),
-        "labelsTraceIndex": len(mesh_payload.get("faces", [])) + 1,
+        "faceTraceCount": len(mesh_payload.get("faces", [])) if include_traces else 0,
+        "adjacencyTraceIndex": len(mesh_payload.get("faces", []))
+        if include_traces
+        else None,
+        "labelsTraceIndex": len(mesh_payload.get("faces", [])) + 1
+        if include_traces
+        else None,
+        "faceIds": [str(mesh.get("face_id")) for mesh in mesh_payload.get("faces", [])],
         "faces": face_data,
         "draft": feature_graph_draft,
         "featureTypes": feature_types,

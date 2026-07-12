@@ -77,6 +77,32 @@ def test_corpus_audit_embeds_images_escapes_text_and_compares_papers(tmp_path: P
     assert "Semantic package validation passed without issues." in html
 
 
+def test_corpus_audit_can_render_one_strictly_isolated_paper(tmp_path: Path):
+    first = _write_paper_bundle(
+        tmp_path, "paper-a", title="Normal-conducting", curve_forms=["ellipse"]
+    )
+    second = _write_paper_bundle(
+        tmp_path, "paper-b", title="Superconducting", curve_forms=["spline"]
+    )
+
+    html = build_corpus_audit_html(
+        tmp_path,
+        _manifest(first, second),
+        paper_id="paper-a",
+    )
+
+    assert "Normal-conducting · isolated audit" in html
+    assert "Superconducting" not in html
+    assert "curve_priors.equator has different claims" not in html
+
+    with pytest.raises(CorpusAuditError, match="exactly one"):
+        build_corpus_audit_html(
+            tmp_path,
+            _manifest(first, second),
+            paper_id="missing",
+        )
+
+
 def test_corpus_audit_rejects_traversal_for_structured_resources(tmp_path: Path):
     outside = tmp_path.parent / "outside-summary.json"
     outside.write_text("{}", encoding="utf-8")

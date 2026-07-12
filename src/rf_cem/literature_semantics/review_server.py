@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
+import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -32,6 +33,30 @@ DEFAULT_MAX_REQUEST_BYTES = 256 * 1024
 MAX_ITEM_ID_LENGTH = 240
 MAX_NOTE_LENGTH = 8_000
 MAX_REVIEWER_LENGTH = 240
+MAX_HELPER2_REVIEW_BYTES = 192 * 1024
+MAX_HELPER2_ITEMS = 10_000
+
+HELPER2_GEOMETRY_STATUSES = {
+    "accepted",
+    "requires_review",
+    "rejected",
+    "unreviewed",
+}
+HELPER2_CANDIDATE_STATUSES = {
+    "confirmed",
+    "modified",
+    "requires_review",
+    "rejected",
+    "unreviewed",
+}
+HELPER2_BINDING_STATUSES = {
+    "accepted",
+    "modified",
+    "requires_review",
+    "rejected",
+    "deleted",
+    "broken_binding",
+}
 
 PreviewCallback = Callable[[dict[str, Any], dict[str, Any]], Mapping[str, Any]]
 
@@ -255,6 +280,55 @@ class ReviewSessionStore:
                 copy.deepcopy(session),
             )
 
+    def record_helper2_review(
+        self,
+        *,
+        expected_revision: int,
+        projection_id: str,
+        review: Mapping[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Persist one namespaced Helper2 review snapshot.
+
+        Helper2 geometry/feature/binding statuses intentionally remain
+        separate from the literature decision vocabulary.
+        """
+        clean_projection_id = _bounded_text(
+            projection_id, "projection_id", MAX_ITEM_ID_LENGTH
+        )
+        clean_review = _sanitize_helper2_review(review)
+        review_bytes = _compact_json_bytes(clean_review)
+        if len(review_bytes) > MAX_HELPER2_REVIEW_BYTES:
+            raise ReviewSessionError("Helper2 review snapshot exceeds size limit")
+
+        with self._lock:
+            self._check_revision(expected_revision)
+            revision = expected_revision + 1
+            occurred_at = _utc_now()
+            event_id = str(uuid.uuid4())
+            event = {
+                "schema_version": EVENT_SCHEMA_VERSION,
+                "event_id": event_id,
+                "event_type": "helper2_review_saved",
+                "revision": revision,
+                "occurred_at": occurred_at,
+                "projection_id": clean_projection_id,
+                "review_sha256": "sha256:"
+                + hashlib.sha256(review_bytes).hexdigest(),
+                "review": copy.deepcopy(clean_review),
+            }
+            session = copy.deepcopy(self._session)
+            session["revision"] = revision
+            session["updated_at"] = occurred_at
+            session["helper2_reviews"][clean_projection_id] = {
+                "projection_id": clean_projection_id,
+                "review": clean_review,
+                "updated_at": occurred_at,
+                "event_id": event_id,
+                "revision": revision,
+            }
+            self._commit(session, event)
+            return copy.deepcopy(event), copy.deepcopy(session)
+
     def _new_session(
         self, initial_session: Optional[Mapping[str, Any]]
     ) -> dict[str, Any]:
@@ -270,6 +344,7 @@ class ReviewSessionStore:
                 "updated_at": now,
                 "review_decisions": {},
                 "manual_items": [],
+                "helper2_reviews": {},
             }
         )
         _json_bytes(session)
@@ -292,6 +367,9 @@ class ReviewSessionStore:
             raise ReviewSessionError("persisted review_decisions must be an object")
         if not isinstance(payload.get("manual_items"), list):
             raise ReviewSessionError("persisted manual_items must be an array")
+        payload.setdefault("helper2_reviews", {})
+        if not isinstance(payload.get("helper2_reviews"), dict):
+            raise ReviewSessionError("persisted helper2_reviews must be an object")
         for item_id, decision in payload["review_decisions"].items():
             if (
                 not isinstance(item_id, str)
@@ -312,6 +390,15 @@ class ReviewSessionStore:
             ):
                 raise ReviewSessionError("persisted manual item is invalid")
             manual_ids.add(item["id"])
+        for projection_id, record in payload["helper2_reviews"].items():
+            if (
+                not isinstance(projection_id, str)
+                or not isinstance(record, dict)
+                or record.get("projection_id") != projection_id
+                or not isinstance(record.get("review"), Mapping)
+            ):
+                raise ReviewSessionError("persisted Helper2 review is invalid")
+            record["review"] = _sanitize_helper2_review(record["review"])
         _json_bytes(payload)
         return payload
 
@@ -387,6 +474,7 @@ class ReviewServer:
         *,
         preview_callback: Optional[PreviewCallback] = None,
         review_html: Optional[str] = None,
+        paper_document: Optional[bytes] = None,
         review_path: str = "/",
         token: Optional[str] = None,
         port: int = 0,
@@ -399,6 +487,13 @@ class ReviewServer:
         selected_token = secrets.token_urlsafe(32) if token is None else token
         if not isinstance(selected_token, str) or len(selected_token) < 16:
             raise ValueError("token must contain at least 16 characters")
+        if paper_document is not None and not isinstance(paper_document, bytes):
+            raise TypeError("paper_document must be bytes or None")
+        if paper_document is not None and (
+            not paper_document.startswith(b"%PDF-")
+            or len(paper_document) > 64 * 1024 * 1024
+        ):
+            raise ValueError("paper_document must be a bounded PDF")
 
         self.store = store
         self.token = selected_token
@@ -411,6 +506,7 @@ class ReviewServer:
             token=selected_token,
             preview_callback=preview_callback,
             review_html=review_html,
+            paper_document=paper_document,
             review_path=self.review_path,
             max_request_bytes=max_request_bytes,
         )
@@ -486,6 +582,7 @@ def create_review_handler(
     token: str,
     preview_callback: Optional[PreviewCallback] = None,
     review_html: Optional[str] = None,
+    paper_document: Optional[bytes] = None,
     review_path: str = "/",
     max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
 ) -> type[BaseHTTPRequestHandler]:
@@ -494,6 +591,13 @@ def create_review_handler(
         raise ValueError("token must contain at least 16 characters")
     if review_html is not None and not isinstance(review_html, str):
         raise TypeError("review_html must be a string or None")
+    if paper_document is not None and not isinstance(paper_document, bytes):
+        raise TypeError("paper_document must be bytes or None")
+    if paper_document is not None and (
+        not paper_document.startswith(b"%PDF-")
+        or len(paper_document) > 64 * 1024 * 1024
+    ):
+        raise ValueError("paper_document must be a bounded PDF")
     selected_review_path = _validate_review_path(review_path)
     review_html_bytes = review_html.encode("utf-8") if review_html is not None else None
 
@@ -512,10 +616,13 @@ def create_review_handler(
                 return
             if not self._request_is_trusted():
                 return
-            if parsed.path != "/api/session":
-                self._send_error(404, "not_found", "endpoint not found")
+            if parsed.path == "/api/session":
+                self._send_json(200, {"ok": True, "session": store.get_session()})
                 return
-            self._send_json(200, {"ok": True, "session": store.get_session()})
+            if parsed.path == "/api/paper-source" and paper_document is not None:
+                self._send_binary(paper_document, "application/pdf")
+                return
+            self._send_error(404, "not_found", "endpoint not found")
 
         def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
             if not self._request_is_trusted():
@@ -525,6 +632,7 @@ def create_review_handler(
                 "/api/review-events",
                 "/api/manual-items",
                 "/api/preview",
+                "/api/helper2-review",
             }:
                 self._send_error(404, "not_found", "endpoint not found")
                 return
@@ -556,6 +664,16 @@ def create_review_handler(
                             "event": event,
                             "session": session,
                         },
+                    )
+                    return
+                if path == "/api/helper2-review":
+                    event, session = store.record_helper2_review(
+                        expected_revision=expected_revision,
+                        projection_id=body.get("projection_id"),
+                        review=body.get("review"),
+                    )
+                    self._send_json(
+                        200, {"ok": True, "event": event, "session": session}
                     )
                     return
 
@@ -729,6 +847,19 @@ def create_review_handler(
             self.wfile.write(body)
             self.close_connection = True
 
+        def _send_binary(self, body: bytes, content_type: str) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Disposition", "inline; filename=source.pdf")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(body)
+            self.close_connection = True
+
         def log_message(self, format: str, *args: object) -> None:
             # The embedding CLI/app owns logging; bearer-token requests are not
             # echoed to stderr by this low-level transport.
@@ -739,6 +870,120 @@ def create_review_handler(
 
 class _ResponseAlreadySent(Exception):
     pass
+
+
+def _sanitize_helper2_review(review: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(review, Mapping):
+        raise ReviewSessionError("Helper2 review must be a JSON object")
+
+    geometry = _sanitize_status_mapping(
+        review.get("geometry", {}),
+        "geometry",
+        HELPER2_GEOMETRY_STATUSES,
+        extra_fields=(),
+    )
+    candidates = _sanitize_status_mapping(
+        review.get("candidates", {}),
+        "candidates",
+        HELPER2_CANDIDATE_STATUSES,
+        extra_fields=("type", "geometry_refs"),
+    )
+    bindings = _sanitize_status_mapping(
+        review.get("bindings", {}),
+        "bindings",
+        HELPER2_BINDING_STATUSES,
+        extra_fields=("feature_id", "geometry_node_id", "deleted"),
+    )
+    manual_groups = review.get("manual_groups", {})
+    if not isinstance(manual_groups, Mapping) or len(manual_groups) > MAX_HELPER2_ITEMS:
+        raise ReviewSessionError("Helper2 manual_groups must be a bounded object")
+    clean_groups: dict[str, Any] = {}
+    for group_id, group in manual_groups.items():
+        clean_id = _bounded_text(group_id, "manual group id", MAX_ITEM_ID_LENGTH)
+        if not isinstance(group, Mapping):
+            raise ReviewSessionError("Helper2 manual group must be an object")
+        clean_groups[clean_id] = {
+            "type": _bounded_text(
+                group.get("type", ""),
+                "manual group type",
+                MAX_ITEM_ID_LENGTH,
+            ),
+            "geometry_refs": _bounded_string_list(
+                group.get("geometry_refs", []), "manual group geometry_refs"
+            ),
+        }
+
+    active_tab = str(review.get("active_tab") or "geometry")
+    if active_tab not in {"geometry", "features", "udsg", "review"}:
+        raise ReviewSessionError("Helper2 active_tab is invalid")
+    return {
+        "schema_version": "helper2_review_session.v1",
+        "active_tab": active_tab,
+        "selected_faces": _bounded_string_list(
+            review.get("selected_faces", []), "selected_faces"
+        ),
+        "geometry": geometry,
+        "candidates": candidates,
+        "bindings": bindings,
+        "manual_groups": clean_groups,
+        "notes": _bounded_text(
+            review.get("notes", ""),
+            "Helper2 notes",
+            MAX_NOTE_LENGTH,
+            allow_empty=True,
+        ),
+    }
+
+
+def _sanitize_status_mapping(
+    value: object,
+    field_name: str,
+    allowed_statuses: set[str],
+    *,
+    extra_fields: tuple[str, ...],
+) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or len(value) > MAX_HELPER2_ITEMS:
+        raise ReviewSessionError(f"Helper2 {field_name} must be a bounded object")
+    result: dict[str, Any] = {}
+    for raw_id, raw_entry in value.items():
+        item_id = _bounded_text(raw_id, f"{field_name} id", MAX_ITEM_ID_LENGTH)
+        if not isinstance(raw_entry, Mapping):
+            raise ReviewSessionError(f"Helper2 {field_name} item must be an object")
+        status = str(raw_entry.get("status") or "")
+        if status not in allowed_statuses:
+            raise ReviewSessionError(
+                f"Helper2 {field_name} status is invalid: {status!r}"
+            )
+        clean: dict[str, Any] = {"status": status}
+        for extra in extra_fields:
+            if extra == "geometry_refs":
+                clean[extra] = _bounded_string_list(
+                    raw_entry.get(extra, []), f"{field_name}.{extra}"
+                )
+            elif extra == "deleted":
+                deleted = raw_entry.get(extra, False)
+                if not isinstance(deleted, bool):
+                    raise ReviewSessionError(
+                        f"Helper2 {field_name}.{extra} must be a boolean"
+                    )
+                clean[extra] = deleted
+            else:
+                clean[extra] = _bounded_text(
+                    raw_entry.get(extra, ""),
+                    f"{field_name}.{extra}",
+                    MAX_ITEM_ID_LENGTH,
+                )
+        result[item_id] = clean
+    return result
+
+
+def _bounded_string_list(value: object, field_name: str) -> list[str]:
+    if not isinstance(value, list) or len(value) > MAX_HELPER2_ITEMS:
+        raise ReviewSessionError(f"{field_name} must be a bounded array")
+    return [
+        _bounded_text(item, field_name, MAX_ITEM_ID_LENGTH)
+        for item in value
+    ]
 
 
 def _bounded_text(

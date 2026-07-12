@@ -15,7 +15,10 @@ if str(SRC) not in sys.path:
 from rf_cem.literature_semantics.geometry_candidate import (
     build_sls2_geometry_candidate,
 )
-from rf_cem.literature_semantics.review_app import Sls2LiteratureReviewApp
+from rf_cem.literature_semantics.review_app import (
+    LiteratureReviewAppError,
+    Sls2LiteratureReviewApp,
+)
 
 
 pytestmark = pytest.mark.no_cst
@@ -53,11 +56,28 @@ def test_prepare_server_writes_bound_html_and_small_session(
         assert launch.review_url.startswith("http://127.0.0.1:")
         assert "Layer 1 · Evidence" in html
         assert "Layer 3 · Geometry projection" in html
+        assert launch.html_path.name == "rf_cem_literature_review_sls2.html"
         assert session["review_scope"]["paper_id"] == "sls2"
         assert len(json.dumps(session)) < 20_000
         assert launch.initial_step_path.name == "fake.step"
     finally:
         launch.server.stop()
+
+
+def test_sls2_geometry_app_rejects_superconducting_review_scope(tmp_path: Path) -> None:
+    manifest, package, candidate = _write_bundle(tmp_path)
+    package["request_context"]["operating_regime"] = "superconducting"
+    (tmp_path / "paper" / "semantics.json").write_text(
+        json.dumps(package, ensure_ascii=False), encoding="utf-8"
+    )
+
+    with pytest.raises(LiteratureReviewAppError, match="normal_conducting"):
+        Sls2LiteratureReviewApp(
+            bundle_root=tmp_path,
+            corpus_manifest=manifest,
+            session_root=tmp_path / "session",
+            candidate=candidate,
+        )
 
 
 def test_parameter_iteration_is_human_edit_with_paper_baseline(

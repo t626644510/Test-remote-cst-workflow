@@ -13,6 +13,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import secrets
 import threading
 from typing import Any, Mapping, Optional
@@ -26,6 +27,7 @@ from step_feature_assistant.layer_builders import (
     detect_review_issues,
 )
 from step_feature_assistant.topology_analyzer import build_adjacency_graph
+from step_feature_assistant.reviewer import build_reviewer_payload
 
 from .geometry_candidate import (
     LiteratureGeometryCandidateError,
@@ -96,9 +98,23 @@ class Sls2LiteratureReviewApp:
             item for item in source_payload["papers"] if item.get("id") == paper_id
         )
         self.semantic_package = copy.deepcopy(paper["literature_semantics"])
+        request_context = self.semantic_package.get("request_context", {})
+        operating_regime = (
+            request_context.get("operating_regime")
+            if isinstance(request_context, Mapping)
+            else None
+        )
+        if operating_regime != "normal_conducting":
+            raise LiteratureReviewAppError(
+                "SLS-2 geometry review requires a normal_conducting paper; "
+                "superconducting papers must use a separate semantic-only session"
+            )
         self.corpus_manifest = corpus_manifest
         self.paper_id = paper_id
         self.bundle_root = self.loader.root
+        self.paper_pdf = self.loader.read_paper_pdf(
+            corpus_manifest, paper_id=paper_id
+        )
         self.session_root = Path(session_root).expanduser().resolve(strict=False)
         self.session_root.mkdir(parents=True, exist_ok=True)
         if not self.session_root.is_dir():
@@ -155,13 +171,19 @@ class Sls2LiteratureReviewApp:
 
         selected_token = token or secrets.token_urlsafe(32)
         html = build_interactive_review_html(payload, selected_token)
-        html_path = self._session_child("rf_cem_literature_review_gui.html")
+        safe_paper_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", self.paper_id).strip("._")
+        if not safe_paper_id:
+            raise LiteratureReviewAppError("paper_id cannot form a safe HTML filename")
+        html_path = self._session_child(
+            f"rf_cem_literature_review_{safe_paper_id}.html"
+        )
         _write_text_atomic(html_path, html)
         store = self._open_session_store(payload)
         server = ReviewServer(
             store,
             preview_callback=self.preview,
             review_html=html,
+            paper_document=self.paper_pdf,
             token=selected_token,
             port=port,
         )
@@ -259,6 +281,9 @@ class Sls2LiteratureReviewApp:
         output_step = artifact_dir / "cavity.step"
         if report_path.is_file() and output_step.is_file():
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            if not report.get("helper2", {}).get("review_payload"):
+                self._enrich_helper2(report, output_step, artifact_dir)
+                _write_json_atomic(report_path, report)
         else:
             report = generate_sls2_step(
                 candidate,
@@ -326,6 +351,18 @@ class Sls2LiteratureReviewApp:
             "review_issues": issues,
             "model_profile": "normal_conducting_500mhz",
             "all_mappings_require_human_review": True,
+            "review_payload": build_reviewer_payload(
+                mesh_faces,
+                geometry_manifest,
+                feature_draft,
+                {},
+                geometry_graph,
+                feature_candidates,
+                udsg,
+                issues,
+                {},
+                include_traces=False,
+            ),
         }
         report["validation"]["helper2"] = {
             "status": udsg.get("validation", {}).get("status"),

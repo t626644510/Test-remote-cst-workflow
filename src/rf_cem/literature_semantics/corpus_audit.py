@@ -75,6 +75,7 @@ def build_corpus_audit_html(
     corpus_manifest: ManifestInput,
     *,
     max_image_bytes: int = DEFAULT_MAX_IMAGE_BYTES,
+    paper_id: Optional[str] = None,
 ) -> str:
     """Return a self-contained, escaped HTML audit for a literature bundle.
 
@@ -90,6 +91,19 @@ def build_corpus_audit_html(
     papers_value = manifest.get("papers")
     if not isinstance(papers_value, list):
         raise CorpusAuditError("corpus manifest papers must be a list")
+    if paper_id is not None:
+        papers_value = [
+            item
+            for item in papers_value
+            if isinstance(item, Mapping) and str(item.get("id")) == paper_id
+        ]
+        if len(papers_value) != 1:
+            raise CorpusAuditError(
+                f"paper id must identify exactly one corpus entry: {paper_id!r}"
+            )
+        manifest = dict(manifest)
+        manifest["title"] = f"{papers_value[0].get('title') or paper_id} · isolated audit"
+        manifest["cross_paper_findings"] = []
     papers: list[_PaperAudit] = []
     for index, item in enumerate(papers_value):
         if not isinstance(item, Mapping):
@@ -104,12 +118,14 @@ def write_corpus_audit_html(
     corpus_manifest: ManifestInput,
     *,
     max_image_bytes: int = DEFAULT_MAX_IMAGE_BYTES,
+    paper_id: Optional[str] = None,
 ) -> None:
     """Write a self-contained corpus audit HTML file using UTF-8."""
     html = build_corpus_audit_html(
         bundle_root,
         corpus_manifest,
         max_image_bytes=max_image_bytes,
+        paper_id=paper_id,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")

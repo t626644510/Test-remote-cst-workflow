@@ -52,7 +52,14 @@ def test_interactive_reviewer_has_three_layers_review_controls_and_geometry_view
 def test_interactive_reviewer_uses_strict_same_origin_api_contract() -> None:
     html = build_interactive_review_html(_payload(), "local-secret")
 
-    for endpoint in ("/api/session", "/api/review-events", "/api/manual-items", "/api/preview"):
+    for endpoint in (
+        "/api/session",
+        "/api/review-events",
+        "/api/manual-items",
+        "/api/preview",
+        "/api/helper2-review",
+        "/api/paper-source",
+    ):
         assert endpoint in html
     assert '"X-Review-Token":TOKEN' in html
     assert "expected_revision" in html
@@ -62,6 +69,7 @@ def test_interactive_reviewer_uses_strict_same_origin_api_contract() -> None:
     assert "?token=" not in html
     assert "credentials:\"same-origin\"" in html
     assert "connect-src 'self'" in html
+    assert "frame-src blob:" in html
     assert "style-src 'unsafe-inline'" in html
     assert "style-src 'nonce-" not in html
 
@@ -100,6 +108,12 @@ def test_interactive_reviewer_exposes_six_mm_parameters_and_preview_payload() ->
     assert "feature_candidates" in html
     assert "Geometry refs" in html
     assert "Confidence / status" in html
+    assert "Helper2 面审核" in html
+    assert "PDF 原文同页" in html
+    assert "literature_semantic_candidate_view.v1" in html
+    assert "配置应用建议 / Draft patches" in html
+    assert "Generated geometry hypothesis" not in html
+    assert "UDSG preview" not in html
 
 
 def test_interactive_reviewer_accepts_adapter_review_items_and_nested_evidence() -> None:

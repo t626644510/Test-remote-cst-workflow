@@ -1,3 +1,4 @@
+import copy
 import http.client
 import json
 import os
@@ -154,6 +155,56 @@ def test_manual_item_cannot_arrive_preaccepted_or_duplicate(tmp_path):
         )
 
 
+def test_store_persists_namespaced_helper2_review(tmp_path):
+    store = ReviewSessionStore(tmp_path / "review")
+    review = {
+        "schema_version": "helper2_review_session.v1",
+        "active_tab": "udsg",
+        "selected_faces": ["F0004"],
+        "geometry": {"F0004": {"status": "accepted"}},
+        "candidates": {
+            "equator": {
+                "status": "modified",
+                "type": "EquatorRegion",
+                "geometry_refs": ["face:F0004"],
+            }
+        },
+        "bindings": {
+            "binding-equator": {
+                "status": "accepted",
+                "feature_id": "equator",
+                "geometry_node_id": "face:F0004",
+                "deleted": False,
+            }
+        },
+        "manual_groups": {},
+        "notes": "赤道面已人工确认。",
+    }
+
+    event, session = store.record_helper2_review(
+        expected_revision=0,
+        projection_id="sls2.cavity.1",
+        review=review,
+    )
+
+    assert event["event_type"] == "helper2_review_saved"
+    assert event["review_sha256"].startswith("sha256:")
+    assert event["review"]["selected_faces"] == ["F0004"]
+    saved = session["helper2_reviews"]["sls2.cavity.1"]["review"]
+    assert saved["active_tab"] == "udsg"
+    assert saved["bindings"]["binding-equator"]["status"] == "accepted"
+    assert ReviewSessionStore(store.session_root).get_session() == session
+
+    invalid = copy.deepcopy(review)
+    invalid["bindings"]["binding-equator"]["deleted"] = "false"
+    with pytest.raises(ReviewSessionError, match="must be a boolean"):
+        store.record_helper2_review(
+            expected_revision=1,
+            projection_id="sls2.cavity.1",
+            review=invalid,
+        )
+
+
 def test_server_is_loopback_token_protected_and_has_no_cors(tmp_path):
     store = ReviewSessionStore(tmp_path / "review")
     with ReviewServer(store, token=TOKEN) as server:
@@ -200,6 +251,50 @@ def test_server_is_loopback_token_protected_and_has_no_cors(tmp_path):
         assert status == 405
         assert payload["error"]["code"] == "method_not_allowed"
         assert "access-control-allow-origin" not in headers
+
+
+def test_server_serves_only_injected_pdf_and_persists_helper2(tmp_path):
+    store = ReviewSessionStore(tmp_path / "review")
+    pdf = b"%PDF-1.4\n%%EOF\n"
+    with ReviewServer(store, token=TOKEN, paper_document=pdf) as server:
+        connection = http.client.HTTPConnection(server.host, server.port, timeout=5)
+        try:
+            connection.request(
+                "GET",
+                "/api/paper-source",
+                headers={"X-Review-Token": TOKEN},
+            )
+            response = connection.getresponse()
+            body = response.read()
+            headers = {name.lower(): value for name, value in response.getheaders()}
+        finally:
+            connection.close()
+        assert response.status == 200
+        assert body == pdf
+        assert headers["content-type"] == "application/pdf"
+        assert headers["content-disposition"].startswith("inline")
+
+        status, payload, _ = _request(
+            server,
+            "POST",
+            "/api/helper2-review",
+            body={
+                "expected_revision": 0,
+                "projection_id": "candidate-1",
+                "review": {
+                    "active_tab": "geometry",
+                    "selected_faces": [],
+                    "geometry": {},
+                    "candidates": {},
+                    "bindings": {},
+                    "manual_groups": {},
+                    "notes": "",
+                },
+            },
+        )
+        assert status == 200
+        assert payload["session"]["revision"] == 1
+        assert "candidate-1" in payload["session"]["helper2_reviews"]
 
 
 def test_injected_review_html_is_served_same_origin_with_query_token_only(tmp_path):

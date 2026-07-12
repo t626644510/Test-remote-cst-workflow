@@ -55,5 +55,7 @@ wf3-campaign/
 *.h5
 *.rar
 *.zip
+!documentation_archive/
+!documentation_archive/markdown_before_consolidation_20260712_HEAD-0663994.zip
 *.pdf
 *.docx

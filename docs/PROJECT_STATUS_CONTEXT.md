@@ -1,453 +1,583 @@
-# CST 自动化与优化项目总状态上下文
+# Agent Project Status Context
 
-更新时间：2026-07-10（严格 workflow 分支隔离重构后）
+Status timestamp: 2026-07-12 Asia/Shanghai
 
-本文是当前仓库的总入口，供人类维护者和后续 agent 快速恢复上下文。
-代码、测试、当前 Git diff 和分支本身优先于历史报告。除非用户明确要求，
-不要运行 CST、杀进程、删除锁、清理 campaign 或改写本地结果。
+Repository family: CST accelerator-cavity automation and surrogate optimisation
 
-## 1. 执行摘要
+Current worktree: `C:\Users\lau\cst_ver3_rf_cem_review_gui`
 
-四个用户提供的目录原本不是四个独立仓库，而是同一 Git 仓库的多个
-worktree。2026-07-10 已按“严格隔离式 main”重构：
+Current branch at consolidation start: `codex/rf-cem-literature-review-gui`
 
-- `main` 只保留共享核心、通用 CST history/STEP 工具、官方 CST 文档和
-  纯共享测试；不包含具体 workflow、入口、campaign 配置或 workflow-only
-  测试。
-- 每个具体工作流位于独立的 canonical `workflow/*` 分支，并从严格
-  `main` 建立。
-- WF2 已把收口后未提交的“未知纵向 HOM 频率窗口拟合”纳入正式分支，
-  同时重写收口状态和科学限制。
-- 本次重构只运行 no-CST 测试与 `compileall`，没有启动 live-CST。
-- 所有大改动前已创建本地归档、完整 Git bundle 和远端备份分支。
+Current HEAD at consolidation start: `066399403afd3a9a1f1c90e0ba799e1bbcca8806`
 
-## 2. Canonical 分支与 worktree
+This file is the detailed machine-oriented project state. Current code, tests, Git graph, and local runtime evidence have higher authority than prose. Historical tags, reports, archived Markdown, and campaign summaries are evidence only.
 
-| 分支 | 当前 worktree | 责任边界 | no-CST 基线 |
-|---|---|---|---:|
-| `main` | `C:\Users\lau\cst_ver3` | 共享核心与通用工具 | 581 passed |
-| `workflow/1-rfgun-sao` | `C:\Users\lau\cst_ver3_wf1` | WF1 SAO、单/双 pass、分阶段与自适应搜索 | 1087 passed, 1 skipped |
-| `workflow/2-rfgun-hom-antenna` | `C:\Users\lau\cst_ver3_wf2_major_refactor` | WF2 双工程 HOM 天线优化、wake PSO | 724 passed, 1 skipped |
-| `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | WF3 recovery 与 tolerance 工具链 | 692 passed, 1 skipped |
-| `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | WF4 HOM 本征模批量 campaign | 615 passed, 2 skipped |
-| `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | RF-CEM 500 MHz 逆向参数化几何与优化 | 606 passed, 1 skipped |
+## 1. Documentation contract
 
-`codex/S01-known-mode-pso-closure` 是 WF2 的收口兼容 ref，应与
-`workflow/2-rfgun-hom-antenna` 指向同一状态。历史 phase/codex 分支不是
-开发基线；需要历史证据时使用第 12 节的备份。
+The maintained project-document set is:
 
-查询当前准确提交，不要从旧报告复制 hash：
+| Path | Contract |
+| --- | --- |
+| `README.md` | Chinese human handoff, background, current progress, basic use. |
+| `docs/PROJECT_STATUS_CONTEXT.md` | This authoritative agent state model. |
+| `docs/AGENT_CONTEXT_RECOVERY.md` | Recovery procedure after crash, compaction, or agent handoff. |
+| `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | Feature and executable-entry inventory. |
+| `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
+| `AGENTS.md` | Automatically loaded governance/index stub; not a sixth status document. |
 
-```powershell
-git fetch --prune origin
-git rev-parse main
-git rev-parse workflow/2-rfgun-hom-antenna
-git worktree list
-```
-
-## 3. 分支使用规则
-
-1. 共享代码只在 `main` 开发和验证。
-2. workflow 分支定期 rebase 到最新 `main`，但不得把其他 workflow 包带入。
-3. workflow-specific 代码先留在自己的 `workflows/<package>/`。
-4. 只有在两个以上工作流真实复用、接口稳定、单位和错误语义清楚后，才提级
-   到 `src/cst_optimization/`。
-5. 提级时先在 `main` 添加共享实现和纯核心测试，再让各 workflow 分支删除
-   本地副本并改用共享实现。
-6. 禁止把共享模块复制到 workflow 包下换名保留；这会重新制造漂移。
-7. 本地 CST 路径、结果、数据库、JSONL、checkpoint、日志和 scratch 脚本
-   不得提交。
-
-## 4. `main`：共享核心
-
-### 4.1 包结构
-
-| 路径 | 作用 |
-|---|---|
-| `src/cst_optimization/core/` | 已验证 CST connection/project/solver/results/retry/cleanup/timeout wrapper |
-| `src/cst_optimization/evaluation/` | SQLite evaluation DB、schema、dedup、warm start、reuse、failure skip、retry taxonomy/runtime |
-| `src/cst_optimization/objectives/` | 通用频率、Q、场、mode objective |
-| `src/cst_optimization/optimization/` | SAO、SAEA、acquisition、sampling、adaptive bounds、resume |
-| `src/cst_optimization/parameters/` | 参数范围、参数集与约束 |
-| `src/cst_optimization/physics/` | cavity、wakefield、Poynting、heating 和单位明确的公式 |
-| `src/cst_optimization/workflows/` | workflow 间稳定的 evaluator/evaluation contract；不是具体 workflow 包 |
-| `src/cst_optimization/factory.py` | 共享 parameter/objective/optimizer/weight builders；没有具体 `build_workflow_N` |
-| `src/cst_optimization/runner.py` | workflow CLI 可继承的 `BaseRunner` |
-| `src/cst_optimization/checkpoint.py` | pickle checkpoint 与 evaluation 状态 |
-| `src/cst_optimization/database.py` | CST 1D 曲线记录、NPZ 保存与离线 replay |
-| `src/cst_history_extractor/` | CST history/macro 提取与 recipe manifest |
-| `src/step_feature_assistant/` | STEP 拓扑、FeatureGraph、UDSG 层和人工审核器 |
-
-### 4.2 CST wrapper 边界
-
-- `CSTConnection.new_mws_project()` 使用 CST 2026 已验证的
-  `DesignEnvironment.new_mws()`。
-- `CSTProject.execute_vba(..., timeout=...)` 只透传已验证
-  `Model3D.add_to_history` timeout 语义。
-- `CSTConnection.close_targeted()` 只处理当前连接记录的 PID，不进行全局进程
-  sweep；只适用于独占 `mode="new"` DesignEnvironment 且工程已显式关闭的
-  workflow。
-- 不得根据名称猜测新的 `cst.interface` 或 `cst.results` API。
-
-### 4.3 通用工具入口
-
-安装推荐使用 editable 模式：
-
-```powershell
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
-```
-
-CST history 提取：
-
-```powershell
-.venv\Scripts\python.exe -m cst_history_extractor `
-  --history-macro examples\example_history.bas `
-  --output-dir runs\history_example
-```
-
-STEP feature assistant：
-
-```powershell
-.venv\Scripts\python.exe -m step_feature_assistant `
-  --step-file StepData\bare_cavity_500mhz.stp `
-  --output-dir runs\bare_cavity_500mhz `
-  --axis z `
-  --model-type bare_cavity_500mhz `
-  --backend cadquery `
-  --preview html
-```
-
-CadQuery/OCP 在此 Windows 环境可能在解释器退出时触发 access violation。
-生产路径使用隔离 worker；不要把直接 `import cadquery` 后的异常退出误判为
-几何计算结果失败。
-
-## 5. WF1：RF gun SAO
-
-- 分支：`workflow/1-rfgun-sao`
-- 根入口：`run_workflow_1.py`
-- 实际 runner：`workflows/rfgun_sao/run.py`
-- 运行配置：`workflows/rfgun_sao/config.yaml`
-- validated reference：`workflows/rfgun_single_pass/`
-
-帮助与常用入口：
-
-```powershell
-.venv\Scripts\python.exe run_workflow_1.py --help
-.venv\Scripts\python.exe run_workflow_1.py --config workflows\rfgun_sao\config.local.yaml
-.venv\Scripts\python.exe run_workflow_1.py --seed 43 --n-initial 1 --n-iter 0
-```
-
-主要能力：
-
-- 默认 single-pass SAO；保留 validated single-pass reference。
-- 可选 two-pass calibration/measurement。
-- metric role：optimize、threshold、report-only、gate。
-- staged search、adaptive bounds、evaluation DB warm start、success reuse、
-  failure-skip 和多层 retry。
-- checkpoint 与可选 JSONL diagnostic sidecar。
-
-限制与要求：
-
-- live-CST 路径只能放在 gitignored `config.local.yaml` 或显式 `--config`。
-- 两 pass 的 CST runtime 必须显式启用；不要把 placeholder 路径当作 live 结果。
-- 对 cleanup、retry、checkpoint 或 DB schema 的更改必须跑完整分支测试。
-- 根 shim 只属于该分支，`main` 上不存在。
-
-## 6. WF2：双工程 HOM 天线优化
-
-- 分支：`workflow/2-rfgun-hom-antenna`
-- 收口兼容 ref：`codex/S01-known-mode-pso-closure`
-- 根入口：`run_workflow_2.py`
-- 实际 runner：`workflows/rfgun_hom_antenna/run.py`
-- 唯一配置源：`workflows/rfgun_hom_antenna/config.yaml`
-- builder：`workflows/rfgun_hom_antenna/workflow.py`
-- 收口文档：`docs/workflows/wf2_known_mode_pso_closure.md`
-- 操作契约：`docs/workflows/wf2_known_mode_pso_operational_contract.md`
-
-CLI：
-
-```powershell
-.venv\Scripts\python.exe run_workflow_2.py --help
-.venv\Scripts\python.exe run_workflow_2.py --auto-resume --heartbeat
-.venv\Scripts\python.exe run_workflow_2.py --auto-resume --recovery-only
-.venv\Scripts\python.exe run_workflow_2.py --warmup-from-db D:\Results\wf2_warmup_total\index.total.jsonl
-.venv\Scripts\python.exe run_workflow_2.py --config D:\smoke\config.yaml --smoke-only
-```
-
-主要能力：
-
-- `DualProjectOrchestrator` 顺序管理 frequency-domain 与 wakefield 工程。
-- `template_copy` 模式为每次 attempt 使用工程副本，避免直接污染模板。
-- crash recovery、phase snapshot、heartbeat、warmup bundle 和 adaptive gate。
-- antenna absorption、transmission、longitudinal/transverse impedance objective。
-- wake-domain PSO 支持固定 known longitudinal modes，并拟合剩余未知 HOM。
-- 未知纵向 HOM 可选 bounded frequency fit：默认关闭；启用后变量由 `[A,Q]`
-  变为 `[f,A,Q]`，频率只能在显式 `half_width_hz` 窗内移动；重叠窗口和
-  transverse frequency fit fail closed。
-- `quadratic_peak_barrier` scalarization 同时保留在直接 CST impedance 和
-  PSO reconstruction 路径。
-
-科学限制：
-
-- known mode 的频率、Q、R/Q 仍是固定输入；频率拟合只作用于剩余未知
-  longitudinal HOM。
-- 单次 PSO 的 HOM Q/RQ 或重建阻抗不是唯一物理解。
-- 主要可信证据是多起点/多 seed 的 wake residual、correlation 和稳定性。
-- 不得把该模块单独作为最终 pass/fail gate。
-
-代码边界：
-
-- `main` 的 `cst_optimization.factory` 不再提供
-  `build_workflow_2` compatibility wrapper。
-- WF2-only retry adapter 已回到 `workflows/rfgun_hom_antenna/workflow.py`。
-- 原始 `analysis_outputs/` 和研究草稿保持本地，不提交。
-
-## 7. WF3：recovery 与 tolerance
-
-- 分支：`workflow/3-rfgun-recovery-tolerance`
-- recovery 入口：`run_workflow_3.py`
-- recovery 配置：`config/workflow_3.yaml`
-- tolerance 默认配置：`config/default.yaml`
-- 包：`workflows/rfgun_recovery/`、`workflows/rfgun_tolerance/`
-
-Recovery：
-
-```powershell
-.venv\Scripts\python.exe run_workflow_3.py --help
-.venv\Scripts\python.exe run_workflow_3.py `
-  --resume-from runs\workflow3\stage_2\evaluation_records.jsonl
-```
-
-Tolerance sampling（需要 CST）：
-
-```powershell
-.venv\Scripts\python.exe -m workflows.rfgun_tolerance.run `
-  --config config\default.yaml `
-  --tolerance-scale 1.0 1.67 3.33
-```
-
-单数据库分析（no-CST）：
-
-```powershell
-.venv\Scripts\python.exe -m workflows.rfgun_tolerance.cli `
-  --db path\to\evaluations.db `
-  --output runs\tolerance\report.md
-```
-
-跨 tolerance level 分析（no-CST）：
-
-```powershell
-.venv\Scripts\python.exe -m workflows.rfgun_tolerance.campaign_cli `
-  --config config\default.yaml `
-  --db 3=path\to\tolerance_eval_3um.db `
-  --db 5=path\to\tolerance_eval_5um.db `
-  --output runs\tolerance\campaign_report.md
-```
-
-限制：数据库、分析报告和 campaign 结果全部是本地产物；recovery 的
-`--resume-from` 必须指向 schema 兼容的成功记录，不能把部分失败记录静默
-当作零 penalty。
-
-## 8. WF4：HOM eigenmode campaign
-
-- 分支：`workflow/4-rfgun-hom-eigenmode`
-- 根入口：`run_workflow_4.py`
-- 包：`workflows/rfgun_hom_eigenmode/`
-- 配置：`workflows/rfgun_hom_eigenmode/config.yaml`
-- 测量目标：`HOMwork/eigenmode_frequency_targets.csv`
-- 当前 campaign 交接：`HOMwork/HOM_Campaign_Current_Status_2026-06-25.md`
-
-CLI：
-
-```powershell
-.venv\Scripts\python.exe run_workflow_4.py --help
-.venv\Scripts\python.exe run_workflow_4.py --plan-only
-.venv\Scripts\python.exe run_workflow_4.py --resume-preview
-.venv\Scripts\python.exe run_workflow_4.py --offline-only <campaign_dir>
-.venv\Scripts\python.exe run_workflow_4.py --audit-results
-```
-
-只有用户明确要求时才可实际 resume/run CST。模板 revision adoption 需要
-显式 `--adopt-template-revision` 和 provenance note。
-
-当前 campaign 摘要：
-
-- 60 条测量目标，聚为 39 个 target cluster。
-- 116 个 solver windows，323 条 eigenmode candidate。
-- 576 条 mode-target map，995 条 mode-condition result，0 unmatched target。
-- 频率匹配高度歧义：2 matched、574 ambiguous。
-- 316/323 条模式触及每窗口最多 3 模的模板上限；63 个 window 标为
-  `mode_enumeration_incomplete`。
-- native CST Voltage 与 `R over Q beta=1` 是纵向权威量；Ez line integral
-  crosscheck 只作 warning。
-- 传播端口 warning 和 template revision 混合必须保留 provenance，不能据此
-  删除原始候选。
-
-原始 campaign CSV/JSON 保持不可变。下游派生表另存新文件，不得覆盖输入
-CSV 或顶层输出。
-
-## 9. RF-CEM 500 MHz 参数化几何
-
-- 分支：`workflow/rf-cem-500mhz`
-- 共享前置：`cst_history_extractor`、`step_feature_assistant`
-- RF-CEM 包：`src/rf_cem/`
-- 优化包：`workflows/rf_cem_500mhz_parametric_opt/`
-- 配置：`workflows/rf_cem_500mhz_parametric_opt/config.yaml`
-- 状态：`docs/rf_cem_parametric_geometry_status.zh.md`
-- 工作站交接：`docs/rf_cem_workstation_agent_handoff_2026-07-09.md`
-
-数据链：
+All tracked Markdown that existed before consolidation was archived at:
 
 ```text
-reviewed feature labels / expert prior
-  -> 12D curve controls
+documentation_archive/markdown_before_consolidation_20260712_HEAD-0663994.zip
+SHA-256: 342f999e67bc10ccf6a8d7d6685ca57a93bc27fb666c9c5c61516b0c5e986ab6
+```
+
+Generated run reports may still use a `.md` extension. They are runtime artifacts, not maintained repository documentation.
+
+## 2. Non-negotiable invariants
+
+1. `main` is a strict shared-core baseline. It contains no concrete workflow packages, workflow entry points, campaign configuration, or workflow-only tests.
+2. Concrete workflows live only on their canonical `workflow/*` branch.
+3. Shared code owner is `src/cst_optimization/`; generic history and STEP tools are `src/cst_history_extractor/` and `src/step_feature_assistant/`.
+4. Workflow-specific behavior remains inside its workflow package until a stable cross-workflow contract and at least two real consumers exist.
+5. Never invent `cst.interface` or `cst.results` APIs. Use user-supplied official documentation or repository wrappers already verified.
+6. Frequency, Q, field, power, impedance, gradient, wake, and derived objectives require explicit units and assumptions.
+7. Local configs, CST projects, PDFs, STEP inputs, result folders, databases, JSONL, NPZ, checkpoints, sessions, logs, and scratch scripts are not source artifacts.
+8. no-CST and live-CST evidence are recorded separately.
+9. Running CST does not imply permission to kill processes, delete locks, remove result folders, overwrite campaigns, or launch recovery.
+10. A large change requires a backup before mutation.
+
+## 3. Canonical Git/worktree topology
+
+State observed on 2026-07-12:
+
+| Responsibility | Branch | Worktree | Audited baseline HEAD |
+| --- | --- | --- | --- |
+| Shared core | `main` | `C:\Users\lau\cst_ver3` | `6ec518b6f2db2689b7a631bc9f650c2a088e8364` |
+| WF1 SAO | `workflow/1-rfgun-sao` | `C:\Users\lau\cst_ver3_wf1` | `63207ba5a992d44823a19b8b848a4f542e1f0b6a` |
+| WF2 HOM antenna | `workflow/2-rfgun-hom-antenna` | `C:\Users\lau\cst_ver3_wf2_major_refactor` | `6a6c99d484362ce02c08589d0b3bd0e2793ce9e0` |
+| WF3 recovery/tolerance | `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | `5ba5e1f4a2c505dcdbf82eb55b45c7ca5c924430` |
+| WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
+| Canonical RF-CEM | `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | `af690d5d946406e2876679d62489574d4fa3807d` |
+| Literature hardening | `codex/rf-cem-literature-semantics-hardening` | `C:\Users\lau\cst_ver3_rf_cem_semantics` | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
+| Current GUI integration | `codex/rf-cem-literature-review-gui` | `C:\Users\lau\cst_ver3_rf_cem_review_gui` | `066399403afd3a9a1f1c90e0ba799e1bbcca8806` |
+
+The runtime-feature baseline audited here is exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
+
+1. `3803921 feat(rf-cem): harden literature semantics pipeline`
+2. `6faeee7 feat(rf-cem): add interactive literature geometry review`
+3. `0663994 feat(rf-cem): isolate paper reviews and integrate helper2 audit`
+
+The documentation-consolidation commit may sit on top of that feature baseline; resolve the current HEAD with Git rather than copying a prose hash. Merge state: not merged into canonical RF-CEM as of this status timestamp. Do not treat the experimental worktree as a new independent product. Before integration, review the feature delta and preserve the normal-conducting/superconducting isolation contract.
+
+WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same commit as its canonical workflow branch. Other `backup/*` refs are recovery evidence, not development baselines.
+
+## 4. Source ownership model
+
+### 4.1 Shared core on `main`
+
+| Package/path | Responsibility |
+| --- | --- |
+| `src/cst_optimization/core/` | CST connection, project, solver, results, retry, timeout, cleanup. |
+| `src/cst_optimization/evaluation/` | Evaluation DB schema/storage/dedup/warm start/reuse/failure skip/retry runtime. |
+| `src/cst_optimization/objectives/` | Generic frequency, quality, field, mode objectives. |
+| `src/cst_optimization/optimization/` | SAO, SAEA, acquisition, sampling, adaptive bounds, conditional gates, resume. |
+| `src/cst_optimization/parameters/` | Typed parameters, bounds, geometry parameter sets. |
+| `src/cst_optimization/physics/` | Unit-aware cavity, wakefield, Poynting, heating formulas. |
+| `src/cst_optimization/workflows/` | Stable generic evaluator/recovery contracts only. |
+| `src/cst_optimization/factory.py` | Shared config-to-object builders; no concrete workflow builders. |
+| `src/cst_optimization/runner.py` | `BaseRunner` for workflow CLIs. |
+| `src/cst_optimization/checkpoint.py` | Checkpoint state management. |
+| `src/cst_optimization/database.py` | Curve/result recording and offline replay infrastructure. |
+| `src/cst_history_extractor/` | History/macro extraction, classification, recipe manifest. |
+| `src/step_feature_assistant/` | STEP topology, geometry facts, Feature candidates, partial UDSG, reviewer. |
+
+### 4.2 Current RF-CEM branch additions
+
+| Package/path | Responsibility |
+| --- | --- |
+| `src/rf_cem/design_package.py` | 500 MHz baseline paths and package structure. |
+| `src/rf_cem/history_templates.py` | Extract verified setup blocks from baseline `ModelHistory.json`. |
+| `src/rf_cem/udsg_builder.py` | Baseline semantic/UDSG construction. |
+| `src/rf_cem/translator.py` | Deterministic CST actions, mapping table, VBA script, report. |
+| `src/rf_cem/parametric_geometry/` | STEP ingest, feature projection, grammar, reconstruction, validation, interfaces. |
+| `src/rf_cem/literature_semantics/` | arXiv/PDF evidence, semantic schema, prior draft, audits, GUI, geometry candidate. |
+| `workflows/rf_cem_500mhz_parametric_opt/` | no-CST scan and live campaign. |
+
+The current literature and geometry-review implementation remains RF-CEM-specific. It is not eligible for `main` promotion until a second real workflow uses a stable subset.
+
+## 5. Workflow status matrix
+
+Maturity terms:
+
+- `FM0` concept only;
+- `FM1` no-CST prototype;
+- `FM2` real single-case or controlled live validation;
+- `FM3` repeatable batch/campaign;
+- `FM4` operational with portable, idempotent recovery.
+
+Architecture terms:
+
+- `AC0` implicit;
+- `AC1` explicit interfaces;
+- `AC2` auditable provenance/validation;
+- `AC3` fail-closed and recoverable;
+- `AC4` versioned reuse with multiple consumers.
+
+| Capability | FM | AC | State |
+| --- | ---: | ---: | --- |
+| Shared CST wrappers | FM3 | AC2 | Used across workflows; API boundary documented. Some cleanup paths are intentionally high risk. |
+| Evaluation DB/retry | FM3 | AC3 | Extensive no-CST coverage; concrete ownership differs by workflow. |
+| CST history extractor | FM2 | AC2 | Exported macro and direct `ModelHistory.json` supported; direct format is unofficial. |
+| STEP Feature Assistant | FM2 | AC2 | CadQuery/OCP facts, stable generated IDs, review HTML, resolved labels, calibration and advisory ML. |
+| WF1 | FM3 | AC2-3 | Single/two pass, roles/gates, staged/adaptive search, DB/retry; live configuration is opt-in. |
+| WF2 | FM3 | AC3 | Closure branch, dual-project orchestration, recovery, warmup, bounded unknown-HOM fit. |
+| WF3 | FM2-3 | AC2 | Recovery and tolerance chain; local datasets remain external. |
+| WF4 | FM3 | AC3 | Campaign and offline audit; physical ambiguity/enumeration censoring remain. |
+| RF-CEM design package | FM3 | AC2 | 500 MHz chain and batch live results verified. |
+| RF-CEM parametric geometry | FM3 | AC2 | 12D candidate regeneration stable; physical hard gates incomplete. |
+| RF-CEM result readback | FM3 | AC2 | Frequency, R/Q, Q verified through result-tree paths. |
+| RF-CEM campaign | FM3 | AC2 | 60/60 success; objective, arbitrary record seed, resume lifecycle incomplete. |
+| Literature semantics | FM2 | AC2-3 | Fixed-version two-paper pilot, validation, hashes, draft merge gates, audit HTML. |
+| Literature review GUI | FM1-2 | AC2-3 | Functional no-CST local GUI with isolated paper/regime sessions and Helper2 integration. |
+| Multi-cell/X-band grammar | FM0 | AC0 | Planned only; STEP semantic profile exists but no RF-CEM generation closure. |
+| Multi-physics/HOM/coupler RF-CEM | FM0 | AC0 | Explicitly out of current scope. |
+
+## 6. RF-CEM 500 MHz state
+
+### 6.1 Geometry contract
+
+Current selected variant: `free_equator_smooth`.
+
+Current optimisation preset: `exploratory_12d`.
+
+The 12 parameters are:
+
+1. shared equator crown radial offset, mm;
+2. equator crown axial midpoint, mm;
+3. left shoulder absolute z, mm;
+4. right shoulder absolute z, mm;
+5. left shoulder radial offset, mm;
+6. right shoulder radial offset, mm;
+7. left nose internal radial offset, mm;
+8. right nose internal radial offset, mm;
+9. left nose internal axial offset, mm;
+10. right nose internal axial offset, mm;
+11. left blend arc radius offset, mm;
+12. right blend arc radius offset, mm.
+
+Parameter values are written into an expert-prior override, then the pipeline regenerates:
+
+```text
+resolved_expert_prior
+  -> profile segments
   -> parametric_geometry.v0.json
   -> generated_vacuum.step
-  -> CSTTranslator setup
-  -> Tetrahedral eigenmode solve
-  -> Frequency / R over Q / Q result-tree readback
+  -> geometry_validation.json
+  -> CSTTranslator payload
 ```
 
-No-CST candidate generation：
+`parametric_geometry.v0.json` is the run truth source. STEP is an export artifact. CST `StoreParameter` is not the geometry source of truth for this workflow.
+
+Variants retained by the grammar:
+
+| Variant | Role |
+| --- | --- |
+| `iris_torus_exact` | Evidence-exact nose/blend reference. |
+| `expanded_smooth_nose` | Smooth-nose reference with conventional equator. |
+| `free_equator_smooth` | Current selected working baseline. |
+| `manual_equator_inset_3mm` | Visual inward crown probe. |
+| `manual_equator_bulge_3mm` | Visual outward crown probe. |
+| `manual_equator_wide_soft` | Wider soft inward-crown probe. |
+
+CadQuery-native smooth curves can fall back to dense sampled profiles. The generation mode and fallback provenance must remain in validation output.
+
+### 6.2 Live CST contract
+
+Verified path:
+
+- CST 2026 Python libraries;
+- disposable or candidate-specific project;
+- global background material `Copper (annealed)`, conductivity `5.8e7 S/m`;
+- imported RF-vacuum body explicitly assigned `Vacuum`;
+- `Tetrahedral` eigenmode solver, `Solver_HF_TET_E`;
+- template registration through `Model/3D/Model.rpp` plus three `.r0d` artifacts;
+- saved result readback through `cst.results.ProjectFile`.
+
+Verified result paths:
+
+```text
+Tables\0D Results\Frequency (Mode 1)                 [MHz]
+Tables\0D Results\R over Q (Mode 1)                  [Ohm]
+Tables\0D Results\Q-Factor (Perturbation) (Mode 1)   [dimensionless]
+```
+
+Representative live evidence:
+
+- Frequency: 505.583944055 MHz;
+- R/Q: 428.086330643 ohm;
+- Q perturbation: 45867.1264209.
+
+Campaign evidence: 60 evaluations, 60 `SUCCESS`. Candidate 039 was the recorded R/Q leader; candidate 046 was the recorded `R=(R/Q)*Q` leader. These remain audit candidates, not accepted designs.
+
+`EvaluateResultTemplates` is not enabled by default. On the verified Tetrahedral path it may emit a non-blocking `HEX mesh is invalid` message even when the required result-tree values are readable.
+
+### 6.3 Objective gap
+
+Current physical intent:
+
+```text
+frequency acceptance: 490 MHz <= f <= 510 MHz
+primary improvement: maximize R/Q and R=(R/Q)*Q
+Q: soft floor, currently 30000
+novelty: optional low-weight term
+```
+
+The current scalar penalty still over-rewards proximity to 500 MHz inside the acceptable band. Required hardening:
+
+- explicit zero/weak penalty inside the configured window;
+- distance-to-nearest-boundary penalty outside the window;
+- tests at 490, 500, 510 MHz and immediately outside both boundaries;
+- versioned weights and normalization;
+- no infinite reward for Q above the soft floor.
+
+### 6.4 Campaign lifecycle gap
+
+Current CLI can seed SAO from a configured quick-scan candidate index. It cannot yet load an arbitrary prior `live_records.jsonl` item. It also lacks a complete fail-closed output-directory resume contract.
+
+Required additions before FM4:
+
+- `--seed-record-path` and `--seed-record-index`;
+- schema, dimension, name, unit, finite-value and bounds validation;
+- record/file hash provenance;
+- output-directory collision refusal by default;
+- explicit `--resume` with next-index and optimizer-state restoration;
+- no record duplication and no candidate/project overwrite;
+- interrupted/incomplete record semantics.
+
+## 7. Literature semantics state
+
+### 7.1 Safety model
+
+Allowed pipeline:
+
+```text
+arXiv discovery metadata
+  -> human selection of explicit version
+  -> immutable PDF + SHA-256 manifest
+  -> selected PDF pages
+  -> literature_semantics.v0
+  -> expert_prior.draft.v0
+  -> human review
+  -> optional reviewed merge
+```
+
+Disallowed automatic transition:
+
+```text
+search rank / natural language / image pixels
+  -X-> production geometry / STEP / CST command / campaign
+```
+
+Search rank is not authority. PDF ingestion requires an explicit arXiv version. Image-only evidence cannot support a hard numeric rule. Single-source numeric values are soft candidates. All executable patches are pending by default.
+
+### 7.2 Semantic schema
+
+`literature_semantics.v0` top-level sections:
+
+- `request_context`;
+- `evidence_sources`;
+- `text_evidence`;
+- `image_evidence`;
+- `classification`;
+- `named_features`;
+- `shape_motifs`;
+- `curve_priors`;
+- `parameter_ranges`;
+- `optimization_objectives`;
+- `physical_constraints`.
+
+Review statuses:
+
+- `pending`;
+- `accepted`;
+- `accepted_as_soft_only`;
+- `rejected`;
+- `needs_more_evidence`.
+
+Semantic item display is normalized into `literature_semantic_candidate_view.v1` with subject, claim/predicate, value, applicability, confidence, geometry binding, and evidence. Missing values are JSON `null` and GUI `N/A`; non-standard `NaN` is not used.
+
+Executable draft targets are restricted to ontology-supported grammar variant fields. Other information is additive metadata. `merge-prior` verifies semantic-package, base-prior and immutable-draft hashes; accepted-as-soft-only patches do not alter executable grammar.
+
+### 7.3 Normal-conducting / superconducting isolation
+
+The same corpus may hold different papers, but human decision state must remain isolated:
+
+- one paper;
+- one operating regime;
+- one review session;
+- one GUI page/URL.
+
+`corpus-audit --paper-id` produces an isolated static audit. Combined reports are for integrity/statistics only. The SLS-2 geometry generator is fail-closed unless the package classification is:
+
+```text
+operating_regime = normal_conducting
+cavity_family = elliptical
+cell_count = single
+geometry_scope = axisymmetric_single_cell_rf_vacuum
+```
+
+NC and SRF may share schemas, evidence navigation and UI components. They do not share material-loss, cryogenic, Q0, peak-field, multipacting, mechanical or cell-coupling priors by default.
+
+### 7.4 GUI implementation
+
+Current GUI layers:
+
+1. Evidence: text/image evidence, page navigation, embedded verified source PDF page;
+2. Semantic candidates: grouped normalized candidates, draft patch group, review status, Chinese note, structured Add;
+3. Geometry projection:
+   - Geometry parameters and generation validation;
+   - Helper2 Features;
+   - partial UDSG bindings.
+
+Model comparison traces:
+
+- baseline: immutable published-parameter candidate;
+- previous: immediate parent candidate;
+- current: current human-preview edit.
+
+SLS-2 v0 parameters, all in mm:
+
+| Parameter | Baseline | Meaning |
+| --- | ---: | --- |
+| `L` | 680.0 | total axial length |
+| `l` | 188.671 | straight beam-pipe length per side |
+| `r` | 50.0 | beam-pipe radius |
+| `R` | 249.901 | equator radius for published candidate 1 |
+| `a` | 125.232 | upper/equator ellipse axial semi-axis |
+| `b` | 70.2322 | upper/equator ellipse radial semi-axis |
+
+Reconstruction assumptions:
+
+```text
+h = L/2 - l
+lower axial semi-axis = h - a
+lower radial semi-axis = R - r - b
+guards:
+  L > 2l
+  0 < a < h
+  0 < b < R-r
+  r > 0
+```
+
+The four 90-degree analytic ellipse arcs are sampled and fit using CadQuery `Workplane.splineApprox`, degree at most 5. The STEP curves are spline approximations, not exact conic entities. This assumption is provenance, not a paper claim.
+
+Human edits set `origin=human_preview_edit`, clear source refs, set `published_value_claim=false`, retain the immutable paper baseline, and link to the parent by content hash.
+
+Helper2 review state is stored separately from literature review state under `helper2_reviews.<projection_id>`.
+
+### 7.5 Local review service
+
+Security properties:
+
+- binds only `127.0.0.1`;
+- random token per launch;
+- Host and Origin validation;
+- no CORS;
+- request-body limit;
+- token header on API;
+- no shell, CST, production prior merge, or campaign endpoint;
+- atomic session replacement and append-only event log;
+- optimistic revision conflict detection.
+
+Session outputs are under a user-provided ignored directory and include:
+
+- `review_session.v1.json`;
+- `review_events.jsonl`;
+- single-paper review HTML;
+- `review_launch.json`;
+- content-addressed geometry preview directories;
+- generation report and review snapshots;
+- Helper2 face mesh.
+
+Do not trust an old PID or token. Read the current launch record and verify the process before stopping it.
+
+## 8. STEP Feature Assistant state
+
+Primary CLI supports:
+
+- `fallback` STEP text diagnostics;
+- `cadquery` geometry-kernel facts;
+- `auto` with recorded fallback;
+- model profiles `bare_cavity_500mhz`, `normal_conducting_500mhz` and `xband_2.3cell_gun`;
+- geometry manifest, face inventory, adjacency, FeatureGraph draft;
+- stable generated face IDs and groups;
+- offline Plotly reviewer;
+- reviewed-label validation and resolved FeatureGraph;
+- geometry graph, feature candidates and partial UDSG layer;
+- manual groups, face-ref editing and binding review;
+- calibration proposals from reviewed projects;
+- advisory one-vs-rest logistic-regression classifier.
+
+Production authority is human-reviewed labels. Rule calibration and ML suggestions never mutate production rules automatically.
+
+CadQuery/OCP is executed in an isolated worker for risky geometry operations. On this Windows/Python environment, a process-exit access violation can occur even after useful results were written; callers must distinguish worker result status from interpreter teardown status.
+
+## 9. CST history extractor state
+
+Inputs:
+
+- exported `.bas` or macro/history text;
+- `.cst` project with adjacent unpacked `Model/3D/ModelHistory.json`;
+- optional CST library path to open a project and trigger unpacking.
+
+Outputs:
+
+- raw history and source metadata;
+- classified command inventory;
+- recipe manifest;
+- geometry summary;
+- unknown/unclassified command list;
+- human-readable generated report.
+
+Direct `ModelHistory.json` parsing is an observed internal project format, not an official Python API. Unknown operations are preserved. `get_tree_items` returns navigation-tree paths and cannot replace history-body extraction.
+
+## 10. Workflow-specific status
+
+### 10.1 WF1
+
+Owner: `workflow/1-rfgun-sao`. Root compatibility entry exists only on that branch.
+
+Capabilities include default single-pass SAO, opt-in two-pass CST runtime, calibration, metric roles (`optimize`, `threshold`, `report_only`, `gate`), gates, staged search, adaptive bounds, checkpoint, optional diagnostic JSONL, evaluation DB, warm start/reuse, and retry.
+
+Do not confuse placeholder two-pass runtime with live results. Local CST paths belong in ignored local config.
+
+### 10.2 WF2
+
+Owner: `workflow/2-rfgun-hom-antenna`. Canonical config is package-local.
+
+Capabilities include dual-project orchestration, per-attempt template copies, heartbeat, phase snapshot, recovery, warmup total bundle, adaptive gate, direct and reconstructed wake objectives, fixed known modes, and optional bounded fit of unknown longitudinal-mode frequency.
+
+Frequency fitting is disabled by default. It must never affect known modes or transverse modes, and overlapping frequency windows fail closed. A single PSO inverse result is non-unique evidence.
+
+### 10.3 WF3
+
+Owner: `workflow/3-rfgun-recovery-tolerance`.
+
+Includes recovery optimisation plus tolerance simulation, single-database no-CST analysis, and cross-level campaign analysis. Resume input must be schema-compatible; local datasets and reports are not source files.
+
+### 10.4 WF4
+
+Owner: `workflow/4-rfgun-hom-eigenmode`.
+
+Supports planning, resume preview, offline-only reprocessing and result audit. Historical state recorded 60 targets, 39 clusters, 116 windows and 323 eigenmode candidates, with severe ambiguity and mode-enumeration censoring. Those numbers are historical campaign evidence, not regenerated by this branch.
+
+Template revision adoption is explicit and provenance-bound. Dedicated `mode=new` processes use targeted cleanup; failure to verify PID exit stops the campaign as `cleanup_incomplete`. No machine-wide process sweep is allowed.
+
+## 11. Known risks and required controls
+
+| Risk | Required control |
+| --- | --- |
+| Geometry visually plausible but RF-invalid | Separate BRep/profile checks from live solver and mode review. |
+| STEP face IDs change | Use generated stable geometry IDs, facts and human review; never bind by raw kernel ID alone. |
+| Natural language becomes executable | Ontology whitelist, pending draft, hashes and human patch review. |
+| NC/SRF semantic contamination | Paper/regime/session isolation and fail-closed classification. |
+| Single-paper numeric overfitting | Soft-only default and independent-paper validation. |
+| Objective rewards frequency too strongly | Window objective with boundary tests and explicit normalization. |
+| Candidate/project numbering mismatch | Candidate-specific package/project paths and record cross-check. |
+| Campaign output overwrite | Default collision refusal and explicit resume contract. |
+| Result template absent from history | Register `Model.rpp` plus `.r0d`; verify result-tree paths. |
+| Misleading `HEX mesh is invalid` | Do not switch mesh blindly; inspect template registration, material, solver state and actual result readback. |
+| Unsaved CST result cache | Save project, then invalidate/reopen `ResultReader` cache. |
+| CST process cleanup affects other work | Target owned PID only; global sweep needs explicit authority. |
+| Windows Unicode/encoding corruption | UTF-8 reads/writes; use patch-based Chinese source edits. |
+| PowerShell case-insensitive JSON keys | Do not inspect `L` and `l` tuples with Windows PowerShell 5.1 `ConvertFrom-Json`; use Python or GUI. |
+
+## 12. Verification state
+
+Recommended interpreter:
+
+```text
+C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe
+```
+
+Current-branch full no-CST command:
 
 ```powershell
-$env:PYTHONPATH = "src"
-.venv\Scripts\python.exe -m workflows.rf_cem_500mhz_parametric_opt.runner `
-  --output-dir runs\rf_cem_500mhz_parametric_opt_12d_no_cst_smoke
+$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+& C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe -m pytest -q -m 'not cst_required'
 ```
 
-Live campaign（需要已验证模板、CST 2026 library 和许可证）：
+Full no-CST result after this documentation consolidation:
 
-```powershell
-$env:PYTHONPATH = "src"
-.venv\Scripts\python.exe -m workflows.rf_cem_500mhz_parametric_opt.live_campaign `
-  --mode sao `
-  --output-dir runs\rf_cem_500mhz_sao `
-  --template-project-dir "D:\ModelData\bare" `
-  --library-path "D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries" `
-  --seed-candidate-index 4 `
-  --local-bounds-scale 0.35 `
-  --max-evals 10
+```text
+696 passed, 11 skipped in 9.81s
 ```
 
-已验证状态：
+This result includes the literature review GUI and Helper2 integration. It does not include live CST. The consolidation verification also completed:
 
-- `free_equator_smooth` 是当前几何基线，预设为 `exploratory_12d`。
-- 几何参数通过 expert-prior override 重新生成 STEP，不直接使用
-  CST `StoreParameter` 作为真值源。
-- 成功 live 路径是 Copper (annealed) background、Vacuum imported body、
-  Tetrahedral eigenmode 和 `.rpp/.r0d` result-template registration。
-- 第一轮 seeded SAO campaign 为 60/60 `SUCCESS`。
-- 当前优先候选是 candidate 039（最高 R/Q）和 candidate 046（最高
-  `R=(R/Q)*Q`），但必须在工作站审计完整 STEP、validation、audit HTML 和
-  CST 工程后才能作为新 seed。
+- full current-branch no-CST suite;
+- `compileall` for source and workflows;
+- `git diff --check`;
+- tracked-Markdown inventory and link/path scan;
+- CLI `--help` smoke for maintained entries.
 
-当前缺口：
+Historical branch-specific pass counts from 2026-07-10 are archived and must not be copied as current evidence without rerunning those worktrees.
 
-- objective 仍过度奖励精确贴近 500 MHz；下一步应把 490–510 MHz 作为
-  低/零惩罚窗口，主要提高 R/Q 与 shunt impedance，Q 使用 soft floor。
-- CLI 还不能从上一轮 `live_records.jsonl` 任意选择 seed record；目前只支持
-  quick-scan `--seed-candidate-index`。
-- smooth NURBS 必要时仍 fallback 到 dense sampled profile，必须保留
-  generation-mode provenance。
-- 12D 范围和物理 hard gate 尚需人工确认；multi-cell、非轴对称、
-  coupler/HOM/thermal/structural/multipacting 不在当前完成范围。
-- `Appendix/`、CST 工程、工作站 `runs/` 和二进制参考资料是本地输入/产物，
-  不提交。
+## 13. Current priorities
 
-## 10. 配置、单位和 CST 安全要求
+Priority order:
 
-- 频率必须明确 Hz、MHz 或 GHz；不要靠字段名猜测单位。
-- Q 无量纲；R/Q 使用 ohm；横向阻抗使用 ohm/m；wake distance 在进入公式前
-  统一为 m。
-- 派生 `R = (R/Q) * Q` 的单位是 ohm。
-- CST project/library/output 路径应放在 gitignored local config 或 CLI。
-- 当前部分历史 tracked YAML 仍带本机 `D:/...` 示例路径；它们是已验证机器
-  默认值，不是可移植保证。后续应拆成 portable example + local override，
-  在此之前不要在其他机器盲目运行默认配置。
-- `EvaluateResultTemplates` 在 RF-CEM Tetrahedral 路径可能产生非致命
-  `HEX mesh is invalid`；result-tree readback 已足够时不要默认启用。
-- 任何 kill、lock 删除、result-folder 清理或 campaign recovery 都需要用户
-  明确授权。
+1. Complete human SLS-2 evidence/semantic/geometry/Helper2 review.
+2. Audit RF-CEM candidates 039 and 046 on the workstation.
+3. Implement/test the 490–510 MHz window objective.
+4. Add arbitrary live-record seed loading with provenance validation.
+5. Add campaign collision, resume and idempotency contract.
+6. Validate semantic generalisation on new normal-conducting papers.
+7. Run a blinded superconducting transfer benchmark with domain-specific priors isolated.
+8. Decide whether to merge the current 3-commit experimental branch into `workflow/rf-cem-500mhz`.
+9. Promote only demonstrated cross-workflow contracts to `main`.
 
-## 11. 验证方法与本次结果
+## 14. Backup and recovery references
 
-统一使用：
+Documentation-task pre-change Git bundle:
 
-```powershell
-.venv\Scripts\python.exe -m pytest tests -q --tb=short
-.venv\Scripts\python.exe -m compileall -q src workflows run_workflow_*.py
-git diff --check
+```text
+C:\Users\lau\cst_ver3_backups\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
 ```
 
-本次 no-CST 结果见第 2 节。测试中的 skipped 项主要来自本地可选 CAD/HDF5
-fixture 或依赖，不代表 CST live 测试。一次 WF1 重跑时共享 Python 3.9 在
-标准库 `ast.walk` 中发生 Windows access violation；隔离测试 40/40 通过后，
-完整 WF1 suite 稳定重跑为 1087 passed、1 skipped。
-
-本次没有进行 live-CST 验证。历史 live 结果只能作为已知证据，不能替代修改
-后的新 live smoke。
-
-## 12. 重构前备份与恢复
-
-本地备份目录：
+Earlier strict-reorganisation backup:
 
 ```text
 C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115
 ```
 
-内容：
+Important remote backup refs include:
 
-- `repository-all-refs.bundle`：完整 Git refs，已通过 `git bundle verify`。
-- 四个原始 worktree ZIP：包含 tracked、modified 和 untracked 文件；排除
-  `.venv/`、`runs/`、`dist/`、cache 和 pyc。
-- `README.md`：SHA-256 与恢复说明。
+- `backup/pre-strict-reorg-20260710-main`;
+- `backup/pre-strict-reorg-20260710-homwork`;
+- `backup/pre-strict-reorg-20260710-cst-step`;
+- `backup/pre-strict-reorg-20260710-wf2-closure`;
+- `backup/pre-clean-wf2-closure-20260710`;
+- `backup/pre-strict-reorg-20260710-wf2-worktree`;
+- `backup/pre-strict-reorg-20260710-stale-workflows`;
+- `backup/post-backup-cst-step-assistant-changes-20260710`.
 
-远端备份 refs：
+Never restore over a live worktree. Clone a bundle or add a new recovery worktree, inspect it, and selectively integrate.
 
-```text
-backup/pre-strict-reorg-20260710-main
-backup/pre-strict-reorg-20260710-homwork
-backup/pre-strict-reorg-20260710-cst-step
-backup/pre-strict-reorg-20260710-wf2-closure
-backup/pre-clean-wf2-closure-20260710
-backup/pre-strict-reorg-20260710-wf2-worktree
-backup/pre-strict-reorg-20260710-stale-workflows
-backup/post-backup-cst-step-assistant-changes-20260710
-```
+## 15. State-update protocol
 
-其中后三条分别保留旧 WF2 worktree、旧 WF1/WF3 同源分支，以及初始归档后
-才提交的 CST/STEP assistant 改动。对应旧 `codex/*`、`phase/*` 和过时
-`workflow/*` 开发 ref 已在确认这些备份可达后清理；WF2 收口兼容 ref 除外。
+Update this file when any of these changes:
 
-不要直接覆盖当前 worktree。恢复时先克隆到新目录：
+- canonical branch/worktree ownership;
+- current experimental/canonical merge state;
+- shared-core contract;
+- RF-CEM geometry schema, parameter set, solver/material/result path;
+- literature schema, review status, isolation or merge gate;
+- entry point ownership;
+- latest verified no-CST or live-CST evidence;
+- campaign objective/resume state;
+- high-priority blockers;
+- backup location required for recovery.
 
-```powershell
-git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-all-refs.bundle restored-repository
-```
-
-## 13. 交接检查清单
-
-后续 agent 开始工作时：
-
-1. 确认 cwd、branch、HEAD、`git status --short --branch`。
-2. 阅读根 `AGENTS.md`、本文和目标 workflow 自己的 README/status。
-3. 确认要改的是共享核心还是 workflow-only 行为。
-4. 搜索现有 wrapper、builder、objective 和测试，禁止猜 CST API。
-5. 先跑目标测试建立基线。
-6. 修改科学计算时写明单位、假设和失败语义。
-7. 不碰本地结果和未跟踪输入；大改动前创建新备份 ref/归档。
-8. 完成后运行 branch-local 全量 no-CST、`compileall`、`git diff --check`。
-9. 明确报告 no-CST 与 live-CST 哪些已运行、哪些未运行。
-
-## 14. 当前优先级
-
-1. RF-CEM：工作站审计 candidate 039/046，确定下一轮 seed。
-2. RF-CEM：实现 `--seed-record-path` + `--seed-record-index`，并重新标定
-   490–510 MHz window objective。
-3. WF2：只在有物理依据时启用 unknown-HOM frequency fit；补多 seed 稳定性
-   报告，不把单解当唯一反演。
-4. WF4：对关键频段解决 3-mode enumeration censoring 和 ambiguous mapping；
-   非明确要求不要重跑全 campaign。
-5. 所有 workflow：逐步把 tracked 本机路径拆成 portable example 与
-   gitignored local config，但不得破坏已验证 CST 路径。
+Do not append dated mini-reports. Replace obsolete state and retain only concise provenance. Put operational commands in `FUNCTIONS_AND_ENTRYPOINTS.md` and restart procedures in `AGENT_CONTEXT_RECOVERY.md`.

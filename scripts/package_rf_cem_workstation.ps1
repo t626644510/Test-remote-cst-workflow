@@ -11,14 +11,16 @@ New-Item -ItemType Directory -Force -Path $Stage | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path $OutputFullPath) | Out-Null
 
 $Items = @(
+    "AGENTS.md",
+    "README.md",
     "pyproject.toml",
     "src",
     "workflows\rf_cem_500mhz_parametric_opt",
     "scripts\rf_cem_workstation_bootstrap.ps1",
-    "docs\rf_cem_expert_prior_schema.md",
-    "docs\rf_cem_parametric_geometry_status.md",
-    "docs\rf_cem_parametric_geometry_status.zh.md",
-    "docs\rf_cem_cst_postprocessing_template_notes.md",
+    "docs\PROJECT_STATUS_CONTEXT.md",
+    "docs\AGENT_CONTEXT_RECOVERY.md",
+    "docs\FUNCTIONS_AND_ENTRYPOINTS.md",
+    "docs\CST_AUTOMATION_INTERFACES.md",
     "tests\test_rf_cem_parametric_optimization.py",
     "tests\test_rf_cem_parametric_geometry_500mhz.py",
     "tests\test_rf_cem_500mhz.py"

@@ -1,14 +1,14 @@
 # Agent Project Status Context
 
-Status timestamp: 2026-07-12 Asia/Shanghai
+Status timestamp: 2026-07-13 Asia/Shanghai
 
 Repository family: CST accelerator-cavity automation and surrogate optimisation
 
-Current worktree: `C:\Users\lau\cst_ver3_rf_cem_review_gui`
+Repository root: resolve locally with `git rev-parse --show-toplevel`; no workstation path is canonical.
 
-Current branch at consolidation start: `codex/rf-cem-literature-review-gui`
+Canonical branch: `workflow/rf-cem-literature-review`
 
-Current HEAD at consolidation start: `066399403afd3a9a1f1c90e0ba799e1bbcca8806`
+Pre-handoff documentation baseline: `0a675df8714564e03ce305959095183524238850`
 
 This file is the detailed machine-oriented project state. Current code, tests, Git graph, and local runtime evidence have higher authority than prose. Historical tags, reports, archived Markdown, and campaign summaries are evidence only.
 
@@ -19,11 +19,13 @@ The maintained project-document set is:
 | Path | Contract |
 | --- | --- |
 | `README.md` | Chinese human handoff, background, current progress, basic use. |
+| `CONTRIBUTING.md` | Chinese Git/PR workflow, branch routing and contributor checklist. |
 | `docs/PROJECT_STATUS_CONTEXT.md` | This authoritative agent state model. |
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Recovery procedure after crash, compaction, or agent handoff. |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | Feature and executable-entry inventory. |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
-| `AGENTS.md` | Automatically loaded governance/index stub; not a sixth status document. |
+| `AGENTS.md` | Automatically loaded governance/index stub; not a status document. |
+| `.github/pull_request_template.md` | Maintained review checklist; collaboration infrastructure, not project state. |
 
 All tracked Markdown that existed before consolidation was archived at:
 
@@ -49,26 +51,26 @@ Generated run reports may still use a `.md` extension. They are runtime artifact
 
 ## 3. Canonical Git/worktree topology
 
-State observed on 2026-07-12:
+State observed on 2026-07-13. Worktree directories are local choices and deliberately omitted; discover them with `git worktree list --porcelain`.
 
-| Responsibility | Branch | Worktree | Audited baseline HEAD |
+| Responsibility | Branch/ref | Status | Audited baseline HEAD |
 | --- | --- | --- | --- |
-| Shared core | `main` | `C:\Users\lau\cst_ver3` | `6ec518b6f2db2689b7a631bc9f650c2a088e8364` |
-| WF1 SAO | `workflow/1-rfgun-sao` | `C:\Users\lau\cst_ver3_wf1` | `63207ba5a992d44823a19b8b848a4f542e1f0b6a` |
-| WF2 HOM antenna | `workflow/2-rfgun-hom-antenna` | `C:\Users\lau\cst_ver3_wf2_major_refactor` | `6a6c99d484362ce02c08589d0b3bd0e2793ce9e0` |
-| WF3 recovery/tolerance | `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | `5ba5e1f4a2c505dcdbf82eb55b45c7ca5c924430` |
-| WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
-| Canonical RF-CEM | `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | `af690d5d946406e2876679d62489574d4fa3807d` |
-| Literature hardening | `codex/rf-cem-literature-semantics-hardening` | `C:\Users\lau\cst_ver3_rf_cem_semantics` | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| Current GUI integration | `codex/rf-cem-literature-review-gui` | `C:\Users\lau\cst_ver3_rf_cem_review_gui` | `066399403afd3a9a1f1c90e0ba799e1bbcca8806` |
+| Shared core | `main` | canonical | `6ec518b6f2db2689b7a631bc9f650c2a088e8364` |
+| WF1 SAO | `workflow/1-rfgun-sao` | canonical | `63207ba5a992d44823a19b8b848a4f542e1f0b6a` |
+| WF2 HOM antenna | `workflow/2-rfgun-hom-antenna` | canonical | `6a6c99d484362ce02c08589d0b3bd0e2793ce9e0` |
+| WF3 recovery/tolerance | `workflow/3-rfgun-recovery-tolerance` | canonical | `5ba5e1f4a2c505dcdbf82eb55b45c7ca5c924430` |
+| WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
+| RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
+| Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
+| RF-CEM literature review/GUI | `workflow/rf-cem-literature-review` | canonical; colleague handoff target | `0a675df8714564e03ce305959095183524238850` before portability/handoff changes |
 
-The runtime-feature baseline audited here is exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
+The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
 1. `3803921 feat(rf-cem): harden literature semantics pipeline`
 2. `6faeee7 feat(rf-cem): add interactive literature geometry review`
 3. `0663994 feat(rf-cem): isolate paper reviews and integrate helper2 audit`
 
-The documentation-consolidation commit may sit on top of that feature baseline; resolve the current HEAD with Git rather than copying a prose hash. Merge state: not merged into canonical RF-CEM as of this status timestamp. Do not treat the experimental worktree as a new independent product. Before integration, review the feature delta and preserve the normal-conducting/superconducting isolation contract.
+The documentation-consolidation and handoff commits sit on top of that feature baseline; resolve the current HEAD with Git rather than copying a prose hash. `workflow/rf-cem-literature-review` is now an independent canonical workflow branch, not an experiment waiting for wholesale merge into `workflow/rf-cem-500mhz`. The two branches share ancestry but have different owners: live cavity optimisation remains on `workflow/rf-cem-500mhz`; literature evidence, semantics and human review remain here.
 
 WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same commit as its canonical workflow branch. Other `backup/*` refs are recovery evidence, not development baselines.
 
@@ -92,7 +94,7 @@ WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same comm
 | `src/cst_history_extractor/` | History/macro extraction, classification, recipe manifest. |
 | `src/step_feature_assistant/` | STEP topology, geometry facts, Feature candidates, partial UDSG, reviewer. |
 
-### 4.2 Current RF-CEM branch additions
+### 4.2 Current literature-review workflow additions
 
 | Package/path | Responsibility |
 | --- | --- |
@@ -495,17 +497,15 @@ Template revision adoption is explicit and provenance-bound. Dedicated `mode=new
 
 ## 12. Verification state
 
-Recommended interpreter:
-
-```text
-C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe
-```
+Recommended interpreter: the active clone/worktree's `.venv\Scripts\python.exe`, resolved from the repository root rather than another workstation directory.
 
 Current-branch full no-CST command:
 
 ```powershell
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
-& C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe -m pytest -q -m 'not cst_required'
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
+& $Python -m pytest -q -m 'not cst_required'
 ```
 
 Full no-CST result after this documentation consolidation:
@@ -535,25 +535,24 @@ Priority order:
 5. Add campaign collision, resume and idempotency contract.
 6. Validate semantic generalisation on new normal-conducting papers.
 7. Run a blinded superconducting transfer benchmark with domain-specific priors isolated.
-8. Decide whether to merge the current 3-commit experimental branch into `workflow/rf-cem-500mhz`.
-9. Promote only demonstrated cross-workflow contracts to `main`.
+8. Keep literature/GUI development on `workflow/rf-cem-literature-review`; do not merge the complete workflow into `workflow/rf-cem-500mhz`.
+9. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
 
 ## 14. Backup and recovery references
 
-Documentation-task pre-change Git bundle:
+Local backup paths are workstation-specific and must be configured as `<BACKUP_ROOT>` rather than copied literally. Relevant local evidence names are:
 
 ```text
-C:\Users\lau\cst_ver3_backups\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
-```
+<BACKUP_ROOT>\rf-cem-literature-review-pre-handoff-20260713-144716.bundle
+SHA-256: F77586AB38E70E2B293AEABACCFBB48E9AE3EB4F01BFCE10C38C287733EA0AC6
 
-Earlier strict-reorganisation backup:
-
-```text
-C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115
+<BACKUP_ROOT>\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
+<BACKUP_ROOT>\cst_ver3_strict_reorg_backup_20260710T121115\
 ```
 
 Important remote backup refs include:
 
+- `backup/rf-cem-literature-review-pre-handoff-20260713-144716`;
 - `backup/pre-strict-reorg-20260710-main`;
 - `backup/pre-strict-reorg-20260710-homwork`;
 - `backup/pre-strict-reorg-20260710-cst-step`;
@@ -570,7 +569,7 @@ Never restore over a live worktree. Clone a bundle or add a new recovery worktre
 Update this file when any of these changes:
 
 - canonical branch/worktree ownership;
-- current experimental/canonical merge state;
+- canonical branch ownership or cross-branch integration state;
 - shared-core contract;
 - RF-CEM geometry schema, parameter set, solver/material/result path;
 - literature schema, review status, isolation or merge gate;

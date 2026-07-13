@@ -316,6 +316,7 @@ Relevant backup names and remote refs:
 <BACKUP_ROOT>\rf-cem-literature-review-pre-handoff-20260713-144716.bundle
 SHA-256: F77586AB38E70E2B293AEABACCFBB48E9AE3EB4F01BFCE10C38C287733EA0AC6
 remote tag: backup/rf-cem-literature-review-pre-handoff-20260713-144716
+pre-rebase tag: backup/rf-cem-literature-review-pre-canonical-rebase-20260713-145915
 
 <BACKUP_ROOT>\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
 <BACKUP_ROOT>\cst_ver3_strict_reorg_backup_20260710T121115\

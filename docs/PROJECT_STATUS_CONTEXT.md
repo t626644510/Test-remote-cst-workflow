@@ -26,6 +26,7 @@ The maintained project-document set is:
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
 | `AGENTS.md` | Automatically loaded governance/index stub; not a status document. |
 | `.github/pull_request_template.md` | Maintained review checklist; collaboration infrastructure, not project state. |
+| `.github/workflows/no-cst.yml` | Cross-branch offline validation gate; collaboration infrastructure, not project state. |
 
 All tracked Markdown that existed before consolidation was archived at:
 
@@ -55,7 +56,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 
 | Responsibility | Branch/ref | Status | Audited baseline HEAD |
 | --- | --- | --- | --- |
-| Shared core | `main` | canonical | `6ec518b6f2db2689b7a631bc9f650c2a088e8364` |
+| Shared core | `main` | canonical | `8f3f89d7f6627feb98f8338416500a4ce457a31c` |
 | WF1 SAO | `workflow/1-rfgun-sao` | canonical | `63207ba5a992d44823a19b8b848a4f542e1f0b6a` |
 | WF2 HOM antenna | `workflow/2-rfgun-hom-antenna` | canonical | `6a6c99d484362ce02c08589d0b3bd0e2793ce9e0` |
 | WF3 recovery/tolerance | `workflow/3-rfgun-recovery-tolerance` | canonical | `5ba5e1f4a2c505dcdbf82eb55b45c7ca5c924430` |
@@ -553,6 +554,7 @@ SHA-256: F77586AB38E70E2B293AEABACCFBB48E9AE3EB4F01BFCE10C38C287733EA0AC6
 Important remote backup refs include:
 
 - `backup/rf-cem-literature-review-pre-handoff-20260713-144716`;
+- `backup/rf-cem-literature-review-pre-canonical-rebase-20260713-145915`;
 - `backup/pre-strict-reorg-20260710-main`;
 - `backup/pre-strict-reorg-20260710-homwork`;
 - `backup/pre-strict-reorg-20260710-cst-step`;

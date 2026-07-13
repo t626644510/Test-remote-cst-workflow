@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Literal
 
 from .history_templates import CstHistoryBlock, CstHistoryTemplates
@@ -384,8 +384,13 @@ def _emit_vba_script(actions: list[dict], report: dict) -> str:
 
 
 def _step_filename_argument(step_file: Path, filename_mode: FilenameMode) -> str:
+    raw_path = str(step_file)
+    windows_path = PureWindowsPath(raw_path)
     if filename_mode == "star-basename":
-        return f"*{step_file.name}"
+        # CST filenames are Windows paths even when no-CST translation runs on Linux CI.
+        return f"*{windows_path.name}"
     if filename_mode == "absolute":
+        if windows_path.is_absolute():
+            return str(windows_path)
         return str(step_file.resolve())
     raise ValueError(f"Unsupported STEP filename mode: {filename_mode}")

@@ -1,6 +1,6 @@
 # Agent Context Recovery and Maintenance Runbook
 
-Updated: 2026-07-12
+Updated: 2026-07-13
 
 Purpose: restore reliable context after a crash, context compaction, task handoff, stale GUI process, interrupted no-CST run, or branch confusion.
 
@@ -74,7 +74,7 @@ Use this decision table before editing:
 | Recovery or tolerance behavior | `workflow/3-rfgun-recovery-tolerance` |
 | HOM eigenmode campaign behavior | `workflow/4-rfgun-hom-eigenmode` |
 | 500 MHz parametric RF-CEM or live campaign | `workflow/rf-cem-500mhz` |
-| Literature semantics/GUI currently under review | `codex/rf-cem-literature-review-gui` until integration decision |
+| Literature evidence, semantics, geometry review or GUI | `workflow/rf-cem-literature-review` |
 
 If current cwd is the wrong owner:
 
@@ -84,20 +84,17 @@ If current cwd is the wrong owner:
 4. preserve the user’s dirty changes;
 5. record the branch change.
 
-## 4. Known worktrees
+## 4. Discovering worktrees
 
-```text
-C:\Users\lau\cst_ver3                         main
-C:\Users\lau\cst_ver3_wf1                     workflow/1-rfgun-sao
-C:\Users\lau\cst_ver3_wf2_major_refactor      workflow/2-rfgun-hom-antenna
-C:\Users\lau\cst_ver3_wf3                     workflow/3-rfgun-recovery-tolerance
-C:\Users\lau\cst_ver3_HOMwork                 workflow/4-rfgun-hom-eigenmode
-C:\Users\lau\cst_ver3_project                 workflow/rf-cem-500mhz
-C:\Users\lau\cst_ver3_rf_cem_semantics        codex/rf-cem-literature-semantics-hardening
-C:\Users\lau\cst_ver3_rf_cem_review_gui       codex/rf-cem-literature-review-gui
+Worktree directory names are local state, not repository truth. Never infer branch ownership from a directory name. Discover the current machine's mapping:
+
+```powershell
+git worktree list --porcelain
+git branch --show-current
+git rev-parse --show-toplevel
 ```
 
-Always confirm with `git worktree list`. These paths are a recovery hint, not a guarantee.
+The canonical branch names are listed in section 3 and `PROJECT_STATUS_CONTEXT.md`. A new contributor may use one clone without additional worktrees; worktrees are optional.
 
 ## 5. Recovering an interrupted documentation or code task
 
@@ -134,11 +131,12 @@ If no commit exists, use the current diff as the only authoritative partial stat
 
 ### 5.3 Validate the partial state before continuing
 
-Start with syntax and targeted tests. Use the shared environment unless the active worktree has its own known-good environment:
+Start with syntax and targeted tests. Use the active clone/worktree's environment:
 
 ```powershell
-$py = 'C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe'
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$py = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
 & $py -m compileall -q src workflows
 & $py -m pytest -q path\to\target_test.py
 ```
@@ -154,7 +152,8 @@ The GUI is a local HTTP service, not a static HTML application.
 Given the session root:
 
 ```powershell
-$launchPath = 'C:\path\to\review_session\review_launch.json'
+$SessionRoot = '<LOCAL_REVIEW_SESSION_ROOT>'
+$launchPath = Join-Path $SessionRoot 'review_launch.json'
 $launch = Get-Content -Raw -Encoding UTF8 $launchPath | ConvertFrom-Json
 $launch.review_url
 $launch.pid
@@ -175,15 +174,17 @@ If process lookup fails or the URL is unreachable, start a new service. Preserve
 ### 6.3 Restart
 
 ```powershell
-Set-Location C:\Users\lau\cst_ver3_rf_cem_review_gui
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
-$py = 'C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe'
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$py = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
+$BundleRoot = '<LOCAL_LITERATURE_BUNDLE_ROOT>'
+$SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
 & $py -m rf_cem.literature_semantics review-gui `
-  --bundle-root analysis_outputs\rf_cem_literature_pilot_20260710 `
+  --bundle-root $BundleRoot `
   --manifest corpus_manifest.json `
   --paper-id sls2 `
-  --session-root analysis_outputs\rf_cem_literature_pilot_20260710\review_sessions\sls2_gui
+  --session-root $SessionRoot
 ```
 
 If the session reports a source-payload hash mismatch, do not bypass it. Use a new `--session-root`. Old state remains audit evidence.
@@ -204,8 +205,9 @@ If the session reports a source-payload hash mismatch, do not bypass it. Use a n
 ### 7.1 Targeted test
 
 ```powershell
-$py = 'C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe'
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$py = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
 & $py -m pytest -q tests\test_target.py
 ```
 
@@ -293,8 +295,11 @@ At minimum:
 ```powershell
 git status --short --branch
 git rev-parse HEAD
-git bundle create C:\safe\path\repository_all_refs.bundle --all
-git bundle verify C:\safe\path\repository_all_refs.bundle
+$BackupRoot = '<BACKUP_DIRECTORY_OUTSIDE_WORKTREE>'
+$BundlePath = Join-Path $BackupRoot 'repository_all_refs.bundle'
+git bundle create $BundlePath --all
+git bundle verify $BundlePath
+Get-FileHash -Algorithm SHA256 -LiteralPath $BundlePath
 ```
 
 For dirty or untracked user inputs, a Git bundle is insufficient. Create a scoped filesystem archive that:
@@ -305,11 +310,15 @@ For dirty or untracked user inputs, a Git bundle is insufficient. Create a scope
 - has a SHA-256;
 - is stored outside the worktree when practical.
 
-Current relevant backups:
+Relevant backup names and remote refs:
 
 ```text
-C:\Users\lau\cst_ver3_backups\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
-C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115
+<BACKUP_ROOT>\rf-cem-literature-review-pre-handoff-20260713-144716.bundle
+SHA-256: F77586AB38E70E2B293AEABACCFBB48E9AE3EB4F01BFCE10C38C287733EA0AC6
+remote tag: backup/rf-cem-literature-review-pre-handoff-20260713-144716
+
+<BACKUP_ROOT>\rf_cem_docs_consolidation_20260712_224614\repository_all_refs.bundle
+<BACKUP_ROOT>\cst_ver3_strict_reorg_backup_20260710T121115\
 documentation_archive\markdown_before_consolidation_20260712_HEAD-0663994.zip
 ```
 
@@ -320,43 +329,46 @@ Do not restore over the active worktree.
 Preferred Git bundle inspection:
 
 ```powershell
-git clone C:\path\repository_all_refs.bundle C:\path\restored_repository
-Set-Location C:\path\restored_repository
+$BundlePath = '<PATH_TO_VERIFIED_GIT_BUNDLE>'
+$RestoreRoot = '<NEW_EMPTY_RESTORE_DIRECTORY>'
+git clone $BundlePath $RestoreRoot
+Set-Location $RestoreRoot
 git branch --all
 git log --oneline --all --decorate --graph -30
 ```
 
 Then compare and selectively cherry-pick or copy reviewed files. For archived documentation, extract to a separate directory and read only; do not reintroduce the old document set wholesale.
 
-## 11. Integration recovery for the current GUI branch
+## 11. Canonical literature-review branch relationship
 
-Recorded relation:
+Recorded ancestry before the handoff/portability commits:
 
 ```text
 workflow/rf-cem-500mhz
   + 3803921 literature semantics hardening
   + 6faeee7 interactive literature geometry review
   + 0663994 paper isolation + Helper2 audit
+  + 0a675df documentation consolidation
+  -> workflow/rf-cem-literature-review
 ```
 
-Before merging into canonical RF-CEM:
+`workflow/rf-cem-literature-review` is now the canonical owner of literature ingestion, semantic review, geometry projection and the local GUI. `workflow/rf-cem-500mhz` remains the canonical owner of the 500 MHz live geometry/campaign workflow. Do not merge the complete literature branch into either `workflow/rf-cem-500mhz` or `main`.
+
+Before integrating a reusable subset elsewhere:
 
 1. fetch and compare current refs;
-2. ensure canonical did not advance;
-3. run full no-CST on both relevant states if needed;
-4. inspect all changed package-data and ignored-output assumptions;
-5. verify NC/SRF isolation tests;
-6. verify local GUI authentication tests;
-7. verify CadQuery worker behavior;
-8. preserve user review sessions outside Git;
-9. use a backup ref/bundle;
-10. integrate into `workflow/rf-cem-500mhz`, not `main`.
-
-Do not merge literature-specific CLI or GUI directly into strict `main`.
+2. identify the smallest stable contract and its actual consumers;
+3. open a focused change against the correct owner branch;
+4. run full no-CST on both relevant states if needed;
+5. inspect package-data and ignored-output assumptions;
+6. preserve NC/SRF isolation, local GUI authentication and CadQuery worker behavior;
+7. preserve user review sessions outside Git;
+8. use a backup ref/bundle before history-changing integration;
+9. never copy a shared module back under a second name.
 
 ## 12. Documentation maintenance procedure
 
-Only the five maintained documents plus `AGENTS.md` are source documentation.
+The six maintained project documents are `README.md`, `CONTRIBUTING.md` and the four files under `docs/` listed below. `AGENTS.md` is the governance entry; `.github/pull_request_template.md` is collaboration infrastructure.
 
 When code changes:
 
@@ -366,14 +378,17 @@ When code changes:
 4. keep CST evidence in `CST_AUTOMATION_INTERFACES.md`;
 5. keep transient recovery steps here;
 6. keep human explanations in root `README.md`;
-7. update `PROJECT_STATUS_CONTEXT.md` for architecture, maturity, branch or priority changes;
-8. run a Markdown inventory and link scan.
+7. keep Git/PR instructions in `CONTRIBUTING.md`;
+8. update `PROJECT_STATUS_CONTEXT.md` for architecture, maturity, branch or priority changes;
+9. run a Markdown inventory and link/path scan.
 
 Expected tracked source Markdown:
 
 ```text
 AGENTS.md
+CONTRIBUTING.md
 README.md
+.github/pull_request_template.md
 docs/AGENT_CONTEXT_RECOVERY.md
 docs/CST_AUTOMATION_INTERFACES.md
 docs/FUNCTIONS_AND_ENTRYPOINTS.md

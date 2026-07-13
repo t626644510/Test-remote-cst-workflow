@@ -12,7 +12,7 @@
 3. 用代理模型、恢复机制和评估数据库组织不同工作流；
 4. 在 RF-CEM 路线上，把论文证据、人工语义审核、参数化几何、STEP、CSTTranslator 和本征模结果连成可审计链路。
 
-当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。当前实验分支还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成，以及 Helper2 面级 Feature/UDSG 审核。
+当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成，以及 Helper2 面级 Feature/UDSG 审核。
 
 > **RF 备注：**“几何生成成功”只说明模型能被构造，不等于频率、R/Q、Q 或峰值场已经复现。最终物理结论仍要由明确的求解器设置、材料、边界、网格和结果定义支持。
 >
@@ -68,19 +68,19 @@
 
 ## 3. 仓库、分支与工作目录
 
-这些目录是同一个 Git 仓库的不同 worktree，不是互不相关的项目副本。
+这些分支属于同一个 Git 仓库。每个人的 clone/worktree 目录都可以不同，目录名不是项目契约；需要确认本机目录时运行 `git worktree list`。
 
-| 工作目录 | Canonical 分支 | 主要责任 |
-| --- | --- | --- |
-| `C:\Users\lau\cst_ver3` | `main` | 严格共享核心、CST history 工具、STEP Feature Assistant |
-| `C:\Users\lau\cst_ver3_wf1` | `workflow/1-rfgun-sao` | RF gun 单/双 pass SAO |
-| `C:\Users\lau\cst_ver3_wf2_major_refactor` | `workflow/2-rfgun-hom-antenna` | 双工程 HOM 天线与 wake 拟合 |
-| `C:\Users\lau\cst_ver3_wf3` | `workflow/3-rfgun-recovery-tolerance` | recovery 与 tolerance |
-| `C:\Users\lau\cst_ver3_HOMwork` | `workflow/4-rfgun-hom-eigenmode` | HOM eigenmode campaign |
-| `C:\Users\lau\cst_ver3_project` | `workflow/rf-cem-500mhz` | canonical 500 MHz RF-CEM |
-| `C:\Users\lau\cst_ver3_rf_cem_review_gui` | `codex/rf-cem-literature-review-gui` | 当前文献语义与几何审核实验分支 |
+| Canonical 分支 | 主要责任 |
+| --- | --- |
+| `main` | 严格共享核心、CST history 工具、STEP Feature Assistant |
+| `workflow/1-rfgun-sao` | RF gun 单/双 pass SAO |
+| `workflow/2-rfgun-hom-antenna` | 双工程 HOM 天线与 wake 拟合 |
+| `workflow/3-rfgun-recovery-tolerance` | recovery 与 tolerance |
+| `workflow/4-rfgun-hom-eigenmode` | HOM eigenmode campaign |
+| `workflow/rf-cem-500mhz` | 500 MHz 常温单腔参数化几何与 live campaign |
+| `workflow/rf-cem-literature-review` | 文献获取、语义审核、几何投影和 Helper2 GUI；新同事在此分支工作 |
 
-当前文档所在分支以 `workflow/rf-cem-500mhz` 为基线，向前增加 3 个提交；截至 2026-07-12 尚未合并回 canonical RF-CEM 分支。
+`workflow/rf-cem-literature-review` 从 `workflow/rf-cem-500mhz` 的已验证能力发展而来，但现在是文献语义与审阅 GUI 的唯一 canonical owner。它不会整体并回 `workflow/rf-cem-500mhz`；只有契约稳定、确有复用价值的通用组件，才按所有权规则单独提级。
 
 > **RF 备注：**常温腔与超导腔可以共享证据 schema、审核控件和几何术语，但不能直接共享材料损耗、Q0、低温、峰值场和 cell coupling 等物理先验。
 >
@@ -157,7 +157,7 @@ reviewed labels / expert prior
 
 ### 4.7 文献语义与审阅 GUI
 
-当前实验分支已实现：
+当前规范工作流分支已实现：
 
 - arXiv 检索候选与显式版本 PDF 固定；
 - PDF SHA-256、证据选页与图片渲染；
@@ -192,32 +192,31 @@ reviewed labels / expert prior
 先阅读：
 
 1. 本文；
-2. `docs/PROJECT_STATUS_CONTEXT.md`；
-3. `docs/FUNCTIONS_AND_ENTRYPOINTS.md`；
-4. 需要恢复工作时再读 `docs/AGENT_CONTEXT_RECOVERY.md`；
-5. 涉及 CST 时必须读 `docs/CST_AUTOMATION_INTERFACES.md`。
+2. `CONTRIBUTING.md`，按其中流程配置 fork、upstream、任务分支和 PR；
+3. `docs/PROJECT_STATUS_CONTEXT.md`；
+4. `docs/FUNCTIONS_AND_ENTRYPOINTS.md`；
+5. 需要恢复工作时再读 `docs/AGENT_CONTEXT_RECOVERY.md`；
+6. 涉及 CST 时必须读 `docs/CST_AUTOMATION_INTERFACES.md`。
 
 然后检查本机状态：
 
 ```powershell
-Set-Location C:\Users\lau\cst_ver3_rf_cem_review_gui
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+Set-Location $RepoRoot
 git status --short --branch
 git worktree list
 ```
 
 ### 5.2 Python 与 no-CST 验证
 
-当前建议复用：
-
-```text
-C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe
-```
+每个 clone/worktree 使用自己的 `.venv`。首次安装步骤见 `CONTRIBUTING.md`。
 
 ```powershell
-Set-Location C:\Users\lau\cst_ver3_rf_cem_review_gui
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
 
-& C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe `
+& $Python `
   -m pytest -q -m 'not cst_required'
 ```
 
@@ -226,18 +225,23 @@ $env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
 ### 5.3 启动 SLS-2 文献审阅 GUI
 
 ```powershell
-Set-Location C:\Users\lau\cst_ver3_rf_cem_review_gui
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
+$BundleRoot = '<LOCAL_LITERATURE_BUNDLE_ROOT>'
+$SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
-& C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe `
+& $Python `
   -m rf_cem.literature_semantics review-gui `
-  --bundle-root analysis_outputs\rf_cem_literature_pilot_20260710 `
+  --bundle-root $BundleRoot `
   --manifest corpus_manifest.json `
   --paper-id sls2 `
-  --session-root analysis_outputs\rf_cem_literature_pilot_20260710\review_sessions\sls2_gui
+  --session-root $SessionRoot
 ```
 
 程序会输出带随机 token 的 `http://127.0.0.1:<port>/...` 地址。必须打开完整 URL，不能直接双击 HTML。
+
+`<LOCAL_LITERATURE_BUNDLE_ROOT>` 是未提交到 Git 的本地论文包目录。新同事需要单独接收经授权的论文/审计数据，或者按功能入口文档重新生成；不能假设 clone 后自动存在 `analysis_outputs/`。
 
 > **RF 备注：**建议先逐条检查论文证据与定义，再审核语义，最后才看几何投影。单篇数值通常先标 Soft OK。
 >
@@ -281,12 +285,13 @@ $env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
 | 文件 | 读者与用途 |
 | --- | --- |
 | `README.md` | 人类中文背景、现状、入门与交接；就是本文。 |
+| `CONTRIBUTING.md` | 中文 Git/PR 协作流程、分支路由和提交前自查。 |
 | `docs/PROJECT_STATUS_CONTEXT.md` | Agent 使用的完整、机械化项目状态真值。 |
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Agent 中断、死机、换任务后的恢复与维护步骤。 |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | 全部主要功能、CLI、输入输出和分支入口。 |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST 官方接口、仓库封装与直接项目文件证据。 |
 
-根 `AGENTS.md` 是 Codex 自动读取的短治理入口，只保留不可违反的规则和上述文档索引，不作为第六份项目说明。
+根 `AGENTS.md` 是 Codex 自动读取的短治理入口，只保留不可违反的规则和上述文档索引；`.github/` 中的 PR 模板与 CI 是协作基础设施，不是项目状态报告。
 
 收口前的 25 份 Markdown 原件已整体归档为：
 
@@ -295,4 +300,4 @@ documentation_archive\markdown_before_consolidation_20260712_HEAD-0663994.zip
 SHA-256: 342f999e67bc10ccf6a8d7d6685ca57a93bc27fb666c9c5c61516b0c5e986ab6
 ```
 
-历史内容只用于追溯，不再单独维护；出现冲突时，以当前代码、测试、Git 状态和以上五份文档为准。
+历史内容只用于追溯，不再单独维护；出现冲突时，以当前代码、测试、Git 状态和以上六份文档为准。

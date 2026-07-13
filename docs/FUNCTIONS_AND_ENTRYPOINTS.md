@@ -1,6 +1,6 @@
 # Functions and Entrypoints Catalog
 
-Updated: 2026-07-12
+Updated: 2026-07-13
 
 Audience: agents and maintainers locating an existing capability before adding code.
 
@@ -8,18 +8,23 @@ This catalog describes executable entries, important public classes, inputs, out
 
 ## 1. Execution conventions
 
-Recommended interpreter for the current RF-CEM worktrees:
-
-```text
-C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe
-```
-
-From a worktree root:
+From a clone/worktree root, resolve the repository and its own virtual environment:
 
 ```powershell
-$py = 'C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe'
-$env:PYTHONPATH = (Join-Path (Resolve-Path '.') 'src')
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$py = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+$env:PYTHONPATH = Join-Path $RepoRoot 'src'
 ```
+
+External paths are local configuration, not repository-relative paths. Examples use these explicit placeholders:
+
+```powershell
+$CstLibraryPath = '<CST_PYTHON_LIBRARY_DIR>'
+$TemplateProjectDir = '<CST_TEMPLATE_PROJECT_DIR>'
+$LocalDataRoot = '<LOCAL_DATA_ROOT>'
+```
+
+Replace each placeholder on the current machine before running a command. Never commit the resolved values.
 
 Dependency groups:
 
@@ -36,7 +41,7 @@ Editable install:
 & $py -m pip install -e '.[dev,cad,review]'
 ```
 
-Do not install or upgrade dependencies during a bounded audit unless necessary and authorized. The current GUI worktree normally reuses the canonical RF-CEM virtual environment.
+Do not install or upgrade dependencies during a bounded audit unless necessary and authorized. Each contributor clone/worktree should use its own known-good environment; do not hard-code another worktree's interpreter.
 
 ## 2. Quick entrypoint index
 
@@ -54,7 +59,7 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m rf_cem.live_500mhz_postprocessing_diagnostic` | RF-CEM | yes | Attach templates, solve, read Frequency/RQ/Q |
 | `python -m workflows.rf_cem_500mhz_parametric_opt.runner` | RF-CEM | no | Generate baseline and exploratory candidates |
 | `python -m workflows.rf_cem_500mhz_parametric_opt.live_campaign` | RF-CEM | yes | Repeated quick-live or SAO campaign |
-| `python -m rf_cem.literature_semantics ...` | current GUI branch | no | Literature discovery, evidence, semantics, audits, GUI |
+| `python -m rf_cem.literature_semantics ...` | `workflow/rf-cem-literature-review` | no | Literature discovery, evidence, semantics, audits, GUI |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
 | `python run_workflow_3.py` | WF3 branch only | yes | Recovery optimisation |
@@ -213,10 +218,11 @@ Module:
 ### 4.2 CST project input
 
 ```powershell
+$CstProjectFile = '<CST_PROJECT_FILE>'
 & $py -m cst_history_extractor `
-  --cst-file C:\path\project.cst `
+  --cst-file $CstProjectFile `
   --output-dir runs\project_history `
-  --cst-library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries'
+  --cst-library-path $CstLibraryPath
 ```
 
 The library path is optional. It is used only to open the project and attempt to trigger unpacking when adjacent `Model/3D/ModelHistory.json` is absent.
@@ -515,7 +521,7 @@ Exit code 1 means blocking geometry errors were reported.
 & $py -m rf_cem.live_500mhz_diagnostic `
   --appendix Appendix\500MHz_baseline `
   --output-dir runs\baseline_live_smoke `
-  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --library-path $CstLibraryPath `
   --connect-mode new
 ```
 
@@ -526,7 +532,7 @@ This creates a disposable CST project and executes generated setup blocks. It in
 ```powershell
 & $py -m rf_cem.live_500mhz_parametric_diagnostic `
   --package-dir runs\parametric_geometry_500mhz `
-  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --library-path $CstLibraryPath `
   --connect-mode new `
   --run-solver
 ```
@@ -538,8 +544,8 @@ Without `--run-solver` it is import/setup only. With it, solver timeout defaults
 ```powershell
 & $py -m rf_cem.live_500mhz_postprocessing_diagnostic `
   --package-dir runs\parametric_geometry_500mhz `
-  --template-project-dir D:\ModelData\bare `
-  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --template-project-dir $TemplateProjectDir `
+  --library-path $CstLibraryPath `
   --connect-mode new `
   --run-solver
 ```
@@ -565,7 +571,7 @@ Outputs:
 
 ## 7. RF-CEM parametric optimisation workflow
 
-Owner: `workflow/rf-cem-500mhz` and current descendant GUI branch.
+Owner: live campaign behavior belongs to `workflow/rf-cem-500mhz`; the literature branch inherits this baseline only for review/geometry comparison and must not become a second live-campaign owner.
 
 ### 7.1 no-CST scan
 
@@ -592,8 +598,8 @@ Outputs:
 & $py -m workflows.rf_cem_500mhz_parametric_opt.live_campaign `
   --mode quick-live `
   --output-dir runs\rf_cem_quick_live `
-  --template-project-dir D:\ModelData\bare `
-  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --template-project-dir $TemplateProjectDir `
+  --library-path $CstLibraryPath `
   --start-at-index 1 `
   --max-evals 4
 ```
@@ -604,8 +610,8 @@ Outputs:
 & $py -m workflows.rf_cem_500mhz_parametric_opt.live_campaign `
   --mode sao `
   --output-dir runs\rf_cem_sao `
-  --template-project-dir D:\ModelData\bare `
-  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --template-project-dir $TemplateProjectDir `
+  --library-path $CstLibraryPath `
   --seed-candidate-index 4 `
   --local-bounds-scale 0.35 `
   --n-initial 6 `
@@ -643,7 +649,8 @@ Subcommands:
 ### 8.1 `validate`
 
 ```powershell
-& $py -m rf_cem.literature_semantics validate --package C:\path\paper
+$Package = '<LITERATURE_PACKAGE_OR_FILE>'
+& $py -m rf_cem.literature_semantics validate --package $Package
 ```
 
 Accepts a package directory or JSON/YAML file. Returns nonzero on validation errors and prints exact field paths.
@@ -651,10 +658,13 @@ Accepts a package directory or JSON/YAML file. Returns nonzero on validation err
 ### 8.2 `draft-prior`
 
 ```powershell
+$Package = '<LITERATURE_SEMANTICS_JSON>'
+$BasePrior = '<EXPERT_PRIOR_YAML>'
+$DraftPrior = '<OUTPUT_DRAFT_PRIOR_YAML>'
 & $py -m rf_cem.literature_semantics draft-prior `
-  --package C:\path\literature_semantics.v0.json `
-  --base-prior C:\path\expert_prior.v0.yaml `
-  --out C:\path\expert_prior.draft.v0.yaml
+  --package $Package `
+  --base-prior $BasePrior `
+  --out $DraftPrior
 ```
 
 All generated patch items start `pending` and are hash-bound to the semantic package and base prior.
@@ -662,11 +672,15 @@ All generated patch items start `pending` and are hash-bound to the semantic pac
 ### 8.3 `merge-prior`
 
 ```powershell
+$Package = '<LITERATURE_SEMANTICS_JSON>'
+$BasePrior = '<EXPERT_PRIOR_YAML>'
+$ReviewedDraft = '<REVIEWED_DRAFT_PRIOR_YAML>'
+$ReviewedPrior = '<OUTPUT_REVIEWED_PRIOR_YAML>'
 & $py -m rf_cem.literature_semantics merge-prior `
-  --package C:\path\literature_semantics.v0.json `
-  --base-prior C:\path\expert_prior.v0.yaml `
-  --draft-prior C:\path\reviewed.draft.v0.yaml `
-  --out C:\path\expert_prior.reviewed.v0.yaml
+  --package $Package `
+  --base-prior $BasePrior `
+  --draft-prior $ReviewedDraft `
+  --out $ReviewedPrior
 ```
 
 Default `--require-reviewed` blocks pending/rejected/needs-evidence patches. `--allow-unreviewed` is an explicit diagnostic mode and still enforces integrity and ontology validation.
@@ -674,10 +688,13 @@ Default `--require-reviewed` blocks pending/rejected/needs-evidence patches. `--
 ### 8.4 `audit`
 
 ```powershell
+$Package = '<LITERATURE_SEMANTICS_JSON>'
+$DraftPrior = '<DRAFT_PRIOR_YAML>'
+$AuditHtml = '<OUTPUT_AUDIT_HTML>'
 & $py -m rf_cem.literature_semantics audit `
-  --package C:\path\literature_semantics.v0.json `
-  --draft-prior C:\path\expert_prior.draft.v0.yaml `
-  --out C:\path\paper_audit.html
+  --package $Package `
+  --draft-prior $DraftPrior `
+  --out $AuditHtml
 ```
 
 Writes one self-contained static paper audit.
@@ -706,11 +723,14 @@ Requires an explicit version for PDF download. Writes immutable `source.pdf` and
 ### 8.7 `render-evidence`
 
 ```powershell
+$SourcePdf = '<SOURCE_PDF>'
+$FigureDir = '<OUTPUT_FIGURE_DIRECTORY>'
+$PdfToPpm = '<PDFTOPPM_EXECUTABLE>'
 & $py -m rf_cem.literature_semantics render-evidence `
-  --pdf C:\path\source.pdf `
+  --pdf $SourcePdf `
   --pages 4 8 9 11 `
-  --out-dir C:\path\figures `
-  --pdftoppm C:\path\pdftoppm.exe `
+  --out-dir $FigureDir `
+  --pdftoppm $PdfToPpm `
   --dpi 150
 ```
 
@@ -721,11 +741,14 @@ Page numbers are one-based. Writes rendered images and `render_manifest.json`.
 Isolated human audit:
 
 ```powershell
+$BundleRoot = '<LOCAL_LITERATURE_BUNDLE_ROOT>'
+$Manifest = Join-Path $BundleRoot 'corpus_manifest.json'
+$AuditHtml = Join-Path $BundleRoot 'normal_conducting_sls2.html'
 & $py -m rf_cem.literature_semantics corpus-audit `
-  --bundle-root C:\path\corpus `
-  --manifest C:\path\corpus\corpus_manifest.json `
+  --bundle-root $BundleRoot `
+  --manifest $Manifest `
   --paper-id sls2 `
-  --out C:\path\normal_conducting_sls2.html
+  --out $AuditHtml
 ```
 
 Omit `--paper-id` only for combined integrity/statistical reporting. Do not use a combined NC/SRF page as the human OK/Reject surface.
@@ -865,11 +888,13 @@ Default mode is single-pass. Two-pass CST is opt-in. Root `run_workflow_1.py` is
 ### 10.2 WF2: `workflow/2-rfgun-hom-antenna`
 
 ```powershell
+$WarmupIndex = '<WF2_WARMUP_INDEX_JSONL>'
+$SmokeConfig = '<WF2_SMOKE_CONFIG_YAML>'
 & $py run_workflow_2.py --help
 & $py run_workflow_2.py --auto-resume --heartbeat
 & $py run_workflow_2.py --auto-resume --recovery-only
-& $py run_workflow_2.py --warmup-from-db D:\Results\wf2_warmup_total\index.total.jsonl
-& $py run_workflow_2.py --config D:\smoke\config.yaml --smoke-only
+& $py run_workflow_2.py --warmup-from-db $WarmupIndex
+& $py run_workflow_2.py --config $SmokeConfig --smoke-only
 ```
 
 The package-local `workflows/rfgun_hom_antenna/config.yaml` is the tracked source of truth. Scheduler compatibility remains at the root shim.
@@ -894,28 +919,32 @@ Tolerance simulation, requires CST:
 Single database analysis, no-CST:
 
 ```powershell
+$EvaluationDb = '<TOLERANCE_EVALUATION_DB>'
 & $py -m workflows.rfgun_tolerance.cli `
-  --db C:\path\evaluations.db `
+  --db $EvaluationDb `
   --output runs\tolerance\report.md
 ```
 
 Cross-level analysis, no-CST:
 
 ```powershell
+$Tolerance3Db = '<TOLERANCE_3UM_DB>'
+$Tolerance5Db = '<TOLERANCE_5UM_DB>'
 & $py -m workflows.rfgun_tolerance.campaign_cli `
   --config config\default.yaml `
-  --db 3=C:\path\tolerance_eval_3um.db `
-  --db 5=C:\path\tolerance_eval_5um.db `
+  --db "3=$Tolerance3Db" `
+  --db "5=$Tolerance5Db" `
   --output runs\tolerance\campaign_report.md
 ```
 
 ### 10.4 WF4: `workflow/4-rfgun-hom-eigenmode`
 
 ```powershell
+$CampaignRoot = '<WF4_CAMPAIGN_ROOT>'
 & $py run_workflow_4.py --help
 & $py run_workflow_4.py --plan-only
 & $py run_workflow_4.py --resume-preview
-& $py run_workflow_4.py --offline-only C:\path\campaign
+& $py run_workflow_4.py --offline-only $CampaignRoot
 & $py run_workflow_4.py --audit-results
 ```
 

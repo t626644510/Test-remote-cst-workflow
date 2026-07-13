@@ -13,6 +13,12 @@ from pathlib import Path
 import sys
 
 
+# Profile coordinates use millimetres. A 1e-3 mm (1 micrometre) fitting
+# tolerance is negligible for the cavity scale while avoiding platform-specific
+# failures seen with CadQuery's 1e-6 default variational smoothing.
+_SPLINE_APPROX_TOLERANCE_MM = 1e-3
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m rf_cem.parametric_geometry.core.cadquery_worker")
     parser.add_argument("--request", type=Path, required=True)
@@ -149,7 +155,13 @@ def _workplane_from_segments(cq, profile_segments: list[dict]):
                 raise ValueError(
                     f"nurbs segment {segment.get('id')} degree_max must be from 1 to 5"
                 )
-            wp = wp.splineApprox(points, maxDeg=max_degree, includeCurrent=True)
+            wp = wp.splineApprox(
+                points,
+                tol=_SPLINE_APPROX_TOLERANCE_MM,
+                maxDeg=max_degree,
+                smoothing=None,
+                includeCurrent=True,
+            )
         else:
             wp = wp.lineTo(float(end["r"]), float(end["z"]))
     last = profile_segments[-1]["end"]
@@ -179,6 +191,8 @@ def _segment_approximation_reports(profile_segments: list[dict]) -> list[dict]:
                 "input_source": "sampled_points" if sampled else "control_points",
                 "input_point_count": len(sampled or controls),
                 "max_degree": int(curve.get("degree_max") or 3),
+                "tolerance_mm": _SPLINE_APPROX_TOLERANCE_MM,
+                "smoothing": None,
                 "declared_source_curve": curve.get("source_curve"),
             }
         )

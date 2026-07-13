@@ -288,6 +288,11 @@ def test_real_cadquery_worker_generates_valid_no_seed_step(tmp_path):
     assert report["kernel_report"]["curve_generation"]["mode"] == "cadquery_curve_segments"
     assert len(report["kernel_report"]["curve_generation"]["approximations"]) == 4
     assert all(item["max_degree"] == 5 for item in report["kernel_report"]["curve_generation"]["approximations"])
+    assert all(
+        item["tolerance_mm"] == pytest.approx(1e-3)
+        for item in report["kernel_report"]["curve_generation"]["approximations"]
+    )
+    assert all(item["smoothing"] is None for item in report["kernel_report"]["curve_generation"]["approximations"])
     assert Path(report["geometry"]["step_path"]).stat().st_size > 0
 
 

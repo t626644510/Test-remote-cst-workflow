@@ -1,6 +1,6 @@
 # Git 归档快照目录
 
-状态：`PREPARED`（归档标签已在本地建立；旧引用尚未删除）
+状态：`COMPLETE`（归档标签和目录分支已在远端验证；旧引用已安全退役）
 
 更新日期：2026-07-13（Asia/Shanghai）
 
@@ -26,6 +26,18 @@
 | `git bundle verify` | 通过；记录完整历史与 48 个 refs |
 
 绝对路径只记录本次备份在当前工作站的位置，不是仓库规范路径。换机后请用文件名和 SHA-256 定位、校验备份。
+
+退役 semantics 工作树前，还发现了未进入 Git 的 ignored artifacts，并进行了独立备份：
+
+| 字段 | 值 |
+|---|---|
+| 目录名 | `rf-cem-semantics-local-artifacts-20260713-235827` |
+| 当前工作站位置 | `C:\Users\lau\cst_ver3_backups\rf-cem-semantics-local-artifacts-20260713-235827` |
+| 文件数 | `198` |
+| 总大小 | `17,494,431` bytes |
+| 校验 | 所有源文件与备份文件逐项进行 SHA-256 比对，全部一致 |
+
+其中包括 `analysis_outputs/`、`tmp/`、pytest cache 和 Python bytecode。前两类可能有人工复核价值；cache/bytecode 仅为完整保留，不应回写仓库。
 
 ## 3. 归档标签
 
@@ -87,4 +99,11 @@ git clone <BACKUP_ROOT>\pre-git-archive-consolidation-20260713-235206.bundle <RE
 4. 删除旧 `backup/*` 分支、旧 `backup/*` 标签与已被覆盖的 semantics staging 分支；
 5. 运行全工作树状态、远端 refs、`git fsck` 和 bundle 完整性复核。
 
-只有步骤 3 验证成功后才允许执行步骤 4。完成后，本节状态将更新为 `COMPLETE`。
+本次执行结果：
+
+- `archive/backup-catalog` 在删除前已推送并核验；初始目录提交为 `f057af6fd9f79fc043378986eaf64f3781aa0e53`；
+- 14 个 `archive/snapshot/*` 标签的远端 peeled commit 已逐项匹配；
+- 删除 8 个远端和 7 个本地 `backup/*` 分支，以及本地、远端各 3 个旧 `backup/*` 标签；数量不同是因为部分旧快照原本只存在于一端；
+- 删除 `cst_ver3_rf_cem_semantics` 工作树和 `codex/rf-cem-literature-semantics-hardening` 本地、远端分支；退役 commit 仍由归档标签保护；
+- 最终旧 backup refs 数量为 0，8 个保留工作树全部干净并跟踪远端；
+- 离线 bundle SHA-256 复核一致，`git bundle verify` 与 `git fsck --full --no-dangling` 均通过。

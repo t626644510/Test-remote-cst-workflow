@@ -9,6 +9,7 @@ description = "Microwave accelerator cavity automated EM simulation and surrogat
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.21",
+    "pandas>=2.0",
     "scipy>=1.7",
     "matplotlib>=3.5",
     "scikit-learn>=1.0",

@@ -1,10 +1,12 @@
 # CST Automation Interfaces and Project-File Evidence
 
-Updated: 2026-07-12
+Updated: 2026-07-13
 
 Audited CST generation: CST Studio Suite 2026
 
-Primary official source: `D:\CST2026\CST Studio Suite 2026\Online Help`
+Portable official-source alias: `<CST_HELP>`, meaning `<CST_INSTALL>\Online Help`.
+
+Original audited workstation location: `D:\CST2026\CST Studio Suite 2026\Online Help`. This absolute path is retained only as provenance; it is not a command or installation requirement.
 
 This is the maintained inventory of CST automation surfaces discovered for the project. It deliberately separates official interfaces, repository-verified wrappers, and observed internal project files.
 
@@ -44,7 +46,7 @@ Evidence: `OFFICIAL`
 Help page:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\advanced\commandlineoptions.htm
+<CST_HELP>\advanced\commandlineoptions.htm
 ```
 
 Windows form:
@@ -86,8 +88,10 @@ Documented calculation flags:
 Example of the documented standalone `.bas` route:
 
 ```powershell
-& 'D:\CST2026\CST Studio Suite 2026\CST DESIGN ENVIRONMENT.exe' `
-  -m -hide 'C:\path\driver.bas'
+$CstInstall = '<CST_INSTALL>'
+$CstExe = Join-Path $CstInstall 'CST DESIGN ENVIRONMENT.exe'
+$DriverMacro = '<DRIVER_MACRO_FILE>'
+& $CstExe -m -hide $DriverMacro
 ```
 
 Limits:
@@ -104,7 +108,7 @@ Evidence: `OFFICIAL`
 Help page:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\advanced\vbaapplicationobject.htm
+<CST_HELP>\advanced\vbaapplicationobject.htm
 ```
 
 Registered application identifiers:
@@ -138,8 +142,8 @@ Conceptual official route:
 
 ```vb
 Set app = CreateObject("CSTStudio.Application.2026")
-Set mws = app.OpenFile("C:\path\project.cst")
-mws.RunScript "C:\path\driver.bas"
+Set mws = app.OpenFile("<CST_PROJECT_FILE>")
+mws.RunScript "<DRIVER_MACRO_FILE>"
 mws.Save
 app.Quit
 ```
@@ -153,7 +157,7 @@ Evidence: `OFFICIAL`
 Help page:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\mergedProjects\VBA_3D\common_vbaapp\common_vbaappapplication_object.htm
+<CST_HELP>\mergedProjects\VBA_3D\common_vbaapp\common_vbaappapplication_object.htm
 ```
 
 Confirmed high-value methods:
@@ -182,7 +186,7 @@ Evidence: `OFFICIAL`
 Help page:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\mergedProjects\VBA_DES\special_vbacommands\projectobject.htm
+<CST_HELP>\mergedProjects\VBA_DES\special_vbacommands\projectobject.htm
 ```
 
 Confirmed:
@@ -202,7 +206,7 @@ Evidence: `OFFICIAL` unless noted
 Reference:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\Python\source\cst.interface.html
+<CST_HELP>\Python\source\cst.interface.html
 ```
 
 Tutorials:
@@ -311,11 +315,11 @@ Candidate bridge:
 ```python
 project.model3d.add_to_history(
     "run external script",
-    'RunScript "C:\\path\\driver.bas"',
+    'RunScript "<DRIVER_MACRO_FILE>"',
 )
 
 project.schematic.execute_vba_code(
-    'RunScript "C:\\path\\driver.bas"'
+    'RunScript "<DRIVER_MACRO_FILE>"'
 )
 ```
 
@@ -381,7 +385,7 @@ Evidence: `OFFICIAL`
 Reference:
 
 ```text
-D:\CST2026\CST Studio Suite 2026\Online Help\Python\source\cst.results.html
+<CST_HELP>\Python\source\cst.results.html
 ```
 
 Root:
@@ -485,13 +489,13 @@ Evidence: `OBSERVED-INTERNAL`.
 Given:
 
 ```text
-C:\path\project.cst
+<CST_PROJECT_FILE>
 ```
 
 CST may create/unpack:
 
 ```text
-C:\path\project\
+<UNPACKED_CST_PROJECT_ROOT>\
   Model\
     3D\
       ModelHistory.json
@@ -778,8 +782,9 @@ Do not:
 The local scanner:
 
 ```powershell
-& C:\Users\lau\cst_ver3_project\.venv\Scripts\python.exe `
-  scripts\cst_help_automation_scan.py --help
+$RepoRoot = (git rev-parse --show-toplevel).Trim()
+$Python = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+& $Python scripts\cst_help_automation_scan.py --help
 ```
 
 When CST is upgraded:

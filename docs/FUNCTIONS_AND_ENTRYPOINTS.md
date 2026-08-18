@@ -1,6 +1,6 @@
 # Functions and Entrypoints Catalog
 
-Updated: 2026-07-13
+Updated: 2026-08-18
 
 Audience: agents and maintainers locating an existing capability before adding code.
 
@@ -775,6 +775,8 @@ The loader enforces bundle-root containment, file-size limits, PDF/image signatu
 
 It blocks until Ctrl+C.
 
+Full 3D/profile/Helper2 visual review requires the declared `cad` and `review` extras. Without Plotly the page intentionally falls back to tables; without CadQuery/OCP cached artifacts may remain readable, but a new parameter variant cannot be materialized.
+
 ## 9. Literature review GUI functions
 
 ### 9.1 Evidence
@@ -800,6 +802,14 @@ Displayed groups:
 - physical constraints;
 - draft-prior configuration suggestions.
 
+The GUI presents these as three review lanes:
+
+1. paper facts and geometry semantics;
+2. paper-scoped objectives and constraints;
+3. repository mapping proposals / draft patches.
+
+The v1 session still uses one review status for source support and transfer authority. `accepted` means that evidence supports the claim inside the displayed applicability; it is not a universal family rule. Use `accepted_as_soft_only` for single-source numeric values, paper-specific objectives, unverified metric equivalence or non-executable repository mappings.
+
 Unified display schema: `literature_semantic_candidate_view.v1`. Duplicate subjects such as `equator` are grouped; separate cards represent different predicates/claims, not accidental duplicate rows.
 
 Structured Add requires:
@@ -809,7 +819,7 @@ Structured Add requires:
 - JSON object;
 - evidence/provenance fields.
 
-Added items start pending.
+Added items start pending. Adding or reviewing Evidence/Semantic items updates only the session; it does not request a geometry preview or infer a parameter change.
 
 ### 9.3 Geometry projection
 
@@ -823,6 +833,8 @@ Current generator is SLS-2-specific:
 - candidate-level review state and Chinese note.
 
 It does not derive numeric changes from accepted natural-language semantics.
+
+Geometry review decisions still refresh the candidate review/validation overlay. Kernel materialization is content-addressed: unchanged parameters reuse the existing artifact, while an explicit `L/l/r/R/a/b` submission creates a human-preview variant when values differ.
 
 ### 9.4 Helper2 integration
 
@@ -859,6 +871,16 @@ helper2_face_mesh.json
 ```
 
 Literature decisions and Helper2 reviews use separate namespaces.
+
+GUI decisions are a source-bound session overlay. They do not rewrite the semantic package or the draft-prior YAML, and they are not an implicit `merge-prior` authorization.
+
+### 9.6 Frozen SLS-2 revision-149 baseline
+
+Baseline ID `sls2.r149.6593e02` closes the ignored `sls2_gui_isolated_final_20260712` session at revision 149. The frozen decision source is `review_session.v1.json` (30 terminal decisions: 18 `accepted`, 12 `accepted_as_soft_only`); the event source is `review_events.jsonl` with 149 valid records and continuous revisions 1–149. `generation.core.json` remains an immutable geometry-generation record and may say `pending`; it is not a replacement for the frozen human session. Helper2 Geometry/Features/UDSG counts are an independent projection-ID overlay: 8 accepted faces, 9 confirmed candidates and 13 accepted bindings.
+
+The interactive HTML is only the authenticated review view/UI shell. It is not a self-contained final review record, and `review_launch.json` is runtime metadata rather than freeze evidence. Do not choose a snapshot by mtime or treat a pending/accepted snapshot as authoritative over the session. For a new audit, create a new session root; the frozen session is not a writable continuation target.
+
+This closeout is no-CST. It does not run `merge-prior`, change the existing draft YAML, establish `family_profile`/`family_instance`, or establish physical acceptance. Keep validation evidence separate as `geometry_generation`, `human_geometry_review`, `helper2_review`, `live_cst`, and `physical_acceptance`; never summarize this baseline as one `validation_status=pass`.
 
 ## 10. Workflow branch entries
 

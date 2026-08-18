@@ -890,14 +890,19 @@ The no-CST family-profile CLI consumes two frozen source manifests and keeps the
 & $py -m rf_cem.family_profile build `
   --sls2-baseline-manifest analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e\baseline_manifest.v0.json `
   --rf500-instance-manifest <RF500_OWNER_WORKTREE>\analysis_outputs\rf_cem_family_instance_sources\rf500.2c27faee.b1r3\instance_source_manifest.v0.json `
-  --proof-root analysis_outputs\rf_cem_family_profiles
+  --proof-root analysis_outputs\rf_cem_family_profiles `
+  --implementation-commit <implementation-commit> `
+  --targeted-tests-result "<targeted result>" `
+  --full-no-cst-tests-result "<full result>"
 & $py -m rf_cem.family_profile validate `
-  --profile analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.<profile-hash-8>\family_profile.v0.json
+  --profile analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.<profile-hash-8>\family_profile.v0.json `
+  --sls2-baseline-manifest <SLS2_MANIFEST> `
+  --rf500-instance-manifest <RF500_MANIFEST>
 ```
 
-`src/rf_cem/family_profile/` provides the generic `family_profile.v0`/`family_instance.v0` schema, typed containers, finite-value/hash validation, canonical JSON v0 hashing, `Sls2FamilyInstanceAdapter`, `Rf500FamilyInstanceAdapter`, deterministic builder, and round-trip verifier. The schema accepts one or more instances with different native schemas, groups, units and dimensions; the Stage C builder intentionally requires the two frozen inputs for its integration proof. The CLI is no-CST and refuses an existing proof target.
+`src/rf_cem/family_profile/` provides the generic `family_profile.v0`/`family_instance.v0` schema, typed containers, finite-value/hash validation, canonical JSON v0 hashing, `Sls2FamilyInstanceAdapter`, `Rf500FamilyInstanceAdapter`, deterministic builder, and source-backed native round-trip verifier. The schema accepts one or more instances with different native schemas, groups, units and dimensions; the Stage C builder intentionally requires the two frozen inputs for its integration proof. The CLI separates structural validation, portable projection validation and source-backed native validation. Without source manifests, `validate` must report `source_roundtrip=not_run` and `roundtrip_all_passed=False`; with both manifests it re-reads and hash-verifies the source objects. The CLI is no-CST and refuses an existing proof target.
 
-The Stage C proof bundle is ignored under `analysis_outputs/rf_cem_family_profiles/`. It contains `family_profile.v0.json`, `family_profile_validation.v0.json`, `adapter_roundtrip_report.v0.json`, and `source_binding_manifest.v0.json`; paths inside the bundle are relative or instance/hash references. The family contract excludes RF performance metrics and objectives pending a separate definition. `live_cst` and `physical_acceptance` must remain separate validation states and are not established by this CLI.
+The old `nc_axisymmetric_single_cell_rf_vacuum.75f6cba4` proof is retained read-only but superseded because it demonstrated only portable self-consistency. The corrected proof is `nc_axisymmetric_single_cell_rf_vacuum.00414d4f`; it contains `family_profile.v0.json`, `family_profile_validation.v0.json`, `adapter_roundtrip_report.v0.json`, and `source_binding_manifest.v0.json`. The profile core contains no absolute paths. RF500 source-native restoration is `d392... -> d392...`; SLS-2 is `bdc... -> bdc...`. A portable projection hash, when present, is a separate field and is not a native source hash. The family contract excludes RF performance metrics and objectives pending a separate definition (`metric_contract_status=excluded_pending_definition`). `live_cst` and `physical_acceptance` must remain separate validation states and are not established by this CLI.
 
 ## 10. Workflow branch entries
 

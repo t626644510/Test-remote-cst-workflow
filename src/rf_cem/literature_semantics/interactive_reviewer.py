@@ -411,23 +411,39 @@ function semanticCard(row,view) {{
     '<dl class="semantic-fields"><dt>Subject type</dt><dd>'+esc(displayed(subject.entity_type))+'</dd><dt>Claim / Predicate</dt><dd>'+esc(displayed(claim.kind))+' / '+esc(displayed(claim.predicate))+'</dd><dt>Value</dt><dd>'+esc(displayed(claim.value))+(claim.unit?' ['+esc(claim.unit)+']':'')+'</dd><dt>Applicability</dt><dd>'+esc(displayed({{status:app.status,operating_regime:app.operating_regime,cavity_family:app.cavity_family,cell_count:app.cell_count,frequency_mhz:app.frequency_mhz,scope:app.scope}}))+'</dd><dt>Confidence</dt><dd>'+esc(displayed(object(view.assessment).confidence))+'</dd><dt>Geometry binding</dt><dd>'+esc(displayed({{grammar_region:binding.grammar_region,parameter_names:binding.parameter_names,feature_types:binding.feature_types,status:binding.binding_status}}))+'</dd><dt>Evidence</dt><dd>'+refButtons+'</dd></dl>'+
     '<label class="small">中文备注 / review_note<textarea class="note" data-note="'+esc(row.id)+'" lang="zh-CN">'+esc(note)+'</textarea></label><div class="actions">'+reviewActionButtons(row.id)+'<button data-save-note="'+esc(row.id)+'">保存备注</button></div></article>';
 }}
+function semanticGroupsHtml(entries) {{
+  const groups=new Map(); entries.forEach(entry=>{{ const key=String(object(entry.view.subject).canonical_id || "unclassified"); if (!groups.has(key)) groups.set(key,[]); groups.get(key).push(entry); }});
+  return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([subject,items])=>'<section class="semantic-group"><h3>'+esc(subject)+' <span class="pill">'+items.length+' claims</span></h3>'+items.map(entry=>semanticCard(entry.row,entry.view)).join("")+'</section>').join("");
+}}
+function semanticLaneHtml(title,note,entries) {{
+  if (!entries.length) return "";
+  return '<section class="semantic-lane"><div class="card"><div class="card-title">'+esc(title)+'</div><div class="muted">'+esc(note)+'</div></div>'+semanticGroupsHtml(entries)+'</section>';
+}}
 function renderGroupedSemantics() {{
-  const rows=semanticItems(),host=document.getElementById("semantic-list"),groups=new Map(),patches=[];
-  rows.forEach(row=>{{ const view=semanticView(row); if (row.section==="draft_prior_patch" || object(view.claim).kind==="proposed_patch") patches.push({{row,view}}); else {{ const key=String(object(view.subject).canonical_id || "unclassified"); if (!groups.has(key)) groups.set(key,[]); groups.get(key).push({{row,view}}); }} }});
-  const sections=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([subject,items])=>'<section class="semantic-group"><h3>'+esc(subject)+' <span class="pill">'+items.length+' claims</span></h3>'+items.map(entry=>semanticCard(entry.row,entry.view)).join("")+'</section>');
-  if (patches.length) sections.push('<section class="semantic-group"><h3>配置应用建议 / Draft patches <span class="pill">'+patches.length+'</span></h3><div class="muted">该组是待审核的配置动作，不与论文事实混排。</div>'+patches.map(entry=>semanticCard(entry.row,entry.view)).join("")+'</section>');
-  host.innerHTML=sections.join("") || '<div class="card muted">没有可审核的语义候选。</div>';
+  const rows=semanticItems(),host=document.getElementById("semantic-list"),facts=[],intents=[],patches=[],intentSections=new Set(["optimization_objectives","physical_constraints"]);
+  rows.forEach(row=>{{ const view=semanticView(row),entry={{row,view}}; if (row.section==="draft_prior_patch" || object(view.claim).kind==="proposed_patch") patches.push(entry); else if (intentSections.has(row.section)) intents.push(entry); else facts.push(entry); }});
+  const policy='<div class="card"><div class="card-title">Review meaning / 审核含义</div><div class="muted">v1 状态同时表达证据判断与迁移权限：OK 表示当前适用范围内有证据支持；Soft OK 表示有证据但仅保留为非执行软信息。</div></div>';
+  const sections=[
+    semanticLaneHtml("Paper facts / 论文事实与几何语义","OK 表示证据支持该 paper-scoped claim；单篇数值或迁移权限受限时使用 Soft OK。",facts),
+    semanticLaneHtml("Paper-scoped objectives and constraints / 论文范围的目标与约束","这里审核的是作者在特定论文范围内采用的目标或约束。OK 不代表 family 通用规则；指标等价性或迁移性未独立验证时使用 Soft OK。",intents),
+    semanticLaneHtml("Repository mapping proposals / 配置应用建议 / Draft patches","该组是仓库映射建议，不是论文事实或自动 merge。Soft OK 保持 executable grammar 不变；literature_semantics 目标仅保存 provenance 元数据。",patches),
+  ].filter(Boolean);
+  host.innerHTML=rows.length?policy+sections.join(""):'<div class="card muted">没有可审核的语义候选。</div>';
   const options=SEMANTIC_SECTIONS.map(section=>'<option value="'+esc(section)+'">'+esc(section)+'</option>').join("");
-  document.getElementById("manual-add").innerHTML='<details class="card"><summary><b>Add structured semantic / 新增结构化语义</b></summary><form id="manual-form" class="form-grid"><label>Section<select name="section">'+options+'</select></label><label>ID<input name="id" required placeholder="manual_semantic_001"></label><label class="wide">结构化 JSON（除 section/id 外的字段）<textarea name="body" rows="7" spellcheck="false">{{}}</textarea></label><label class="wide">中文备注<input name="review_note" lang="zh-CN"></label><div class="wide"><button type="submit">Add as pending and render / 新增并渲染</button></div></form></details><div class="global-note"><label><b>全局中文备注</b><textarea id="global-note" class="note" lang="zh-CN">'+esc(noteOf({{}},"__global_note__"))+'</textarea></label><div class="actions"><button id="save-global-note">保存全局备注</button></div></div>';
+  document.getElementById("manual-add").innerHTML='<details class="card"><summary><b>Add structured semantic / 新增结构化语义</b></summary><form id="manual-form" class="form-grid"><label>Section<select name="section">'+options+'</select></label><label>ID<input name="id" required placeholder="manual_semantic_001"></label><label class="wide">结构化 JSON（除 section/id 外的字段）<textarea name="body" rows="7" spellcheck="false">{{}}</textarea></label><label class="wide">中文备注<input name="review_note" lang="zh-CN"></label><div class="wide"><button type="submit">Add as pending / 新增待审核语义</button></div></form></details><div class="global-note"><label><b>全局中文备注</b><textarea id="global-note" class="note" lang="zh-CN">'+esc(noteOf({{}},"__global_note__"))+'</textarea></label><div class="actions"><button id="save-global-note">保存全局备注</button></div></div>';
   bindSemanticActions(rows,host);
   host.querySelectorAll("[data-evidence-ref]").forEach(button=>button.addEventListener("click",()=>{{ const evidence=findEvidenceByRef(button.dataset.evidenceRef); if (evidence) openEvidence(evidence); else notify("未找到证据引用: "+button.dataset.evidenceRef,true); }}));
 }}
 function renderSemantics() {{
   renderGroupedSemantics();
 }}
+function reviewChangesGeometry(row) {{
+  const item=object(row.item),layer=String(item.layer || "").toLowerCase();
+  return layer==="geometry" || row.section==="geometry_projection" || String(row.id).includes("::geometry::");
+}}
 function bindReviewActions(host,rows) {{
   const byId=new Map(rows.map(row=>[row.id,row]));
-  host.querySelectorAll("[data-review-id]").forEach(button=>button.addEventListener("click",()=>{{ const row=byId.get(button.dataset.reviewId); if (row) saveReview(row.id,button.dataset.status,true); }}));
+  host.querySelectorAll("[data-review-id]").forEach(button=>button.addEventListener("click",()=>{{ const row=byId.get(button.dataset.reviewId); if (row) saveReview(row.id,button.dataset.status,reviewChangesGeometry(row)); }}));
   host.querySelectorAll("[data-save-note]").forEach(button=>button.addEventListener("click",()=>{{ const row=byId.get(button.dataset.saveNote); if (row) saveReview(row.id,statusOf(row.item,row.id),false); }}));
 }}
 function bindSemanticActions(rows,host) {{
@@ -437,12 +453,12 @@ function bindSemanticActions(rows,host) {{
 }}
 function noteInput(id) {{ return [...document.querySelectorAll("[data-note]")].find(node=>node.dataset.note===id); }}
 
-async function saveReview(id,status,regenerate) {{
+async function saveReview(id,status,refreshPreview) {{
   if (!REVIEW_STATUSES.has(status)) {{ notify(`非法审核状态: ${{status}}`,true); return; }}
   const review_note=String(noteInput(id)?.value || ""); setBusy(true);
   try {{
     const value=await request(API.events,{{method:"POST",body:{{expected_revision:currentRevision(),item_id:id,status,review_note}}}}); acceptSession(value); renderAll();
-    if (regenerate) await generatePreview("semantic_review_updated",id); else notify("备注已保存");
+    if (refreshPreview) await generatePreview("geometry_review_updated",id); else notify("审核已保存；几何未改变");
   }} catch (error) {{ await handleMutationError(error); }} finally {{ setBusy(false); }}
 }}
 async function saveGlobalNote() {{
@@ -456,7 +472,7 @@ async function addManualItem(event) {{
   catch (error) {{ notify(`结构化 JSON 无效: ${{error.message}}`,true); return; }}
   const item={{...extra,section:String(form.get("section") || ""),id:String(form.get("id") || "").trim(),review_note:String(form.get("review_note") || "")}};
   if (!SEMANTIC_SECTIONS.includes(item.section) || !item.id) {{ notify("Section 或 ID 无效",true); return; }} setBusy(true);
-  try {{ const value=await request(API.manual,{{method:"POST",body:{{expected_revision:currentRevision(),item}}}}); acceptSession(value); renderAll(); await generatePreview("manual_semantic_added",item.id); }}
+  try {{ const value=await request(API.manual,{{method:"POST",body:{{expected_revision:currentRevision(),item}}}}); acceptSession(value); renderAll(); notify("结构化语义已保存；几何未改变"); }}
   catch (error) {{ await handleMutationError(error); }} finally {{ setBusy(false); }}
 }}
 async function handleMutationError(error) {{ if (error.code==="revision_conflict") await loadSession(); notify(error.message,true); }}

@@ -116,6 +116,20 @@ def test_interactive_reviewer_exposes_six_mm_parameters_and_preview_payload() ->
     assert "UDSG preview" not in html
 
 
+def test_semantic_review_taxonomy_does_not_refresh_geometry() -> None:
+    html = build_interactive_review_html(_payload(), "local-secret")
+
+    assert "Review meaning / 审核含义" in html
+    assert "Paper facts / 论文事实与几何语义" in html
+    assert "Paper-scoped objectives and constraints / 论文范围的目标与约束" in html
+    assert "Repository mapping proposals / 配置应用建议 / Draft patches" in html
+    assert "Add as pending / 新增待审核语义" in html
+    assert "saveReview(row.id,button.dataset.status,reviewChangesGeometry(row))" in html
+    assert 'generatePreview("geometry_review_updated",id)' in html
+    assert 'generatePreview("semantic_review_updated",id)' not in html
+    assert 'generatePreview("manual_semantic_added",item.id)' not in html
+
+
 def test_interactive_reviewer_accepts_adapter_review_items_and_nested_evidence() -> None:
     payload = _payload()
     payload["papers"] = [

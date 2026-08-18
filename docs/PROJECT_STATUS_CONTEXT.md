@@ -417,7 +417,7 @@ The immutable source bindings were re-read as UTF-8 with the repository `canonic
 
 Truth layers are deliberately separate and must be combined as `immutable generation.core + frozen revision-149 session + Helper2 overlay`: (1) `generation.core.json` is the immutable geometry-generation record and may still show `review_status=pending`; (2) the human acceptance state comes from the frozen `review_session.v1.json`; (3) Helper2 decisions come from the independent overlay under the session's matching projection ID; (4) interactive HTML is a review view/tokenized UI shell, not the sole or self-contained final audit record. Never select a “latest” review snapshot by file mtime. Pending and accepted snapshots may coexist and must not override the session state. Validation evidence remains layered as `geometry_generation`, `human_geometry_review`, `helper2_review`, `live_cst`, and `physical_acceptance`; this baseline does not collapse them into `validation_status=pass`.
 
-This remains no-CST, local audit evidence. It did not edit the hash-bound `literature_semantics.v0` source package, did not change the draft-prior YAML, and did not run `merge-prior`. The draft YAML remains in its existing state, and no `family_profile`/`family_instance` schema has been established. The baseline closes the current SLS-2 instance review; it does not prove that a family schema supports two real instances.
+This remains no-CST, local audit evidence. It did not edit the hash-bound `literature_semantics.v0` source package, did not change the draft-prior YAML, and did not run `merge-prior`. The draft YAML remains in its existing state. The baseline closes the current SLS-2 instance review; the separate Stage C record below is the evidence for the two-instance family contract.
 
 The old session root is frozen and is no longer a writable continuation target. Every later review must create a new session root, even when the paper or source package is unchanged.
 
@@ -430,6 +430,30 @@ Post-audit GUI maintenance keeps the v1 schemas unchanged and narrows interactio
 - the UI states that `accepted` confirms a source claim only within its applicability, while `accepted_as_soft_only` preserves non-executable transfer limits.
 
 Maintenance validation on 2026-08-18 used the branch `.venv`: targeted reviewer/server/app tests passed 30/30, and `pytest -q -m "not cst_required"` passed 697 tests with 11 skipped in 11.82s. No live CST validation was run.
+
+### 7.7 2026-08-18 Stage C family profile v0 validation
+
+Stage C is complete on branch `codex/rf-cem-family-profile-v0`, implementation commit `d28ffcfd4db1a81e907316b8966178decf6cd003`. The canonical family is `nc_axisymmetric_single_cell_rf_vacuum` with independent identity fields `operating_regime=normal_conducting`, `symmetry=axisymmetric`, `cell_count=single`, and `geometry_scope=rf_vacuum`.
+
+The two input manifests were consumed read-only and rechecked after proof generation:
+
+- `sls2.r149.6593e02e`: `analysis_outputs/rf_cem_literature_pilot_20260710/frozen_baselines/sls2.r149.6593e02e/baseline_manifest.v0.json`, raw SHA-256 `19a15b0ea8248a85b698d9ace32e87ae190b6356b814fb3c1817d89987da0ffb`;
+- `rf500.2c27faee.b1r3`: owner bundle `analysis_outputs/rf_cem_family_instance_sources/rf500.2c27faee.b1r3/instance_source_manifest.v0.json`, raw SHA-256 `4c64d1497bfcd98749fa2df7a742614820159e8ceaa665e6bec95d2ea4b916a5`.
+
+The SLS-2 native payload has one unique source: `generation.core.json#/parameter_tuple/values`. Its six original names and values are `L=680.0`, `l=188.671`, `r=50.0`, `R=249.901`, `a=125.232`, and `b=70.2322`, all in `mm`, with scope `published_candidate`. The source artifact raw SHA-256 is `31051d936b71682ffc64dea4c174dde7b56f2e7eed31aa7d87f9e32d6e159fa1`; the six-value native canonical SHA-256 is `bdc9e7e251e628933aeeb82a5d3165578a33b52d6b62635fb36757d0986b2620`. The frozen revision-149 session/source binding remains payload SHA `99f51410d436116f99fe4c165b1580aa9037ac91e1f66d7245fecaac85f0ee8e`; it is provenance for the review payload, not a replacement for the six-value locator.
+
+The RF-CEM native payload retains the original `parametric_geometry.v0` schema, model type, variant, `named_parameters` group (15 entries), and `derived_parameters` group (52 entries). Original units remain `MHz`, `mm`, and `ns`; source payload raw SHA-256 is `2c27faeecb5d36f9815fb5045d6c967749ddaaff3dec080a5ffa00599bb69a3f` and source canonical SHA-256 is `d392a87f4f6cee5793747dede68c51e0738a80b0439c6c80d686e74f2e277557`. The portable family-native projection has canonical SHA-256 `9bd06e773a84861439e0851a2c2e30a24223c088b0932b274c45eeb2fe8d8461`; only machine-absolute source-path strings are path-neutralized, while named/derived fields, values, units, scope and the source raw/canonical hashes remain bound.
+
+The generic schema is under `src/rf_cem/family_profile/schema.py` and uses `$defs/family_instance.v0`, `instances.minItems=1`, unconstrained native schema/group names and non-fixed parameter counts. The two adapters are `Sls2FamilyInstanceAdapter` and `Rf500FamilyInstanceAdapter`; their no-CST build and portable restore round-trips passed. The eight validation layers remain separate for both instances. `live_cst` is `not_run` for SLS-2 and `not_linked` for RF-CEM; both `physical_acceptance` values remain `not_established`; the metric contract remains `excluded_pending_definition`, with no executable family objectives.
+
+The ignored proof bundle is `analysis_outputs/rf_cem_family_profiles/nc_axisymmetric_single_cell_rf_vacuum.75f6cba4/`. Its deterministic files and hashes are:
+
+- `family_profile.v0.json`: raw `9a33cdbf6a2c4d28ab90eabb81fd45628e9eead3b07a390ff87bb7eced085275`, canonical `75f6cba4bb92208b9a64349c09fd5c0a4ff8c6dd775c173f327593214e05abab`;
+- `family_profile_validation.v0.json`: raw `73ac686e55ac5a12791f4fe9d21a88ae1eb2399e45b07d23bf1eb3f6086da2a5`, canonical `6ee60e1d72a879a09e2cd7573fd43a02bacb77683182dfc44316239aad573463`;
+- `adapter_roundtrip_report.v0.json`: raw `911fb500e1310d068d87e2d7f32f430452e5641a0e9864f17ea7cda5713d3852`, canonical `b973dc99a9991c96d369f301c4a27e49210832a613c83306e6d7266735984031`;
+- `source_binding_manifest.v0.json`: raw `13a299b237531cdede416267d2e3c9c83f7e08a9e8dc4a0846366c87e2803ca7`, canonical `1d79bb45927aca0edabfbfad38543d1b44ce2db48b68981db7cf04f783c27f54`.
+
+Two builds from the same inputs produced identical profile bytes and canonical SHA. Validation commands were `.venv\Scripts\pytest.exe -q -p no:cacheprovider tests\test_rf_cem_family_profile.py tests\test_rf_cem_literature_geometry_candidate.py tests\test_rf_cem_literature_review_bundle.py tests\test_rf_cem_literature_review_app.py tests\test_rf_cem_literature_semantics_v0.py` (`58 passed`) and `.venv\Scripts\pytest.exe -q -p no:cacheprovider -m "not cst_required"` (`709 passed, 11 skipped`). `python -m rf_cem.family_profile validate --profile <proof>/family_profile.v0.json` passed. No CST, solver, campaign, recovery, merge-prior, push or PR was run/performed. `family_schema_established=true` and `adapter_established=true` are established for this two-instance no-CST contract only; they do not imply parameter equivalence, metric equivalence, live-CST linkage, or physical acceptance. SLS-2 soft-only ranges remain soft-only.
 
 ## 8. STEP Feature Assistant state
 

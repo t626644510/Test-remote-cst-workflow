@@ -48,8 +48,12 @@ def build_family_profile(
             verify_round_trip(sls2_adapter, instances[0]),
             verify_round_trip(rf500_adapter, instances[1]),
         ],
-        "all_passed": True,
+        "all_passed": False,
     }
+    roundtrip["all_passed"] = all(item["passed"] for item in roundtrip["instances"])
+    roundtrip["source_roundtrip"] = (
+        "passed" if roundtrip["all_passed"] else "failed"
+    )
     source_bindings = build_source_binding_manifest(profile)
     return profile, roundtrip, source_bindings
 
@@ -81,8 +85,13 @@ def build_validation_report(
     *,
     profile_raw_sha256: str,
     profile_canonical_sha256: str,
+    execution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return deterministic validation evidence for a built profile."""
+    """Return validation evidence for a built profile.
+
+    The profile remains deterministic; execution metadata is intentionally
+    optional and belongs only in this report because it may contain a time.
+    """
 
     profile.validate()
     if len(profile.instances) != 2:
@@ -107,9 +116,12 @@ def build_validation_report(
                 "source_payload_canonical_sha256": instance.parameter_payload.get(
                     "source_payload_canonical_sha256"
                 ),
+                "portable_projection_canonical_sha256": instance.parameter_payload.get(
+                    "portable_projection_canonical_sha256"
+                ),
             }
         )
-    return {
+    report = {
         "schema_version": "family_profile_validation.v0",
         "family_id": FAMILY_ID,
         "family_identity": deepcopy(FAMILY_IDENTITY),
@@ -141,9 +153,49 @@ def build_validation_report(
             ),
             "metric_contract_excluded": profile.metric_contract_status
             == "excluded_pending_definition",
+            "source_roundtrip_all_passed": bool(roundtrip.get("all_passed"))
+            and all(
+                item.get("source_backed") is True
+                and item.get("source_roundtrip") == "passed"
+                for item in roundtrip.get("instances", [])
+            ),
         },
         "instances": instance_checks,
+        "source_inputs": [
+            {
+                "instance_id": instance.instance_id,
+                "manifest_id": instance.source_binding["manifest_id"],
+                "manifest_raw_sha256": instance.source_binding["manifest_raw_sha256"],
+                "native_payload_locator": instance.parameter_payload[
+                    "native_payload_locator"
+                ],
+                "input_native_payload_canonical_sha256": next(
+                    item["input_native_payload_canonical_sha256"]
+                    for item in roundtrip["instances"]
+                    if item["instance_id"] == instance.instance_id
+                ),
+                "restored_native_payload_canonical_sha256": next(
+                    item["restored_native_payload_canonical_sha256"]
+                    for item in roundtrip["instances"]
+                    if item["instance_id"] == instance.instance_id
+                ),
+                "source_backed": next(
+                    item["source_backed"]
+                    for item in roundtrip["instances"]
+                    if item["instance_id"] == instance.instance_id
+                ),
+                "passed": next(
+                    item["passed"]
+                    for item in roundtrip["instances"]
+                    if item["instance_id"] == instance.instance_id
+                ),
+            }
+            for instance in profile.instances
+        ],
     }
+    if execution is not None:
+        report["execution"] = deepcopy(execution)
+    return report
 
 
 def write_json_report(path: Path, payload: dict[str, Any]) -> str:
@@ -159,6 +211,8 @@ def write_stage_c_bundle(
     profile: FamilyProfile,
     roundtrip: dict[str, Any],
     source_bindings: dict[str, Any],
+    *,
+    execution: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Write the four proof files into a new directory without overwriting."""
 
@@ -172,6 +226,7 @@ def write_stage_c_bundle(
         roundtrip,
         profile_raw_sha256=profile_raw,
         profile_canonical_sha256=profile_canonical,
+        execution=execution,
     )
     validation_raw = write_json_report(
         output_dir / "family_profile_validation.v0.json", validation

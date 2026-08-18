@@ -343,7 +343,11 @@ def _validate_instance_mapping(instance: Mapping[str, Any], path: str) -> None:
         "scope",
         "source_refs",
     }
-    optional_payload = {"source_payload_canonical_sha256", "portable_path_policy"}
+    optional_payload = {
+        "source_payload_canonical_sha256",
+        "portable_projection_canonical_sha256",
+        "portable_path_policy",
+    }
     missing_payload = sorted(required_payload - set(payload))
     extra_payload = sorted(set(payload) - required_payload - optional_payload)
     if missing_payload:
@@ -362,13 +366,32 @@ def _validate_instance_mapping(instance: Mapping[str, Any], path: str) -> None:
         payload["native_payload_canonical_sha256"],
         f"{payload_path}.native_payload_canonical_sha256",
     )
-    if canonical_sha256(native_payload) != _require_hash(
+    native_hash = _require_hash(
         payload["native_payload_canonical_sha256"],
         f"{payload_path}.native_payload_canonical_sha256",
-    ):
+    )
+    source_hash = payload.get("source_payload_canonical_sha256")
+    if source_hash is not None:
+        source_hash = _require_hash(
+            source_hash,
+            f"{payload_path}.source_payload_canonical_sha256",
+        )
+        if native_hash != source_hash:
+            raise FamilyProfileError(
+                f"{payload_path}.native_payload hash must equal the source-native hash"
+            )
+    portable_hash = payload.get("portable_projection_canonical_sha256")
+    if portable_hash is not None:
+        portable_hash = _require_hash(
+            portable_hash,
+            f"{payload_path}.portable_projection_canonical_sha256",
+        )
+        if canonical_sha256(native_payload) != portable_hash:
+            raise FamilyProfileError(
+                f"{payload_path}.portable projection canonical hash mismatch"
+            )
+    elif source_hash is None and canonical_sha256(native_payload) != native_hash:
         raise FamilyProfileError(f"{payload_path}.native_payload canonical hash mismatch")
-    if payload.get("source_payload_canonical_sha256") is not None:
-        _require_hash(payload["source_payload_canonical_sha256"], f"{payload_path}.source_payload_canonical_sha256")
     _require_hash(payload["source_artifact_raw_sha256"], f"{payload_path}.source_artifact_raw_sha256")
     _validate_parameter_groups(payload["parameter_groups"], f"{payload_path}.parameter_groups")
     parameter_count = _require_mapping(payload["parameter_count"], f"{payload_path}.parameter_count")
@@ -475,7 +498,15 @@ class NativePayloadAdapter(Protocol):
     adapter_id: str
 
     def restore_native_payload(self, instance: "FamilyInstance") -> dict[str, Any]:
-        """Restore the canonical native payload stored in an instance."""
+        """Restore the canonical source-native payload for an instance."""
+
+    def source_context_available(self) -> bool:
+        """Return whether source-backed materialization can be attempted."""
+
+    def preservation_checks(
+        self, instance: "FamilyInstance", restored: Mapping[str, Any]
+    ) -> dict[str, bool]:
+        """Check native names, groups, values, units and scope after restore."""
 
 
 @dataclass(frozen=True)
@@ -573,7 +604,7 @@ class FamilyInstance:
         )
 
     def restore_native_payload(self) -> dict[str, Any]:
-        """Return the stored native payload without renaming or flattening it."""
+        """Return the stored portable projection for offline structural use."""
 
         return deepcopy(self.parameter_payload["native_payload"])
 
@@ -695,12 +726,50 @@ def write_profile(path: Path, profile: FamilyProfile) -> tuple[str, str]:
 
 
 def verify_round_trip(adapter: NativePayloadAdapter, instance: FamilyInstance) -> dict[str, Any]:
-    """Verify lossless canonical round-trip for an adapter-built instance."""
+    """Verify a source-backed native round-trip without trusting a projection hash."""
 
     expected = _require_hash(
         instance.parameter_payload["native_payload_canonical_sha256"],
         "instance.parameter_payload.native_payload_canonical_sha256",
     )
+    portable_expected = instance.parameter_payload.get(
+        "portable_projection_canonical_sha256"
+    )
+    if portable_expected is None:
+        portable_expected = expected
+    portable_expected = _require_hash(
+        portable_expected,
+        "instance.parameter_payload.portable_projection_canonical_sha256",
+    )
+    portable_actual = canonical_sha256(instance.parameter_payload["native_payload"])
+    if portable_actual != portable_expected:
+        raise FamilyProfileError(
+            f"portable projection hash mismatch for {instance.instance_id}: "
+            f"expected {portable_expected}, got {portable_actual}"
+        )
+    result: dict[str, Any] = {
+        "instance_id": instance.instance_id,
+        "adapter_id": instance.parameter_payload["adapter_id"],
+        "native_payload_locator": instance.parameter_payload["native_payload_locator"],
+        "input_native_payload_canonical_sha256": expected,
+        "restored_native_payload_canonical_sha256": None,
+        "source_backed": False,
+        "source_roundtrip": "not_run",
+        "portable_projection_canonical_sha256": portable_actual,
+        "portable_projection_validation": "passed",
+        "preservation_checks": {
+            "names": "not_run",
+            "groups": "not_run",
+            "values": "not_run",
+            "units": "not_run",
+            "scope": "not_run",
+        },
+        "passed": False,
+        "parameter_count": deepcopy(instance.parameter_payload["parameter_count"]),
+    }
+    if not adapter.source_context_available():
+        return result
+
     restored = adapter.restore_native_payload(instance)
     restored_hash = canonical_sha256(restored)
     if restored_hash != expected:
@@ -708,14 +777,21 @@ def verify_round_trip(adapter: NativePayloadAdapter, instance: FamilyInstance) -
             f"adapter round-trip hash mismatch for {instance.instance_id}: "
             f"expected {expected}, got {restored_hash}"
         )
-    return {
-        "instance_id": instance.instance_id,
-        "adapter_id": instance.parameter_payload["adapter_id"],
-        "input_native_payload_canonical_sha256": expected,
-        "restored_native_payload_canonical_sha256": restored_hash,
-        "passed": True,
-        "parameter_count": deepcopy(instance.parameter_payload["parameter_count"]),
-    }
+    checks = adapter.preservation_checks(instance, restored)
+    if not all(checks.values()):
+        raise FamilyProfileError(
+            f"native preservation checks failed for {instance.instance_id}: {checks}"
+        )
+    result.update(
+        {
+            "restored_native_payload_canonical_sha256": restored_hash,
+            "source_backed": True,
+            "source_roundtrip": "passed",
+            "preservation_checks": checks,
+            "passed": True,
+        }
+    )
+    return result
 
 
 __all__ = [

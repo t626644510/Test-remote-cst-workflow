@@ -205,6 +205,7 @@ FAMILY_PROFILE_SCHEMA: dict[str, Any] = {
                         "native_payload_locator": {"type": "string", "minLength": 1},
                         "native_payload_canonical_sha256": {"$ref": "#/$defs/hash"},
                         "source_payload_canonical_sha256": {"$ref": "#/$defs/hash"},
+                        "portable_projection_canonical_sha256": {"$ref": "#/$defs/hash"},
                         "source_artifact_raw_sha256": {"$ref": "#/$defs/hash"},
                         "parameter_groups": {"type": "object", "minProperties": 1},
                         "parameter_count": {"type": "object", "minProperties": 1},

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Sequence
 
 from .adapters import Rf500FamilyInstanceAdapter, Sls2FamilyInstanceAdapter
@@ -17,12 +19,25 @@ from .core import (
 )
 
 
-def _adapter_for_id(adapter_id: str):
+def _adapter_for_id(
+    adapter_id: str,
+    *,
+    sls2_manifest: Path | None = None,
+    rf500_manifest: Path | None = None,
+):
     if adapter_id == Sls2FamilyInstanceAdapter.adapter_id:
-        return Sls2FamilyInstanceAdapter()
+        return Sls2FamilyInstanceAdapter(sls2_manifest)
     if adapter_id == Rf500FamilyInstanceAdapter.adapter_id:
-        return Rf500FamilyInstanceAdapter()
+        return Rf500FamilyInstanceAdapter(rf500_manifest)
     raise FamilyProfileError(f"unsupported adapter id in profile: {adapter_id}")
+
+
+def _portable_cli_path(value: Path, placeholder: str) -> str:
+    """Return a no-absolute-path command argument for proof provenance."""
+
+    if value.is_absolute():
+        return f"<{placeholder}>"
+    return value.as_posix()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -41,12 +56,19 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Create the non-overwriting family-id/hash-prefixed proof directory below this root.",
     )
+    build.add_argument("--implementation-commit", required=True)
+    build.add_argument("--targeted-tests-result", default="not_recorded")
+    build.add_argument("--full-no-cst-tests-result", default="not_recorded")
     validate = subparsers.add_parser("validate", help="Validate an existing profile JSON.")
     validate.add_argument("--profile", type=Path, required=True)
+    validate.add_argument("--sls2-baseline-manifest", type=Path)
+    validate.add_argument("--rf500-instance-manifest", type=Path)
     return parser
 
 
 def _run_build(args: argparse.Namespace) -> int:
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", args.implementation_commit):
+        raise FamilyProfileError("--implementation-commit must be a full 40-character SHA")
     profile, roundtrip, source_bindings = build_family_profile(
         args.sls2_baseline_manifest,
         args.rf500_instance_manifest,
@@ -56,12 +78,45 @@ def _run_build(args: argparse.Namespace) -> int:
         output_dir = args.proof_root / f"{FAMILY_ID}.{profile_hash[:8]}"
     else:
         output_dir = args.output_dir
-    hashes = write_stage_c_bundle(output_dir, profile, roundtrip, source_bindings)
+    execution = {
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "implementation_commit": args.implementation_commit.lower(),
+        "command_argv": [
+            "python",
+            "-m",
+            "rf_cem.family_profile",
+            "build",
+            "--sls2-baseline-manifest",
+            _portable_cli_path(args.sls2_baseline_manifest, "SLS2_WORKTREE"),
+            "--rf500-instance-manifest",
+            _portable_cli_path(args.rf500_instance_manifest, "RF500_OWNER_WORKTREE"),
+            "--proof-root" if args.proof_root is not None else "--output-dir",
+            _portable_cli_path(
+                args.proof_root if args.proof_root is not None else args.output_dir,
+                "PROOF_ROOT" if args.proof_root is not None else "PROOF_DIR",
+            ),
+            "--implementation-commit",
+            args.implementation_commit.lower(),
+        ],
+        "command_exit_status": 0,
+        "result": "passed",
+        "targeted_no_cst_tests": args.targeted_tests_result,
+        "full_no_cst_tests": args.full_no_cst_tests_result,
+        "cst": "not_run",
+    }
+    hashes = write_stage_c_bundle(
+        output_dir,
+        profile,
+        roundtrip,
+        source_bindings,
+        execution=execution,
+    )
     print(f"profile={output_dir / 'family_profile.v0.json'}")
     print(f"profile_canonical_sha256={hashes['profile_canonical_sha256']}")
     print(f"profile_raw_sha256={hashes['profile_raw_sha256']}")
     print(f"instance_count={len(profile.instances)}")
     print(f"roundtrip_all_passed={roundtrip['all_passed']}")
+    print(f"source_roundtrip={roundtrip['source_roundtrip']}")
     print(
         "family_profile_validation_canonical_sha256="
         f"{hashes['family_profile_validation_canonical_sha256']}"
@@ -83,12 +138,35 @@ def _run_validate(args: argparse.Namespace) -> int:
     profile = load_profile(args.profile)
     roundtrip = []
     for instance in profile.instances:
-        adapter = _adapter_for_id(instance.parameter_payload["adapter_id"])
+        adapter = _adapter_for_id(
+            instance.parameter_payload["adapter_id"],
+            sls2_manifest=args.sls2_baseline_manifest,
+            rf500_manifest=args.rf500_instance_manifest,
+        )
         roundtrip.append(verify_round_trip(adapter, instance))
     print("OK: family profile is valid")
     print(f"family_id={profile.family_id}")
     print(f"instance_count={len(profile.instances)}")
     print(f"profile_canonical_sha256={canonical_sha256(profile.to_mapping())}")
+    print("structural_validation=passed")
+    print(
+        "portable_projection_validation="
+        + (
+            "passed"
+            if all(
+                item["portable_projection_validation"] == "passed"
+                for item in roundtrip
+            )
+            else "failed"
+        )
+    )
+    if all(item["source_roundtrip"] == "passed" for item in roundtrip):
+        source_roundtrip = "passed"
+    elif all(item["source_roundtrip"] == "not_run" for item in roundtrip):
+        source_roundtrip = "not_run"
+    else:
+        source_roundtrip = "failed"
+    print(f"source_roundtrip={source_roundtrip}")
     print(f"roundtrip_all_passed={all(item['passed'] for item in roundtrip)}")
     print("cst=not_run")
     return 0

@@ -244,15 +244,62 @@ class FamilyInstanceAdapter:
     def __init__(self, manifest_path: Path | None = None) -> None:
         self.manifest_path = Path(manifest_path) if manifest_path is not None else None
 
+    def source_context_available(self) -> bool:
+        """Return whether this adapter can materialize the frozen source object."""
+
+        return self.manifest_path is not None
+
     def restore_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
-        """Restore a family instance's portable native payload without mutation."""
+        """Restore a family instance's source-native payload without mutation."""
 
         if instance.parameter_payload.get("adapter_id") != self.adapter_id:
             raise FamilyProfileError(
                 f"instance adapter mismatch: expected {self.adapter_id}, "
                 f"got {instance.parameter_payload.get('adapter_id')}"
             )
-        return instance.restore_native_payload()
+        if not self.source_context_available():
+            raise FamilyProfileError(
+                "source-backed native restore requires a frozen source manifest"
+            )
+        return self._restore_source_native_payload(instance)
+
+    def _load_bound_source(
+        self,
+        instance: FamilyInstance,
+        *,
+        manifest_id_key: str,
+        collection_key: str,
+        canonical_key: str,
+        raw_key: str,
+    ) -> tuple[dict[str, Any], dict[str, _Artifact]]:
+        if self.manifest_path is None:
+            raise FamilyProfileError("source-backed native restore requires a source manifest")
+        manifest, manifest_sha, root = _load_manifest(self.manifest_path)
+        binding = instance.source_binding
+        expected_manifest_sha = str(binding.get("manifest_raw_sha256") or "").lower()
+        if expected_manifest_sha != manifest_sha:
+            raise FamilyProfileError("source manifest raw hash does not match the profile binding")
+        source_id = str(manifest.get(manifest_id_key) or "").strip()
+        if source_id != instance.instance_id or binding.get("manifest_id") != source_id:
+            raise FamilyProfileError("source manifest ID does not match the profile binding")
+        artifacts = _verify_artifacts(
+            manifest,
+            root,
+            collection_key=collection_key,
+            canonical_key=canonical_key,
+            raw_key=raw_key,
+        )
+        return manifest, artifacts
+
+    def _restore_source_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def preservation_checks(
+        self, instance: FamilyInstance, restored: Mapping[str, Any]
+    ) -> dict[str, bool]:
+        """Return adapter-specific source-native preservation checks."""
+
+        raise NotImplementedError
 
     def build_instance(self) -> FamilyInstance:
         """Build one instance from the configured frozen source manifest."""
@@ -266,7 +313,7 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
     adapter_id = "sls2_family_instance_adapter.v0"
 
     def build_instance(self) -> FamilyInstance:
-        """Read the manifest and bind the unique six-value native tuple."""
+        """Read the manifest and bind its native parameter tuple."""
 
         if self.manifest_path is None:
             raise FamilyProfileError("SLS-2 adapter requires a source manifest path")
@@ -300,8 +347,8 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
         if not isinstance(parameter_tuple, Mapping):
             raise FamilyProfileError("SLS-2 generation lacks parameter_tuple")
         values = parameter_tuple.get("values")
-        if not isinstance(values, Mapping) or len(values) != 6:
-            raise FamilyProfileError("SLS-2 native parameter tuple must contain exactly six values")
+        if not isinstance(values, Mapping) or not values:
+            raise FamilyProfileError("SLS-2 native parameter tuple must be a non-empty mapping")
         if parameter_tuple.get("origin") != "published_candidate" or parameter_tuple.get("unit") != "mm":
             raise FamilyProfileError("SLS-2 native tuple origin/unit is not frozen source evidence")
         if not all(isinstance(name, str) and name for name in values):
@@ -381,7 +428,7 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
             },
             "parameter_validation": {
                 "status": "pass",
-                "source_status": "finite_six_value_native_tuple",
+                "source_status": "finite_native_mapping",
                 "evidence": [_evidence(generation_artifact, "#/parameter_tuple")],
             },
             "geometry_generation": {
@@ -421,7 +468,8 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
             "native_payload": native_payload,
             "native_payload_locator": "generation.core.json#/parameter_tuple/values",
             "native_payload_canonical_sha256": native_hash,
-            "source_payload_canonical_sha256": source_payload_hash.lower(),
+            "source_payload_canonical_sha256": native_hash,
+            "portable_projection_canonical_sha256": native_hash,
             "source_artifact_raw_sha256": generation_artifact.raw_sha256,
             "parameter_groups": {
                 "native_parameters": {
@@ -466,6 +514,7 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
                 "adapter_id": self.adapter_id,
                 "source_truth_layers": "generation.core + frozen review session + Helper2 overlay",
                 "source_manifest_payload_sha256": source_payload_hash.lower(),
+                "review_source_payload_canonical_sha256": source_payload_hash.lower(),
                 "no_cst": True,
                 "physical_acceptance_not_established": True,
             },
@@ -474,6 +523,47 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
         )
         instance.validate()
         return instance
+
+    def _restore_source_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
+        """Materialize ``parameter_tuple.values`` from the bound generation file."""
+
+        _, artifacts = self._load_bound_source(
+            instance,
+            manifest_id_key="baseline_id",
+            collection_key="frozen_files",
+            canonical_key="canonical_sha256",
+            raw_key="raw_sha256",
+        )
+        generation_artifact = artifacts.get("generation.core.json")
+        if generation_artifact is None:
+            raise FamilyProfileError("SLS-2 source generation artifact is missing")
+        generation = _read_json(generation_artifact.path)
+        parameter_tuple = generation.get("parameter_tuple")
+        values = parameter_tuple.get("values") if isinstance(parameter_tuple, Mapping) else None
+        if not isinstance(values, Mapping) or not values:
+            raise FamilyProfileError("SLS-2 source native payload is not a non-empty mapping")
+        restored = deepcopy(dict(values))
+        actual_hash = canonical_sha256(restored)
+        expected_hash = str(instance.parameter_payload["native_payload_canonical_sha256"]).lower()
+        if actual_hash != expected_hash:
+            raise FamilyProfileError("SLS-2 source-native payload canonical hash mismatch")
+        return restored
+
+    def preservation_checks(
+        self, instance: FamilyInstance, restored: Mapping[str, Any]
+    ) -> dict[str, bool]:
+        group = instance.parameter_payload["parameter_groups"].get("native_parameters", {})
+        group_values = group.get("values") if isinstance(group, Mapping) else None
+        return {
+            "names": isinstance(group_values, Mapping)
+            and set(group_values) == set(restored),
+            "groups": set(instance.parameter_payload["parameter_groups"]) == {"native_parameters"},
+            "values": group_values == dict(restored),
+            "units": instance.native_units.get("length") == "mm"
+            and group.get("unit") == "mm",
+            "scope": group.get("scope") == "published_candidate"
+            and instance.parameter_payload["scope"] == "published_candidate_geometry",
+        }
 
 
 class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
@@ -628,8 +718,9 @@ class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
             "native_schema_version": native_schema,
             "native_payload": portable_payload,
             "native_payload_locator": "source/parametric_geometry.v0.json#/$",
-            "native_payload_canonical_sha256": portable_hash,
+            "native_payload_canonical_sha256": actual_payload_hash,
             "source_payload_canonical_sha256": actual_payload_hash,
+            "portable_projection_canonical_sha256": portable_hash,
             "source_artifact_raw_sha256": payload_artifact.raw_sha256,
             "parameter_groups": {
                 "named_parameters": {
@@ -681,6 +772,61 @@ class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
         )
         instance.validate()
         return instance
+
+    def _restore_source_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
+        """Materialize the complete source JSON object, including unknown fields."""
+
+        manifest, artifacts = self._load_bound_source(
+            instance,
+            manifest_id_key="instance_source_id",
+            collection_key="artifacts",
+            canonical_key="canonical_payload_sha256",
+            raw_key="source_file_sha256",
+        )
+        payload_artifact = artifacts.get("source/parametric_geometry.v0.json")
+        if payload_artifact is None:
+            raise FamilyProfileError("RF-CEM source payload artifact is missing")
+        payload = _read_json(payload_artifact.path)
+        actual_hash = canonical_sha256(payload)
+        source_meta = manifest.get("source_payload")
+        if not isinstance(source_meta, Mapping):
+            raise FamilyProfileError("RF-CEM source payload metadata is missing")
+        if source_meta.get("canonical_json_sha256") != actual_hash:
+            raise FamilyProfileError("RF-CEM source payload canonical hash mismatch")
+        if source_meta.get("raw_sha256") != payload_artifact.raw_sha256:
+            raise FamilyProfileError("RF-CEM source payload raw hash mismatch")
+        expected_hash = str(instance.parameter_payload["native_payload_canonical_sha256"]).lower()
+        if actual_hash != expected_hash:
+            raise FamilyProfileError("RF-CEM source-native payload canonical hash mismatch")
+        return payload
+
+    def preservation_checks(
+        self, instance: FamilyInstance, restored: Mapping[str, Any]
+    ) -> dict[str, bool]:
+        groups = instance.parameter_payload["parameter_groups"]
+        named_group = groups.get("named_parameters", {})
+        derived_group = groups.get("derived_parameters", {})
+        named = restored.get("named_parameters")
+        derived = restored.get("derived_parameters")
+        projection = _portableize(restored)
+        return {
+            "names": isinstance(named, Mapping)
+            and isinstance(derived, Mapping)
+            and set(named) == set(named_group.get("values", {}))
+            and set(derived) == set(derived_group.get("values", {})),
+            "groups": set(groups) == {"named_parameters", "derived_parameters"},
+            "values": named == named_group.get("values")
+            and derived == derived_group.get("values"),
+            "units": restored.get("units") == instance.parameter_payload["units"]
+            and instance.native_units
+            == {str(key): str(value) for key, value in restored.get("units", {}).items()},
+            "scope": bool(instance.parameter_payload["scope"])
+            and all(
+                bool(group.get("scope"))
+                for group in (named_group, derived_group)
+            ),
+            "unknown_native_fields": projection == instance.parameter_payload["native_payload"],
+        }
 
 
 def _check_finite_mapping(value: Mapping[str, Any], label: str) -> None:

@@ -235,6 +235,7 @@ def test_cli_writes_parametric_geometry_design_package(tmp_path):
         selected_variant_dir / "translator" / "cst_payload.json"
     ).read_bytes()
     for relative_path in (
+        Path("metadata") / "parametric_geometry.v0.json",
         Path("metadata") / "geometry_validation.json",
         Path("geometry") / "generated_vacuum.step",
     ):

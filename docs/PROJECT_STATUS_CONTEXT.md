@@ -1,6 +1,6 @@
 # Agent Project Status Context
 
-Status timestamp: 2026-07-13 Asia/Shanghai
+Status timestamp: 2026-08-18 Asia/Shanghai
 
 Repository family: CST accelerator-cavity automation and surrogate optimisation
 
@@ -403,7 +403,33 @@ Session outputs are under a user-provided ignored directory and include:
 - generation report and review snapshots;
 - Helper2 face mesh.
 
+`review_launch.json` is launch/runtime metadata only; it is not freeze evidence and must not be used to record a PID or bearer token in an audit baseline.
+
 Do not trust an old PID or token. Read the current launch record and verify the process before stopping it.
+
+### 7.6 2026-08-18 frozen SLS-2 revision-149 audit baseline
+
+Baseline ID: `sls2.r149.6593e02`. The ignored local session `sls2_gui_isolated_final_20260712` is closed at revision 149 for paper `sls2` in the `normal_conducting` operating regime. It contains 30 review decisions in terminal states: 18 `accepted` and 12 `accepted_as_soft_only`. Both `parameter_ranges` decisions are explicitly soft-only. Helper2 records 8 accepted geometry faces, 9 confirmed Feature candidates and 13 accepted Feature-to-Geometry bindings.
+
+The required raw SHA-256 values are: `review_session.v1.json` `6593E02EB1B968D7BF12BC243CCF7ABD86784C9E67A53E41D50B8CF8D951240D`; `review_events.jsonl` `1EFAED66D907914DFB1888481B5C54B6B748112592BED91475BC9A1A4909DACE`; `generation.core.json` `31051D936B71682FFC64DEA4C174DDE7B56F2E7EED31AA7D87F9E32D6E159FA1`; `helper2_face_mesh.json` `BBAC2B76CF1F7B12AC7065703E3D981DCC83A8518BCD936AD8E22FFC05B69E9B`; and `cavity.step` `97DD3F3F23C0E9A1DE671011D9F3B3E52A36936DFF1AB7BC7BB8BC2864B40767`. The event log contains 149 valid JSONL records with unique, continuous revisions 1–149.
+
+The immutable source bindings were re-read as UTF-8 with the repository `canonical_sha256` helper: `literature_semantics.v0.json` raw `1191238875D1EB6FA145CE6291AB2EA536F56A6B09A2661D7140CC17D85C43B9`, canonical `sha256:e23fa66d7cb2f0515bfc9ae57a31ad085b1426b40ded699e688d015a1dda00e5`; `expert_prior.draft.v0.yaml` raw `E23A936ADBE3E0E9232AD0801FBA50934C893BC32990B181F588C6B7638F1069`, canonical `sha256:923113a16834127514820138b8d1d935dd8d2615ac42ad38c0484ff80579711f`. The session source binding also records payload `sha256:99f51410d436116f99fe4c165b1580aa9037ac91e1f66d7245fecaac85f0ee8e` and geometry projection canonical `sha256:f801015edb5bc605d85315f246087b2a1956684704428e6ca02dbccffd79ced6`.
+
+Truth layers are deliberately separate and must be combined as `immutable generation.core + frozen revision-149 session + Helper2 overlay`: (1) `generation.core.json` is the immutable geometry-generation record and may still show `review_status=pending`; (2) the human acceptance state comes from the frozen `review_session.v1.json`; (3) Helper2 decisions come from the independent overlay under the session's matching projection ID; (4) interactive HTML is a review view/tokenized UI shell, not the sole or self-contained final audit record. Never select a “latest” review snapshot by file mtime. Pending and accepted snapshots may coexist and must not override the session state. Validation evidence remains layered as `geometry_generation`, `human_geometry_review`, `helper2_review`, `live_cst`, and `physical_acceptance`; this baseline does not collapse them into `validation_status=pass`.
+
+This remains no-CST, local audit evidence. It did not edit the hash-bound `literature_semantics.v0` source package, did not change the draft-prior YAML, and did not run `merge-prior`. The draft YAML remains in its existing state, and no `family_profile`/`family_instance` schema has been established. The baseline closes the current SLS-2 instance review; it does not prove that a family schema supports two real instances.
+
+The old session root is frozen and is no longer a writable continuation target. Every later review must create a new session root, even when the paper or source package is unchanged.
+
+Post-audit GUI maintenance keeps the v1 schemas unchanged and narrows interaction behavior:
+
+- Evidence and Semantic status changes persist only to the review session and no longer request a geometry preview;
+- adding a manual structured semantic does not request a geometry preview;
+- Geometry review decisions, explicit refresh and `L/l/r/R/a/b` parameter submission retain preview behavior;
+- Semantic candidates are visibly separated into paper facts, paper-scoped objectives/constraints and repository mapping proposals;
+- the UI states that `accepted` confirms a source claim only within its applicability, while `accepted_as_soft_only` preserves non-executable transfer limits.
+
+Maintenance validation on 2026-08-18 used the branch `.venv`: targeted reviewer/server/app tests passed 30/30, and `pytest -q -m "not cst_required"` passed 697 tests with 11 skipped in 11.82s. No live CST validation was run.
 
 ## 8. STEP Feature Assistant state
 
@@ -509,10 +535,10 @@ $env:PYTHONPATH = Join-Path $RepoRoot 'src'
 & $Python -m pytest -q -m 'not cst_required'
 ```
 
-Full no-CST result after this documentation consolidation:
+Full no-CST result after the SLS-2 GUI closeout:
 
 ```text
-696 passed, 11 skipped in 9.81s
+697 passed, 11 skipped in 11.82s
 ```
 
 This result includes the literature review GUI and Helper2 integration. It does not include live CST. The consolidation verification also completed:
@@ -529,7 +555,7 @@ Historical branch-specific pass counts from 2026-07-10 are archived and must not
 
 Priority order:
 
-1. Complete human SLS-2 evidence/semantic/geometry/Helper2 review.
+1. Stage B only: in the `workflow/rf-cem-500mhz` owner, obtain one real hash-pinned `parametric_geometry.v0` instance; do not create the family schema in this stage.
 2. Audit RF-CEM candidates 039 and 046 on the workstation.
 3. Implement/test the 490–510 MHz window objective.
 4. Add arbitrary live-record seed loading with provenance validation.

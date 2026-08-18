@@ -266,7 +266,7 @@ def _variant_index(output_dir: Path, variant_results: list[dict], selected: dict
     return {
         "schema_version": "parametric_geometry_variant_index.v0",
         "selected_variant": selected["variant"],
-        "selected_policy": "expanded_smooth_nose is copied to the top-level compatibility package.",
+        "selected_policy": "The selected variant is copied to the top-level compatibility package.",
         "output_dir": str(output_dir),
         "variants": variants,
     }

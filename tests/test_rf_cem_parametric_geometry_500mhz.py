@@ -215,6 +215,30 @@ def test_cli_writes_parametric_geometry_design_package(tmp_path):
         "manual_equator_wide_soft",
     }
     assert variant_index["selected_variant"] == "free_equator_smooth"
+    assert variant_index["selected_policy"] == "The selected variant is copied to the top-level compatibility package."
+    selected_entries = [entry for entry in variant_index["variants"] if entry["selected"]]
+    assert len(selected_entries) == 1
+    selected_entry = selected_entries[0]
+    assert selected_entry["name"] == variant_index["selected_variant"]
+    selected_variant_dir = output_dir / "variants" / variant_index["selected_variant"]
+    for field, relative_path in (
+        ("parametric_geometry", Path("metadata") / "parametric_geometry.v0.json"),
+        ("geometry_validation", Path("metadata") / "geometry_validation.json"),
+        ("generated_step", Path("geometry") / "generated_vacuum.step"),
+        ("translator_payload", Path("translator") / "cst_payload.json"),
+    ):
+        indexed_path = selected_entry[field].replace("\\", "/")
+        assert f"variants/{variant_index['selected_variant']}/" in indexed_path
+        assert indexed_path.endswith(relative_path.as_posix())
+        assert Path(selected_entry[field]).exists()
+    assert (output_dir / "translator" / "cst_payload.json").read_bytes() == (
+        selected_variant_dir / "translator" / "cst_payload.json"
+    ).read_bytes()
+    for relative_path in (
+        Path("metadata") / "geometry_validation.json",
+        Path("geometry") / "generated_vacuum.step",
+    ):
+        assert (output_dir / relative_path).read_bytes() == (selected_variant_dir / relative_path).read_bytes()
     assert any(segment["kind"] == "arc" and "NoseCone" in segment["feature_refs"] for segment in exact_parametric["profile"]["segments"])
     assert any(segment["kind"] == "arc" and "TransitionBlend" in segment["feature_refs"] for segment in exact_parametric["profile"]["segments"])
     assert any(segment["kind"] == "nurbs" and "NoseCone" in segment["feature_refs"] for segment in smooth_parametric["profile"]["segments"])

@@ -409,7 +409,7 @@ Do not trust an old PID or token. Read the current launch record and verify the 
 
 ### 7.6 2026-08-18 frozen SLS-2 revision-149 audit baseline
 
-Baseline ID: `sls2.r149.6593e02`. The ignored local session `sls2_gui_isolated_final_20260712` is closed at revision 149 for paper `sls2` in the `normal_conducting` operating regime. It contains 30 review decisions in terminal states: 18 `accepted` and 12 `accepted_as_soft_only`. Both `parameter_ranges` decisions are explicitly soft-only. Helper2 records 8 accepted geometry faces, 9 confirmed Feature candidates and 13 accepted Feature-to-Geometry bindings.
+Baseline ID: `sls2.r149.6593e02e`. The ignored local session `sls2_gui_isolated_final_20260712` is closed at revision 149 for paper `sls2` in the `normal_conducting` operating regime. It contains 30 review decisions in terminal states: 18 `accepted` and 12 `accepted_as_soft_only`. Both `parameter_ranges` decisions are explicitly soft-only. Helper2 records 8 accepted geometry faces, 9 confirmed Feature candidates and 13 accepted Feature-to-Geometry bindings.
 
 The required raw SHA-256 values are: `review_session.v1.json` `6593E02EB1B968D7BF12BC243CCF7ABD86784C9E67A53E41D50B8CF8D951240D`; `review_events.jsonl` `1EFAED66D907914DFB1888481B5C54B6B748112592BED91475BC9A1A4909DACE`; `generation.core.json` `31051D936B71682FFC64DEA4C174DDE7B56F2E7EED31AA7D87F9E32D6E159FA1`; `helper2_face_mesh.json` `BBAC2B76CF1F7B12AC7065703E3D981DCC83A8518BCD936AD8E22FFC05B69E9B`; and `cavity.step` `97DD3F3F23C0E9A1DE671011D9F3B3E52A36936DFF1AB7BC7BB8BC2864B40767`. The event log contains 149 valid JSONL records with unique, continuous revisions 1–149.
 

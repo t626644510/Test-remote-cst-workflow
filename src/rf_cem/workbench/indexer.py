@@ -1,4 +1,4 @@
-"""Source adapters and deterministic rebuild orchestration for Workbench W0."""
+"""Source adapters and deterministic rebuild orchestration for Workbench W0/W1."""
 
 from __future__ import annotations
 
@@ -13,6 +13,18 @@ from rf_cem.literature_semantics.validator import assert_valid_semantic_package
 from rf_cem.parametric_geometry.expert_prior import (
     DEFAULT_PRIOR_PATH,
     load_expert_prior,
+)
+from rf_cem.semantic.contracts import (
+    FamilyGrammar,
+    InstanceBoundaryGraph,
+    InstanceGraphDiff,
+    SemanticContractError,
+    canonical_sha256 as semantic_sha256,
+    diff_instance_graphs,
+    load_family_grammar,
+    load_instance_boundary_graph,
+    load_instance_graph_diff,
+    validate_graph_against_grammar,
 )
 
 from .registry import (
@@ -36,7 +48,7 @@ class WorkbenchIndexError(WorkbenchRegistryError):
 
 @dataclass(frozen=True)
 class WorkbenchSourceSet:
-    """Explicit source set used for one reproducible W0 registry rebuild."""
+    """Explicit source set used for one reproducible W0/W1 registry rebuild."""
 
     repo_root: Path
     family_profile: Path
@@ -44,6 +56,9 @@ class WorkbenchSourceSet:
     architecture_document: Path | None = None
     literature_packages: tuple[Path, ...] = ()
     review_sessions: tuple[Path, ...] = ()
+    family_grammar: Path | None = None
+    instance_boundary_graphs: tuple[Path, ...] = ()
+    instance_graph_diff: Path | None = None
 
 
 _REPRESENTATION_CATALOG = (
@@ -127,13 +142,27 @@ _ROADMAP_PHASES = (
     (
         "R0B",
         "Architecture Re-baseline + Workbench W0",
-        "hard_gate_passed_pending_canonical_merge",
+        "hard_gate_passed_merged",
     ),
-    ("R1", "RF Boundary Semantic Core", "planned"),
+    ("R1", "RF Boundary Semantic Core", "hard_gate_validation_passed_closeout_pending"),
     ("R2", "Boundary Representation Core + Compiler v0", "planned"),
     ("R3", "Family Induction / Extension v0", "planned"),
     ("R4", "Observation & Engineering Constraint Contract", "planned"),
     ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
+)
+
+_R1_GATES = (
+    ("two_valid_graphs", "Both real instance boundary graphs validate", "passed", "family_grammar.v0 validation"),
+    ("nose_absent_sls2", "SLS-2 has no nose node with reviewed-topology absence evidence", "passed", "sls2.r149.6593e02e boundary graph"),
+    ("nose_present_rf500", "RF500 has an evidence-bound paired nose motif", "passed", "rf500.2c27faee.b1r3 boundary graph"),
+    ("semantic_graph_diff", "Graph diff reports semantic/topology change rather than missing parameters", "passed", "instance_boundary_graph_diff.v0"),
+    ("one_family_grammar", "One family grammar accepts both topologies", "passed", "family_grammar.v0"),
+    ("invalid_topology_fail_closed", "Invalid adjacency, cardinality, and interfaces fail closed", "passed", "tests/test_rf_cem_semantic_core.py"),
+    ("region_identity_evidence_review", "Every region has stable identity, evidence, and terminal review", "passed", "instance graph contract validation"),
+    ("w1_views", "W1 exposes grammar, graphs, nose state, motif, and graph diff", "implemented", "fixed /semantic-graphs route"),
+    ("no_common_parameter_vector", "No common geometry parameter vector is introduced", "passed", "semantic topology parameter contract"),
+    ("no_cst_regression", "Targeted and full no-CST regression suites pass", "passed", "19 targeted passed; 745 passed and 11 skipped in the full default suite"),
+    ("phase_closeout", "One R1 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r1-semantic-core"),
 )
 
 _R0B_GATES = (
@@ -165,11 +194,12 @@ _CAPABILITY_CATALOG = (
     ("source.family_profile.v0", "Source-lossless family profile", "established", "Stage C"),
     ("source.literature_semantics.v0", "Literature semantics and evidence", "established", "literature review workflow"),
     ("source.helper2_review", "Helper2 geometry/Feature/UDSG review", "established_partial", "frozen SLS-2 overlay"),
-    ("architecture.semantic", "Representation-independent semantic layer", "boundary_established_r0b", "R1 implementation planned"),
+    ("architecture.semantic", "Representation-independent semantic layer", "implemented_r1", "family grammar + instance boundary graphs"),
     ("architecture.representation", "Family-independent representation layer", "boundary_established_r0b", "R2 implementation planned"),
     ("architecture.compiler", "Generic boundary compiler", "boundary_only_r0b", "R2 implementation planned"),
     ("architecture.observation", "Representation-independent observation", "boundary_only_r0b", "R4 implementation planned"),
     ("workbench.w0", "Derived local project catalog", "implemented_r0b", "SQLite + loopback read-only server"),
+    ("workbench.w1", "Semantic graph and grammar review", "implemented_r1", "SQLite + /semantic-graphs"),
     ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
 )
 
@@ -193,6 +223,12 @@ _VALIDATION_CATALOG = (
         "tests/test_rf_cem_workbench.py",
     ),
     (
+        "tests.semantic_core_r1",
+        "R1 grammar, topology, evidence, diff, and artifact contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_semantic_core.py",
+    ),
+    (
         "tests.literature_review",
         "Literature semantics and review GUI contracts",
         "available_no_cst",
@@ -208,7 +244,7 @@ _VALIDATION_CATALOG = (
 
 
 def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSummary:
-    """Validate explicit sources and atomically rebuild the W0 read model."""
+    """Validate explicit sources and atomically rebuild the W0/W1 read model."""
     root = source_set.repo_root.resolve()
     if not root.is_dir():
         raise WorkbenchIndexError(f"repository root is missing: {root}")
@@ -318,6 +354,52 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             add_entity,
         )
 
+    w1_requested = any(
+        (
+            source_set.family_grammar is not None,
+            bool(source_set.instance_boundary_graphs),
+            source_set.instance_graph_diff is not None,
+        )
+    )
+    if w1_requested:
+        if (
+            source_set.family_grammar is None
+            or len(source_set.instance_boundary_graphs) != 2
+            or source_set.instance_graph_diff is None
+        ):
+            raise WorkbenchIndexError(
+                "W1 indexing requires one family grammar, exactly two instance graphs, and one graph diff"
+            )
+        grammar_source = _register_source(
+            source_set.family_grammar, "family_grammar.v0", root
+        )
+        source_rows.append(grammar_source)
+        graph_sources: list[tuple[SourceRecord, InstanceBoundaryGraph]] = []
+        for graph_path in sorted(source_set.instance_boundary_graphs, key=str):
+            graph_source = _register_source(
+                graph_path, "instance_boundary_graph.v0", root
+            )
+            source_rows.append(graph_source)
+            graph_sources.append(
+                (graph_source, load_instance_boundary_graph(graph_path))
+            )
+        diff_source = _register_source(
+            source_set.instance_graph_diff,
+            "instance_boundary_graph_diff.v0",
+            root,
+        )
+        source_rows.append(diff_source)
+        _index_r1_semantics(
+            family_id=str(profile["family_id"]),
+            grammar=load_family_grammar(source_set.family_grammar),
+            grammar_source_id=grammar_source.source_id,
+            graph_sources=tuple(graph_sources),
+            graph_diff=load_instance_graph_diff(source_set.instance_graph_diff),
+            diff_source_id=diff_source.source_id,
+            add_entity=add_entity,
+            add_relation=add_relation,
+        )
+
     missing_instances = sorted(REQUIRED_W0_INSTANCES - indexed_instances)
     if missing_instances:
         raise WorkbenchIndexError(
@@ -345,7 +427,8 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         relations=relation_rows,
         metadata={
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
-            "roadmap_phase": "R0B",
+            "roadmap_phase": "R1" if w1_requested else "R0B",
+            "w1_semantic_graphs": "indexed" if w1_requested else "not_supplied",
         },
     )
 
@@ -397,6 +480,17 @@ def _index_catalog(
                 status,
                 roadmap_source_id,
                 {"phase": "R0B", "evidence": evidence},
+            )
+        )
+    for gate_id, label, status, evidence in _R1_GATES:
+        add_entity(
+            EntityRecord(
+                "roadmap_gate",
+                f"R1.{gate_id}",
+                label,
+                status,
+                roadmap_source_id,
+                {"phase": "R1", "evidence": evidence},
             )
         )
     for capability_id, label, status, evidence in _CAPABILITY_CATALOG:
@@ -607,6 +701,310 @@ def _index_family_profile(
             )
         )
     return instance_ids
+
+
+def _index_r1_semantics(
+    *,
+    family_id: str,
+    grammar: FamilyGrammar,
+    grammar_source_id: str,
+    graph_sources: tuple[tuple[SourceRecord, InstanceBoundaryGraph], ...],
+    graph_diff: InstanceGraphDiff,
+    diff_source_id: str,
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Index a complete, mutually validated W1 semantic proof set."""
+
+    if grammar.family_id != family_id:
+        raise WorkbenchIndexError("W1 grammar family_id differs from family profile")
+    graphs: dict[str, InstanceBoundaryGraph] = {}
+    graph_source_ids: dict[str, str] = {}
+    for source, graph in graph_sources:
+        if graph.instance_id in graphs:
+            raise WorkbenchIndexError(
+                f"duplicate W1 graph instance: {graph.instance_id}"
+            )
+        graphs[graph.instance_id] = graph
+        graph_source_ids[graph.instance_id] = source.source_id
+    if set(graphs) != REQUIRED_W0_INSTANCES:
+        raise WorkbenchIndexError(
+            "W1 graphs must be the canonical SLS-2 and RF500 instances"
+        )
+    for graph in graphs.values():
+        try:
+            validate_graph_against_grammar(grammar, graph)
+        except SemanticContractError as exc:
+            raise WorkbenchIndexError(
+                f"W1 graph {graph.graph_id} does not satisfy the grammar: {exc}"
+            ) from exc
+    expected_diff = diff_instance_graphs(
+        graphs["sls2.r149.6593e02e"], graphs["rf500.2c27faee.b1r3"]
+    )
+    if graph_diff.to_mapping() != expected_diff.to_mapping():
+        raise WorkbenchIndexError(
+            "W1 graph diff is not the canonical SLS-2-to-RF500 semantic diff"
+        )
+
+    grammar_mapping = grammar.to_mapping()
+    add_entity(
+        EntityRecord(
+            "family_grammar",
+            grammar.grammar_id,
+            "NC axisymmetric single-cell RF-vacuum family grammar",
+            "validated_accepts_both_instances",
+            grammar_source_id,
+            grammar_mapping,
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "family_has_grammar",
+            "family",
+            family_id,
+            "family_grammar",
+            grammar.grammar_id,
+        )
+    )
+    for ontology_kind, ontology in (
+        ("semantic_region_ontology", grammar_mapping["region_ontology"]),
+        ("semantic_landmark_ontology", grammar_mapping["landmark_ontology"]),
+    ):
+        ontology_id = str(ontology["schema_version"])
+        add_entity(
+            EntityRecord(
+                ontology_kind,
+                ontology_id,
+                ontology_id,
+                "canonical_v0",
+                grammar_source_id,
+                dict(ontology),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "grammar_uses_ontology",
+                "family_grammar",
+                grammar.grammar_id,
+                ontology_kind,
+                ontology_id,
+            )
+        )
+    for motif in grammar.motifs:
+        add_entity(
+            EntityRecord(
+                "semantic_motif",
+                motif.motif_id,
+                motif.label,
+                "paired_optional_topology",
+                grammar_source_id,
+                motif.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "grammar_has_motif",
+                "family_grammar",
+                grammar.grammar_id,
+                "semantic_motif",
+                motif.motif_id,
+            )
+        )
+
+    for instance_id in sorted(graphs):
+        graph = graphs[instance_id]
+        graph_source_id = graph_source_ids[instance_id]
+        graph_payload = {
+            "schema_version": graph.schema_version,
+            "graph_id": graph.graph_id,
+            "family_id": graph.family_id,
+            "instance_id": graph.instance_id,
+            "graph_sha256": semantic_sha256(graph.to_mapping()),
+            "nose_presence": graph.nose_presence,
+            "active_motif_ids": list(graph.active_motif_ids),
+            "region_count": len(graph.regions),
+            "ordered_region_ids": [region.region_id for region in graph.regions],
+            "ordered_region_types": list(graph.ordered_region_types),
+            "parameter_contract": graph.parameter_contract,
+            "exclusions": list(graph.exclusions),
+        }
+        status = (
+            "validated_nose_present"
+            if graph.nose_presence == "present"
+            else "validated_nose_absent_reviewed_topology"
+        )
+        add_entity(
+            EntityRecord(
+                "instance_graph",
+                graph.graph_id,
+                f"{instance_id} semantic boundary graph",
+                status,
+                graph_source_id,
+                graph_payload,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "instance_has_semantic_graph",
+                "instance",
+                instance_id,
+                "instance_graph",
+                graph.graph_id,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "grammar_accepts_graph",
+                "family_grammar",
+                grammar.grammar_id,
+                "instance_graph",
+                graph.graph_id,
+            )
+        )
+        for motif_id in graph.active_motif_ids:
+            add_relation(
+                RelationRecord(
+                    "graph_activates_motif",
+                    "instance_graph",
+                    graph.graph_id,
+                    "semantic_motif",
+                    motif_id,
+                )
+            )
+        for region in graph.regions:
+            add_entity(
+                EntityRecord(
+                    "semantic_region",
+                    region.region_id,
+                    f"{region.side} / {region.region_type}",
+                    region.review.status,
+                    graph_source_id,
+                    region.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "graph_has_region",
+                    "instance_graph",
+                    graph.graph_id,
+                    "semantic_region",
+                    region.region_id,
+                )
+            )
+        for landmark in graph.landmarks:
+            add_entity(
+                EntityRecord(
+                    "semantic_landmark",
+                    landmark.landmark_id,
+                    f"{landmark.side} / {landmark.landmark_type}",
+                    landmark.review.status,
+                    graph_source_id,
+                    landmark.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "graph_has_landmark",
+                    "instance_graph",
+                    graph.graph_id,
+                    "semantic_landmark",
+                    landmark.landmark_id,
+                )
+            )
+            for region_id in landmark.incident_region_ids:
+                add_relation(
+                    RelationRecord(
+                        "landmark_incident_to_region",
+                        "semantic_landmark",
+                        landmark.landmark_id,
+                        "semantic_region",
+                        region_id,
+                    )
+                )
+        for interface in graph.interfaces:
+            add_entity(
+                EntityRecord(
+                    "boundary_interface",
+                    interface.interface_id,
+                    (
+                        f"{interface.left_region_id.rsplit('.', 1)[-1]} → "
+                        f"{interface.right_region_id.rsplit('.', 1)[-1]}"
+                    ),
+                    "validated",
+                    graph_source_id,
+                    interface.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "graph_has_interface",
+                    "instance_graph",
+                    graph.graph_id,
+                    "boundary_interface",
+                    interface.interface_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "interface_uses_landmark",
+                    "boundary_interface",
+                    interface.interface_id,
+                    "semantic_landmark",
+                    interface.landmark_id,
+                )
+            )
+
+    diff_id = f"{graph_diff.left_graph_id}__vs__{graph_diff.right_graph_id}"
+    add_entity(
+        EntityRecord(
+            "graph_diff",
+            diff_id,
+            "SLS-2 ↔ RF500 semantic topology diff",
+            graph_diff.classification,
+            diff_source_id,
+            graph_diff.to_mapping(),
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "diff_compares_left_graph",
+            "graph_diff",
+            diff_id,
+            "instance_graph",
+            graph_diff.left_graph_id,
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "diff_compares_right_graph",
+            "graph_diff",
+            diff_id,
+            "instance_graph",
+            graph_diff.right_graph_id,
+        )
+    )
+    add_entity(
+        EntityRecord(
+            "validation",
+            "w1.semantic-hard-gate",
+            "W1 semantic hard-gate proof",
+            "pass",
+            diff_source_id,
+            {
+                "grammar_id": grammar.grammar_id,
+                "graph_ids": [
+                    graphs[instance_id].graph_id
+                    for instance_id in sorted(graphs)
+                ],
+                "graph_diff_id": diff_id,
+                "nose_presence": {
+                    instance_id: graphs[instance_id].nose_presence
+                    for instance_id in sorted(graphs)
+                },
+                "parameter_comparison": graph_diff.parameter_comparison,
+            },
+        )
+    )
 
 
 def _index_literature_package(

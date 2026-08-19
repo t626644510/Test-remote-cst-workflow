@@ -1,4 +1,4 @@
-"""Authenticated loopback-only, read-only HTTP Workbench for W0."""
+"""Authenticated loopback-only, read-only HTTP Workbench for W0/W1."""
 
 from __future__ import annotations
 
@@ -22,6 +22,21 @@ _PAGES = {
     "/families": ("families", "Families", ("family",)),
     "/instances": ("instances", "Instances", ("instance",)),
     "/semantics": ("semantics", "Semantics", ("semantic",)),
+    "/semantic-graphs": (
+        "semantic-graphs",
+        "Semantic Graphs / W1",
+        (
+            "family_grammar",
+            "semantic_region_ontology",
+            "semantic_landmark_ontology",
+            "semantic_motif",
+            "instance_graph",
+            "semantic_region",
+            "semantic_landmark",
+            "boundary_interface",
+            "graph_diff",
+        ),
+    ),
     "/representations": (
         "representations",
         "Representations",
@@ -170,6 +185,7 @@ def create_workbench_handler(
                     token=token,
                     overview=parsed.path == "/",
                     show_sources=parsed.path in {"/", "/validation"},
+                    semantic_graphs=parsed.path == "/semantic-graphs",
                 ).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
@@ -214,7 +230,7 @@ def create_workbench_handler(
                     "ok": False,
                     "error": {
                         "code": "method_not_allowed",
-                        "message": "Workbench W0 is read-only and CORS is disabled",
+                        "message": "Workbench W0/W1 is read-only and CORS is disabled",
                     },
                 },
             )
@@ -329,6 +345,7 @@ def _render_page(
     token: str,
     overview: bool,
     show_sources: bool,
+    semantic_graphs: bool,
 ) -> str:
     counts = reader.entity_counts()
     sources = reader.audit_sources(source_root) if show_sources else []
@@ -348,7 +365,9 @@ def _render_page(
         sections.append(f'<section><h2>Catalog summary</h2><div class="metrics">{cards}</div></section>')
         overview_entities = reader.list_entities("roadmap_phase")
         sections.append(_entity_table("Roadmap status", overview_entities))
-    if entities:
+    if semantic_graphs:
+        sections.extend(_semantic_graph_sections(entities))
+    elif entities:
         sections.append(_entity_table(title, entities))
     elif not overview:
         sections.append(
@@ -367,7 +386,65 @@ nav{{display:flex;gap:6px;flex-wrap:wrap;padding:10px 18px;background:#fff;borde
 main{{max-width:1500px;margin:0 auto;padding:22px}}section{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:18px;overflow:auto}}h2{{margin:0 0 12px;font-size:18px}}
 .metrics{{display:flex;gap:10px;flex-wrap:wrap}}.metric{{min-width:140px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}}.metric b{{display:block;font-size:22px}}.metric span{{color:var(--muted)}}
 table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}}th{{color:#475467;background:#f8fafc}}code,pre{{font:12px/1.4 ui-monospace,Consolas,monospace}}pre{{white-space:pre-wrap;max-width:780px;margin:0}}.status{{font-weight:650}}.empty{{color:var(--muted)}}
-</style></head><body><header><h1>RF-CEM Workbench W0</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+.graph-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.graph-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.graph-card h3{{margin:0 0 5px;font-size:16px}}.nose{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eaf2ff;color:#1849a9;font-weight:700}}.sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:12px}}.chip{{display:inline-block;border:1px solid #b9c5d8;border-radius:6px;background:#fff;padding:4px 7px;font:12px ui-monospace,Consolas,monospace}}.arrow{{color:var(--muted)}}.facts{{color:var(--muted);margin:7px 0 0}}
+</style></head><body><header><h1>RF-CEM Workbench W0 / W1</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+
+
+def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entity in entities:
+        by_kind.setdefault(str(entity["entity_kind"]), []).append(entity)
+    sections: list[str] = []
+    graphs = by_kind.get("instance_graph", [])
+    if graphs:
+        cards: list[str] = []
+        for graph in graphs:
+            payload = graph.get("payload", {})
+            if not isinstance(payload, dict):
+                payload = {}
+            nose_presence = str(payload.get("nose_presence") or "unknown")
+            nose_label = (
+                "Nose: present (paired motif)"
+                if nose_presence == "present"
+                else "Nose: absent (reviewed topology)"
+            )
+            raw_types = payload.get("ordered_region_types", [])
+            region_types = raw_types if isinstance(raw_types, list) else []
+            sequence = '<span class="arrow">→</span>'.join(
+                f'<span class="chip">{escape(str(region_type))}</span>'
+                for region_type in region_types
+            )
+            cards.append(
+                '<article class="graph-card">'
+                f'<h3>{escape(str(graph["label"]))}</h3>'
+                f'<span class="nose">{escape(nose_label)}</span>'
+                f'<p class="facts">{escape(str(payload.get("region_count", 0)))} regions · '
+                f'{escape(str(graph["status"]))}</p>'
+                f'<div class="sequence">{sequence}</div>'
+                '</article>'
+            )
+        sections.append(
+            '<section><h2>Validated instance topologies</h2>'
+            f'<div class="graph-grid">{"".join(cards)}</div></section>'
+        )
+    for kind, label in (
+        ("family_grammar", "Family grammar"),
+        ("semantic_motif", "Optional semantic motifs"),
+        ("graph_diff", "Semantic topology diff"),
+        ("semantic_region_ontology", "Semantic region ontology"),
+        ("semantic_landmark_ontology", "Semantic landmark ontology"),
+        ("semantic_region", "Instance semantic regions"),
+        ("semantic_landmark", "Instance semantic landmarks"),
+        ("boundary_interface", "Boundary interfaces"),
+    ):
+        values = by_kind.get(kind, [])
+        if values:
+            sections.append(_entity_table(label, values))
+    if not sections:
+        sections.append(
+            '<section><p class="empty">No W1 semantic graph proof set was supplied at rebuild.</p></section>'
+        )
+    return sections
 
 
 def _entity_table(title: str, entities: list[dict[str, Any]]) -> str:

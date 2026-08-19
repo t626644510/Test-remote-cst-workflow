@@ -25,7 +25,10 @@ from rf_cem.family_profile import (
     verify_round_trip,
 )
 from rf_cem.family_profile.core import FamilyInstance
-from rf_cem.family_profile.cli import main as family_profile_main
+from rf_cem.family_profile.cli import (
+    _execution_metadata,
+    main as family_profile_main,
+)
 
 
 pytestmark = pytest.mark.no_cst
@@ -401,6 +404,45 @@ def test_validate_cli_without_manifests_reports_structural_only(
     assert "roundtrip_all_passed=False" in output
 
 
+def test_proof_command_argv_keeps_manifest_suffix_and_test_arguments(
+    tmp_path: Path,
+) -> None:
+    args = type(
+        "BuildArgs",
+        (),
+        {
+            "sls2_baseline_manifest": tmp_path
+            / "sls2"
+            / "analysis_outputs"
+            / "frozen"
+            / "baseline_manifest.v0.json",
+            "rf500_instance_manifest": tmp_path
+            / "rf500"
+            / "analysis_outputs"
+            / "sources"
+            / "instance_source_manifest.v0.json",
+            "proof_root": tmp_path / "proof",
+            "output_dir": None,
+            "implementation_commit": "1" * 40,
+            "targeted_tests_result": "64 passed",
+            "full_no_cst_tests_result": "715 passed, 11 skipped",
+        },
+    )()
+
+    metadata = _execution_metadata(args)
+    argv = metadata["command_argv"]
+    assert "<SLS2_WORKTREE>/analysis_outputs/frozen/baseline_manifest.v0.json" in argv
+    assert (
+        "<RF500_OWNER_WORKTREE>/analysis_outputs/sources/instance_source_manifest.v0.json"
+        in argv
+    )
+    assert "--targeted-tests-result" in argv
+    assert "64 passed" in argv
+    assert "--full-no-cst-tests-result" in argv
+    assert "715 passed, 11 skipped" in argv
+    assert all("C:\\Users\\" not in str(item) for item in argv)
+
+
 def test_sls2_source_adapter_round_trip_does_not_require_a_fixed_dimension_count(
     tmp_path: Path,
 ) -> None:
@@ -440,6 +482,53 @@ def test_rf500_source_bound_restore_is_lossless_and_keeps_projection_separate(
         str(value).startswith(("C:\\", "/"))
         for value in json.dumps(instance.to_mapping(), ensure_ascii=False).split('"')
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "manifest_schema",
+        "artifact_binding",
+        "locator",
+        "source_artifact_raw",
+        "source_hash",
+        "native_hash",
+        "model_type",
+        "variant",
+        "scope",
+        "group_scope",
+    ],
+)
+def test_rf500_profile_source_cross_bindings_fail_closed(
+    tmp_path: Path, mutation: str
+) -> None:
+    source = _make_rf500_source_fixture(tmp_path)
+    adapter = Rf500FamilyInstanceAdapter(source["manifest"])
+    instance = adapter.build_instance()
+
+    if mutation == "manifest_schema":
+        instance.source_binding["manifest_schema_version"] = "forged_manifest.v0"
+    elif mutation == "artifact_binding":
+        instance.source_binding["artifacts"][0]["raw_sha256"] = "f" * 64
+    elif mutation == "locator":
+        instance.parameter_payload["native_payload_locator"] = "source/other.json#/$"
+    elif mutation == "source_artifact_raw":
+        instance.parameter_payload["source_artifact_raw_sha256"] = "e" * 64
+    elif mutation == "source_hash":
+        instance.parameter_payload["source_payload_canonical_sha256"] = "d" * 64
+    elif mutation == "native_hash":
+        instance.parameter_payload["native_payload_canonical_sha256"] = "c" * 64
+    elif mutation in {"model_type", "variant"}:
+        mapping = instance.to_mapping()
+        mapping["native_model_type" if mutation == "model_type" else "native_variant"] = "forged"
+        instance = FamilyInstance.from_mapping(mapping)
+    elif mutation == "scope":
+        instance.parameter_payload["scope"] = "forged_scope"
+    elif mutation == "group_scope":
+        instance.parameter_payload["parameter_groups"]["named_parameters"]["scope"] = "forged_scope"
+
+    with pytest.raises(FamilyProfileError):
+        verify_round_trip(adapter, instance)
 
 
 @pytest.mark.parametrize("mutation", ["change", "drop"])

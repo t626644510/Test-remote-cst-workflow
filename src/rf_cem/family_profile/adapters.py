@@ -291,6 +291,64 @@ class FamilyInstanceAdapter:
         )
         return manifest, artifacts
 
+    def _validate_profile_source_binding(
+        self,
+        instance: FamilyInstance,
+        manifest: Mapping[str, Any],
+        artifacts: Mapping[str, _Artifact],
+        *,
+        native_artifact_relative: str,
+        native_locator: str,
+    ) -> _Artifact:
+        """Cross-check profile references against the verified source binding."""
+
+        binding = instance.source_binding
+        if binding.get("manifest_schema_version") != manifest.get("schema_version"):
+            raise FamilyProfileError("profile/source manifest schema binding mismatch")
+
+        def normalise_artifact(value: Mapping[str, Any]) -> dict[str, Any]:
+            result = {
+                "bundle_relative_path": str(value.get("bundle_relative_path", "")).replace(
+                    "\\", "/"
+                ),
+                "raw_sha256": str(value.get("raw_sha256", ""))
+                .removeprefix("sha256:")
+                .lower(),
+            }
+            for key in ("canonical_sha256", "role"):
+                if value.get(key) is not None:
+                    result[key] = (
+                        str(value[key]).removeprefix("sha256:").lower()
+                        if key == "canonical_sha256"
+                        else value[key]
+                    )
+            return result
+
+        declared_artifacts = binding.get("artifacts")
+        if not isinstance(declared_artifacts, list):
+            raise FamilyProfileError("profile source artifact binding is not a list")
+        declared = sorted(
+            (normalise_artifact(item) for item in declared_artifacts if isinstance(item, Mapping)),
+            key=lambda item: item["bundle_relative_path"],
+        )
+        actual = sorted(
+            (normalise_artifact(artifact.to_binding()) for artifact in artifacts.values()),
+            key=lambda item: item["bundle_relative_path"],
+        )
+        if declared != actual:
+            raise FamilyProfileError("profile source artifact binding does not match the verified manifest")
+
+        payload = instance.parameter_payload
+        if payload.get("native_payload_locator") != native_locator:
+            raise FamilyProfileError("profile native payload locator does not match the adapter source locator")
+        source_artifact = artifacts.get(native_artifact_relative)
+        if source_artifact is None:
+            raise FamilyProfileError("profile native payload artifact is missing from the source manifest")
+        declared_raw = str(payload.get("source_artifact_raw_sha256") or "").removeprefix("sha256:").lower()
+        if declared_raw != source_artifact.raw_sha256:
+            raise FamilyProfileError("profile native payload artifact raw hash does not match the source")
+        return source_artifact
+
     def _restore_source_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
         raise NotImplementedError
 
@@ -527,16 +585,20 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
     def _restore_source_native_payload(self, instance: FamilyInstance) -> dict[str, Any]:
         """Materialize ``parameter_tuple.values`` from the bound generation file."""
 
-        _, artifacts = self._load_bound_source(
+        manifest, artifacts = self._load_bound_source(
             instance,
             manifest_id_key="baseline_id",
             collection_key="frozen_files",
             canonical_key="canonical_sha256",
             raw_key="raw_sha256",
         )
-        generation_artifact = artifacts.get("generation.core.json")
-        if generation_artifact is None:
-            raise FamilyProfileError("SLS-2 source generation artifact is missing")
+        generation_artifact = self._validate_profile_source_binding(
+            instance,
+            manifest,
+            artifacts,
+            native_artifact_relative="generation.core.json",
+            native_locator="generation.core.json#/parameter_tuple/values",
+        )
         generation = _read_json(generation_artifact.path)
         parameter_tuple = generation.get("parameter_tuple")
         values = parameter_tuple.get("values") if isinstance(parameter_tuple, Mapping) else None
@@ -545,8 +607,22 @@ class Sls2FamilyInstanceAdapter(FamilyInstanceAdapter):
         restored = deepcopy(dict(values))
         actual_hash = canonical_sha256(restored)
         expected_hash = str(instance.parameter_payload["native_payload_canonical_sha256"]).lower()
-        if actual_hash != expected_hash:
+        expected_source_hash = str(
+            instance.parameter_payload.get("source_payload_canonical_sha256") or ""
+        ).removeprefix("sha256:").lower()
+        if actual_hash != expected_hash or actual_hash != expected_source_hash:
             raise FamilyProfileError("SLS-2 source-native payload canonical hash mismatch")
+        model_type = generation.get("features", {}).get("model_type")
+        candidate_id = str(generation.get("candidate_id") or "").strip()
+        native_schema = str(generation.get("schema_version") or "")
+        if (
+            instance.native_schema != native_schema
+            or instance.parameter_payload.get("native_schema_version") != native_schema
+            or instance.native_model_type != model_type
+            or instance.native_variant != candidate_id.rsplit(".", 1)[-1]
+            or instance.native_units != {"length": "mm"}
+        ):
+            raise FamilyProfileError("SLS-2 native envelope does not match the source")
         return restored
 
     def preservation_checks(
@@ -783,9 +859,13 @@ class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
             canonical_key="canonical_payload_sha256",
             raw_key="source_file_sha256",
         )
-        payload_artifact = artifacts.get("source/parametric_geometry.v0.json")
-        if payload_artifact is None:
-            raise FamilyProfileError("RF-CEM source payload artifact is missing")
+        payload_artifact = self._validate_profile_source_binding(
+            instance,
+            manifest,
+            artifacts,
+            native_artifact_relative="source/parametric_geometry.v0.json",
+            native_locator="source/parametric_geometry.v0.json#/$",
+        )
         payload = _read_json(payload_artifact.path)
         actual_hash = canonical_sha256(payload)
         source_meta = manifest.get("source_payload")
@@ -796,8 +876,24 @@ class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
         if source_meta.get("raw_sha256") != payload_artifact.raw_sha256:
             raise FamilyProfileError("RF-CEM source payload raw hash mismatch")
         expected_hash = str(instance.parameter_payload["native_payload_canonical_sha256"]).lower()
-        if actual_hash != expected_hash:
+        expected_source_hash = str(
+            instance.parameter_payload.get("source_payload_canonical_sha256") or ""
+        ).removeprefix("sha256:").lower()
+        if actual_hash != expected_hash or actual_hash != expected_source_hash:
             raise FamilyProfileError("RF-CEM source-native payload canonical hash mismatch")
+        source_variant = payload.get("variant")
+        source_units = payload.get("units")
+        if not isinstance(source_variant, Mapping) or not isinstance(source_units, Mapping):
+            raise FamilyProfileError("RF-CEM native envelope is incomplete")
+        if (
+            instance.native_schema != payload.get("schema_version")
+            or instance.parameter_payload.get("native_schema_version") != payload.get("schema_version")
+            or instance.native_model_type != payload.get("model_type")
+            or instance.native_variant != source_variant.get("name")
+            or instance.native_units != {str(key): str(value) for key, value in source_units.items()}
+            or instance.parameter_payload.get("units") != dict(source_units)
+        ):
+            raise FamilyProfileError("RF-CEM native envelope does not match the source")
         return payload
 
     def preservation_checks(
@@ -820,11 +916,10 @@ class Rf500FamilyInstanceAdapter(FamilyInstanceAdapter):
             "units": restored.get("units") == instance.parameter_payload["units"]
             and instance.native_units
             == {str(key): str(value) for key, value in restored.get("units", {}).items()},
-            "scope": bool(instance.parameter_payload["scope"])
-            and all(
-                bool(group.get("scope"))
-                for group in (named_group, derived_group)
-            ),
+            "scope": instance.parameter_payload["scope"]
+            == "native_parametric_geometry_payload"
+            and named_group.get("scope") == "native_named_parameters"
+            and derived_group.get("scope") == "native_derived_parameters",
             "unknown_native_fields": projection == instance.parameter_payload["native_payload"],
         }
 

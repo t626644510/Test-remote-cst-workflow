@@ -32,12 +32,60 @@ def _adapter_for_id(
     raise FamilyProfileError(f"unsupported adapter id in profile: {adapter_id}")
 
 
-def _portable_cli_path(value: Path, placeholder: str) -> str:
-    """Return a no-absolute-path command argument for proof provenance."""
+def _portable_cli_path(
+    value: Path, placeholder: str, *, include_repository_suffix: bool = False
+) -> str:
+    """Return an executable no-absolute-path command argument for provenance."""
 
     if value.is_absolute():
+        if include_repository_suffix and "analysis_outputs" in value.parts:
+            index = value.parts.index("analysis_outputs")
+            suffix = "/".join(value.parts[index:])
+            return f"<{placeholder}>/{suffix}"
         return f"<{placeholder}>"
     return value.as_posix()
+
+
+def _execution_metadata(args: argparse.Namespace) -> dict[str, object]:
+    """Build report provenance without embedding workstation absolute paths."""
+
+    proof_option = "--proof-root" if args.proof_root is not None else "--output-dir"
+    proof_value = args.proof_root if args.proof_root is not None else args.output_dir
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "implementation_commit": args.implementation_commit.lower(),
+        "command_argv": [
+            "python",
+            "-m",
+            "rf_cem.family_profile",
+            "build",
+            "--sls2-baseline-manifest",
+            _portable_cli_path(
+                args.sls2_baseline_manifest,
+                "SLS2_WORKTREE",
+                include_repository_suffix=True,
+            ),
+            "--rf500-instance-manifest",
+            _portable_cli_path(
+                args.rf500_instance_manifest,
+                "RF500_OWNER_WORKTREE",
+                include_repository_suffix=True,
+            ),
+            proof_option,
+            _portable_cli_path(proof_value, "PROOF_ROOT" if args.proof_root is not None else "PROOF_DIR"),
+            "--implementation-commit",
+            args.implementation_commit.lower(),
+            "--targeted-tests-result",
+            args.targeted_tests_result,
+            "--full-no-cst-tests-result",
+            args.full_no_cst_tests_result,
+        ],
+        "command_exit_status": 0,
+        "result": "passed",
+        "targeted_no_cst_tests": args.targeted_tests_result,
+        "full_no_cst_tests": args.full_no_cst_tests_result,
+        "cst": "not_run",
+    }
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -78,32 +126,7 @@ def _run_build(args: argparse.Namespace) -> int:
         output_dir = args.proof_root / f"{FAMILY_ID}.{profile_hash[:8]}"
     else:
         output_dir = args.output_dir
-    execution = {
-        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "implementation_commit": args.implementation_commit.lower(),
-        "command_argv": [
-            "python",
-            "-m",
-            "rf_cem.family_profile",
-            "build",
-            "--sls2-baseline-manifest",
-            _portable_cli_path(args.sls2_baseline_manifest, "SLS2_WORKTREE"),
-            "--rf500-instance-manifest",
-            _portable_cli_path(args.rf500_instance_manifest, "RF500_OWNER_WORKTREE"),
-            "--proof-root" if args.proof_root is not None else "--output-dir",
-            _portable_cli_path(
-                args.proof_root if args.proof_root is not None else args.output_dir,
-                "PROOF_ROOT" if args.proof_root is not None else "PROOF_DIR",
-            ),
-            "--implementation-commit",
-            args.implementation_commit.lower(),
-        ],
-        "command_exit_status": 0,
-        "result": "passed",
-        "targeted_no_cst_tests": args.targeted_tests_result,
-        "full_no_cst_tests": args.full_no_cst_tests_result,
-        "cst": "not_run",
-    }
+    execution = _execution_metadata(args)
     hashes = write_stage_c_bundle(
         output_dir,
         profile,

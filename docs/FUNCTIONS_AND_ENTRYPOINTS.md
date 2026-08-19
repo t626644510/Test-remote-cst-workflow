@@ -1,6 +1,6 @@
 # Functions and Entrypoints Catalog
 
-Updated: 2026-07-13
+Updated: 2026-08-18
 
 Audience: agents and maintainers locating an existing capability before adding code.
 
@@ -775,6 +775,8 @@ The loader enforces bundle-root containment, file-size limits, PDF/image signatu
 
 It blocks until Ctrl+C.
 
+Full 3D/profile/Helper2 visual review requires the declared `cad` and `review` extras. Without Plotly the page intentionally falls back to tables; without CadQuery/OCP cached artifacts may remain readable, but a new parameter variant cannot be materialized.
+
 ## 9. Literature review GUI functions
 
 ### 9.1 Evidence
@@ -800,6 +802,14 @@ Displayed groups:
 - physical constraints;
 - draft-prior configuration suggestions.
 
+The GUI presents these as three review lanes:
+
+1. paper facts and geometry semantics;
+2. paper-scoped objectives and constraints;
+3. repository mapping proposals / draft patches.
+
+The v1 session still uses one review status for source support and transfer authority. `accepted` means that evidence supports the claim inside the displayed applicability; it is not a universal family rule. Use `accepted_as_soft_only` for single-source numeric values, paper-specific objectives, unverified metric equivalence or non-executable repository mappings.
+
 Unified display schema: `literature_semantic_candidate_view.v1`. Duplicate subjects such as `equator` are grouped; separate cards represent different predicates/claims, not accidental duplicate rows.
 
 Structured Add requires:
@@ -809,7 +819,7 @@ Structured Add requires:
 - JSON object;
 - evidence/provenance fields.
 
-Added items start pending.
+Added items start pending. Adding or reviewing Evidence/Semantic items updates only the session; it does not request a geometry preview or infer a parameter change.
 
 ### 9.3 Geometry projection
 
@@ -823,6 +833,8 @@ Current generator is SLS-2-specific:
 - candidate-level review state and Chinese note.
 
 It does not derive numeric changes from accepted natural-language semantics.
+
+Geometry review decisions still refresh the candidate review/validation overlay. Kernel materialization is content-addressed: unchanged parameters reuse the existing artifact, while an explicit `L/l/r/R/a/b` submission creates a human-preview variant when values differ.
 
 ### 9.4 Helper2 integration
 
@@ -859,6 +871,40 @@ helper2_face_mesh.json
 ```
 
 Literature decisions and Helper2 reviews use separate namespaces.
+
+GUI decisions are a source-bound session overlay. They do not rewrite the semantic package or the draft-prior YAML, and they are not an implicit `merge-prior` authorization.
+
+### 9.6 Frozen SLS-2 revision-149 baseline
+
+Baseline ID `sls2.r149.6593e02e` closes the ignored `sls2_gui_isolated_final_20260712` session at revision 149. The frozen decision source is `review_session.v1.json` (30 terminal decisions: 18 `accepted`, 12 `accepted_as_soft_only`); the event source is `review_events.jsonl` with 149 valid records and continuous revisions 1–149. `generation.core.json` remains an immutable geometry-generation record and may say `pending`; it is not a replacement for the frozen human session. Helper2 Geometry/Features/UDSG counts are an independent projection-ID overlay: 8 accepted faces, 9 confirmed candidates and 13 accepted bindings.
+
+The interactive HTML is only the authenticated review view/UI shell. It is not a self-contained final review record, and `review_launch.json` is runtime metadata rather than freeze evidence. Do not choose a snapshot by mtime or treat a pending/accepted snapshot as authoritative over the session. For a new audit, create a new session root; the frozen session is not a writable continuation target.
+
+This closeout is no-CST. It does not run `merge-prior`, change the existing draft YAML, or establish physical acceptance. At the time of this frozen SLS-2 closeout, the family profile was not yet established; Stage C evidence is recorded separately below. Keep validation evidence separate as `geometry_generation`, `human_geometry_review`, `helper2_review`, `live_cst`, and `physical_acceptance`; never summarize this baseline as one `validation_status=pass`.
+
+### 9.7 Family profile v0 (Stage C)
+
+The no-CST family-profile CLI consumes two frozen source manifests and keeps their native payloads separate:
+
+```powershell
+& $py -m rf_cem.family_profile build `
+  --sls2-baseline-manifest analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e\baseline_manifest.v0.json `
+  --rf500-instance-manifest <RF500_OWNER_WORKTREE>\analysis_outputs\rf_cem_family_instance_sources\rf500.2c27faee.b1r3\instance_source_manifest.v0.json `
+  --proof-root analysis_outputs\rf_cem_family_profiles `
+  --implementation-commit <implementation-commit> `
+  --targeted-tests-result "<targeted result>" `
+  --full-no-cst-tests-result "<full result>"
+& $py -m rf_cem.family_profile validate `
+  --profile analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.<profile-hash-8>\family_profile.v0.json `
+  --sls2-baseline-manifest <SLS2_MANIFEST> `
+  --rf500-instance-manifest <RF500_MANIFEST>
+```
+
+`src/rf_cem/family_profile/` provides the generic `family_profile.v0`/`family_instance.v0` schema, typed containers, finite-value/hash validation, canonical JSON v0 hashing, `Sls2FamilyInstanceAdapter`, `Rf500FamilyInstanceAdapter`, deterministic builder, and source-backed native round-trip verifier. The schema accepts one or more instances with different native schemas, groups, units and dimensions; the Stage C builder intentionally requires the two frozen inputs for its integration proof. The CLI separates structural validation, portable projection validation and source-backed native validation. Without source manifests, `validate` must report `source_roundtrip=not_run` and `roundtrip_all_passed=False`; with both manifests it re-reads and hash-verifies the source objects. The CLI is no-CST and refuses an existing proof target.
+
+The old `nc_axisymmetric_single_cell_rf_vacuum.75f6cba4` proof is retained read-only but superseded because it demonstrated only portable self-consistency. The corrected proof is `nc_axisymmetric_single_cell_rf_vacuum.00414d4f`; it contains `family_profile.v0.json`, `family_profile_validation.v0.json`, `adapter_roundtrip_report.v0.json`, and `source_binding_manifest.v0.json`. The profile core contains no absolute paths. RF500 source-native restoration is `d392... -> d392...`; SLS-2 is `bdc... -> bdc...`. A portable projection hash, when present, is a separate field and is not a native source hash. The family contract excludes RF performance metrics and objectives pending a separate definition (`metric_contract_status=excluded_pending_definition`). `live_cst` and `physical_acceptance` must remain separate validation states and are not established by this CLI.
+
+The Stage C D0 closeout is implemented by `4023eec5c13c72e00857cf4d033dc7f2b3d8ceb1`. Source-backed verification cross-checks the profile's manifest schema, full artifact bindings, adapter-specific native locator, native artifact raw hash, source/native materialized hashes, RF native envelope, and exact native/group scopes. Build provenance keeps portable manifest arguments as `<WORKTREE>/analysis_outputs/...` and records `--implementation-commit`, `--targeted-tests-result`, and `--full-no-cst-tests-result`. D0 does not alter or regenerate the deterministic `00414d4f` profile/proof generated by `619e3051077e8083488b570a7d1be29d80232f3d`. The next safe step is Stage D1 `metric_contract.v0` no-CST contract work; metrics/objectives remain excluded, and neither live CST nor physical acceptance is established.
 
 ## 10. Workflow branch entries
 

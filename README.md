@@ -1,6 +1,6 @@
 # CST 自动化与 RF-CEM 项目：中文背景、现状与交接说明
 
-更新日期：2026-07-12
+更新日期：2026-08-19
 适合读者：懂一些 RF/加速器腔和 Python，但尚未熟悉本项目架构、CST 自动化细节或代理模型优化的研究生同事。
 
 ## 先说结论
@@ -12,7 +12,7 @@
 3. 用代理模型、恢复机制和评估数据库组织不同工作流；
 4. 在 RF-CEM 路线上，把论文证据、人工语义审核、参数化几何、STEP、CSTTranslator 和本征模结果连成可审计链路。
 
-当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成，以及 Helper2 面级 Feature/UDSG 审核。
+当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核，以及 Stage C 两个真实实例的 `family_profile.v0`。当前按 R0B–R5 路线推进；R0B Workbench W0 只提供 no-CST 派生视图，不替代任何源数据或物理验收。
 
 > **RF 备注：**“几何生成成功”只说明模型能被构造，不等于频率、R/Q、Q 或峰值场已经复现。最终物理结论仍要由明确的求解器设置、材料、边界、网格和结果定义支持。
 >
@@ -185,6 +185,12 @@ reviewed labels / expert prior
 >
 > **软件工程备注：**组合 corpus 页面适合完整性统计，不适合作为人工接受入口。人工审核应保持“一篇论文、一个 operating regime、一个 session”。
 
+### 4.8 Stage C 与 R0B Workbench W0
+
+Stage C 已通过 PR #4 合入 `workflow/rf-cem-literature-review`，形成 `nc_axisymmetric_single_cell_rf_vacuum` 的 source-lossless 两实例 profile：`sls2.r149.6593e02e` 与 `rf500.2c27faee.b1r3`。该契约保存两者原生 schema、参数名、分组、单位、维数和来源哈希，但明确不声称它们共享 RF 指标定义；`live_cst` 与 `physical_acceptance` 也仍是独立、未建立的状态。
+
+R0B 新增了 `semantic`、`representation`、`compiler`、`observation` 四个依赖边界，以及一个可删除、可重建的本地 Workbench W0。W0 从显式输入重建 SQLite 索引，显示 Families、Instances、Semantics、Representations、Algorithms、Reviews、Validation、Roadmap/Gates、Capability Coverage 与有限的 legacy compile placeholders。它只绑定 `127.0.0.1`，需要随机 token，并且没有 shell、任意文件浏览、CST 控制或写入 API。使用方法见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`，架构和各阶段出门条件见 `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md`。
+
 ## 5. 新同事如何开始
 
 ### 5.1 只读熟悉
@@ -194,9 +200,10 @@ reviewed labels / expert prior
 1. 本文；
 2. `CONTRIBUTING.md`，按其中流程配置 fork、upstream、任务分支和 PR；
 3. `docs/PROJECT_STATUS_CONTEXT.md`；
-4. `docs/FUNCTIONS_AND_ENTRYPOINTS.md`；
-5. 需要恢复工作时再读 `docs/AGENT_CONTEXT_RECOVERY.md`；
-6. 涉及 CST 时必须读 `docs/CST_AUTOMATION_INTERFACES.md`。
+4. `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md`；
+5. `docs/FUNCTIONS_AND_ENTRYPOINTS.md`；
+6. 需要恢复工作时再读 `docs/AGENT_CONTEXT_RECOVERY.md`；
+7. 涉及 CST 时必须读 `docs/CST_AUTOMATION_INTERFACES.md`。
 
 然后检查本机状态：
 
@@ -271,14 +278,14 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
 ## 7. 建议的近期工作顺序
 
-1. 人工完成 SLS-2 常温语义、几何、Feature 与 UDSG 审核；
-2. 审计 candidate 039/046，选择或否决下一轮 seed；
-3. 重写 490–510 MHz window objective，并补边界测试；
-4. 支持从 `live_records.jsonl` 可追溯加载 seed；
-5. 加固 campaign resume、输出目录冲突和幂等性；
-6. 用新的常温论文测试语义模板泛化；
-7. 再用未参与开发的超导论文做盲测，评估哪些协议可迁移、哪些先验必须重建；
-8. 只有审核稳定后，才讨论把通用组件提级到 `main`。
+1. 完成 R0B hard gate：架构边界、Workbench W0、完整 no-CST 回归、文档与单一 canonical owner；
+2. R1 建立与表示方法无关的 RF 真空边界语义核心；
+3. R2 建立与腔族无关的边界表示，并在唯一 compiler 边界实现 Compiler v0；
+4. R3 做有证据门禁的腔族归纳与扩展；
+5. R4 建立带单位、验证层和工程约束的公共 observation contract；
+6. R5 先离线建立 RF result/mode/field contract；只有用户明确授权后才做 live-CST 验证；
+7. 原有 candidate、objective、seed 与 campaign 工作继续由 `workflow/rf-cem-500mhz` 所有，不与此路线静默混合；
+8. 只有出现第二个真实消费者和稳定契约后，才讨论把通用组件提级到 `main`。
 
 ## 8. 以后只维护哪些说明文档
 
@@ -290,6 +297,8 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Agent 中断、死机、换任务后的恢复与维护步骤。 |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | 全部主要功能、CLI、输入输出和分支入口。 |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST 官方接口、仓库封装与直接项目文件证据。 |
+| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM 架构决策、Workbench W0 以及 R0B–R5 阶段门禁。 |
+| `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` | 当前 R0B–R5 的执行范围、阶段顺序与收口约束。 |
 
 根 `AGENTS.md` 是 Codex 自动读取的短治理入口，只保留不可违反的规则和上述文档索引；`.github/` 中的 PR 模板与 CI 是协作基础设施，不是项目状态报告。
 
@@ -300,4 +309,4 @@ documentation_archive\markdown_before_consolidation_20260712_HEAD-0663994.zip
 SHA-256: 342f999e67bc10ccf6a8d7d6685ca57a93bc27fb666c9c5c61516b0c5e986ab6
 ```
 
-历史内容只用于追溯，不再单独维护；出现冲突时，以当前代码、测试、Git 状态和以上六份文档为准。
+历史内容只用于追溯，不再单独维护；出现冲突时，以当前代码、测试、Git 状态和以上八份文档为准。

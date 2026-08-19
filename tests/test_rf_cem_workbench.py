@@ -195,6 +195,7 @@ def test_server_is_loopback_authenticated_read_only_and_fixed_route(
             ("/families", "Families"),
             ("/instances", "Instances"),
             ("/semantics", "Semantics"),
+            ("/semantic-graphs", "Semantic Graphs / W1"),
             ("/representations", "Representations"),
             ("/algorithms", "Algorithms"),
             ("/reviews", "Reviews"),

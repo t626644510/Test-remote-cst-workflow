@@ -1,10 +1,10 @@
 # Agent Context Recovery and Maintenance Runbook
 
-Updated: 2026-07-13
+Updated: 2026-08-19
 
 Purpose: restore reliable context after a crash, context compaction, task handoff, stale GUI process, interrupted no-CST run, or branch confusion.
 
-This document is procedural. Project truth is `PROJECT_STATUS_CONTEXT.md`; commands and feature details are in `FUNCTIONS_AND_ENTRYPOINTS.md`; CST interface authority is in `CST_AUTOMATION_INTERFACES.md`.
+This document is procedural. Project truth is `PROJECT_STATUS_CONTEXT.md`; RF-CEM phase gates are in `RF_CEM_ROADMAP_AND_ARCHITECTURE.md`; commands and feature details are in `FUNCTIONS_AND_ENTRYPOINTS.md`; CST interface authority is in `CST_AUTOMATION_INTERFACES.md`.
 
 ## 1. Recovery goal
 
@@ -40,9 +40,10 @@ Then read, in order:
 1. root `AGENTS.md`;
 2. root `README.md` if human/scientific background is needed;
 3. `docs/PROJECT_STATUS_CONTEXT.md`;
-4. this runbook;
-5. `docs/FUNCTIONS_AND_ENTRYPOINTS.md` for the target feature;
-6. `docs/CST_AUTOMATION_INTERFACES.md` before touching any CST-facing code.
+4. `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` for RF-CEM R0B–R5 work;
+5. this runbook;
+6. `docs/FUNCTIONS_AND_ENTRYPOINTS.md` for the target feature;
+7. `docs/CST_AUTOMATION_INTERFACES.md` before touching any CST-facing code.
 
 Inspect local changes:
 
@@ -75,6 +76,7 @@ Use this decision table before editing:
 | HOM eigenmode campaign behavior | `workflow/4-rfgun-hom-eigenmode` |
 | 500 MHz parametric RF-CEM or live campaign | `workflow/rf-cem-500mhz` |
 | Literature evidence, semantics, geometry review or GUI | `workflow/rf-cem-literature-review` |
+| RF-CEM family contract, Workbench W0, semantic/representation/compiler/observation roadmap | `workflow/rf-cem-literature-review` |
 
 If current cwd is the wrong owner:
 
@@ -231,6 +233,17 @@ Policy:
 
 CadQuery/OCP teardown faults require the same distinction: check whether the isolated worker produced a valid structured result before classifying the geometry action.
 
+### 7.4 Recover the RF-CEM Workbench W0
+
+Workbench W0 is a derived database, not a session and not a source artifact. First inspect the branch and source state; then use the exact `status` and `rebuild` commands in `FUNCTIONS_AND_ENTRYPOINTS.md`.
+
+```powershell
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w0.sqlite'
+& $py -m rf_cem.workbench status --database $WorkbenchDatabase --repo-root $RepoRoot
+```
+
+If the database is absent, or any source reports `stale`/`missing`, do not patch SQLite or copy an older database. Rebuild the explicitly named target from the canonical profile, validation, frozen semantic/review inputs and architecture document. The rebuild is atomic and does not run CST. A running Workbench is a foreground loopback process; stop that owned foreground process normally and start a new `serve` command after rebuild. Never kill unrelated processes or alter source sessions as a Workbench recovery shortcut.
+
 ## 8. Recovering a live-CST campaign
 
 This section is a safety checklist, not authorization to run or resume CST.
@@ -369,7 +382,7 @@ Before integrating a reusable subset elsewhere:
 
 ## 12. Documentation maintenance procedure
 
-The six maintained project documents are `README.md`, `CONTRIBUTING.md` and the four files under `docs/` listed below. `AGENTS.md` is the governance entry; `.github/pull_request_template.md` is collaboration infrastructure.
+The eight maintained project documents are `README.md`, `CONTRIBUTING.md`, the five files under `docs/` listed below, and the active `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`. `AGENTS.md` is the governance entry; `.github/pull_request_template.md` is collaboration infrastructure.
 
 When code changes:
 
@@ -394,6 +407,8 @@ docs/AGENT_CONTEXT_RECOVERY.md
 docs/CST_AUTOMATION_INTERFACES.md
 docs/FUNCTIONS_AND_ENTRYPOINTS.md
 docs/PROJECT_STATUS_CONTEXT.md
+docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md
+.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md
 ```
 
 Runtime-generated reports such as `review_report.md`, `calibration_report.md` or `history_analysis_report.md` may appear only under output directories and are not added to the maintained set.

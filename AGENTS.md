@@ -10,8 +10,10 @@ Use only this maintained documentation set:
 2. `docs/AGENT_CONTEXT_RECOVERY.md` — crash/handoff recovery;
 3. `docs/FUNCTIONS_AND_ENTRYPOINTS.md` — capabilities and commands;
 4. `docs/CST_AUTOMATION_INTERFACES.md` — CST API and project-file authority;
-5. `README.md` — Chinese human handoff;
-6. `CONTRIBUTING.md` — Chinese Git/PR collaboration procedure.
+5. `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` — RF-CEM R0B–R5 architecture and gates;
+6. `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` — active R0B–R5 execution contract;
+7. `README.md` — Chinese human handoff;
+8. `CONTRIBUTING.md` — Chinese Git/PR collaboration procedure.
 
 This file is an automatically loaded governance/index stub, not a project-status report. `.github/` templates are maintained collaboration infrastructure. Other tracked Markdown is archival or generated output and must not become a new maintained status document.
 
@@ -29,6 +31,7 @@ This file is an automatically loaded governance/index stub, not a project-status
 - `main` is strict shared core. It contains no concrete workflow packages, workflow entries, campaign configs, or workflow-only tests.
 - Concrete packages and root compatibility shims live only on canonical `workflow/*` branches listed in `PROJECT_STATUS_CONTEXT.md`.
 - `workflow/rf-cem-literature-review` is the canonical owner of RF-CEM literature ingestion, semantic review, geometry projection, and the local review GUI. It is separate from the `workflow/rf-cem-500mhz` live-campaign owner.
+- On that workflow branch, `src/rf_cem/semantic/`, `representation/`, `compiler/`, and `observation/` are the R0B architectural boundaries. `src/rf_cem/workbench/` is a derived no-CST read model; it is not a source of engineering truth.
 - Shared core is `src/cst_optimization/`:
   - `core/` — CST connection/project/solver/results/retry/cleanup/timeout;
   - `evaluation/` — evaluation DB and retry infrastructure;

@@ -1,6 +1,6 @@
 # Agent Project Status Context
 
-Status timestamp: 2026-08-18 Asia/Shanghai
+Status timestamp: 2026-08-19 Asia/Shanghai
 
 Repository family: CST accelerator-cavity automation and surrogate optimisation
 
@@ -24,6 +24,8 @@ The maintained project-document set is:
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Recovery procedure after crash, compaction, or agent handoff. |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | Feature and executable-entry inventory. |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
+| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM architecture decisions, Workbench W0 contract, and R0B–R5 gates. |
+| `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` | Active autonomous R0B–R5 execution and phase-closeout contract. |
 | `AGENTS.md` | Automatically loaded governance/index stub; not a status document. |
 | `.github/pull_request_template.md` | Maintained review checklist; collaboration infrastructure, not project state. |
 | `.github/workflows/no-cst.yml` | Cross-branch offline validation gate; collaboration infrastructure, not project state. |
@@ -63,7 +65,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 | WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
 | RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
 | Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| RF-CEM literature review/GUI | `workflow/rf-cem-literature-review` | canonical; colleague handoff target | `0a675df8714564e03ce305959095183524238850` before portability/handoff changes |
+| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical; Stage C integrated by PR #4 | merge commit `3867a9a8eae502359556a83bcad15b3a519e64de` before R0B |
 
 The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
@@ -105,6 +107,12 @@ WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same comm
 | `src/rf_cem/translator.py` | Deterministic CST actions, mapping table, VBA script, report. |
 | `src/rf_cem/parametric_geometry/` | STEP ingest, feature projection, grammar, reconstruction, validation, interfaces. |
 | `src/rf_cem/literature_semantics/` | arXiv/PDF evidence, semantic schema, prior draft, audits, GUI, geometry candidate. |
+| `src/rf_cem/family_profile/` | Source-lossless `family_profile.v0` and two real-instance adapters. |
+| `src/rf_cem/semantic/` | Representation-independent RF boundary semantic boundary; full R1 contract is not yet implemented. |
+| `src/rf_cem/representation/` | Family-independent mathematical boundary representation; full R2 contract is not yet implemented. |
+| `src/rf_cem/compiler/` | Sole semantic/representation composition boundary; Compiler v0 is deferred to R2. |
+| `src/rf_cem/observation/` | Read-only observation boundary; full R4 contract is not yet implemented. |
+| `src/rf_cem/workbench/` | R0B no-CST derived SQLite registry and authenticated loopback read-only views. |
 | `workflows/rf_cem_500mhz_parametric_opt/` | no-CST scan and live campaign. |
 
 The current literature and geometry-review implementation remains RF-CEM-specific. It is not eligible for `main` promotion until a second real workflow uses a stable subset.
@@ -143,6 +151,8 @@ Architecture terms:
 | RF-CEM campaign | FM3 | AC2 | 60/60 success; objective, arbitrary record seed, resume lifecycle incomplete. |
 | Literature semantics | FM2 | AC2-3 | Fixed-version two-paper pilot, validation, hashes, draft merge gates, audit HTML. |
 | Literature review GUI | FM1-2 | AC2-3 | Functional no-CST local GUI with isolated paper/regime sessions and Helper2 integration. |
+| Family profile v0 | FM1 | AC3 | Stage C source-native two-instance profile; metrics, live CST and physical acceptance remain excluded. |
+| RF-CEM Workbench W0 | FM1 | AC2-3 | Deterministic derived registry, source-hash audit, fixed read-only views and no-CST security tests. |
 | Multi-cell/X-band grammar | FM0 | AC0 | Planned only; STEP semantic profile exists but no RF-CEM generation closure. |
 | Multi-physics/HOM/coupler RF-CEM | FM0 | AC0 | Explicitly out of current scope. |
 
@@ -433,7 +443,7 @@ Maintenance validation on 2026-08-18 used the branch `.venv`: targeted reviewer/
 
 ### 7.7 2026-08-18 Stage C family profile v0 validation
 
-Stage C is formally passed on branch `codex/rf-cem-family-profile-v0`, implementation commit `619e3051077e8083488b570a7d1be29d80232f3d`. The canonical family is `nc_axisymmetric_single_cell_rf_vacuum` with independent identity fields `operating_regime=normal_conducting`, `symmetry=axisymmetric`, `cell_count=single`, and `geometry_scope=rf_vacuum`.
+Stage C is formally passed and has one canonical owner. Branch `codex/rf-cem-family-profile-v0` was validated, reviewed in PR #4, and merged into `workflow/rf-cem-literature-review` as merge commit `3867a9a8eae502359556a83bcad15b3a519e64de`; the original profile implementation commit is `619e3051077e8083488b570a7d1be29d80232f3d`. The canonical family is `nc_axisymmetric_single_cell_rf_vacuum` with independent identity fields `operating_regime=normal_conducting`, `symmetry=axisymmetric`, `cell_count=single`, and `geometry_scope=rf_vacuum`.
 
 The two input manifests were consumed read-only and rechecked after proof generation:
 
@@ -455,7 +465,17 @@ The previous ignored proof bundle `analysis_outputs/rf_cem_family_profiles/nc_ax
 
 Two builds from the same inputs produced identical profile objects, bytes and canonical SHA. The corrected report records the implementation commit, generated-at time, no-absolute-path equivalent argv, command exit status, both input manifest IDs/raw SHA, both source-native input/restored SHA, targeted `64 passed`, full `.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider -m "not cst_required"` result `715 passed, 11 skipped`, and `cst=not_run`. With both frozen manifests, `python -m rf_cem.family_profile validate` reported structural validation passed, portable projection validation passed, `source_roundtrip=passed`, and `roundtrip_all_passed=True`; without manifests it reported `source_roundtrip=not_run` and `roundtrip_all_passed=False`. No CST, solver, campaign, recovery, merge-prior, push or PR was run/performed. `family_schema_established=true` and `adapter_established=true` are established for this corrected two-instance no-CST contract only; they do not imply metric equivalence, live-CST linkage, or physical acceptance. SLS-2 soft-only ranges remain soft-only.
 
-The 2026-08-19 Stage C closeout added D0 source-binding hardening in implementation commit `4023eec5c13c72e00857cf4d033dc7f2b3d8ceb1`: source-backed verification now fails closed on manifest schema, complete artifact-list, adapter locator, native artifact raw hash, materialized source/native hashes, RF native envelope, and parameter/group scope cross-bindings; build provenance also preserves the repository-relative `analysis_outputs/...` suffix and records the test-result arguments. This is validation/provenance hardening only. The deterministic profile and four corrected proof artifacts above remain byte/hash unchanged, were generated by `619e3051077e8083488b570a7d1be29d80232f3d`, and were not regenerated or overwritten. Stage C still excludes RF performance metrics and executable objectives (`metric_contract_status=excluded_pending_definition`); no live CST result or physical acceptance is established. The next safe action is Stage D1: define `metric_contract.v0` and its no-CST contract tests before any metric/objective execution.
+The 2026-08-19 Stage C closeout added D0 source-binding hardening in implementation commit `4023eec5c13c72e00857cf4d033dc7f2b3d8ceb1`: source-backed verification now fails closed on manifest schema, complete artifact-list, adapter locator, native artifact raw hash, materialized source/native hashes, RF native envelope, and parameter/group scope cross-bindings; build provenance also preserves the repository-relative `analysis_outputs/...` suffix and records the test-result arguments. This is validation/provenance hardening only. The deterministic profile and four corrected proof artifacts above remain byte/hash unchanged, were generated by `619e3051077e8083488b570a7d1be29d80232f3d`, and were not regenerated or overwritten. Stage C still excludes RF performance metrics and executable objectives (`metric_contract_status=excluded_pending_definition`); no live CST result or physical acceptance is established. The active sequence is now the canonical R0B–R5 roadmap, not the superseded Stage D1 proposal.
+
+### 7.8 R0B architecture and Workbench W0
+
+R0B establishes dependency boundaries without pretending that the later phase contracts already exist. `semantic` cannot depend on representations, geometry kernels or CST; `representation` cannot depend on semantic families or CST; `compiler` is the composition boundary; `observation` is read-only and does not generate geometry. AST dependency tests enforce these initial boundaries. Full semantic, representation/compiler and observation contracts belong to R1, R2 and R4 respectively.
+
+Workbench W0 is implemented as a deletable derived read model in `src/rf_cem/workbench/`. Its SQLite registry is rebuilt atomically from explicitly supplied source files and stores repository-relative source identity plus raw SHA-256. It indexes the real `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3` instances, separate validation layers, frozen review decisions, Helper2 semantics, current expert-prior grammar variants/control policies, legacy compile placeholders, capability coverage, and R0B–R5 gates. The browser binds only to `127.0.0.1`, requires a random token with Host/Origin validation, exposes fixed GET views/APIs, opens SQLite read-only, and offers no shell, arbitrary file browser, CST control or mutation endpoint.
+
+The ignored local rebuild target is `analysis_outputs/rf_cem_workbench/w0.sqlite`; it is disposable and must never become an engineering source of truth or a tracked artifact. Source status must be `fresh` before its content is used; a changed or missing source is shown as `stale` or `missing` until an explicit rebuild. The canonical architecture/gate source is `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md`. R1 must not begin until the R0B hard gate, including closeout validation and canonical documentation, passes.
+
+Two consecutive real-source rebuilds produced the same input-set SHA-256 `a84aa1b70a5757e752622599cf50d52ab22de0ea24d8aa4edd9cbb29b9a12929`, with 7 fresh sources, 131 entities and 21 relations. The canonical portable snapshot SHA-256 was `9e389d9d807d116123723de1f8755dbf88b7e09eeef5724a7fb0acef15964165`. This is local no-CST verification evidence, not a tracked proof bundle or physical validation.
 
 ## 8. STEP Feature Assistant state
 
@@ -561,13 +581,14 @@ $env:PYTHONPATH = Join-Path $RepoRoot 'src'
 & $Python -m pytest -q -m 'not cst_required'
 ```
 
-Full no-CST result after the SLS-2 GUI closeout:
+R0B closeout verification on 2026-08-19:
 
 ```text
-697 passed, 11 skipped in 11.82s
+targeted Stage C + review GUI + architecture + Workbench: 52 passed in 1.45s
+full branch-local no-CST: 738 passed, 11 skipped in 10.64s
 ```
 
-This result includes the literature review GUI and Helper2 integration. It does not include live CST. The consolidation verification also completed:
+These results include the Stage C profile, literature review GUI, architecture dependency guards, deterministic registry rebuild, source-staleness audit, and loopback server security contracts. They do not include live CST. The closeout verification also includes:
 
 - full current-branch no-CST suite;
 - `compileall` for source and workflows;
@@ -581,15 +602,14 @@ Historical branch-specific pass counts from 2026-07-10 are archived and must not
 
 Priority order:
 
-1. Stage B only: in the `workflow/rf-cem-500mhz` owner, obtain one real hash-pinned `parametric_geometry.v0` instance; do not create the family schema in this stage.
-2. Audit RF-CEM candidates 039 and 046 on the workstation.
-3. Implement/test the 490–510 MHz window objective.
-4. Add arbitrary live-record seed loading with provenance validation.
-5. Add campaign collision, resume and idempotency contract.
-6. Validate semantic generalisation on new normal-conducting papers.
-7. Run a blinded superconducting transfer benchmark with domain-specific priors isolated.
-8. Keep literature/GUI development on `workflow/rf-cem-literature-review`; do not merge the complete workflow into `workflow/rf-cem-500mhz`.
-9. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
+1. Close the R0B hard gate on `codex/rf-cem-r0b-workbench`, merge it into `workflow/rf-cem-literature-review`, and preserve the W0 registry as a derived no-CST view.
+2. R1: implement the representation-independent RF boundary semantic core and validate both real instances against it.
+3. R2: implement family-independent boundary representations plus Compiler v0 at the declared composition boundary.
+4. R3: implement evidence-gated family induction/extension without silent migration of legacy artifacts.
+5. R4: implement representation-independent observations and engineering constraints with explicit units and validation states.
+6. R5: define RF result/mode/field contracts no-CST first. Any live-CST validation remains separately blocked on explicit user authorization.
+7. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
+8. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
 
 ## 14. Backup and recovery references
 

@@ -76,7 +76,7 @@ py -3 -m venv .venv
 | recovery 或 tolerance | `workflow/3-rfgun-recovery-tolerance` |
 | HOM eigenmode campaign | `workflow/4-rfgun-hom-eigenmode` |
 | 500 MHz 常温单腔参数化几何或 live campaign | `workflow/rf-cem-500mhz` |
-| 文献获取、语义审核、几何投影、Helper2 审核 GUI | `workflow/rf-cem-literature-review` |
+| 文献获取、语义审核、几何投影、Helper2 审核 GUI、family profile、Workbench W0 与 R0B–R5 架构 | `workflow/rf-cem-literature-review` |
 
 `main` 是严格共享核心，不能接收具体 workflow 包、入口、campaign 配置或 workflow-only 测试。无法确定所有权时，先在任务中说明拟修改文件和目标分支，不要先写代码再决定。
 

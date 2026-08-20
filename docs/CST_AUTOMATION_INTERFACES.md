@@ -695,6 +695,12 @@ Consequently, R2 `status=pass` means only that topology/representation compositi
 
 R3 `status=pass` therefore means only that the reviewed SLS-2/RF500 semantic structures aligned without common parameter names, the optional-nose proposal remained non-mutating until accepted manual review, the explicit patch revalidated both training graphs, and the separately reviewed real LEReC graph classified after induction. It does not establish geometry equivalence, frequency, Q, R/Q, accelerating gradient, power, fields, wake/impedance, mode identity or physical acceptance. W3 is a read-only derived view of that no-CST chain. None of these states authorizes live CST; R5 remains separately blocked on explicit user authorization.
 
+### 19.3 R4 observation and engineering constraints remain outside the CST path
+
+`rf_cem.observation` reads only passing R2 `compile_record.v0` geometry plus the matching reviewed R1 semantic graphs. It rechecks exact compiled profile/STEP identities, samples generic region curves, derives unit-bound shape/scalar descriptors and evaluates immutable engineering-constraint demonstrations. It does not import or call `cst.interface`, `cst.results`, COM/VBA, batch mode, project/result files, the solver or the verified live sequence above. Workbench W4 only indexes the immutable no-CST proof and opens it through fixed read-only loopback routes.
+
+R4 `status=pass` means that exact/shape/scalar identities, descriptor definitions/units/provenance, cross-representation tolerances, constraint schemas/evaluations, violation locations and source/artifact bindings passed. Its length/radius values are in `mm`, curvature in `1/mm`, area in `mm^2`, volume in `mm^3`, tangents dimensionless, and discrete descriptors `count`/`bool`. The six included constraints are contract demonstrations, not validated manufacturing limits. R4 does not define or read frequency, Q, R/Q, accelerating gradient, power, fields, wake/impedance or mode identity, and every proof retains `live_cst_status=not_run` and `physical_acceptance_status=not_established`. Any R5 live-CST validation still requires a separate, explicit user authorization.
+
 ## 20. `EvaluateResultTemplates` behavior
 
 Evidence: command executed through existing `CSTProject.execute_vba`; live behavior is mixed.

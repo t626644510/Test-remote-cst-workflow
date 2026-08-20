@@ -1,4 +1,4 @@
-"""RF-CEM Workbench W0-W3 derived registry and local read-only server."""
+"""RF-CEM Workbench W0-W4 derived registry and local read-only server."""
 
 from .indexer import (
     REQUIRED_W0_INSTANCES,

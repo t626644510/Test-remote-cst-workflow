@@ -65,7 +65,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 | WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
 | RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
 | Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R4; Stage C/R0B/R1/R2/R3/R4 integrated by PRs #4/#5/#6/#7/#8/#9; R5 no-CST readiness active | R4 merge commit `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; active R5 branch `codex/rf-cem-r5-rf-result-field` |
+| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R4; Stage C/R0B/R1/R2/R3/R4 integrated by PRs #4/#5/#6/#7/#8/#9; R5 readiness active; nominal Stage A authorized but blocked before connection by CST license error `-8,523` | R4 merge commit `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; active R5 branch `codex/rf-cem-r5-rf-result-field` |
 
 The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
@@ -555,7 +555,7 @@ The canonical ignored immutable proof is `analysis_outputs/rf_cem_observation_co
 
 Workbench indexer `r4.w4.v0` adds `--observation-contract-bundle` and refuses W4 without the complete W1/W2/W3 chain. Two consecutive full-source rebuilds produced 66 fresh sources, 779 entities and 1484 relations with identical input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb` and portable snapshot SHA-256 `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. The fixed `/observations` page displays the three layers, both compiled real instances, 21 definitions, 240 values, six constraints, 12 evaluations, violation locations and source IDs. Authenticated in-app browser QA confirmed every key section appears once, all three violation cards render, no replacement characters or horizontal overflow occur at 1280 px, and the console is empty.
 
-R4 is entirely no-CST: `live_cst_status=not_run` and `physical_acceptance_status=not_established`. It defines no frequency, Q, R/Q, field, power, wake, mode identity or optimization objective. R5 now defines the offline contracts for a bounded subset, but live-CST R5 evidence remains separately blocked until the user explicitly authorizes it.
+R4 is entirely no-CST: `live_cst_status=not_run` and `physical_acceptance_status=not_established`. It defines no frequency, Q, R/Q, field, power, wake, mode identity or optimization objective. R5 now defines the offline contracts for a bounded subset. The user later authorized only the bounded R5 Stage A action described below; that authorization does not retroactively change R4 or the immutable no-CST readiness proof.
 
 ### 7.13 2026-08-20 R5 RF result/mode/field readiness and Workbench W5
 
@@ -565,11 +565,15 @@ Three RF500 cases bind the same R1 semantic graph, R2 compile record and R4 exac
 
 A mode can never be accepted by a bare enumeration index. An established fingerprint requires frequency plus R/Q and symmetry/field evidence. Field data must remain external hash-bound artifacts; inline payloads are forbidden. Mesh convergence needs at least three valid samples, while normal result comparison fails closed on material, boundary, mesh, normalization or mode-identity differences. The special mesh-convergence context relaxes only the intentional mesh difference. SLS-2 remains explicitly `not_linked` because no materialized live-CST result chain exists for that instance.
 
-The canonical ignored immutable readiness proof is `analysis_outputs/rf_cem_rf_result_contract/r5_rf_result_readiness.2f5b48efb5568f85/`, input SHA-256 `2f5b48efb5568f85ce70f12f070ba6372e276b0dd564bbc6b13f7add6847987d`. It contains 56 declared artifacts plus its source-binding manifest: three cases/provenance/mode identities/fingerprints/field bundles, 27 null metric observations, nine metric definitions, one unestablished convergence record, two `not_comparable` decisions and two instance-link records. The loader replays the complete R4 proof, re-hashes 23 sources and all artifacts, recomputes the R5 input preimage, reasserts no-CST/authorization/physical status, rejects duplicate or orphan contracts and substituted comparison objects, and recomputes the two planned comparability decisions. A second fresh build produced the same bundle identity and byte-identical 57 files; the canonical manifest raw SHA-256 is `7b415997574248edf8d26e4f4883c1bdeaafe8ae9839fc0ff21e7cec8ad555dc`.
+The current canonical ignored immutable readiness proof is `analysis_outputs/rf_cem_rf_result_contract/r5_rf_result_readiness.d917acb00f4bfbdf/`, input SHA-256 `d917acb00f4bfbdfd9210624fe06890f58c3e657c2f4926743a9ec87cd87378b`. It contains 56 declared artifacts plus its source-binding manifest: three cases/provenance/mode identities/fingerprints/field bundles, 27 null metric observations, nine metric definitions, one unestablished convergence record, two `not_comparable` decisions and two instance-link records. The loader replays the complete R4 proof, re-hashes 23 sources and all artifacts, recomputes the R5 input preimage, reasserts no-CST/authorization/physical status, rejects duplicate or orphan contracts and substituted comparison objects, and recomputes the two planned comparability decisions. This fresh proof was built after the Stage A status/interface source updates and then strictly replayed; its manifest raw SHA-256 is `9ff5da0f9fecbd4f2bd543b6a1e680685e36ec396c928e88fd999435158787bf`. The prior content-addressed proof remains unchanged.
 
 Workbench indexer `r5.w5.v0` adds `--rf-result-bundle` and refuses W5 without the complete W1/W2/W3/W4 chain. Two consecutive full-source rebuilds, retaining the explicit frozen literature package and review session, produced 146 fresh sources, 855 entities and 1635 relations with identical input-set SHA-256 `532de7ce15a16036322088b6b17f552bcf7ddbd9be5f8ebb4ff611444ece90e9` and portable snapshot SHA-256 `8a56f24287b34108a5741af976b1f818aec5b7e2ffb2fffc20074e42c992fed3`. The fixed `/rf-results` page exposes the authorization hard gate, per-instance linkage, physics cases, mode identity/fingerprints, scalar definitions and null observations, provenance, external fields, convergence and comparability. Authenticated in-app browser QA at 1280 px confirmed every result section appears once, the pending-authorization/no-CST/SLS-2 `not_linked` states render, historical scalar values are absent, and there are no replacement characters, page overflow or console warnings/errors.
 
-This is readiness evidence only. The manifest states `validation_mode=no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`; all 27 metric values are null. R5 cannot satisfy its physical hard gate or close until the user explicitly authorizes a bounded live-CST run and the resulting mode/metric/field/convergence provenance passes these contracts.
+This is readiness evidence only. The manifest states `validation_mode=no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`; all 27 metric values are null. Those assertions describe the immutable readiness bundle and are not hand-edited after later authorization. R5 cannot satisfy its physical hard gate or close until bounded live-CST mode/metric/field/convergence provenance passes these contracts.
+
+On 2026-08-20 the user explicitly authorized live-CST Stage A only: one new isolated RF500 nominal eigenmode project bound to the exact R2 STEP, using the recorded CST 2026 tetrahedral/order-3/one-mode/498–530 MHz setup, with replayable results plus native result-tree, mesh and field-export evidence. The scope forbids reuse or overwrite of an existing output, optimization campaigns, process termination, lock/result deletion, cleanup, recovery, unverified CST API/VBA and license-file import or modification. `src/rf_cem/live_r5_stage_a.py` implements a fail-closed preflight and a guarded `--execute-live` path. It deliberately avoids the shared context-manager close path because that path can force-kill after a timeout; Stage A attempts only native graceful close and records that no force kill or global sweep was attempted.
+
+The exact no-CST preflight passed against R2 bundle `r2_boundary_compiler.aa66a3e90125437b`, R5 readiness bundle `r5_rf_result_readiness.2f5b48efb5568f85`, RF500 STEP SHA-256 `dac9819443816cf67b7977a5504021df5cbd33e3f897beb761feafae784ac515`, and installed CST build `2026.0.1465899`. The first live attempt used new ignored directory `analysis_outputs/rf_cem_r5_live_stage_a/rf500_nominal.20260820.auth01a01a79/` and is preserved as failed evidence. CST launched but `DesignEnvironment.new()` could not connect while the frontend displayed `Specify License`; the report contains zero setup actions, no project PID, no solver result and `graceful_close.status=not_connected`. A read-only follow-up confirmed that the local FlexNet service and `27075@localhost` server/vendor daemon were reachable, but CST 2026 rejected the `start` feature with `Invalid (inconsistent) license key`, FlexNet error `-8,523`. No project setup action or solver ran, no license file was imported or edited, no process was killed, and no lock/result/campaign cleanup or recovery was performed. The CST frontend exited after the dialog was cancelled; the license service remained running. Stage A is therefore authorized but externally blocked before CST connection. Resume it only after a valid CST 2026 license checkout is available and only in another fresh non-existing output directory. Coarse/fine convergence Stage B remains separately unauthorized.
 
 ## 8. STEP Feature Assistant state
 
@@ -757,19 +761,35 @@ live CST: not run; authorization not requested
 
 The R5 checks cover strict finite/unit/path/hash schemas; complete R1/R2/R4 case binding; rejection of bare mode indices; fingerprint evidence rules; null-versus-established metric invariants; Q perturbation/Q0 separation; external field tamper rejection; unique three-sample convergence; default-deny comparability with referenced-object rebinding checks; result provenance; full R4 replay; source/artifact/manifest/status tamper rejection; duplicate/orphan contract rejection; byte-identical 57-file readiness builds; deterministic complete W1→W5 rebuilding; freshness audit; fixed-route rendering; and architecture dependency guards. They establish only an auditable extraction/readiness boundary. No CST process, RF value, field artifact, convergence result or physical acceptance was established.
 
+R5 Stage A no-CST guard closeout on 2026-08-20:
+
+```text
+targeted Stage A guard + RF500 + R5 contract: 24 passed, 4 skipped in 3.01s
+full branch-local default suite: 789 passed, 11 skipped in 36.75s
+compileall for src and tests: pass
+strict current R5 replay: r5_rf_result_readiness.d917acb00f4bfbdf; pass
+Stage A no-CST preflight: ready_no_cst_preflight; exact STEP hash pass; output absent before and after
+git diff --check: pass
+live CST: not rerun; prior isolated attempt remains blocked before connection by FlexNet -8,523
+```
+
+This closeout verifies the bounded Stage A entry, exact recorded nominal solver controls, no-overwrite preflight, native-close-only behavior and external field-file hashing without launching CST. The prior failed output and both content-addressed readiness proofs remain untouched. No license, process, lock, result or campaign cleanup action was performed.
+
 Historical branch-specific pass counts from 2026-07-10 are archived and must not be copied as current evidence without rerunning those worktrees.
 
 ## 13. Current priorities
 
 Priority order:
 
-1. Preserve the canonical R5 readiness proof and W5 registry as ignored, rebuildable no-CST artifacts; do not hand-edit or overwrite either one.
-2. Obtain explicit user authorization before any bounded live-CST R5 validation; without it, keep every metric null and physical acceptance unestablished.
-3. When authorized, materialize exact boundary/mesh/build settings, prove mode identity without a bare index, extract only verified metrics/fields, and demonstrate three-level convergence before deciding physical acceptance.
-4. Keep representation classes family-independent and treat R2 compile, R3 induction, R4 observations/constraints and R5 readiness records as auditable layers, not interchangeable RF physical evidence.
-5. Preserve exact geometry authority: normalized shape samples, scalar descriptors and result contracts never replace R2 profile/STEP identities.
-6. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
-7. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
+1. Preserve the canonical R5 readiness proof, W5 registry and failed Stage A output as ignored evidence; do not hand-edit, delete or overwrite them.
+2. Restore a valid CST 2026 frontend/`start` license checkout through the user's license administrator; do not modify or work around licensing as part of Stage A.
+3. Resume the already authorized nominal Stage A only in a fresh non-existing output directory, then capture the saved result tree, mesh/scalars and native field-export evidence without process termination or cleanup.
+4. Obtain separate user authorization before coarse/fine convergence Stage B, physical-acceptance decisions, campaigns or optimization.
+5. Prove mode identity without a bare index, extract only verified metrics/fields, and require three-level convergence before deciding physical acceptance.
+6. Keep representation classes family-independent and treat R2 compile, R3 induction, R4 observations/constraints and R5 readiness records as auditable layers, not interchangeable RF physical evidence.
+7. Preserve exact geometry authority: normalized shape samples, scalar descriptors and result contracts never replace R2 profile/STEP identities.
+8. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
+9. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
 
 ## 14. Backup and recovery references
 

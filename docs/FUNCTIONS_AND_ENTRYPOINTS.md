@@ -65,6 +65,7 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build and validate the two canonical R2 boundary compiles and `compile_record.v0` artifacts |
 | `python -m rf_cem.observation ...` | `workflow/rf-cem-literature-review` | no | Build and validate the R4 exact/shape/scalar observation and engineering-constraint proof |
 | `python -m rf_cem.physics ...` | `workflow/rf-cem-literature-review` | no | Build and strictly replay the R5 RF result/mode/field readiness contract bundle |
+| `python -m rf_cem.live_r5_stage_a ...` | `workflow/rf-cem-literature-review` | explicitly authorized, one solver | Preflight or execute one isolated exact-R2 RF500 nominal R5 capture |
 | `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W5 registry |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
@@ -1084,22 +1085,51 @@ $ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation
   --goal-document '.agent\goals\RF-CEM_Codex_Goal_R0B-R5.md'
 ```
 
-The canonical ignored immutable readiness proof is `r5_rf_result_readiness.2f5b48efb5568f85`, input SHA-256 `2f5b48efb5568f85ce70f12f070ba6372e276b0dd564bbc6b13f7add6847987d`. It declares 56 artifacts plus its manifest: three coarse/nominal/fine RF500 cases and result-provenance records, three mode identities/fingerprints, nine metric definitions, 27 null metric observations, three external-field placeholders, one mesh-convergence record, two comparability decisions and two per-instance link records. The strict loader rejects changed readiness assertions, duplicate/orphan contracts and substituted comparison objects, then recomputes the planned comparability decisions. The three repository-verified readback locators are eigenfrequency (`MHz`), R/Q (`ohm`) and `Q-Factor (Perturbation)` (`1`); the last remains Q perturbation, not Q0. Stored energy, Epk, Bpk, Epk/Eacc, Bpk/Eacc and surface loss have explicit unit/normalization/mode requirements but their CST locators remain `not_established`.
+The canonical ignored immutable readiness proof is `r5_rf_result_readiness.d917acb00f4bfbdf`, input SHA-256 `d917acb00f4bfbdfd9210624fe06890f58c3e657c2f4926743a9ec87cd87378b`. It declares 56 artifacts plus its manifest: three coarse/nominal/fine RF500 cases and result-provenance records, three mode identities/fingerprints, nine metric definitions, 27 null metric observations, three external-field placeholders, one mesh-convergence record, two comparability decisions and two per-instance link records. The strict loader rejects changed readiness assertions, duplicate/orphan contracts and substituted comparison objects, then recomputes the planned comparability decisions. The three repository-verified readback locators are eigenfrequency (`MHz`), R/Q (`ohm`) and `Q-Factor (Perturbation)` (`1`); the last remains Q perturbation, not Q0. Stored energy, Epk, Bpk, Epk/Eacc, Bpk/Eacc and surface loss have explicit unit/normalization/mode requirements but their CST locators remain `not_established`.
 
 No mode is accepted by a bare solver index. Established mode fingerprints require frequency plus R/Q and symmetry/field evidence. Field payloads must be external files with size and SHA-256 bindings; inline data is rejected. Ordinary comparability fails closed on material, boundary, mesh, normalization or mode differences; the mesh-convergence context permits only its intentional mesh difference and requires at least three valid samples before convergence can be established. SLS-2 remains `not_linked`.
 
 Strictly replay source hashes, all artifacts, the R4 chain and cross-contract identities with:
 
 ```powershell
-$RfResultProof = Join-Path $RfResultRoot 'r5_rf_result_readiness.2f5b48efb5568f85'
+$RfResultProof = Join-Path $RfResultRoot 'r5_rf_result_readiness.d917acb00f4bfbdf'
 & $py -m rf_cem.physics validate `
   --root $RepoRoot `
   --bundle $RfResultProof
 ```
 
-The build refuses an existing content-addressed target. Do not overwrite a prior proof, insert values from historical prose, infer unknown CST locators or relabel Q. Its current manifest is deliberately `no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`. A later live-CST materialization is a separate explicitly authorized action.
+The build refuses an existing content-addressed target. Do not overwrite a prior proof, insert values from historical prose, infer unknown CST locators or relabel Q. Its current manifest is deliberately `no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`. Those are immutable readiness assertions. The later Stage A authorization does not rewrite this proof; live materialization is recorded in a separate output.
 
-### 9.13 RF-CEM Workbench W0/W1/W2/W3/W4/W5 (R0B/R1/R2/R3/R4/R5)
+### 9.13 Authorized isolated R5 Stage A nominal capture
+
+`src/rf_cem/live_r5_stage_a.py` is the bounded Stage A entry. Omit `--execute-live` for a strict no-CST preflight; the preflight verifies the complete readiness replay, R2 compile-record/manifest/STEP hashes, exact recorded nominal history blocks, required result templates and installed CST build without creating the target directory. Live execution requires the user's explicit Stage A authorization and a brand-new output path:
+
+```powershell
+$R2Proof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
+$RfResultProof = 'analysis_outputs\rf_cem_rf_result_contract\r5_rf_result_readiness.d917acb00f4bfbdf'
+$StageAOutput = 'analysis_outputs\rf_cem_r5_live_stage_a\rf500_nominal.<new-unique-id>'
+
+if (Test-Path -LiteralPath $StageAOutput) {
+  throw "Stage A output already exists: $StageAOutput"
+}
+
+& $py -m rf_cem.live_r5_stage_a `
+  --repo-root $RepoRoot `
+  --r2-bundle $R2Proof `
+  --readiness-bundle $RfResultProof `
+  --template-project-dir 'D:\ModelData\bare' `
+  --library-path 'D:\CST2026\CST Studio Suite 2026\AMD64\python_cst_libraries' `
+  --output-dir $StageAOutput `
+  --authorization-id '<recorded-user-authorization-id>' `
+  --execute-live `
+  --wait-for-ui
+```
+
+The entry uses `mode=new`, saves only inside its owned output, refuses an existing target and never calls the shared force-close/cleanup path. It forbids campaigns, process kills, lock/result deletion, cleanup, recovery, unverified CST API/VBA and license-file import or modification. After a successful solve it prints `R5_STAGE_A_UI_READY` with the project, report and `fields/` paths. Perform only CST-native result-tree inspection and field export at that point, then send one input line so the runner can inventory external field hashes, save the current owned project and attempt native graceful close.
+
+The 2026-08-20 authorized attempt passed no-CST preflight but stopped before project creation: CST 2026 rejected the reachable local FlexNet server's `start` feature with error `-8,523` (`Invalid (inconsistent) license key`). Preserve `analysis_outputs/rf_cem_r5_live_stage_a/rf500_nominal.20260820.auth01a01a79/` unchanged. Do not retry, import/edit a license file or seek a workaround from this entry. Resume only after the user's license administrator provides a valid CST 2026 checkout, and use another non-existing output path. This authorization covers nominal Stage A only; coarse/fine Stage B and optimization remain separately gated.
+
+### 9.14 RF-CEM Workbench W0/W1/W2/W3/W4/W5 (R0B/R1/R2/R3/R4/R5)
 
 `src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W5 build below retains all W0–W4 sources, verifies the R2 compile outputs, independently rechecks the R3 and R4 proofs, and then strictly loads the R5 readiness proof. The current expert prior is indexed automatically by its repository source path.
 
@@ -1111,7 +1141,7 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
 $CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
 $InductionProof = 'analysis_outputs\rf_cem_family_induction\r3_family_induction.2f6c02557798e606'
 $ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation_contract.d06695921d941eee'
-$RfResultProof = 'analysis_outputs\rf_cem_rf_result_contract\r5_rf_result_readiness.2f5b48efb5568f85'
+$RfResultProof = 'analysis_outputs\rf_cem_rf_result_contract\r5_rf_result_readiness.d917acb00f4bfbdf'
 
 & $py -m rf_cem.workbench rebuild `
   --database $WorkbenchDatabase `

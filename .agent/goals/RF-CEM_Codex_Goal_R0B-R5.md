@@ -129,7 +129,7 @@ Before new architecture work:
 - R2: merged by PR #7 at `e81ad20942258380cccb93d17cfdf0ca7e2d0e21` after its real no-CST proof, deterministic W2 rebuild, full regression and browser QA passed.
 - R3: merged by PR #8 at `585d549c7a5dac0304852a0150f0c4114fd5b6e9` after graph alignment, common-backbone extraction, optional/alternative proposal contracts, explicit manual review/grammar patch, existing-instance revalidation, real held-out LEReC 704 MHz validation, deterministic W3, full no-CST regression and browser QA passed. The canonical proof is `r3_family_induction.2f6c02557798e606`.
 - R4: closed and canonical. PR #9 merged the one closeout commit into `workflow/rf-cem-literature-review` at `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`. Both compiled real instances retain separate exact/shape/scalar contracts, 21 unit-bound descriptor definitions, 240 values, six reviewed non-mutating constraints, 12 evaluations and three located demonstration violations. Canonical proof `r4_observation_contract.d06695921d941eee`, deterministic W4 (66 fresh sources / 779 entities / 1484 relations), targeted 108-pass and full 767-pass/11-skip no-CST regression, browser QA and PR checks passed.
-- R5: active on `codex/rf-cem-r5-rf-result-field`, created exactly from the R4 canonical merge. The no-CST contract/readiness layer now defines every required v0 case/mode/fingerprint/metric/field/convergence/provenance object, the nine initial metric semantics, external field-artifact hashing, replay validation, default-deny comparability, three planned RF500 mesh levels, explicit null/not-established observations, SLS-2 `not_linked`, and Workbench W5. It does not claim a live RF value, mesh convergence or physical acceptance. The remaining Hard Gate requires explicit user authorization followed by bounded live-CST evidence; no such authorization has been received.
+- R5: active on `codex/rf-cem-r5-rf-result-field`, created exactly from the R4 canonical merge. The no-CST contract/readiness layer now defines every required v0 case/mode/fingerprint/metric/field/convergence/provenance object, the nine initial metric semantics, external field-artifact hashing, replay validation, default-deny comparability, three planned RF500 mesh levels, explicit null/not-established observations, SLS-2 `not_linked`, and Workbench W5. On 2026-08-20 the user explicitly authorized only bounded live-CST Stage A: one new isolated RF500 nominal eigenmode project, exact R2 STEP binding, replayable save, and native result-tree/mesh/field-export evidence, with no overwrite, campaign, process kill, lock/result deletion, cleanup, recovery, unverified API/VBA, or license-file mutation. The hash-bound no-CST preflight passed, but the first isolated connection attempt stopped before project creation because CST 2026 rejected the reachable local FlexNet server's `start` feature with error `-8,523` (invalid/inconsistent license key). No setup action or solver ran, and no process kill or cleanup occurred. R5 still claims no live RF value, field, convergence or physical acceptance. Resume Stage A only after a valid CST 2026 license is available and only in a fresh non-existing output directory; Stage B remains separately unauthorized.
 
 ---
 
@@ -669,15 +669,17 @@ Do not create multiple dated mini-reports. Update canonical status and use the p
 
 ## 13. Immediate goal
 
-Close R3, then continue from its canonical merge:
+Complete the already authorized R5 Stage A only after the external CST license gate is repaired:
 
 ```text
-R3 full no-CST/documentation closeout
-→ one push + PR checks + canonical merge
-→ R4 Observation & Engineering Constraint Contract
+valid CST 2026 frontend/start checkout
+→ fresh isolated non-existing Stage A output directory
+→ one exact-R2 RF500 nominal eigenmode solve
+→ saved result tree, mesh/scalars and native field-export evidence
+→ no-CST/live evidence audit and maintained-document update
 ```
 
-Do not begin R4 until R3 Hard Gate passes and the R3 phase is integrated into the canonical owner.
+Preserve the failed Stage A output unchanged. Do not start coarse/fine convergence, physical acceptance, Stage B, optimization, cleanup, recovery or process termination without the corresponding new authority.
 
 Proceed autonomously using repository code, tests and maintained documentation. Ask the user only when:
 

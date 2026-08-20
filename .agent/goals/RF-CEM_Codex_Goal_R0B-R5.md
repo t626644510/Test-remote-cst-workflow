@@ -126,8 +126,9 @@ Before new architecture work:
 - Stage C: merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`.
 - R0B: merged by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`.
 - R1: merged by PR #6 at `5ae1ba07b841d6adf6e180ec1eedfd073657987b`.
-- R2: implementation, real no-CST proof, deterministic W2 rebuild, targeted tests, and browser QA passed locally on `codex/rf-cem-r2-boundary-compiler`; documentation/full-suite/one-push closeout and canonical merge remain before R3 may start.
-- R3/R4/R5: not started. R5 live-CST work remains separately blocked on explicit user authorization.
+- R2: merged by PR #7 at `e81ad20942258380cccb93d17cfdf0ca7e2d0e21` after its real no-CST proof, deterministic W2 rebuild, full regression and browser QA passed.
+- R3: graph alignment, common-backbone extraction, optional/alternative proposal contracts, explicit manual review/grammar patch, existing-instance revalidation, real held-out LEReC 704 MHz validation, deterministic W3, targeted 36-pass and full 762-pass/11-skip no-CST regression, and browser QA pass locally on `codex/rf-cem-r3-family-induction`. The canonical proof is `r3_family_induction.2f6c02557798e606`; one-push PR closeout and canonical merge remain.
+- R4/R5: not started. R5 live-CST work remains separately blocked on explicit user authorization.
 
 ---
 
@@ -667,15 +668,15 @@ Do not create multiple dated mini-reports. Update canonical status and use the p
 
 ## 13. Immediate goal
 
-Close R2, then continue from its canonical merge:
+Close R3, then continue from its canonical merge:
 
 ```text
-R2 full no-CST/documentation closeout
+R3 full no-CST/documentation closeout
 → one push + PR checks + canonical merge
-→ R3 Family Induction / Extension v0
+→ R4 Observation & Engineering Constraint Contract
 ```
 
-Do not begin R3 until R2 Hard Gate passes and the R2 phase is integrated into the canonical owner.
+Do not begin R4 until R3 Hard Gate passes and the R3 phase is integrated into the canonical owner.
 
 Proceed autonomously using repository code, tests and maintained documentation. Ask the user only when:
 

@@ -197,6 +197,13 @@ def test_w2_requires_two_compile_records_and_the_complete_w1_proof_set(
     with pytest.raises(WorkbenchIndexError, match="complete W1"):
         rebuild_workbench(tmp_path / "no-w1.sqlite", no_w1)
 
+    no_w2 = replace(
+        source_set,
+        family_induction_bundle=source_set.family_profile.parent,
+    )
+    with pytest.raises(WorkbenchIndexError, match="complete W2"):
+        rebuild_workbench(tmp_path / "no-w2.sqlite", no_w2)
+
 
 def test_server_is_loopback_authenticated_read_only_and_fixed_route(
     tmp_path: Path, source_set: WorkbenchSourceSet
@@ -225,6 +232,7 @@ def test_server_is_loopback_authenticated_read_only_and_fixed_route(
             ("/roadmap", "Roadmap / Gates"),
             ("/coverage", "Capability Coverage"),
             ("/compile-records", "Compile Records"),
+            ("/family-induction", "Family Induction / W3"),
         ):
             status, _, body = _request(server, "GET", f"{path}?token={TOKEN}")
             assert status == 200

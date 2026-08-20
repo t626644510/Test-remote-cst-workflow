@@ -1,4 +1,4 @@
-"""Command-line entry points for deterministic W0/W1/W2 rebuild and serving."""
+"""Command-line entry points for deterministic W0-W3 rebuild and serving."""
 
 from __future__ import annotations
 
@@ -41,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     rebuild.add_argument("--instance-graph-diff", type=Path)
     rebuild.add_argument(
         "--compile-record", type=Path, action="append", default=[]
+    )
+    rebuild.add_argument(
+        "--family-induction-bundle",
+        type=Path,
+        help="immutable R3 family-induction proof-bundle directory",
     )
 
     serve = subparsers.add_parser(
@@ -89,6 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 compile_records=tuple(
                     _resolve(root, path) for path in args.compile_record
+                ),
+                family_induction_bundle=_resolve_optional(
+                    root, args.family_induction_bundle
                 ),
             )
             summary = rebuild_workbench(args.database, source_set)

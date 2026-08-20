@@ -751,7 +751,7 @@ CompositeRegionRepresentation
 
 ### 2026-08-20 实现状态
 
-R2 已在 `codex/rf-cem-r2-boundary-compiler` 完成本地 Hard Gate 验证，phase closeout 尚待单次 push、PR 检查与 canonical merge。`rf_cem.representation` 已实现与 family/semantic/CST 无关的 Line、CircularArc、EllipseArc、Spline/NURBS 和 Composite 合同；`rf_cem.compiler.ProfileCompiler.compile` 是 SLS-2 与 RF500 共用的唯一编译入口。
+R2 已通过 PR #7 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`。`rf_cem.representation` 已实现与 family/semantic/CST 无关的 Line、CircularArc、EllipseArc、Spline/NURBS 和 Composite 合同；`rf_cem.compiler.ProfileCompiler.compile` 是 SLS-2 与 RF500 共用的唯一编译入口。
 
 当前 no-CST 内容寻址证明为 `analysis_outputs/rf_cem_boundary_compiler/r2_boundary_compiler.aa66a3e90125437b/`，输入 SHA-256 为 `aa66a3e90125437b32ef900feb296f4512ee4a199b372474cb4c24fb7740813c`。SLS-2 编译为 9 个 `RegionGeometry` / 10 个 patch；RF500 编译为 11 个 `RegionGeometry` / 12 个 patch。所有 patch 均有唯一 owner，语义边界通过 landmark/interface 连接，region/patch 顺序和方向固定；同一原生曲线内部切分要求 G2，其余跨区域连接要求 C0，所有 required continuity gate 均通过。额外 G1/G2 诊断失败仅作为 warning 保存，不被误报为 required pass。
 
@@ -831,6 +831,18 @@ proposal:
 - 不自动接受 proposal；
 - 不从 RF 性能推导最优 motif；
 - 不进入跨 family transfer。
+
+### 2026-08-20 实现状态
+
+R3 已在 `codex/rf-cem-r3-family-induction` 完成本地 Hard Gate、完整 no-CST regression 与浏览器验收，该分支从 R2 canonical merge `e81ad20942258380cccb93d17cfdf0ca7e2d0e21` 建立；phase closeout 尚待单次 push、PR 检查与 canonical merge。验证结果为 targeted 36 passed、explicit no-CST 762 passed/11 skipped、full default 762 passed/11 skipped；live CST 未运行。
+
+`rf_cem_family_induction.v0` 只读取两个 reviewed `instance_boundary_graph.v0` 中有序的 `(side, region_type)` 和审计所需 source/hash，不读取 role、原生 feature/parameter 名或公共几何向量。SLS-2/RF500 产生 9 个 common-backbone slot 和 2 个 RF500-only `NoseRegion` residual；系统据此产生 `optional_motif` proposal，明确记录 `{0,2}` cardinality、左右 insertion adjacency、graph locator、evidence、限制、算法版本和 `0.95` evidence-completeness confidence。未成镜像配对的 residual 走经过测试的 `alternative_topology` 路径。
+
+proposal 初始状态固定为 `pending` / `not_applied`。`rejected` 或 `needs_evidence` 返回原 grammar 的完全相同字节且不产生 patch/diff；只有显式 accepted manual review 可以产生 hash-bound patch。本次 closeout review revision 为 1；patch 对已有 `motif.nose_pair.v0` 执行 `confirm_optional_motif`，更新为 `family_grammar.r3.v0`，记录 6 项可视 diff，并重新验证 SLS-2/RF500。
+
+第三个真实 blind case 是 BNL LEReC 704 MHz normal-conducting single-cell cavity。两份 primary PDF raw SHA-256 分别为 `d806257972ae33208f5244ed31e1329064d120b82491bc4cb9a9e6afb544ba82` 和 `01b6a72aedf32783568cec6e0ab567cd6870d7f4ec7a2e98558d24b790baffab`。adapter 只覆盖文献剖面可审查的 axisymmetric main-cell RF-vacuum wall，明确排除非轴对称 FPC/tuner/pickup/pump/flange。该 graph 在归纳和 patch 完成后才构建/分类，未出现在 training IDs，结果为 `known_optional_motif_present`；这不是 raw-pixel/STEP 无监督语义发现。
+
+当前 no-CST 内容寻址证明为 `analysis_outputs/rf_cem_family_induction/r3_family_induction.2f6c02557798e606/`，输入 SHA-256 为 `2f6c02557798e6062e961d6dea3b4220e4d4076310579754567d570f6ae7c4f0`。两次 fresh test build 字节一致；strict loader 会重新验证 8 个 artifact 与全部 cross-contract identity。Workbench indexer 已升级为 `r3.w3.v0`，W3 必须从完整 W1 + W2 + 一个 R3 bundle 重建，并独立验证 training binding、manual review/patch、训练实例重验证、blind separation、两份 PDF 和未改变的 representation-core hash sentinel。`/family-induction` 显示 alignment、backbone、residual、pending proposal、accepted review、grammar diff 和 LEReC blind result。全程无 CST、无 RF metric、无 physical acceptance。
 
 ---
 
@@ -1128,8 +1140,9 @@ Agent 长期目标放在：
 1. Stage C 已通过 PR #4 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `3867a9a8eae502359556a83bcad15b3a519e64de`；
 2. R0B 已通过 PR #5 合入，canonical merge commit 为 `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`；
 3. R1 已通过 PR #6 合入，canonical merge commit 为 `5ae1ba07b841d6adf6e180ec1eedfd073657987b`；
-4. 当前 phase 分支为 `codex/rf-cem-r2-boundary-compiler`，从上述 R1 canonical merge 建立；
-5. 当前动作是完成 R2 文档、完整 no-CST 验证、单次 closeout push、PR 检查与 canonical merge；
-6. R2 只建立数学边界表示、通用几何编译、确定性 STEP/B-Rep 证明和 Workbench W2，不实现 family induction、observation/RF result contract 或优化搜索；
-7. R2 不运行 CST，不建立 RF physical acceptance；只有 R2 Hard Gate 合入 canonical owner 后再从该 merge 建立 R3 分支；
-8. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。
+4. R2 已通过 PR #7 合入，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`；
+5. 当前 phase 分支为 `codex/rf-cem-r3-family-induction`，从上述 R2 canonical merge 建立；
+6. 当前动作是完成 R3 单次 closeout push、PR 检查与 canonical merge；
+7. R3 只建立 reviewed graph alignment、proposal/manual review/explicit patch、真实 blind validation 和 Workbench W3，不实现 observation/RF result contract 或优化搜索；
+8. R3 不运行 CST，不建立 RF physical acceptance；只有 R3 Hard Gate 合入 canonical owner 后再从该 merge 建立 R4 分支；
+9. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。

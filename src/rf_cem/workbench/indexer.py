@@ -1,4 +1,4 @@
-"""Source adapters and deterministic rebuild orchestration for Workbench W0-W3."""
+"""Source adapters and deterministic rebuild orchestration for Workbench W0-W4."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from rf_cem.family_profile import (
     validate_profile_mapping,
 )
 from rf_cem.literature_semantics.validator import assert_valid_semantic_package
+from rf_cem.observation import R4Bundle, load_r4_bundle
 from rf_cem.parametric_geometry.expert_prior import (
     DEFAULT_PRIOR_PATH,
     load_expert_prior,
@@ -65,7 +66,7 @@ class WorkbenchIndexError(WorkbenchRegistryError):
 
 @dataclass(frozen=True)
 class WorkbenchSourceSet:
-    """Explicit source set used for one reproducible W0-W3 registry rebuild."""
+    """Explicit source set used for one reproducible W0-W4 registry rebuild."""
 
     repo_root: Path
     family_profile: Path
@@ -78,6 +79,7 @@ class WorkbenchSourceSet:
     instance_graph_diff: Path | None = None
     compile_records: tuple[Path, ...] = ()
     family_induction_bundle: Path | None = None
+    observation_contract_bundle: Path | None = None
 
 
 _REPRESENTATION_CATALOG = (
@@ -195,6 +197,24 @@ _ALGORITHM_CATALOG = (
         "status": "implemented_r3_no_cst",
         "implementation": "rf_cem.semantic.induction",
     },
+    {
+        "id": "rf_cem.semantic_arc_observer.v0",
+        "label": "Representation-independent semantic arc observer",
+        "status": "implemented_r4_no_cst",
+        "implementation": "rf_cem.observation.observe_compiled_geometry",
+    },
+    {
+        "id": "rf_cem.axisymmetric_shape_descriptors.v0",
+        "label": "Versioned axisymmetric engineering descriptors",
+        "status": "implemented_r4_no_cst",
+        "implementation": "rf_cem.observation.extract_scalar_descriptors",
+    },
+    {
+        "id": "rf_cem.engineering_constraint_evaluator.v0",
+        "label": "Unit-aware non-mutating constraint evaluator",
+        "status": "implemented_r4_no_cst",
+        "implementation": "rf_cem.observation.evaluate_constraint",
+    },
 )
 
 _ROADMAP_PHASES = (
@@ -212,9 +232,13 @@ _ROADMAP_PHASES = (
     (
         "R3",
         "Family Induction / Extension v0",
-        "hard_gate_validation_passed_closeout_pending",
+        "hard_gate_passed_merged",
     ),
-    ("R4", "Observation & Engineering Constraint Contract", "planned"),
+    (
+        "R4",
+        "Observation & Engineering Constraint Contract",
+        "hard_gate_validation_in_progress",
+    ),
     ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
 )
 
@@ -262,7 +286,23 @@ _R3_GATES = (
     ("w3_views", "W3 exposes alignment, backbone, proposal, review, grammar diff, and blind validation", "implemented", "fixed /family-induction route"),
     ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "36 targeted; 762 passed and 11 skipped full suite"),
     ("no_live_cst", "R3 remains a reviewed-semantic no-CST proof", "passed", "R3 source-binding manifest"),
-    ("phase_closeout", "One R3 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r3-family-induction"),
+    ("phase_closeout", "One R3 closeout commit/push and canonical merge", "passed", "PR #8 merge commit 585d549c7a5dac0304852a0150f0c4114fd5b6e9"),
+)
+
+_R4_GATES = (
+    ("two_real_observations", "Both real instances produce observations from compiled geometry", "evaluated_at_rebuild", "observation_bundle.v0 pair"),
+    ("native_parameter_independence", "Observations do not read instance-native parameter names", "passed", "semantic arc observer contract"),
+    ("three_layer_separation", "Exact geometry, semantic shape, and scalar layers remain separate", "passed", "identity-bound R4 contracts"),
+    ("descriptor_registry", "Descriptors have definitions, units, versions, tolerances, and provenance", "passed", "scalar_descriptor_registry.v0"),
+    ("invalid_values_fail_closed", "Unknown units, non-finite values, and invalid landmarks fail closed", "passed", "R4 contract tests"),
+    ("cross_representation_equivalence", "Equivalent geometry with changed representation/patching has equivalent descriptors", "passed", "cross-representation no-CST test"),
+    ("engineering_constraints", "Length, radius, aperture, curvature, nose, and regional constraints evaluate", "evaluated_at_rebuild", "engineering_constraint.v0 + constraint_evaluation.v0"),
+    ("constraint_kinds", "Hard, soft, advisory, and diagnostic constraint kinds are supported", "passed", "constraint evaluator contract"),
+    ("no_geometry_mutation", "Observation and constraint evaluation do not mutate geometry", "passed", "source hash sentinel + immutable contracts"),
+    ("w4_views", "W4 exposes descriptors, constraints, violations, locations, and sources", "implemented", "fixed /observations route"),
+    ("no_cst_regression", "Targeted, cross-representation, and full no-CST suites pass", "pending_phase_closeout", "R4 closeout validation"),
+    ("no_rf_metrics", "R4 defines no RF metrics and runs no CST", "passed", "R4 manifest exclusions"),
+    ("phase_closeout", "One R4 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r4-observation-contract"),
 )
 
 _R0B_GATES = (
@@ -298,11 +338,12 @@ _CAPABILITY_CATALOG = (
     ("architecture.representation", "Family-independent representation layer", "implemented_r2", "versioned primitive/composite contracts"),
     ("architecture.compiler", "Generic boundary compiler", "implemented_r2_no_cst", "one entry for SLS-2 and RF500"),
     ("architecture.family_induction", "Reviewed graph alignment, proposal, and patch", "implemented_r3_no_cst", "explicit manual review + held-out LEReC validation"),
-    ("architecture.observation", "Representation-independent observation", "boundary_only_r0b", "R4 implementation planned"),
+    ("architecture.observation", "Representation-independent observation", "implemented_r4_no_cst", "exact/shape/scalar contracts + constraints"),
     ("workbench.w0", "Derived local project catalog", "implemented_r0b", "SQLite + loopback read-only server"),
     ("workbench.w1", "Semantic graph and grammar review", "implemented_r1", "SQLite + /semantic-graphs"),
     ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
     ("workbench.w3", "Family induction and blind-validation review", "implemented_r3", "SQLite + /family-induction"),
+    ("workbench.w4", "Observation and engineering-constraint review", "implemented_r4", "SQLite + /observations"),
     ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
 )
 
@@ -344,6 +385,12 @@ _VALIDATION_CATALOG = (
         "tests/test_rf_cem_family_induction.py",
     ),
     (
+        "tests.observation_contract_r4",
+        "R4 observation, descriptors, constraints, proof bundle, and W4 contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_observation_contract.py",
+    ),
+    (
         "tests.literature_review",
         "Literature semantics and review GUI contracts",
         "available_no_cst",
@@ -359,7 +406,7 @@ _VALIDATION_CATALOG = (
 
 
 def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSummary:
-    """Validate explicit sources and atomically rebuild the W0-W3 read model."""
+    """Validate explicit sources and atomically rebuild the W0-W4 read model."""
     root = source_set.repo_root.resolve()
     if not root.is_dir():
         raise WorkbenchIndexError(f"repository root is missing: {root}")
@@ -478,6 +525,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     )
     w2_requested = bool(source_set.compile_records)
     w3_requested = source_set.family_induction_bundle is not None
+    w4_requested = source_set.observation_contract_bundle is not None
     if w2_requested and len(source_set.compile_records) != 2:
         raise WorkbenchIndexError(
             "W2 indexing requires exactly two compile_record.v0 inputs"
@@ -489,6 +537,10 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     if w3_requested and not w2_requested:
         raise WorkbenchIndexError(
             "W3 indexing requires the complete W2 compile and W1 semantic proof sets"
+        )
+    if w4_requested and not w3_requested:
+        raise WorkbenchIndexError(
+            "W4 indexing requires the complete W3, W2, and W1 proof sets"
         )
 
     grammar: FamilyGrammar | None = None
@@ -534,6 +586,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         )
 
     compile_records: list[CompileRecord] = []
+    compile_record_sources: list[SourceRecord] = []
     if w2_requested:
         if grammar is None or grammar_source is None:
             raise WorkbenchIndexError("W2 indexing requires loaded W1 contracts")
@@ -583,6 +636,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
                 source_rows.append(artifact_source)
                 artifact_sources[artifact.role] = artifact_source
             compile_records.append(record)
+            compile_record_sources.append(record_source)
             indexed_compile_inputs.append(
                 (record_source, record, artifact_sources)
             )
@@ -629,6 +683,32 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             add_relation=add_relation,
         )
 
+    r4_bundle: R4Bundle | None = None
+    if w4_requested:
+        assert source_set.observation_contract_bundle is not None
+        (
+            r4_bundle,
+            r4_manifest_source,
+            r4_artifact_sources,
+            r4_declared_sources,
+        ) = _load_r4_bundle_sources(
+            source_set.observation_contract_bundle,
+            root=root,
+        )
+        source_rows.extend(r4_declared_sources)
+        source_rows.append(r4_manifest_source)
+        source_rows.extend(r4_artifact_sources.values())
+        _index_r4_observations(
+            r4_bundle,
+            manifest_source=r4_manifest_source,
+            artifact_sources=r4_artifact_sources,
+            compile_records=tuple(compile_records),
+            compile_record_sources=tuple(compile_record_sources),
+            graph_sources=tuple(graph_sources),
+            add_entity=add_entity,
+            add_relation=add_relation,
+        )
+
     missing_instances = sorted(REQUIRED_W0_INSTANCES - indexed_instances)
     if missing_instances:
         raise WorkbenchIndexError(
@@ -657,13 +737,22 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         metadata={
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
             "roadmap_phase": (
-                "R3"
-                if w3_requested
-                else ("R2" if w2_requested else ("R1" if w1_requested else "R0B"))
+                "R4"
+                if w4_requested
+                else (
+                    "R3"
+                    if w3_requested
+                    else (
+                        "R2"
+                        if w2_requested
+                        else ("R1" if w1_requested else "R0B")
+                    )
+                )
             ),
             "w1_semantic_graphs": "indexed" if w1_requested else "not_supplied",
             "w2_compile_records": "indexed" if w2_requested else "not_supplied",
             "w3_family_induction": "indexed" if w3_requested else "not_supplied",
+            "w4_observation_contract": "indexed" if w4_requested else "not_supplied",
             "r2_compile_ids": canonical_json(
                 sorted(record.compile_id for record in compile_records)
             ),
@@ -678,6 +767,20 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
                 r3_bundle.blind_validation.validation_id
                 if r3_bundle is not None
                 else ""
+            ),
+            "r4_bundle_id": r4_bundle.bundle_id if r4_bundle is not None else "",
+            "r4_descriptor_registry_id": (
+                r4_bundle.descriptor_registry.registry_id
+                if r4_bundle is not None
+                else ""
+            ),
+            "r4_observation_bundle_ids": canonical_json(
+                sorted(
+                    item.observation_bundle.observation_bundle_id
+                    for item in r4_bundle.instances
+                )
+                if r4_bundle is not None
+                else []
             ),
         },
     )
@@ -763,6 +866,17 @@ def _index_catalog(
                 status,
                 roadmap_source_id,
                 {"phase": "R3", "evidence": evidence},
+            )
+        )
+    for gate_id, label, status, evidence in _R4_GATES:
+        add_entity(
+            EntityRecord(
+                "roadmap_gate",
+                f"R4.{gate_id}",
+                label,
+                status,
+                roadmap_source_id,
+                {"phase": "R4", "evidence": evidence},
             )
         )
     for capability_id, label, status, evidence in _CAPABILITY_CATALOG:
@@ -2217,6 +2331,567 @@ def _index_r3_induction(
             bundle.bundle_id,
         )
     )
+    _index_r3_induction_tail(
+        family_id=family_id,
+        grammar=grammar,
+        bundle=bundle,
+        alignment=alignment,
+        proposal=proposal,
+        review=review,
+        patch=patch,
+        updated=updated,
+        application=application,
+        blind_graph=blind_graph,
+        blind_graph_source=blind_graph_source,
+        blind_validation=blind_validation,
+        artifact_sources=artifact_sources,
+        manifest_source=manifest_source,
+        add_entity=add_entity,
+        add_relation=add_relation,
+    )
+
+
+def _load_r4_bundle_sources(
+    bundle_path: Path,
+    *,
+    root: Path,
+) -> tuple[R4Bundle, SourceRecord, dict[str, SourceRecord], list[SourceRecord]]:
+    """Strictly load R4 and register every declared input/output source."""
+
+    resolved = bundle_path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(
+            "W4 observation bundle must be inside the declared repository root"
+        ) from exc
+    try:
+        bundle = load_r4_bundle(resolved, repo_root=root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(f"invalid W4 observation bundle: {exc}") from exc
+    manifest_path = resolved / "source_binding_manifest.v0.json"
+    manifest_source = _register_source(
+        manifest_path,
+        "r4_observation_source_binding_manifest.v0",
+        root,
+    )
+    declared_sources: list[SourceRecord] = []
+    source_values = bundle.manifest.get("sources")
+    if not isinstance(source_values, list):
+        raise WorkbenchIndexError("W4 manifest sources must be an array")
+    for value in source_values:
+        source = _mapping(value, "W4 declared source")
+        relative = str(source.get("path") or "")
+        expected = str(source.get("raw_sha256") or "")
+        if not relative or not expected:
+            raise WorkbenchIndexError("W4 source identity is incomplete")
+        declared_sources.append(
+            _register_source(
+                root / relative,
+                "r4_declared_source",
+                root,
+                expected_raw_sha256=expected,
+            )
+        )
+    artifact_sources: dict[str, SourceRecord] = {}
+    artifact_values = bundle.manifest.get("artifacts")
+    if not isinstance(artifact_values, list):
+        raise WorkbenchIndexError("W4 manifest artifacts must be an array")
+    for value in artifact_values:
+        artifact = _mapping(value, "W4 artifact")
+        relative = str(artifact.get("path") or "")
+        expected = str(artifact.get("raw_sha256") or "")
+        if not relative or relative in artifact_sources or not expected:
+            raise WorkbenchIndexError("W4 artifact identity is invalid or duplicated")
+        artifact_sources[relative] = _register_source(
+            resolved / relative,
+            "r4_observation_artifact",
+            root,
+            expected_raw_sha256=expected,
+        )
+    return bundle, manifest_source, artifact_sources, declared_sources
+
+
+def _index_r4_observations(
+    bundle: R4Bundle,
+    *,
+    manifest_source: SourceRecord,
+    artifact_sources: Mapping[str, SourceRecord],
+    compile_records: tuple[CompileRecord, ...],
+    compile_record_sources: tuple[SourceRecord, ...],
+    graph_sources: tuple[tuple[SourceRecord, InstanceBoundaryGraph], ...],
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Index the exact/shape/scalar layers and non-mutating constraints for W4."""
+
+    compile_by_instance = {item.instance_id: item for item in compile_records}
+    compile_source_by_instance = {
+        record.instance_id: source
+        for source, record in zip(compile_record_sources, compile_records)
+    }
+    graph_by_instance = {graph.instance_id: (source, graph) for source, graph in graph_sources}
+    bundle_instances = {
+        item.exact_geometry.instance_id: item for item in bundle.instances
+    }
+    if (
+        set(bundle_instances) != set(compile_by_instance)
+        or set(bundle_instances) != set(compile_source_by_instance)
+        or set(bundle_instances) != set(graph_by_instance)
+    ):
+        raise WorkbenchIndexError("W4 instance set differs from indexed W1/W2 proofs")
+    manifest_sources = {
+        str(item.get("path") or ""): str(item.get("raw_sha256") or "")
+        for item in bundle.manifest.get("sources", [])
+        if isinstance(item, Mapping)
+    }
+    for source, _ in graph_sources:
+        if manifest_sources.get(source.display_path) != source.raw_sha256:
+            raise WorkbenchIndexError("W4 graph source differs from indexed W1 graph")
+    for instance_id, source in compile_source_by_instance.items():
+        if manifest_sources.get(source.display_path) != source.raw_sha256:
+            raise WorkbenchIndexError(
+                f"W4 compile source differs from indexed W2 record: {instance_id}"
+            )
+
+    registry = bundle.descriptor_registry
+    registry_path = str(_mapping(bundle.manifest["descriptor_registry"], "W4 registry")["path"])
+    registry_source = artifact_sources[registry_path]
+    add_entity(
+        EntityRecord(
+            "descriptor_registry",
+            registry.registry_id,
+            "R4 scalar descriptor registry",
+            "active_r4_no_cst",
+            registry_source.source_id,
+            registry.to_mapping(),
+        )
+    )
+    definition_entity_ids: dict[str, str] = {}
+    for definition in registry.definitions:
+        definition_id = f"{registry.registry_id}:{definition.descriptor_id}"
+        definition_entity_ids[definition.descriptor_id] = definition_id
+        add_entity(
+            EntityRecord(
+                "descriptor_definition",
+                definition_id,
+                definition.label,
+                "versioned_unit_bound",
+                registry_source.source_id,
+                definition.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "registry_defines_descriptor",
+                "descriptor_registry",
+                registry.registry_id,
+                "descriptor_definition",
+                definition_id,
+            )
+        )
+
+    constraint_paths = {
+        str(item["constraint_id"]): str(item["path"])
+        for item in bundle.manifest.get("constraints", [])
+        if isinstance(item, Mapping)
+    }
+    for constraint in bundle.constraints:
+        constraint_source = artifact_sources[constraint_paths[constraint.constraint_id]]
+        add_entity(
+            EntityRecord(
+                "engineering_constraint",
+                constraint.constraint_id,
+                constraint.label,
+                constraint.constraint_kind,
+                constraint_source.source_id,
+                constraint.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "constraint_uses_descriptor_definition",
+                "engineering_constraint",
+                constraint.constraint_id,
+                "descriptor_definition",
+                definition_entity_ids[constraint.descriptor_id],
+            )
+        )
+
+    instance_summaries = {
+        str(item["instance_id"]): item
+        for item in bundle.manifest.get("instances", [])
+        if isinstance(item, Mapping)
+    }
+    total_values = 0
+    total_findings = 0
+    total_violations = 0
+    kinds_seen: set[str] = set()
+    for instance_id, instance in sorted(bundle_instances.items()):
+        exact = instance.exact_geometry
+        shape = instance.shape_observation
+        observation_bundle = instance.observation_bundle
+        record = compile_by_instance[instance_id]
+        graph = graph_by_instance[instance_id][1]
+        if exact.compile_id != record.compile_id or exact.compile_content_sha256 != record.content_sha256:
+            raise WorkbenchIndexError("W4 exact geometry differs from indexed W2 compile")
+        if {item.region_id for item in shape.regions} != {
+            item.region_id for item in graph.regions
+        }:
+            raise WorkbenchIndexError("W4 region observations differ from indexed W1 graph")
+        if {item.landmark_id for item in shape.landmarks} != {
+            item.landmark_id for item in graph.landmarks
+        }:
+            raise WorkbenchIndexError("W4 landmark observations differ from indexed W1 graph")
+        instance_root = f"instances/{instance_id}"
+        exact_source = artifact_sources[
+            f"{instance_root}/exact_geometry_reference.v0.json"
+        ]
+        shape_source = artifact_sources[
+            f"{instance_root}/semantic_shape_observation.v0.json"
+        ]
+        bundle_source = artifact_sources[
+            f"{instance_root}/observation_bundle.v0.json"
+        ]
+        add_entity(
+            EntityRecord(
+                "exact_geometry_reference",
+                exact.exact_geometry_id,
+                f"{instance_id} exact compiled geometry",
+                "hash_bound_exact",
+                exact_source.source_id,
+                exact.to_mapping(),
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "instance_has_exact_geometry",
+                "instance",
+                instance_id,
+                "exact_geometry_reference",
+                exact.exact_geometry_id,
+            ),
+            RelationRecord(
+                "exact_geometry_references_compile",
+                "exact_geometry_reference",
+                exact.exact_geometry_id,
+                "compile_record",
+                exact.compile_id,
+            ),
+        ):
+            add_relation(relation)
+        for artifact in exact.geometry_artifacts:
+            add_relation(
+                RelationRecord(
+                    "exact_geometry_references_artifact",
+                    "exact_geometry_reference",
+                    exact.exact_geometry_id,
+                    "geometry_artifact",
+                    f"{exact.compile_id}:{artifact.role}",
+                )
+            )
+
+        add_entity(
+            EntityRecord(
+                "semantic_shape_observation",
+                shape.shape_observation_id,
+                f"{instance_id} semantic shape observation",
+                "pass_no_cst",
+                shape_source.source_id,
+                shape.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "shape_observes_exact_geometry",
+                "semantic_shape_observation",
+                shape.shape_observation_id,
+                "exact_geometry_reference",
+                exact.exact_geometry_id,
+            )
+        )
+        for region in shape.regions:
+            region_observation_id = f"{shape.shape_observation_id}:{region.region_id}"
+            add_entity(
+                EntityRecord(
+                    "region_shape_observation",
+                    region_observation_id,
+                    f"{region.region_type} / {region.side}",
+                    "normalized_arc_observed",
+                    shape_source.source_id,
+                    region.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "shape_has_region_observation",
+                    "semantic_shape_observation",
+                    shape.shape_observation_id,
+                    "region_shape_observation",
+                    region_observation_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "region_observation_observes_semantic_region",
+                    "region_shape_observation",
+                    region_observation_id,
+                    "semantic_region",
+                    region.region_id,
+                )
+            )
+        for landmark in shape.landmarks:
+            landmark_observation_id = (
+                f"{shape.shape_observation_id}:{landmark.landmark_id}"
+            )
+            add_entity(
+                EntityRecord(
+                    "landmark_shape_observation",
+                    landmark_observation_id,
+                    f"{landmark.landmark_type} / {landmark.side}",
+                    "resolved_compiled_coordinate",
+                    shape_source.source_id,
+                    landmark.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "shape_has_landmark_observation",
+                    "semantic_shape_observation",
+                    shape.shape_observation_id,
+                    "landmark_shape_observation",
+                    landmark_observation_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "landmark_observation_resolves_semantic_landmark",
+                    "landmark_shape_observation",
+                    landmark_observation_id,
+                    "semantic_landmark",
+                    landmark.landmark_id,
+                )
+            )
+
+        add_entity(
+            EntityRecord(
+                "observation_bundle",
+                observation_bundle.observation_bundle_id,
+                f"{instance_id} R4 observation bundle",
+                "pass_no_cst",
+                bundle_source.source_id,
+                observation_bundle.to_mapping(),
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "instance_has_observation_bundle",
+                "instance",
+                instance_id,
+                "observation_bundle",
+                observation_bundle.observation_bundle_id,
+            ),
+            RelationRecord(
+                "observation_bundle_references_exact_geometry",
+                "observation_bundle",
+                observation_bundle.observation_bundle_id,
+                "exact_geometry_reference",
+                exact.exact_geometry_id,
+            ),
+            RelationRecord(
+                "observation_bundle_references_shape",
+                "observation_bundle",
+                observation_bundle.observation_bundle_id,
+                "semantic_shape_observation",
+                shape.shape_observation_id,
+            ),
+            RelationRecord(
+                "observation_bundle_uses_registry",
+                "observation_bundle",
+                observation_bundle.observation_bundle_id,
+                "descriptor_registry",
+                registry.registry_id,
+            ),
+        ):
+            add_relation(relation)
+        value_entity_ids: dict[str, str] = {}
+        for value in observation_bundle.descriptor_values:
+            total_values += 1
+            value_entity_ids[value.value_id] = value.value_id
+            definition = registry.by_id[value.descriptor_id]
+            add_entity(
+                EntityRecord(
+                    "scalar_descriptor",
+                    value.value_id,
+                    f"{definition.label} / {value.scope_id}",
+                    value.status,
+                    bundle_source.source_id,
+                    value.to_mapping(),
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "observation_bundle_has_descriptor",
+                    "observation_bundle",
+                    observation_bundle.observation_bundle_id,
+                    "scalar_descriptor",
+                    value.value_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "descriptor_uses_definition",
+                    "scalar_descriptor",
+                    value.value_id,
+                    "descriptor_definition",
+                    definition_entity_ids[value.descriptor_id],
+                )
+            )
+            target_kind = "instance" if value.scope_kind == "global" else "semantic_region"
+            add_relation(
+                RelationRecord(
+                    "descriptor_observes_scope",
+                    "scalar_descriptor",
+                    value.value_id,
+                    target_kind,
+                    value.scope_id,
+                )
+            )
+
+        summary = _mapping(instance_summaries[instance_id], "W4 instance summary")
+        evaluation_paths = summary.get("evaluation_paths")
+        if not isinstance(evaluation_paths, list):
+            raise WorkbenchIndexError("W4 evaluation path summary is invalid")
+        evaluation_path_by_id = {
+            Path(str(relative)).stem: str(relative) for relative in evaluation_paths
+        }
+        for evaluation in instance.evaluations:
+            kinds_seen.add(evaluation.constraint_kind)
+            relative = evaluation_path_by_id.get(evaluation.evaluation_id)
+            if relative is None:
+                raise WorkbenchIndexError("W4 evaluation artifact path is missing")
+            evaluation_source = artifact_sources[relative]
+            add_entity(
+                EntityRecord(
+                    "constraint_evaluation",
+                    evaluation.evaluation_id,
+                    f"{instance_id} / {evaluation.constraint_kind}",
+                    evaluation.result,
+                    evaluation_source.source_id,
+                    evaluation.to_mapping(),
+                )
+            )
+            for relation in (
+                RelationRecord(
+                    "evaluation_applies_constraint",
+                    "constraint_evaluation",
+                    evaluation.evaluation_id,
+                    "engineering_constraint",
+                    evaluation.constraint_ref.object_id,
+                ),
+                RelationRecord(
+                    "evaluation_reads_observation_bundle",
+                    "constraint_evaluation",
+                    evaluation.evaluation_id,
+                    "observation_bundle",
+                    observation_bundle.observation_bundle_id,
+                ),
+            ):
+                add_relation(relation)
+            for index, finding in enumerate(evaluation.findings):
+                total_findings += 1
+                if not finding.passed:
+                    total_violations += 1
+                finding_id = f"{evaluation.evaluation_id}:finding:{index:02d}"
+                add_entity(
+                    EntityRecord(
+                        "constraint_finding",
+                        finding_id,
+                        finding.detail,
+                        "pass" if finding.passed else "violation",
+                        evaluation_source.source_id,
+                        finding.to_mapping(),
+                    )
+                )
+                add_relation(
+                    RelationRecord(
+                        "evaluation_has_finding",
+                        "constraint_evaluation",
+                        evaluation.evaluation_id,
+                        "constraint_finding",
+                        finding_id,
+                    )
+                )
+                add_relation(
+                    RelationRecord(
+                        "finding_reads_descriptor",
+                        "constraint_finding",
+                        finding_id,
+                        "scalar_descriptor",
+                        value_entity_ids[finding.descriptor_value_id],
+                    )
+                )
+                target_kind = (
+                    "instance" if finding.region_type is None else "semantic_region"
+                )
+                add_relation(
+                    RelationRecord(
+                        "finding_located_at",
+                        "constraint_finding",
+                        finding_id,
+                        target_kind,
+                        finding.scope_id,
+                    )
+                )
+
+    if kinds_seen != {"hard", "soft", "advisory", "diagnostic"}:
+        raise WorkbenchIndexError("W4 proof does not exercise every constraint kind")
+    add_entity(
+        EntityRecord(
+            "validation",
+            "w4.observation-contract-hard-gate",
+            "W4 observation and engineering-constraint hard-gate proof",
+            "pass",
+            manifest_source.source_id,
+            {
+                "bundle_id": bundle.bundle_id,
+                "input_sha256": bundle.input_sha256,
+                "instance_ids": sorted(bundle_instances),
+                "descriptor_definition_count": len(registry.definitions),
+                "descriptor_value_count": total_values,
+                "constraint_count": len(bundle.constraints),
+                "constraint_finding_count": total_findings,
+                "violation_count": total_violations,
+                "constraint_kinds": sorted(kinds_seen),
+                "geometry_mutation_status": "not_performed",
+                "live_cst_status": "not_run",
+                "rf_metric_status": "not_defined_r4",
+                "physical_acceptance_status": "not_established",
+            },
+        )
+    )
+
+
+def _index_r3_induction_tail(
+    *,
+    family_id: str,
+    grammar: FamilyGrammar,
+    bundle: R3Bundle,
+    alignment: Any,
+    proposal: Any,
+    review: Any,
+    patch: Any,
+    updated: FamilyGrammar,
+    application: Any,
+    blind_graph: InstanceBoundaryGraph,
+    blind_graph_source: SourceRecord,
+    blind_validation: Any,
+    artifact_sources: Mapping[str, SourceRecord],
+    manifest_source: SourceRecord,
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Finish indexing the original W3 chain after the W4 helpers."""
 
     add_entity(
         EntityRecord(
@@ -2796,6 +3471,12 @@ def _read_json_mapping(path: Path) -> dict[str, Any]:
         raise WorkbenchIndexError(f"cannot read UTF-8 JSON source: {path}") from exc
     if not isinstance(value, dict):
         raise WorkbenchIndexError(f"Workbench JSON source must contain an object: {path}")
+    return value
+
+
+def _mapping(value: object, label: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise WorkbenchIndexError(f"{label} must be an object")
     return value
 
 

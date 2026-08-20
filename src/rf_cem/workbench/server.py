@@ -1,4 +1,4 @@
-"""Authenticated loopback-only, read-only HTTP Workbench for W0-W3."""
+"""Authenticated loopback-only, read-only HTTP Workbench for W0-W4."""
 
 from __future__ import annotations
 
@@ -80,6 +80,23 @@ _PAGES = {
             "grammar_diff",
             "blind_instance_graph",
             "blind_validation",
+        ),
+    ),
+    "/observations": (
+        "observations",
+        "Observations & Constraints / W4",
+        (
+            "descriptor_registry",
+            "descriptor_definition",
+            "exact_geometry_reference",
+            "semantic_shape_observation",
+            "region_shape_observation",
+            "landmark_shape_observation",
+            "observation_bundle",
+            "scalar_descriptor",
+            "engineering_constraint",
+            "constraint_evaluation",
+            "constraint_finding",
         ),
     ),
 }
@@ -214,6 +231,7 @@ def create_workbench_handler(
                     semantic_graphs=parsed.path == "/semantic-graphs",
                     compile_records=parsed.path == "/compile-records",
                     family_induction=parsed.path == "/family-induction",
+                    observations=parsed.path == "/observations",
                 ).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
@@ -376,6 +394,7 @@ def _render_page(
     semantic_graphs: bool,
     compile_records: bool,
     family_induction: bool,
+    observations: bool,
 ) -> str:
     counts = reader.entity_counts()
     sources = reader.audit_sources(source_root) if show_sources else []
@@ -401,6 +420,8 @@ def _render_page(
         sections.extend(_compile_record_sections(entities))
     elif family_induction:
         sections.extend(_family_induction_sections(entities))
+    elif observations:
+        sections.extend(_observation_sections(entities))
     elif entities:
         sections.append(_entity_table(title, entities))
     elif not overview:
@@ -423,7 +444,8 @@ table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom
 .graph-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.graph-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.graph-card h3{{margin:0 0 5px;font-size:16px}}.nose{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eaf2ff;color:#1849a9;font-weight:700}}.sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:12px}}.chip{{display:inline-block;border:1px solid #b9c5d8;border-radius:6px;background:#fff;padding:4px 7px;font:12px ui-monospace,Consolas,monospace}}.arrow{{color:var(--muted)}}.facts{{color:var(--muted);margin:7px 0 0}}
 .compile-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.compile-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.compile-card h3{{margin:0 0 5px;font-size:16px}}.pass-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eafaf0;color:#067647;font-weight:700}}.trace-list{{display:grid;gap:8px}}.trace-row{{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--line)}}.owner{{border-color:#84adff;background:#eef4ff}}.patch-sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
 .induction-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}}.induction-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.induction-card h3{{margin:0 0 7px;font-size:16px}}.pending-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#fff4e5;color:#b54708;font-weight:700}}.held-out{{border-left:5px solid #12b76a}}.backbone{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
-</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2 / W3</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+.observation-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}}.observation-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.observation-card h3{{margin:0 0 7px;font-size:16px}}.violation{{border-left:5px solid #f04438;background:#fff7f6}}.layer-stack{{display:grid;gap:7px}}.layer-row{{border:1px solid #b9c5d8;border-radius:7px;padding:8px;background:#fff}}.source-note{{color:var(--muted);overflow-wrap:anywhere}}
+</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2 / W3 / W4</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
 
 
 def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
@@ -689,6 +711,134 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
         ("blind_instance_graph", "Held-out LEReC reviewed semantic graph"),
         ("blind_validation", "Post-induction blind validation"),
         ("family_induction_bundle", "R3 source-bound proof bundle"),
+    ):
+        values = by_kind.get(kind, [])
+        if values:
+            sections.append(_entity_table(label, values))
+    return sections
+
+
+def _observation_sections(entities: list[dict[str, Any]]) -> list[str]:
+    """Render W4 layer separation, descriptors, and constraint findings."""
+
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entity in entities:
+        by_kind.setdefault(str(entity["entity_kind"]), []).append(entity)
+    bundles = by_kind.get("observation_bundle", [])
+    if not bundles:
+        return [
+            '<section><p class="empty">No W4 observation/constraint proof bundle was supplied at rebuild.</p></section>'
+        ]
+
+    exact_count = len(by_kind.get("exact_geometry_reference", []))
+    shape_count = len(by_kind.get("semantic_shape_observation", []))
+    descriptor_values = by_kind.get("scalar_descriptor", [])
+    constraints = by_kind.get("engineering_constraint", [])
+    evaluations = by_kind.get("constraint_evaluation", [])
+    findings = by_kind.get("constraint_finding", [])
+    violations = [item for item in findings if item.get("status") == "violation"]
+    layer_cards = (
+        '<article class="observation-card"><h3>Exact native geometry</h3>'
+        f'<p><span class="pass-pill">{exact_count} hash-bound references</span></p>'
+        '<p class="facts">STEP and compiled-profile identities remain authoritative; sampled observations do not replace them.</p></article>'
+        '<article class="observation-card"><h3>Semantic shape observation</h3>'
+        f'<p><span class="pass-pill">{shape_count} normalized instance observations</span></p>'
+        '<p class="facts">Normalized arc coordinate, z/r, tangent, normal, curvature, extrema, convexity, and semantic landmarks.</p></article>'
+        '<article class="observation-card"><h3>Scalar engineering descriptors</h3>'
+        f'<p><span class="pass-pill">{len(descriptor_values)} unit-bound values</span></p>'
+        '<p class="facts">Definitions, units, algorithm versions, equivalence tolerances, and provenance are explicit.</p></article>'
+    )
+    sections = [
+        '<section><h2>Three-layer geometry contract</h2>'
+        f'<div class="observation-grid">{layer_cards}</div>'
+        '<p class="facts">Geometry mutation: <b>not_performed</b> · '
+        'RF metrics: <b>not_defined_r4</b> · No live CST · physical acceptance not established.</p></section>'
+    ]
+
+    bundle_cards = []
+    for entity in sorted(bundles, key=lambda item: str(item["entity_id"])):
+        payload = entity.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        values = payload.get("descriptor_values", [])
+        global_values = {
+            str(item.get("descriptor_id")): item.get("value")
+            for item in values
+            if isinstance(item, dict)
+            and item.get("scope_kind") == "global"
+            and item.get("status") == "observed"
+        }
+        exact_ref = payload.get("exact_geometry_ref", {})
+        shape_ref = payload.get("shape_observation_ref", {})
+        if not isinstance(exact_ref, dict):
+            exact_ref = {}
+        if not isinstance(shape_ref, dict):
+            shape_ref = {}
+        facts = " · ".join(
+            f"{key.removeprefix('global.')}={global_values[key]}"
+            for key in (
+                "global.total_cavity_length",
+                "global.maximum_radius",
+                "global.minimum_aperture_radius",
+                "global.nose_present",
+            )
+            if key in global_values
+        )
+        bundle_cards.append(
+            '<article class="observation-card">'
+            f'<h3>{escape(str(entity["label"]))}</h3>'
+            f'<p><span class="pass-pill">{escape(str(entity["status"]))}</span></p>'
+            f'<p class="facts">Exact: <code>{escape(str(exact_ref.get("object_id") or ""))}</code></p>'
+            f'<p class="facts">Shape: <code>{escape(str(shape_ref.get("object_id") or ""))}</code></p>'
+            f'<p class="facts">{escape(facts)}</p>'
+            f'<p class="source-note">Source: <code>{escape(str(entity.get("source_id") or ""))}</code></p>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Both compiled real instances</h2>'
+        f'<div class="observation-grid">{"".join(bundle_cards)}</div></section>'
+    )
+
+    kinds = sorted({str(item.get("status") or "") for item in constraints})
+    sections.append(
+        '<section><h2>Engineering constraints</h2>'
+        f'<p class="facts"><b>{len(constraints)}</b> reviewed contract demonstrations · '
+        f'kinds: <code>{escape(", ".join(kinds))}</code> · '
+        f'<b>{len(evaluations)}</b> evaluations. Thresholds are not physical acceptance.</p></section>'
+    )
+    violation_cards = []
+    for entity in sorted(violations, key=lambda item: str(item["entity_id"])):
+        payload = entity.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        violation_cards.append(
+            '<article class="observation-card violation">'
+            '<h3>Constraint violation</h3>'
+            f'<p>{escape(str(payload.get("detail") or entity["label"]))}</p>'
+            f'<p class="facts">Location: <code>{escape(str(payload.get("scope_id") or ""))}</code> · '
+            f'value: <b>{escape(str(payload.get("measured_value")))}</b> '
+            f'{escape(str(payload.get("unit") or ""))}</p>'
+            f'<p class="source-note">Source: <code>{escape(str(entity.get("source_id") or ""))}</code></p>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Constraint violations and locations</h2>'
+        + (
+            f'<div class="observation-grid">{"".join(violation_cards)}</div>'
+            if violation_cards
+            else '<p class="empty">No violations in the supplied demonstration constraints.</p>'
+        )
+        + '</section>'
+    )
+    for kind, label in (
+        ("descriptor_definition", "Descriptor definitions / units / provenance"),
+        ("scalar_descriptor", "Observed scalar descriptor values"),
+        ("engineering_constraint", "Constraint contracts and sources"),
+        ("constraint_evaluation", "Constraint evaluation summaries"),
+        ("constraint_finding", "Constraint findings by location"),
+        ("region_shape_observation", "Semantic-region shape observations"),
+        ("landmark_shape_observation", "Semantic landmark observations"),
+        ("exact_geometry_reference", "Exact geometry references"),
     ):
         values = by_kind.get(kind, [])
         if values:

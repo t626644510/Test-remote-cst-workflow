@@ -63,7 +63,8 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m rf_cem.semantic ...` | `workflow/rf-cem-literature-review` | no | Build, validate and diff R1 semantic topology contracts |
 | `python -m rf_cem.semantic.induction ...` | `workflow/rf-cem-literature-review` | no | Build and validate the reviewed R3 alignment/proposal/review/patch/held-out proof |
 | `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build and validate the two canonical R2 boundary compiles and `compile_record.v0` artifacts |
-| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W3 registry |
+| `python -m rf_cem.observation ...` | `workflow/rf-cem-literature-review` | no | Build and validate the R4 exact/shape/scalar observation and engineering-constraint proof |
+| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W4 registry |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
 | `python run_workflow_3.py` | WF3 branch only | yes | Recovery optimisation |
@@ -1035,17 +1036,48 @@ $InductionProof = Join-Path $InductionRoot 'r3_family_induction.2f6c02557798e606
 
 The output contains `graph_alignment.v0.json`, `family_extension_proposal.v0.json`, `family_extension_review.v0.json`, `family_grammar_patch.v0.json`, `family_grammar.r3.v0.json`, `family_grammar_patch_application.v0.json`, `blind/lerec704.instance_boundary_graph.v0.json`, `family_induction_blind_validation.v0.json` and the source-binding manifest. The canonical result has nine common backbone slots, two nose residuals, an evidence-completeness confidence of `0.95`, accepted manual review, six visible grammar differences, both training graphs revalidated and held-out classification `known_optional_motif_present`. `representation_contract=not_imported_or_modified` and `live_cst_status=not_run`; no RF metric or physical acceptance is established.
 
-### 9.11 RF-CEM Workbench W0/W1/W2/W3 (R0B/R1/R2/R3)
+### 9.11 RF boundary observation and engineering constraints (R4)
 
-`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W3 build below retains all W0/W1/W2 sources, verifies the two R2 compile records/output artifacts, and independently rechecks the R3 proof. The current expert prior is indexed automatically by its repository source path.
+`src/rf_cem/observation/` observes passing R2 compiled geometry through generic representation operations plus reviewed R1 topology. It never reads source-native parameter/feature names, generates geometry, mutates geometry or calls CST. Exact geometry, normalized semantic shape and scalar descriptors are separate hash-bound layers. Build the canonical proof from exactly two compile records and their matching graphs:
 
 ```powershell
-$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w3.sqlite'
+$ObservationRoot = 'analysis_outputs\rf_cem_observation_contract'
+$SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
+$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
+
+& $py -m rf_cem.observation build `
+  --root $RepoRoot `
+  --output-root $ObservationRoot `
+  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
+  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
+  --instance-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
+  --instance-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
+  --architecture-document 'docs\RF_CEM_ROADMAP_AND_ARCHITECTURE.md'
+```
+
+The canonical ignored immutable proof is `r4_observation_contract.d06695921d941eee`, input SHA-256 `d06695921d941eee06972ad11de7d2b8f5ad1cddb7d932c795385876db869b59`. It binds 11 source files and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two observation bundles with 240 total descriptor values, and 12 constraint evaluations. The six constraints cover hard/soft/advisory/diagnostic length, radius, aperture, curvature, nose and regional-equator cases; they have no geometry mutation authority and are not physical acceptance.
+
+The command refuses an existing content-addressed target. Never delete or overwrite a proof to reuse its name. Strictly validate its source hashes, artifact inventory, input preimage and cross-contract identities with:
+
+```powershell
+$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.d06695921d941eee'
+& $py -m rf_cem.observation validate --bundle $ObservationProof
+```
+
+R4 length/radius values use `mm`, curvature uses `1/mm`, area uses `mm^2`, volume uses `mm^3`, tangents use dimensionless `1`, and discrete values use `count`/`bool`. Unknown units, non-finite values, invalid landmarks and descriptor/constraint scope mismatches fail closed. The canonical manifest records `live_cst_status=not_run` and `physical_acceptance_status=not_established`; no RF metric, mode, field or optimization contract is defined.
+
+### 9.12 RF-CEM Workbench W0/W1/W2/W3/W4 (R0B/R1/R2/R3/R4)
+
+`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W4 build below retains all W0/W1/W2/W3 sources, verifies the two R2 compile records/output artifacts, independently rechecks the R3 proof, and then strictly loads the R4 observation proof. The current expert prior is indexed automatically by its repository source path.
+
+```powershell
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w4.sqlite'
 $FamilyProof = 'analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.00414d4f'
 $Sls2Baseline = 'analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
 $CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
 $InductionProof = 'analysis_outputs\rf_cem_family_induction\r3_family_induction.2f6c02557798e606'
+$ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation_contract.d06695921d941eee'
 
 & $py -m rf_cem.workbench rebuild `
   --database $WorkbenchDatabase `
@@ -1061,7 +1093,8 @@ $InductionProof = 'analysis_outputs\rf_cem_family_induction\r3_family_induction.
   --instance-graph-diff (Join-Path $SemanticProof 'instance_graph_diff.v0.json') `
   --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
   --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
-  --family-induction-bundle $InductionProof
+  --family-induction-bundle $InductionProof `
+  --observation-contract-bundle $ObservationProof
 
 & $py -m rf_cem.workbench status `
   --database $WorkbenchDatabase `
@@ -1072,15 +1105,17 @@ $InductionProof = 'analysis_outputs\rf_cem_family_induction\r3_family_induction.
   --repo-root $RepoRoot
 ```
 
-`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff. W2 additionally requires exactly two unique canonical compile records under immutable bundle `records/` directories and rechecks profile/grammar/graph canonical/raw hashes, instance/region order, landmarks, representation reuse, no-CST/physical status and all output bindings. W3 additionally refuses to run without complete W2, loads one immutable R3 directory, checks its manifest/eight artifacts/two primary PDFs/representation sentinel, rebinds both training graphs and base/patched grammar, requires accepted manual review and an applied patch, revalidates both training graphs, and proves the LEReC graph was held out. It writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
+`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff. W2 additionally requires exactly two unique canonical compile records under immutable bundle `records/` directories and rechecks profile/grammar/graph canonical/raw hashes, instance/region order, landmarks, representation reuse, no-CST/physical status and all output bindings. W3 additionally refuses to run without complete W2, loads one immutable R3 directory, checks its manifest/eight artifacts/two primary PDFs/representation sentinel, rebinds both training graphs and base/patched grammar, requires accepted manual review and an applied patch, revalidates both training graphs, and proves the LEReC graph was held out. W4 refuses to run without complete W3, strictly reloads one immutable R4 bundle, checks its 11 declared sources and 25 artifacts, requires both canonical instances and all exact/shape/registry/bundle/constraint/evaluation bindings, and indexes located findings without treating them as physical acceptance. It writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
 
 The current full W2 source set rebuilds to 17 fresh sources, 372 entities and 534 relations. Two consecutive rebuilds produced input-set SHA-256 `91f6fdc82ba77f73f8b452b3a0499ad56178f23719f0848978af4a743b591a74`; its canonical portable snapshot SHA-256 is `d9139bfe7d3a4e2a536545addc45999a61f5fa337dd23733a3c6379a28b271fc`.
 
 The current full W3 source set rebuilds to 29 fresh sources, 418 entities and 571 relations. Its input-set SHA-256 is `97fab22424ed421108f99b81ca6d629a52d7e6e8d2d368589ee1cdddb95ded18`; canonical portable snapshot SHA-256 is `f51eadc28ad97d1b2207e15a96ccedd5b42bcec280a43667587a573abcc6c66e`. The W3-specific inventory includes one alignment, 9 backbone slots, 2 residuals, one proposal/review/patch/application, 6 grammar-diff rows, one held-out graph, one blind validation and the passing `w3.family-induction-hard-gate`.
 
-`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2** and **Family Induction / W3**. W1 shows both ordered topologies and graph evidence. W2 shows compiler ownership/continuity/baseline/artifact traces. W3 shows the alignment, common backbone, residuals, pending proposal, accepted review, explicit patch/diff and held-out LEReC result. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+The current full W4 source set rebuilds to 66 fresh sources, 779 entities and 1484 relations. Two consecutive rebuilds produced input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb`; canonical portable snapshot SHA-256 is `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. W4 adds 2 exact references, 2 shape observations, 20 region observations, 24 landmark observations, 21 descriptor definitions, 240 descriptor values, 6 constraints, 12 evaluations/findings and the passing `w4.observation-contract-hard-gate`.
 
-R3 implements reviewed family induction but not observation/constraint or RF result contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by R4/R5.
+`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W1 shows both ordered topologies and graph evidence. W2 shows compiler ownership/continuity/baseline/artifact traces. W3 shows the alignment, common backbone, residuals, pending proposal, accepted review, explicit patch/diff and held-out LEReC result. W4 shows exact/shape/scalar separation, both real observation bundles, descriptors, constraints, evaluations, violation locations and source identities. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+
+R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by R5.
 
 ## 10. Workflow branch entries
 
@@ -1249,6 +1284,18 @@ RF-CEM geometry/optimisation:
   tests\test_rf_cem_500mhz.py `
   tests\test_rf_cem_parametric_geometry_500mhz.py `
   tests\test_rf_cem_parametric_optimization.py
+```
+
+RF-CEM R0B–R4 architecture, semantic, compiler, induction, observation and Workbench:
+
+```powershell
+& $py -m pytest -q `
+  tests\test_rf_cem_architecture_boundaries.py `
+  tests\test_rf_cem_semantic_core.py `
+  tests\test_rf_cem_boundary_compiler.py `
+  tests\test_rf_cem_family_induction.py `
+  tests\test_rf_cem_observation_contract.py `
+  tests\test_rf_cem_workbench.py
 ```
 
 History/STEP:

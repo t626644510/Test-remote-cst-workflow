@@ -1,4 +1,4 @@
-"""Command-line entry points for deterministic W0-W3 rebuild and serving."""
+"""Command-line entry points for deterministic W0-W4 rebuild and serving."""
 
 from __future__ import annotations
 
@@ -46,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--family-induction-bundle",
         type=Path,
         help="immutable R3 family-induction proof-bundle directory",
+    )
+    rebuild.add_argument(
+        "--observation-contract-bundle",
+        type=Path,
+        help="immutable R4 observation/constraint proof-bundle directory",
     )
 
     serve = subparsers.add_parser(
@@ -97,6 +102,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 family_induction_bundle=_resolve_optional(
                     root, args.family_induction_bundle
+                ),
+                observation_contract_bundle=_resolve_optional(
+                    root, args.observation_contract_bundle
                 ),
             )
             summary = rebuild_workbench(args.database, source_set)

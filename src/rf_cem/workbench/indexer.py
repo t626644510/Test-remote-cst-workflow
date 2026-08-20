@@ -1,4 +1,4 @@
-"""Source adapters and deterministic rebuild orchestration for Workbench W0/W1."""
+"""Source adapters and deterministic rebuild orchestration for Workbench W0/W1/W2."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from rf_cem.family_profile import validate_profile_mapping
+from rf_cem.compiler import CompileRecord, ContractSourceRef, load_compile_record
+from rf_cem.family_profile import (
+    canonical_sha256 as family_profile_sha256,
+    validate_profile_mapping,
+)
 from rf_cem.literature_semantics.validator import assert_valid_semantic_package
 from rf_cem.parametric_geometry.expert_prior import (
     DEFAULT_PRIOR_PATH,
@@ -48,7 +52,7 @@ class WorkbenchIndexError(WorkbenchRegistryError):
 
 @dataclass(frozen=True)
 class WorkbenchSourceSet:
-    """Explicit source set used for one reproducible W0/W1 registry rebuild."""
+    """Explicit source set used for one reproducible W0/W1/W2 registry rebuild."""
 
     repo_root: Path
     family_profile: Path
@@ -59,9 +63,45 @@ class WorkbenchSourceSet:
     family_grammar: Path | None = None
     instance_boundary_graphs: tuple[Path, ...] = ()
     instance_graph_diff: Path | None = None
+    compile_records: tuple[Path, ...] = ()
 
 
 _REPRESENTATION_CATALOG = (
+    {
+        "id": "r2.LineRepresentation",
+        "label": "LineRepresentation",
+        "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.LineRepresentation",
+        "scope": "family-independent boundary primitive",
+    },
+    {
+        "id": "r2.CircularArcRepresentation",
+        "label": "CircularArcRepresentation",
+        "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.CircularArcRepresentation",
+        "scope": "family-independent boundary primitive",
+    },
+    {
+        "id": "r2.EllipseArcRepresentation",
+        "label": "EllipseArcRepresentation",
+        "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.EllipseArcRepresentation",
+        "scope": "family-independent boundary primitive",
+    },
+    {
+        "id": "r2.SplineNurbsRepresentation",
+        "label": "SplineNurbsRepresentation",
+        "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.SplineNurbsRepresentation",
+        "scope": "family-independent spline/NURBS boundary primitive",
+    },
+    {
+        "id": "r2.CompositeRegionRepresentation",
+        "label": "CompositeRegionRepresentation",
+        "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.CompositeRegionRepresentation",
+        "scope": "ordered 1..N primitive representations owned by one opaque region",
+    },
     {
         "id": "legacy.line",
         "label": "Line",
@@ -89,13 +129,6 @@ _REPRESENTATION_CATALOG = (
         "status": "implemented_source_with_approximate_kernel_export",
         "implementation": "rf_cem.literature_semantics.geometry_candidate._sample_quarter_ellipse",
         "scope": "SLS-2 four-quarter-ellipse source model",
-    },
-    {
-        "id": "r2.composite_region_representation",
-        "label": "Composite region representation",
-        "status": "planned_r2",
-        "implementation": None,
-        "scope": "not implemented in R0B",
     },
 )
 
@@ -136,6 +169,12 @@ _ALGORITHM_CATALOG = (
         "status": "implemented_w0_placeholder",
         "implementation": "rf_cem.workbench.indexer",
     },
+    {
+        "id": "rf_cem_profile_compiler.v0",
+        "label": "Generic topology/representation profile compiler",
+        "status": "implemented_r2_no_cst",
+        "implementation": "rf_cem.compiler.ProfileCompiler.compile",
+    },
 )
 
 _ROADMAP_PHASES = (
@@ -144,8 +183,12 @@ _ROADMAP_PHASES = (
         "Architecture Re-baseline + Workbench W0",
         "hard_gate_passed_merged",
     ),
-    ("R1", "RF Boundary Semantic Core", "hard_gate_validation_passed_closeout_pending"),
-    ("R2", "Boundary Representation Core + Compiler v0", "planned"),
+    ("R1", "RF Boundary Semantic Core", "hard_gate_passed_merged"),
+    (
+        "R2",
+        "Boundary Representation Core + Compiler v0",
+        "hard_gate_validation_passed_closeout_pending",
+    ),
     ("R3", "Family Induction / Extension v0", "planned"),
     ("R4", "Observation & Engineering Constraint Contract", "planned"),
     ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
@@ -162,7 +205,22 @@ _R1_GATES = (
     ("w1_views", "W1 exposes grammar, graphs, nose state, motif, and graph diff", "implemented", "fixed /semantic-graphs route"),
     ("no_common_parameter_vector", "No common geometry parameter vector is introduced", "passed", "semantic topology parameter contract"),
     ("no_cst_regression", "Targeted and full no-CST regression suites pass", "passed", "19 targeted passed; 745 passed and 11 skipped in the full default suite"),
-    ("phase_closeout", "One R1 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r1-semantic-core"),
+    ("phase_closeout", "One R1 closeout commit/push and canonical merge", "passed", "PR #6 merge commit 5ae1ba07b841d6adf6e180ec1eedfd073657987b"),
+)
+
+_R2_GATES = (
+    ("generic_representation_contract", "Line, circular arc, ellipse arc, spline/NURBS, and composite contracts are generic", "passed", "rf_cem.representation + contract tests"),
+    ("one_compiler_entry", "One ProfileCompiler entry compiles both canonical topologies", "passed", "two compile_record.v0 proofs"),
+    ("region_patch_ownership", "Every semantic region owns 1..N patches and every patch has exactly one region owner", "passed", "RegionGeometry and GeometryPatch fail-closed contracts"),
+    ("landmark_and_continuity", "Landmark bindings and required C0/G1/G2 diagnostics are explicit", "passed", "compile_record.v0 continuity checks"),
+    ("brep_step_valid", "Both profiles close into valid no-CST BRep/STEP outputs", "passed", "isolated CadQuery worker validation"),
+    ("baseline_comparison", "Accepted source-native/baseline comparisons pass declared tolerances", "passed", "compile_record.v0 baseline comparison"),
+    ("source_native_provenance", "Stage C source-native payload and artifact bindings survive compilation", "passed", "hash-bound compile inputs"),
+    ("deterministic_bundle", "Fresh R2 proof builds are byte-identical", "passed", "input-addressed bundle reproducibility test"),
+    ("w2_views", "W2 exposes compile, ownership, landmark, continuity, baseline, warning, and artifact traces", "implemented", "fixed /compile-records route"),
+    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "R2 compiler/Workbench tests and branch closeout suite"),
+    ("no_live_cst", "R2 has no live-CST or physical-acceptance claim", "passed", "live_cst_status=not_run"),
+    ("phase_closeout", "One R2 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r2-boundary-compiler"),
 )
 
 _R0B_GATES = (
@@ -195,11 +253,12 @@ _CAPABILITY_CATALOG = (
     ("source.literature_semantics.v0", "Literature semantics and evidence", "established", "literature review workflow"),
     ("source.helper2_review", "Helper2 geometry/Feature/UDSG review", "established_partial", "frozen SLS-2 overlay"),
     ("architecture.semantic", "Representation-independent semantic layer", "implemented_r1", "family grammar + instance boundary graphs"),
-    ("architecture.representation", "Family-independent representation layer", "boundary_established_r0b", "R2 implementation planned"),
-    ("architecture.compiler", "Generic boundary compiler", "boundary_only_r0b", "R2 implementation planned"),
+    ("architecture.representation", "Family-independent representation layer", "implemented_r2", "versioned primitive/composite contracts"),
+    ("architecture.compiler", "Generic boundary compiler", "implemented_r2_no_cst", "one entry for SLS-2 and RF500"),
     ("architecture.observation", "Representation-independent observation", "boundary_only_r0b", "R4 implementation planned"),
     ("workbench.w0", "Derived local project catalog", "implemented_r0b", "SQLite + loopback read-only server"),
     ("workbench.w1", "Semantic graph and grammar review", "implemented_r1", "SQLite + /semantic-graphs"),
+    ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
     ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
 )
 
@@ -227,6 +286,12 @@ _VALIDATION_CATALOG = (
         "R1 grammar, topology, evidence, diff, and artifact contracts",
         "available_no_cst",
         "tests/test_rf_cem_semantic_core.py",
+    ),
+    (
+        "tests.boundary_compiler_r2",
+        "R2 representation, compiler, proof-bundle, and W2 contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_boundary_compiler.py",
     ),
     (
         "tests.literature_review",
@@ -361,6 +426,19 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             source_set.instance_graph_diff is not None,
         )
     )
+    w2_requested = bool(source_set.compile_records)
+    if w2_requested and len(source_set.compile_records) != 2:
+        raise WorkbenchIndexError(
+            "W2 indexing requires exactly two compile_record.v0 inputs"
+        )
+    if w2_requested and not w1_requested:
+        raise WorkbenchIndexError(
+            "W2 indexing requires the complete W1 grammar, graph, and diff proof set"
+        )
+
+    grammar: FamilyGrammar | None = None
+    grammar_source: SourceRecord | None = None
+    graph_sources: list[tuple[SourceRecord, InstanceBoundaryGraph]] = []
     if w1_requested:
         if (
             source_set.family_grammar is None
@@ -374,7 +452,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             source_set.family_grammar, "family_grammar.v0", root
         )
         source_rows.append(grammar_source)
-        graph_sources: list[tuple[SourceRecord, InstanceBoundaryGraph]] = []
+        grammar = load_family_grammar(source_set.family_grammar)
         for graph_path in sorted(source_set.instance_boundary_graphs, key=str):
             graph_source = _register_source(
                 graph_path, "instance_boundary_graph.v0", root
@@ -391,11 +469,76 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         source_rows.append(diff_source)
         _index_r1_semantics(
             family_id=str(profile["family_id"]),
-            grammar=load_family_grammar(source_set.family_grammar),
+            grammar=grammar,
             grammar_source_id=grammar_source.source_id,
             graph_sources=tuple(graph_sources),
             graph_diff=load_instance_graph_diff(source_set.instance_graph_diff),
             diff_source_id=diff_source.source_id,
+            add_entity=add_entity,
+            add_relation=add_relation,
+        )
+
+    compile_records: list[CompileRecord] = []
+    if w2_requested:
+        if grammar is None or grammar_source is None:
+            raise WorkbenchIndexError("W2 indexing requires loaded W1 contracts")
+        resolved_record_paths = [
+            path.resolve() for path in source_set.compile_records
+        ]
+        if len(set(resolved_record_paths)) != len(resolved_record_paths):
+            raise WorkbenchIndexError("W2 compile record paths must be unique")
+        indexed_compile_inputs: list[
+            tuple[SourceRecord, CompileRecord, Mapping[str, SourceRecord]]
+        ] = []
+        for record_path in sorted(resolved_record_paths, key=str):
+            record_source = _register_source(
+                record_path, "compile_record.v0", root
+            )
+            source_rows.append(record_source)
+            try:
+                record = load_compile_record(record_path)
+            except ValueError as exc:
+                raise WorkbenchIndexError(
+                    f"invalid W2 compile record: {record_source.display_path}: {exc}"
+                ) from exc
+            bundle_root = _compile_bundle_root(record_path, root)
+            artifact_sources: dict[str, SourceRecord] = {}
+            for artifact in record.output_artifacts:
+                if artifact.role in artifact_sources:
+                    raise WorkbenchIndexError(
+                        f"duplicate output artifact role in {record.compile_id}: {artifact.role}"
+                    )
+                artifact_path = (bundle_root / artifact.path).resolve()
+                try:
+                    artifact_path.relative_to(bundle_root)
+                except ValueError as exc:
+                    raise WorkbenchIndexError(
+                        f"W2 output artifact escapes its compile bundle: {artifact.path}"
+                    ) from exc
+                artifact_source = _register_source(
+                    artifact_path,
+                    "compile_output_artifact",
+                    root,
+                    expected_raw_sha256=artifact.raw_sha256,
+                )
+                if artifact_source.size_bytes != artifact.size_bytes:
+                    raise WorkbenchIndexError(
+                        f"output artifact size mismatch for {artifact_source.display_path}"
+                    )
+                source_rows.append(artifact_source)
+                artifact_sources[artifact.role] = artifact_source
+            compile_records.append(record)
+            indexed_compile_inputs.append(
+                (record_source, record, artifact_sources)
+            )
+        _index_r2_compiles(
+            family_id=str(profile["family_id"]),
+            profile=profile,
+            profile_source=profile_source,
+            grammar=grammar,
+            grammar_source=grammar_source,
+            graph_sources=tuple(graph_sources),
+            compile_inputs=tuple(indexed_compile_inputs),
             add_entity=add_entity,
             add_relation=add_relation,
         )
@@ -427,8 +570,12 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         relations=relation_rows,
         metadata={
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
-            "roadmap_phase": "R1" if w1_requested else "R0B",
+            "roadmap_phase": "R2" if w2_requested else ("R1" if w1_requested else "R0B"),
             "w1_semantic_graphs": "indexed" if w1_requested else "not_supplied",
+            "w2_compile_records": "indexed" if w2_requested else "not_supplied",
+            "r2_compile_ids": canonical_json(
+                sorted(record.compile_id for record in compile_records)
+            ),
         },
     )
 
@@ -491,6 +638,17 @@ def _index_catalog(
                 status,
                 roadmap_source_id,
                 {"phase": "R1", "evidence": evidence},
+            )
+        )
+    for gate_id, label, status, evidence in _R2_GATES:
+        add_entity(
+            EntityRecord(
+                "roadmap_gate",
+                f"R2.{gate_id}",
+                label,
+                status,
+                roadmap_source_id,
+                {"phase": "R2", "evidence": evidence},
             )
         )
     for capability_id, label, status, evidence in _CAPABILITY_CATALOG:
@@ -1005,6 +1163,599 @@ def _index_r1_semantics(
             },
         )
     )
+
+
+def _index_r2_compiles(
+    *,
+    family_id: str,
+    profile: Mapping[str, Any],
+    profile_source: SourceRecord,
+    grammar: FamilyGrammar,
+    grammar_source: SourceRecord,
+    graph_sources: tuple[tuple[SourceRecord, InstanceBoundaryGraph], ...],
+    compile_inputs: tuple[
+        tuple[SourceRecord, CompileRecord, Mapping[str, SourceRecord]], ...
+    ],
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Index two mutually bound, hash-verified R2 no-CST compile records."""
+
+    graphs = {graph.instance_id: graph for _, graph in graph_sources}
+    graph_source_by_instance = {
+        graph.instance_id: source for source, graph in graph_sources
+    }
+    records = {record.instance_id: record for _, record, _ in compile_inputs}
+    if len(records) != len(compile_inputs):
+        raise WorkbenchIndexError("W2 compile records must have unique instance IDs")
+    if set(records) != REQUIRED_W0_INSTANCES:
+        raise WorkbenchIndexError(
+            "W2 compile records must be the canonical SLS-2 and RF500 instances"
+        )
+    if set(graphs) != REQUIRED_W0_INSTANCES:
+        raise WorkbenchIndexError("W2 requires both canonical W1 instance graphs")
+
+    profile_canonical_sha = family_profile_sha256(profile)
+    grammar_canonical_sha = semantic_sha256(grammar.to_mapping())
+    representation_contexts: dict[str, set[str]] = {}
+    representation_instances: dict[str, set[str]] = {}
+    total_regions = 0
+    total_patches = 0
+    total_continuity_checks = 0
+
+    for record_source, record, artifact_sources in sorted(
+        compile_inputs, key=lambda item: item[1].instance_id
+    ):
+        graph = graphs[record.instance_id]
+        graph_source = graph_source_by_instance[record.instance_id]
+        if record.family_id != family_id or graph.family_id != family_id:
+            raise WorkbenchIndexError(
+                f"W2 family mismatch for compile record {record.compile_id}"
+            )
+        if record.status != "pass":
+            raise WorkbenchIndexError(
+                f"W2 only indexes passing hard-gate compile records: {record.compile_id}"
+            )
+        if record.live_cst_status != "not_run":
+            raise WorkbenchIndexError("W2 compile records must remain no-CST")
+        if record.physical_acceptance_status != "not_established":
+            raise WorkbenchIndexError(
+                "W2 compile records cannot claim RF physical acceptance"
+            )
+        _assert_contract_ref(
+            record.family_grammar_ref,
+            expected_kind="family_grammar",
+            expected_schema=grammar.schema_version,
+            expected_object_id=grammar.grammar_id,
+            expected_canonical_sha256=grammar_canonical_sha,
+            expected_source=grammar_source,
+            label="family grammar",
+        )
+        _assert_contract_ref(
+            record.instance_graph_ref,
+            expected_kind="instance_boundary_graph",
+            expected_schema=graph.schema_version,
+            expected_object_id=graph.instance_id,
+            expected_canonical_sha256=semantic_sha256(graph.to_mapping()),
+            expected_source=graph_source,
+            label=f"{record.instance_id} instance graph",
+        )
+        _assert_contract_ref(
+            record.source_native_provenance.family_profile,
+            expected_kind="family_profile",
+            expected_schema=str(profile["schema_version"]),
+            expected_object_id=family_id,
+            expected_canonical_sha256=profile_canonical_sha,
+            expected_source=profile_source,
+            label="family profile",
+        )
+
+        expected_region_ids = tuple(region.region_id for region in graph.regions)
+        actual_region_ids = tuple(
+            geometry.owner_region_id for geometry in record.region_geometries
+        )
+        if actual_region_ids != expected_region_ids:
+            raise WorkbenchIndexError(
+                f"W2 region ownership/order differs from graph {graph.graph_id}"
+            )
+        graph_landmark_ids = {item.landmark_id for item in graph.landmarks}
+        bound_landmark_ids = {
+            item.landmark_id for item in record.landmark_bindings
+        }
+        if not graph_landmark_ids.issubset(bound_landmark_ids):
+            missing = sorted(graph_landmark_ids - bound_landmark_ids)
+            raise WorkbenchIndexError(
+                f"W2 compile record omits semantic landmarks: {missing}"
+            )
+        patch_landmark_ids = {
+            landmark_id
+            for geometry in record.region_geometries
+            for patch in geometry.patches
+            for landmark_id in (patch.start_landmark_id, patch.end_landmark_id)
+        }
+        if not patch_landmark_ids.issubset(bound_landmark_ids):
+            raise WorkbenchIndexError(
+                f"W2 patches reference unresolved landmarks in {record.compile_id}"
+            )
+        artifact_roles = {item.role for item in record.output_artifacts}
+        if artifact_roles != set(artifact_sources):
+            raise WorkbenchIndexError(
+                f"W2 artifact/source inventory mismatch in {record.compile_id}"
+            )
+
+        record_payload = record.to_mapping()
+        add_entity(
+            EntityRecord(
+                "compile_record",
+                record.compile_id,
+                f"{record.instance_id} R2 boundary compile",
+                "pass_no_cst_geometry",
+                record_source.source_id,
+                record_payload,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "instance_has_compile_record",
+                "instance",
+                record.instance_id,
+                "compile_record",
+                record.compile_id,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "compile_uses_family_grammar",
+                "compile_record",
+                record.compile_id,
+                "family_grammar",
+                grammar.grammar_id,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "compile_uses_instance_graph",
+                "compile_record",
+                record.compile_id,
+                "instance_graph",
+                graph.graph_id,
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "compile_preserves_family_profile",
+                "compile_record",
+                record.compile_id,
+                "family",
+                family_id,
+            )
+        )
+
+        for geometry in record.region_geometries:
+            total_regions += 1
+            geometry_payload = {
+                **geometry.to_mapping(),
+                "compile_id": record.compile_id,
+                "instance_id": record.instance_id,
+            }
+            add_entity(
+                EntityRecord(
+                    "region_geometry",
+                    geometry.region_geometry_id,
+                    f"Region {geometry.region_order}: {geometry.owner_region_id}",
+                    "compiled_owned",
+                    record_source.source_id,
+                    geometry_payload,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "compile_has_region_geometry",
+                    "compile_record",
+                    record.compile_id,
+                    "region_geometry",
+                    geometry.region_geometry_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "region_geometry_compiles_semantic_region",
+                    "region_geometry",
+                    geometry.region_geometry_id,
+                    "semantic_region",
+                    geometry.owner_region_id,
+                )
+            )
+            composite = geometry.representation
+            composite_payload = {
+                **composite.to_mapping(),
+                "compile_id": record.compile_id,
+                "instance_id": record.instance_id,
+                "owner_region_id": geometry.owner_region_id,
+                "representation_scope": "region_composite",
+            }
+            add_entity(
+                EntityRecord(
+                    "representation",
+                    composite.representation_id,
+                    f"Composite for {geometry.owner_region_id}",
+                    "compiled_r2",
+                    record_source.source_id,
+                    composite_payload,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "region_geometry_uses_representation",
+                    "region_geometry",
+                    geometry.region_geometry_id,
+                    "representation",
+                    composite.representation_id,
+                )
+            )
+            for patch in geometry.patches:
+                total_patches += 1
+                representation = patch.representation
+                representation_type = representation.representation_type
+                representation_contexts.setdefault(
+                    representation_type, set()
+                ).add(geometry.owner_region_id)
+                representation_instances.setdefault(
+                    representation_type, set()
+                ).add(record.instance_id)
+                primitive_payload = {
+                    **representation.to_mapping(),
+                    "compile_id": record.compile_id,
+                    "instance_id": record.instance_id,
+                    "owner_region_id": geometry.owner_region_id,
+                    "patch_id": patch.patch_id,
+                    "representation_scope": "geometry_patch",
+                }
+                add_entity(
+                    EntityRecord(
+                        "representation",
+                        representation.representation_id,
+                        f"{representation_type} for {patch.patch_id}",
+                        "compiled_r2",
+                        record_source.source_id,
+                        primitive_payload,
+                    )
+                )
+                patch_payload = {
+                    **patch.to_mapping(),
+                    "compile_id": record.compile_id,
+                    "instance_id": record.instance_id,
+                }
+                add_entity(
+                    EntityRecord(
+                        "geometry_patch",
+                        patch.patch_id,
+                        f"Patch {patch.global_order}: {patch.patch_id}",
+                        "owned_oriented",
+                        record_source.source_id,
+                        patch_payload,
+                    )
+                )
+                for relation in (
+                    RelationRecord(
+                        "region_geometry_has_patch",
+                        "region_geometry",
+                        geometry.region_geometry_id,
+                        "geometry_patch",
+                        patch.patch_id,
+                    ),
+                    RelationRecord(
+                        "composite_representation_has_patch",
+                        "representation",
+                        composite.representation_id,
+                        "geometry_patch",
+                        patch.patch_id,
+                    ),
+                    RelationRecord(
+                        "patch_uses_representation",
+                        "geometry_patch",
+                        patch.patch_id,
+                        "representation",
+                        representation.representation_id,
+                    ),
+                    RelationRecord(
+                        "patch_owned_by_semantic_region",
+                        "geometry_patch",
+                        patch.patch_id,
+                        "semantic_region",
+                        geometry.owner_region_id,
+                    ),
+                ):
+                    add_relation(relation)
+
+        binding_entity_ids = {
+            binding.landmark_id: f"{record.compile_id}:{binding.landmark_id}"
+            for binding in record.landmark_bindings
+        }
+        for binding in record.landmark_bindings:
+            binding_id = binding_entity_ids[binding.landmark_id]
+            binding_payload = {
+                **binding.to_mapping(),
+                "compile_id": record.compile_id,
+                "instance_id": record.instance_id,
+            }
+            add_entity(
+                EntityRecord(
+                    "landmark_geometry_binding",
+                    binding_id,
+                    f"{binding.binding_role}: {binding.landmark_id}",
+                    "resolved",
+                    record_source.source_id,
+                    binding_payload,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "compile_has_landmark_binding",
+                    "compile_record",
+                    record.compile_id,
+                    "landmark_geometry_binding",
+                    binding_id,
+                )
+            )
+            if binding.landmark_id in graph_landmark_ids:
+                add_relation(
+                    RelationRecord(
+                        "landmark_binding_resolves_semantic_landmark",
+                        "landmark_geometry_binding",
+                        binding_id,
+                        "semantic_landmark",
+                        binding.landmark_id,
+                    )
+                )
+            for patch_id in binding.incident_patch_ids:
+                add_relation(
+                    RelationRecord(
+                        "landmark_binding_incident_to_patch",
+                        "landmark_geometry_binding",
+                        binding_id,
+                        "geometry_patch",
+                        patch_id,
+                    )
+                )
+
+        for geometry in record.region_geometries:
+            for patch in geometry.patches:
+                add_relation(
+                    RelationRecord(
+                        "patch_starts_at_landmark_binding",
+                        "geometry_patch",
+                        patch.patch_id,
+                        "landmark_geometry_binding",
+                        binding_entity_ids[patch.start_landmark_id],
+                    )
+                )
+                add_relation(
+                    RelationRecord(
+                        "patch_ends_at_landmark_binding",
+                        "geometry_patch",
+                        patch.patch_id,
+                        "landmark_geometry_binding",
+                        binding_entity_ids[patch.end_landmark_id],
+                    )
+                )
+
+        for check in record.continuity_checks:
+            total_continuity_checks += 1
+            check_entity_id = f"{record.compile_id}:{check.check_id}"
+            check_payload = {
+                **check.to_mapping(),
+                "compile_id": record.compile_id,
+                "instance_id": record.instance_id,
+            }
+            add_entity(
+                EntityRecord(
+                    "continuity_check",
+                    check_entity_id,
+                    f"{check.required_level} at {check.landmark_id}",
+                    "required_pass" if check.required_pass else "required_fail",
+                    record_source.source_id,
+                    check_payload,
+                )
+            )
+            for relation in (
+                RelationRecord(
+                    "compile_has_continuity_check",
+                    "compile_record",
+                    record.compile_id,
+                    "continuity_check",
+                    check_entity_id,
+                ),
+                RelationRecord(
+                    "continuity_check_left_patch",
+                    "continuity_check",
+                    check_entity_id,
+                    "geometry_patch",
+                    check.left_patch_id,
+                ),
+                RelationRecord(
+                    "continuity_check_right_patch",
+                    "continuity_check",
+                    check_entity_id,
+                    "geometry_patch",
+                    check.right_patch_id,
+                ),
+                RelationRecord(
+                    "continuity_check_at_landmark",
+                    "continuity_check",
+                    check_entity_id,
+                    "landmark_geometry_binding",
+                    binding_entity_ids[check.landmark_id],
+                ),
+            ):
+                add_relation(relation)
+
+        geometry_validation_id = f"{record.compile_id}:geometry-validation"
+        add_entity(
+            EntityRecord(
+                "geometry_validation",
+                geometry_validation_id,
+                f"{record.instance_id} BRep/STEP validation",
+                "pass",
+                record_source.source_id,
+                {
+                    **dict(record.geometry_validation),
+                    "compile_id": record.compile_id,
+                    "instance_id": record.instance_id,
+                },
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "compile_has_geometry_validation",
+                "compile_record",
+                record.compile_id,
+                "geometry_validation",
+                geometry_validation_id,
+            )
+        )
+
+        baseline_id = f"{record.compile_id}:baseline-comparison"
+        add_entity(
+            EntityRecord(
+                "baseline_comparison",
+                baseline_id,
+                f"{record.instance_id} accepted baseline comparison",
+                "pass",
+                record_source.source_id,
+                {
+                    "compile_id": record.compile_id,
+                    "instance_id": record.instance_id,
+                    "contract": record.baseline.to_mapping(),
+                    "comparison": dict(record.baseline_comparison),
+                    "warnings": list(record.warnings),
+                },
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "compile_has_baseline_comparison",
+                "compile_record",
+                record.compile_id,
+                "baseline_comparison",
+                baseline_id,
+            )
+        )
+
+        for artifact in record.output_artifacts:
+            artifact_source = artifact_sources[artifact.role]
+            artifact_id = f"{record.compile_id}:{artifact.role}"
+            add_entity(
+                EntityRecord(
+                    "geometry_artifact",
+                    artifact_id,
+                    f"{record.instance_id} / {artifact.role}",
+                    "hash_verified",
+                    artifact_source.source_id,
+                    {
+                        **artifact.to_mapping(),
+                        "compile_id": record.compile_id,
+                        "instance_id": record.instance_id,
+                        "repository_relative_path": artifact_source.display_path,
+                    },
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "compile_produces_geometry_artifact",
+                    "compile_record",
+                    record.compile_id,
+                    "geometry_artifact",
+                    artifact_id,
+                )
+            )
+
+    reused_types = sorted(
+        representation_type
+        for representation_type, contexts in representation_contexts.items()
+        if len(contexts) > 1
+    )
+    cross_instance_types = sorted(
+        representation_type
+        for representation_type, instances in representation_instances.items()
+        if len(instances) > 1
+    )
+    if not reused_types or not cross_instance_types:
+        raise WorkbenchIndexError(
+            "R2 requires a mathematical representation type reused across semantic contexts and instances"
+        )
+    add_entity(
+        EntityRecord(
+            "validation",
+            "w2.boundary-compiler-hard-gate",
+            "W2 boundary compiler hard-gate proof",
+            "pass",
+            grammar_source.source_id,
+            {
+                "compile_ids": sorted(record.compile_id for record in records.values()),
+                "instance_ids": sorted(records),
+                "region_count": total_regions,
+                "patch_count": total_patches,
+                "continuity_check_count": total_continuity_checks,
+                "reused_representation_types": reused_types,
+                "cross_instance_representation_types": cross_instance_types,
+                "live_cst_status": "not_run",
+                "physical_acceptance_status": "not_established",
+            },
+        )
+    )
+
+
+def _assert_contract_ref(
+    reference: ContractSourceRef,
+    *,
+    expected_kind: str,
+    expected_schema: str,
+    expected_object_id: str,
+    expected_canonical_sha256: str,
+    expected_source: SourceRecord,
+    label: str,
+) -> None:
+    actual = (
+        reference.contract_kind,
+        reference.schema_version,
+        reference.object_id,
+        reference.canonical_sha256,
+        reference.source.source_kind,
+        reference.source.source_path,
+        reference.source.source_raw_sha256,
+        reference.source.locator,
+        reference.source.relation,
+    )
+    expected = (
+        expected_kind,
+        expected_schema,
+        expected_object_id,
+        expected_canonical_sha256,
+        expected_kind,
+        expected_source.display_path,
+        expected_source.raw_sha256,
+        "#/",
+        "compile_input_contract",
+    )
+    if actual != expected:
+        raise WorkbenchIndexError(f"W2 {label} contract/source binding mismatch")
+
+
+def _compile_bundle_root(record_path: Path, repo_root: Path) -> Path:
+    resolved = record_path.resolve()
+    if resolved.parent.name != "records":
+        raise WorkbenchIndexError(
+            "W2 compile records must be supplied from an immutable bundle records/ directory"
+        )
+    bundle_root = resolved.parent.parent.resolve()
+    try:
+        bundle_root.relative_to(repo_root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(
+            "W2 compile bundle must be inside the declared repository root"
+        ) from exc
+    return bundle_root
 
 
 def _index_literature_package(

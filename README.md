@@ -1,6 +1,6 @@
 # CST 自动化与 RF-CEM 项目：中文背景、现状与交接说明
 
-更新日期：2026-08-19
+更新日期：2026-08-20
 适合读者：懂一些 RF/加速器腔和 Python，但尚未熟悉本项目架构、CST 自动化细节或代理模型优化的研究生同事。
 
 ## 先说结论
@@ -12,7 +12,7 @@
 3. 用代理模型、恢复机制和评估数据库组织不同工作流；
 4. 在 RF-CEM 路线上，把论文证据、人工语义审核、参数化几何、STEP、CSTTranslator 和本征模结果连成可审计链路。
 
-当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`，以及 R1 两种真实拓扑共用的 `family_grammar.v0`。R0B 已通过 PR #5 合入；Workbench W0/W1 只提供 no-CST 派生视图，不替代任何源数据、求解结果或物理验收。
+当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`、R1 两种真实拓扑共用的 `family_grammar.v0`，以及 R2 共用编译入口生成的 20 个 region / 22 个 patch 和有效 STEP/B-Rep no-CST 证明。R0B/R1 已分别通过 PR #5/#6 合入；Workbench W0/W1/W2 只提供 no-CST 派生视图，不替代任何源数据、求解结果或物理验收。
 
 > **RF 备注：**“几何生成成功”只说明模型能被构造，不等于频率、R/Q、Q 或峰值场已经复现。最终物理结论仍要由明确的求解器设置、材料、边界、网格和结果定义支持。
 >
@@ -185,13 +185,15 @@ reviewed labels / expert prior
 >
 > **软件工程备注：**组合 corpus 页面适合完整性统计，不适合作为人工接受入口。人工审核应保持“一篇论文、一个 operating regime、一个 session”。
 
-### 4.8 Stage C、R0B 与 R1 Workbench W1
+### 4.8 Stage C、R0B、R1 与 R2 Workbench W2
 
 Stage C 已通过 PR #4 合入 `workflow/rf-cem-literature-review`，形成 `nc_axisymmetric_single_cell_rf_vacuum` 的 source-lossless 两实例 profile：`sls2.r149.6593e02e` 与 `rf500.2c27faee.b1r3`。该契约保存两者原生 schema、参数名、分组、单位、维数和来源哈希，但明确不声称它们共享 RF 指标定义；`live_cst` 与 `physical_acceptance` 也仍是独立、未建立的状态。
 
 R0B 新增了 `semantic`、`representation`、`compiler`、`observation` 四个依赖边界，以及一个可删除、可重建的本地 Workbench W0，并已通过 PR #5 合入。W0 从显式输入重建 SQLite 索引，显示 Families、Instances、Semantics、Representations、Algorithms、Reviews、Validation、Roadmap/Gates、Capability Coverage 与有限的 legacy compile placeholders。它只绑定 `127.0.0.1`，需要随机 token，并且没有 shell、任意文件浏览、CST 控制或写入 API。
 
-R1 在 `semantic` 层实现了独立于几何表示的 region/landmark/interface 本体、实例边界图、可选 motif、腔族语法和图差异。SLS-2 的已评审拓扑没有 nose；RF500 由人工审核的 `NoseCone` 证据支持左右成对 nose。两者共享九区域 backbone，但没有公共几何参数向量。内容寻址证明位于被忽略的 `analysis_outputs/rf_cem_semantic_core/`；Workbench W1 的 **Semantic Graphs / W1** 页面显示语法、两条有序区域链、nose 状态、motif、本体、接口和 diff。它仍不生成 `RegionGeometry`、不运行 Compiler v0、不运行 CST。使用方法见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`。
+R1 在 `semantic` 层实现了独立于几何表示的 region/landmark/interface 本体、实例边界图、可选 motif、腔族语法和图差异，并已通过 PR #6 合入。SLS-2 的已评审拓扑没有 nose；RF500 由人工审核的 `NoseCone` 证据支持左右成对 nose。两者共享九区域 backbone，但没有公共几何参数向量。内容寻址证明位于被忽略的 `analysis_outputs/rf_cem_semantic_core/`；Workbench W1 的 **Semantic Graphs / W1** 页面显示语法、两条有序区域链、nose 状态、motif、本体、接口和 diff。
+
+R2 在 `representation` 层实现了与腔族无关的 Line、CircularArc、EllipseArc、Spline/NURBS 与 Composite 表示，并由唯一的 `ProfileCompiler.compile` 入口编译两个真实实例。SLS-2 输出 9 个 region / 10 个 patch，RF500 输出 11 个 region / 12 个 patch；所有 patch 均有唯一 region owner，required continuity、封闭无自交 profile、有效 B-Rep/STEP、source-native 等价与声明基线比较均通过。内容寻址证明位于被忽略的 `analysis_outputs/rf_cem_boundary_compiler/r2_boundary_compiler.aa66a3e90125437b/`。Workbench W2 的 **Compile Records / W2** 页面可查看 region→representation→patch、landmark、连续性、基线、warning 与产物哈希。R2 仍不运行 CST、不声明 RF physical acceptance，也不进行 family induction 或优化搜索。使用方法见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`。
 
 ## 5. 新同事如何开始
 
@@ -280,10 +282,10 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
 ## 7. 建议的近期工作顺序
 
-1. R0B 已完成并合入：架构边界、Workbench W0、完整 no-CST 回归、文档与单一 canonical owner；
-2. R1 语义核心与 Workbench W1 已通过本地 hard gate，完成 closeout PR 后进入 R2；
-3. R2 建立与腔族无关的边界表示，并在唯一 compiler 边界实现 Compiler v0；
-4. R3 做有证据门禁的腔族归纳与扩展；
+1. R0B 与 R1 已完成并合入：架构边界、Workbench W0/W1、语义拓扑、完整 no-CST 回归与单一 canonical owner；
+2. R2 边界表示、Compiler v0、真实双案例证明与 Workbench W2 已通过本地 hard gate，完成单次 closeout push/PR/merge 后进入 R3；
+3. R3 做有证据门禁的腔族归纳与扩展；
+4. 不要把 R2 的有效 STEP/B-Rep 误写成 RF 物理接受；RF 指标仍由后续合同门禁；
 5. R4 建立带单位、验证层和工程约束的公共 observation contract；
 6. R5 先离线建立 RF result/mode/field contract；只有用户明确授权后才做 live-CST 验证；
 7. 原有 candidate、objective、seed 与 campaign 工作继续由 `workflow/rf-cem-500mhz` 所有，不与此路线静默混合；
@@ -299,7 +301,7 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Agent 中断、死机、换任务后的恢复与维护步骤。 |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | 全部主要功能、CLI、输入输出和分支入口。 |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST 官方接口、仓库封装与直接项目文件证据。 |
-| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM 架构决策、Workbench W0/W1 以及 R0B–R5 阶段门禁。 |
+| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM 架构决策、Workbench W0/W1/W2 以及 R0B–R5 阶段门禁。 |
 | `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` | 当前 R0B–R5 的执行范围、阶段顺序与收口约束。 |
 
 根 `AGENTS.md` 是 Codex 自动读取的短治理入口，只保留不可违反的规则和上述文档索引；`.github/` 中的 PR 模板与 CI 是协作基础设施，不是项目状态报告。

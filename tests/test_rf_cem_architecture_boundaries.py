@@ -69,10 +69,12 @@ def test_architecture_layer_has_no_forbidden_imports(
     assert violations == []
 
 
-def test_compiler_is_the_reserved_composition_layer() -> None:
-    compiler = (RF_CEM / "compiler" / "__init__.py").read_text(encoding="utf-8")
-    assert "only core layer allowed to combine" in compiler
-    assert "Compile(T, {Ri(theta_i)})" in compiler
+def test_compiler_is_the_implemented_composition_layer() -> None:
+    compiler = importlib.import_module("rf_cem.compiler")
+    assert compiler.ARCHITECTURE_LAYER == "compiler"
+    assert compiler.COMPILER_VERSION == "rf_cem_profile_compiler.v0"
+    assert callable(compiler.ProfileCompiler)
+    assert callable(compiler.prepare_r2_cases)
 
 
 def _package_imports(package: Path) -> set[str]:

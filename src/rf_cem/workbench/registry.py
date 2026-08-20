@@ -14,7 +14,7 @@ from typing import Any, Iterable, Mapping
 
 
 WORKBENCH_SCHEMA_VERSION = "rf_cem_workbench.v0"
-INDEXER_VERSION = "r1.w1.v0"
+INDEXER_VERSION = "r2.w2.v0"
 
 
 class WorkbenchRegistryError(ValueError):

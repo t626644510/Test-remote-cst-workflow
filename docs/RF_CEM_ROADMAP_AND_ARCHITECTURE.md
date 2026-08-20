@@ -1,6 +1,6 @@
 # RF-CEM 路线与架构：语义拓扑编译架构及 R0B–R5 Roadmap
 
-**版本**：Roadmap 2.3
+**版本**：Roadmap 2.4
 **日期**：2026-08-20
 **用途**：供项目负责人、人类工程师和后续参与者复盘 RF-CEM 的目标、当前基础、架构决策、工作台设计及 R0B–R5 的阶段出门条件。
 **适用范围**：RF 真空边界语义、边界表示、几何编译、腔族扩展、公共观测、工程约束、RF 结果/模态/场合同；暂不展开复杂曲线方程、可变维数优化、多物理场、HOM、耦合器和冷却结构的具体实现。
@@ -351,37 +351,37 @@ cell_count
 - source-native lossless round trip；
 - manifest、artifact、locator、scope 和 hash 的 fail-closed 绑定；
 - 现有本地审核 HTML、Plotly 视图和 loopback review server。
+- R0B 四层依赖边界与可重建 Workbench W0；
+- R1 两个真实实例的语义拓扑、腔族语法和 W1；
+- R2 统一编译入口、有效 no-CST B-Rep/STEP、compile record 和 W2；
+- R3 不依赖公共参数名的 graph alignment、显式人工 review/grammar patch、真实 LEReC blind validation 和 W3；
+- R4 从 compiled geometry 派生的 exact/shape/scalar 三层观测、单位化工程约束和 W4 实现。
 
 ### 3.2 当前真正缺失的横向核心
 
-仍未正式建立：
+R0B–R4 已填充几何前向链路的横向核心。仍未正式建立的是：
 
-- `FamilyGrammar`；
-- `InstanceBoundaryGraph`；
-- semantic motif；
-- 表示无关的 `BoundaryRepresentation` 协议；
-- 通用 `Compile(T,{Ri,θi})`；
-- 单向 region→patch 所有权；
-- graph alignment 和 family induction；
-- 规范化公共观测和工程约束合同；
 - 完整 RF result/mode/field contract；
-- 系统性的 RF-CEM Workbench。
+- mode identity、field map identity 与单位/归一化/边界/网格绑定；
+- R5 no-CST result contract proof；
+- 经用户明确授权后的 live-CST R5 验证；
+- 超出首批示范约束的制造规则库、优化接入和跨 family transfer。
 
 ### 3.3 当前分支状态
 
-当前 Stage C 分支：
+R3 已通过 PR #8 合入 canonical owner，canonical merge commit 为：
 
 ```text
-codex/rf-cem-family-profile-v0
+585d549c7a5dac0304852a0150f0c4114fd5b6e9
 ```
 
-相对：
+R4 实现分支从该 merge 直接建立：
 
 ```text
-workflow/rf-cem-literature-review
+codex/rf-cem-r4-observation-contract
 ```
 
-仍领先 9 个提交。下一轮新架构开发前，应先把 Stage C 作为一个完整大阶段收口到 canonical owner，再建立新 phase 分支。
+具体 proof ID、Workbench 快照、测试结果和 closeout/merge 状态由 `docs/PROJECT_STATUS_CONTEXT.md` 记录；本档案只保存会被 R4 proof 哈希绑定的稳定架构事实，避免 proof 对自身标识形成循环依赖。
 
 ---
 
@@ -451,9 +451,11 @@ artifact
 5. Representations；
 6. Algorithms；
 7. Compile Records；
-8. Reviews；
-9. Coverage Matrix；
-10. Roadmap / Gates。
+8. Family Induction；
+9. Observations / Constraints；
+10. Reviews；
+11. Coverage Matrix；
+12. Roadmap / Gates。
 
 ### 4.5 Compile Record
 
@@ -834,7 +836,7 @@ proposal:
 
 ### 2026-08-20 实现状态
 
-R3 已在 `codex/rf-cem-r3-family-induction` 完成本地 Hard Gate、完整 no-CST regression 与浏览器验收，该分支从 R2 canonical merge `e81ad20942258380cccb93d17cfdf0ca7e2d0e21` 建立；phase closeout 尚待单次 push、PR 检查与 canonical merge。验证结果为 targeted 36 passed、explicit no-CST 762 passed/11 skipped、full default 762 passed/11 skipped；live CST 未运行。
+R3 已通过 PR #8 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `585d549c7a5dac0304852a0150f0c4114fd5b6e9`。该阶段从 R2 canonical merge `e81ad20942258380cccb93d17cfdf0ca7e2d0e21` 建立；closeout 验证为 targeted 36 passed、explicit no-CST 762 passed/11 skipped、full default 762 passed/11 skipped，且 live CST 未运行。
 
 `rf_cem_family_induction.v0` 只读取两个 reviewed `instance_boundary_graph.v0` 中有序的 `(side, region_type)` 和审计所需 source/hash，不读取 role、原生 feature/parameter 名或公共几何向量。SLS-2/RF500 产生 9 个 common-backbone slot 和 2 个 RF500-only `NoseRegion` residual；系统据此产生 `optional_motif` proposal，明确记录 `{0,2}` cardinality、左右 insertion adjacency、graph locator、evidence、限制、算法版本和 `0.95` evidence-completeness confidence。未成镜像配对的 residual 走经过测试的 `alternative_topology` 路径。
 
@@ -919,6 +921,18 @@ equator_crest_radius
 - 不做 optimization；
 - 不要求完整制造规则库；
 - 不设计所有未来 descriptor。
+
+### 2026-08-20 实现状态
+
+R4 实现位于 `codex/rf-cem-r4-observation-contract`，并严格从 R3 canonical merge `585d549c7a5dac0304852a0150f0c4114fd5b6e9` 建立。`rf_cem.observation` 只读取两份真实 `compile_record.v0`、它们绑定的精确 profile/STEP/B-Rep 产物以及两份 reviewed `instance_boundary_graph.v0`；observer 不读取 source-native parameter/feature 名，不生成或修改几何，也不调用 CST。
+
+三层合同保持独立身份和显式引用：`exact_geometry_reference.v0` 保存 compile record 与精确 profile/STEP/B-Rep 的 hash binding；`semantic_shape_observation.v0` 将每个 semantic region 统一为 65 个弧长归一化样本并保存 `z/r`、切向、法向、有符号曲率、极值、凸性、单调区间和 landmark；`scalar_descriptor_registry.v0` 定义 21 个带 unit、definition、algorithm version、equivalence tolerance 和 provenance 的描述符，`observation_bundle.v0` 只链接这三层而不以采样替代 exact geometry。
+
+首批全局值覆盖总长、最大半径、最小 aperture、轴对称体积/表面积、region count、nose presence 和全局最小曲率半径；区域值覆盖 axial extent、arc length、半径范围、最小曲率半径、端点切向分量/曲率、nose tip radius 与 equator crest radius。单位合同限定 `mm`、`mm^2`、`mm^3`、`1/mm`、无量纲 `1`、`count` 和 `bool`；未知单位、非有限值、无效 landmark、scope/type 不匹配均 fail closed。
+
+`engineering_constraint.v0` / `constraint_evaluation.v0` 支持 `hard`、`soft`、`advisory`、`diagnostic`，支持全局与按 region type/side 选择的区域作用域，并为违反项保存观测值、限值、偏差、semantic region/sample 位置和 source binding。R4 内置的六条 reviewed contract demonstration 覆盖长度、最大半径、aperture、曲率、nose 和 equator 区域约束；它们不是制造规范或 RF physical acceptance，且 `geometry_mutation_authority=none`。
+
+Workbench indexer `r4.w4.v0` 仅在完整 W1/W2/W3 和一个严格验证的 R4 bundle 上建立 W4；固定 `/observations` 页面展示 exact/shape/scalar 分层、descriptor registry/value、constraint/evaluation、违反位置与来源。该实现仍是 no-CST 派生读模型，不定义 RF 指标、不启动优化，也不建立 physical acceptance。内容寻址 proof、W4 快照、浏览器验收和 closeout 身份记录在 `docs/PROJECT_STATUS_CONTEXT.md`，不回写本 proof 输入文件。
 
 ---
 
@@ -1141,8 +1155,9 @@ Agent 长期目标放在：
 2. R0B 已通过 PR #5 合入，canonical merge commit 为 `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`；
 3. R1 已通过 PR #6 合入，canonical merge commit 为 `5ae1ba07b841d6adf6e180ec1eedfd073657987b`；
 4. R2 已通过 PR #7 合入，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`；
-5. 当前 phase 分支为 `codex/rf-cem-r3-family-induction`，从上述 R2 canonical merge 建立；
-6. 当前动作是完成 R3 单次 closeout push、PR 检查与 canonical merge；
-7. R3 只建立 reviewed graph alignment、proposal/manual review/explicit patch、真实 blind validation 和 Workbench W3，不实现 observation/RF result contract 或优化搜索；
-8. R3 不运行 CST，不建立 RF physical acceptance；只有 R3 Hard Gate 合入 canonical owner 后再从该 merge 建立 R4 分支；
-9. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。
+5. R3 已通过 PR #8 合入，canonical merge commit 为 `585d549c7a5dac0304852a0150f0c4114fd5b6e9`；
+6. R4 implementation branch `codex/rf-cem-r4-observation-contract` 从该 R3 merge 建立；
+7. R4 只建立 representation-independent observation、engineering constraint、immutable no-CST proof 和 Workbench W4，不定义 RF result contract 或优化搜索；
+8. R4 不运行 CST、不建立 RF physical acceptance；R4 Hard Gate 及 canonical merge 完成后才从最新 canonical owner 建立 R5 分支；
+9. R5 先实现 no-CST RF result/mode/field contract，任何 live-CST 验证继续单独等待用户明确授权；
+10. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。

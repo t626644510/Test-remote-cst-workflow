@@ -76,7 +76,7 @@ Use this decision table before editing:
 | HOM eigenmode campaign behavior | `workflow/4-rfgun-hom-eigenmode` |
 | 500 MHz parametric RF-CEM or live campaign | `workflow/rf-cem-500mhz` |
 | Literature evidence, semantics, geometry review or GUI | `workflow/rf-cem-literature-review` |
-| RF-CEM family contract, R1 semantic topology, R2 representation/compiler, R3 family induction, Workbench W0–W3, observation roadmap | `workflow/rf-cem-literature-review` |
+| RF-CEM family contract, R1 semantic topology, R2 representation/compiler, R3 family induction, R4 observation/constraints, Workbench W0–W4 | `workflow/rf-cem-literature-review` |
 
 If current cwd is the wrong owner:
 
@@ -233,12 +233,12 @@ Policy:
 
 CadQuery/OCP teardown faults require the same distinction: check whether the isolated worker produced a valid structured result before classifying the geometry action.
 
-### 7.4 Recover the RF-CEM semantic/compiler/induction proofs and Workbench W0–W3
+### 7.4 Recover the RF-CEM semantic/compiler/induction/observation proofs and Workbench W0–W4
 
-The R1 content-addressed semantic proof is generated from the Stage C profile and frozen SLS-2 generation/semantics/review sources. The R2 compiler proof binds that profile and R1 proof to two deterministic no-CST STEP/B-Rep compiles. The R3 induction proof aligns only the two reviewed R1 graphs, records an explicit proposal/review/patch chain, then classifies the held-out LEReC 704 MHz reviewed graph. Workbench W0–W3 is a derived database, not a session and not a source artifact. First inspect the branch and source state; then use the exact semantic/compiler/induction validation, Workbench `status`, and rebuild commands in `FUNCTIONS_AND_ENTRYPOINTS.md`.
+The R1 content-addressed semantic proof is generated from the Stage C profile and frozen SLS-2 generation/semantics/review sources. The R2 compiler proof binds that profile and R1 proof to two deterministic no-CST STEP/B-Rep compiles. The R3 induction proof aligns only the two reviewed R1 graphs, records an explicit proposal/review/patch chain, then classifies the held-out LEReC 704 MHz reviewed graph. The R4 observation proof reads those exact R2 compiles plus matching R1 graphs and adds separate exact/shape/scalar identities and non-mutating engineering-constraint evaluations. Workbench W0–W4 is a derived database, not a session and not a source artifact. First inspect the branch and source state; then use the exact semantic/compiler/induction/observation validation, Workbench `status`, and rebuild commands in `FUNCTIONS_AND_ENTRYPOINTS.md`.
 
 ```powershell
-$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w3.sqlite'
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w4.sqlite'
 & $py -m rf_cem.workbench status --database $WorkbenchDatabase --repo-root $RepoRoot
 ```
 
@@ -250,7 +250,9 @@ For W2, the canonical local proof is `analysis_outputs/rf_cem_boundary_compiler/
 
 For W3, the canonical local proof is `analysis_outputs/rf_cem_family_induction/r3_family_induction.2f6c02557798e606/`. First run `python -m rf_cem.semantic.induction validate --bundle <that-directory>`; it rechecks the manifest, all eight artifact hashes and every alignment/proposal/review/patch/blind identity. Rebuild W3 only with the complete W1 triple, both canonical R2 compile records and this one R3 directory supplied by `--family-induction-bundle`. The indexer must report `roadmap_phase=R3`, `indexer_version=r3.w3.v0`, a passing `w3.family-induction-hard-gate`, both training IDs and the distinct held-out LEReC ID. If a PDF, graph, grammar, representation sentinel or artifact is stale, do not edit JSON, substitute another graph, feed LEReC into training, overwrite the proof or weaken review. Diagnose the named source/code change and intentionally build a fresh content-addressed bundle with a new explicit review revision if warranted.
 
-R1/R2/R3 recovery remains no-CST. A valid STEP/B-Rep, accepted proposal, blind classification or `status=pass` does not authorize CST, establish RF metrics or establish physical acceptance. Do not open CST, run a solver, kill processes, remove locks or clean results as a semantic/compiler/induction/Workbench recovery shortcut.
+For W4, the canonical local proof is `analysis_outputs/rf_cem_observation_contract/r4_observation_contract.d06695921d941eee/`. First run `python -m rf_cem.observation validate --bundle <that-directory>`; it re-hashes all 11 declared repository sources and 25 artifacts, recomputes the input SHA-256 preimage and rechecks both instances plus all exact/shape/registry/bundle/constraint/evaluation identities. Rebuild W4 only with complete W1/W2/W3 inputs and this one directory supplied by `--observation-contract-bundle`. The indexer must report `roadmap_phase=R4`, `indexer_version=r4.w4.v0`, `w4_observation_contract=indexed`, both R4 observation bundle IDs and a passing `w4.observation-contract-hard-gate`. If a code/document input, graph, compile record or proof artifact is stale, do not edit JSON, patch SQLite, overwrite the proof, loosen units/tolerances or substitute sampled data for exact geometry. Diagnose the named source change and intentionally build a new content-addressed bundle only after the source contract is final.
+
+R1/R2/R3/R4 recovery remains no-CST. A valid STEP/B-Rep, accepted proposal, blind classification, descriptor value, constraint result or `status=pass` does not authorize CST, establish RF metrics or establish physical acceptance. Do not open CST, run a solver, kill processes, remove locks or clean results as a semantic/compiler/induction/observation/Workbench recovery shortcut.
 
 ## 8. Recovering a live-CST campaign
 
@@ -374,7 +376,7 @@ workflow/rf-cem-500mhz
   -> workflow/rf-cem-literature-review
 ```
 
-`workflow/rf-cem-literature-review` is the canonical owner of literature ingestion, semantic review, geometry projection, the local GUI, Stage C family profile, R1 semantic topology, R2 boundary representation/compiler and Workbench W0–W3. Stage C was merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`; R0B by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`; R1 by PR #6 at `5ae1ba07b841d6adf6e180ec1eedfd073657987b`; and R2 by PR #7 at `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`. R3 is locally hard-gate complete on `codex/rf-cem-r3-family-induction` and is not canonical until its closeout PR merges. `workflow/rf-cem-500mhz` remains the canonical owner of the 500 MHz live geometry/campaign workflow. Do not merge the complete literature branch into either `workflow/rf-cem-500mhz` or `main`.
+`workflow/rf-cem-literature-review` is the canonical owner of literature ingestion, semantic review, geometry projection, the local GUI, Stage C family profile, R1 semantic topology, R2 boundary representation/compiler, R3 family induction, R4 observation/constraints and Workbench W0–W4. Stage C was merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`; R0B by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`; R1 by PR #6 at `5ae1ba07b841d6adf6e180ec1eedfd073657987b`; R2 by PR #7 at `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`; and R3 by PR #8 at `585d549c7a5dac0304852a0150f0c4114fd5b6e9`. R4 is locally hard-gate complete on `codex/rf-cem-r4-observation-contract` and is not canonical until its closeout PR merges. `workflow/rf-cem-500mhz` remains the canonical owner of the 500 MHz live geometry/campaign workflow. Do not merge the complete literature branch into either `workflow/rf-cem-500mhz` or `main`.
 
 Before integrating a reusable subset elsewhere:
 

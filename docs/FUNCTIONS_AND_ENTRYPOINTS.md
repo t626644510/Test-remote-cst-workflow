@@ -64,7 +64,8 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m rf_cem.semantic.induction ...` | `workflow/rf-cem-literature-review` | no | Build and validate the reviewed R3 alignment/proposal/review/patch/held-out proof |
 | `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build and validate the two canonical R2 boundary compiles and `compile_record.v0` artifacts |
 | `python -m rf_cem.observation ...` | `workflow/rf-cem-literature-review` | no | Build and validate the R4 exact/shape/scalar observation and engineering-constraint proof |
-| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W4 registry |
+| `python -m rf_cem.physics ...` | `workflow/rf-cem-literature-review` | no | Build and strictly replay the R5 RF result/mode/field readiness contract bundle |
+| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W5 registry |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
 | `python run_workflow_3.py` | WF3 branch only | yes | Recovery optimisation |
@@ -1066,18 +1067,51 @@ $ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.d0669592
 
 R4 length/radius values use `mm`, curvature uses `1/mm`, area uses `mm^2`, volume uses `mm^3`, tangents use dimensionless `1`, and discrete values use `count`/`bool`. Unknown units, non-finite values, invalid landmarks and descriptor/constraint scope mismatches fail closed. The canonical manifest records `live_cst_status=not_run` and `physical_acceptance_status=not_established`; no RF metric, mode, field or optimization contract is defined.
 
-### 9.12 RF-CEM Workbench W0/W1/W2/W3/W4 (R0B/R1/R2/R3/R4)
+### 9.12 RF result, mode and field readiness contracts (R5)
 
-`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W4 build below retains all W0/W1/W2/W3 sources, verifies the two R2 compile records/output artifacts, independently rechecks the R3 proof, and then strictly loads the R4 observation proof. The current expert prior is indexed automatically by its repository source path.
+`src/rf_cem/physics/` defines the offline R5 extraction boundary without importing or invoking CST. It strictly replays the canonical R4 proof and builds planned RF500 cases whose geometry, solver, material, boundary, mesh, normalization, result provenance and mode identity are explicit. Build the content-addressed readiness proof with:
 
 ```powershell
-$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w4.sqlite'
+$RfResultRoot = 'analysis_outputs\rf_cem_rf_result_contract'
+$ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation_contract.d06695921d941eee'
+
+& $py -m rf_cem.physics build-readiness `
+  --root $RepoRoot `
+  --r4-bundle $ObservationProof `
+  --output-root $RfResultRoot `
+  --architecture-document 'docs\RF_CEM_ROADMAP_AND_ARCHITECTURE.md' `
+  --interface-document 'docs\CST_AUTOMATION_INTERFACES.md' `
+  --goal-document '.agent\goals\RF-CEM_Codex_Goal_R0B-R5.md'
+```
+
+The canonical ignored immutable readiness proof is `r5_rf_result_readiness.2f5b48efb5568f85`, input SHA-256 `2f5b48efb5568f85ce70f12f070ba6372e276b0dd564bbc6b13f7add6847987d`. It declares 56 artifacts plus its manifest: three coarse/nominal/fine RF500 cases and result-provenance records, three mode identities/fingerprints, nine metric definitions, 27 null metric observations, three external-field placeholders, one mesh-convergence record, two comparability decisions and two per-instance link records. The strict loader rejects changed readiness assertions, duplicate/orphan contracts and substituted comparison objects, then recomputes the planned comparability decisions. The three repository-verified readback locators are eigenfrequency (`MHz`), R/Q (`ohm`) and `Q-Factor (Perturbation)` (`1`); the last remains Q perturbation, not Q0. Stored energy, Epk, Bpk, Epk/Eacc, Bpk/Eacc and surface loss have explicit unit/normalization/mode requirements but their CST locators remain `not_established`.
+
+No mode is accepted by a bare solver index. Established mode fingerprints require frequency plus R/Q and symmetry/field evidence. Field payloads must be external files with size and SHA-256 bindings; inline data is rejected. Ordinary comparability fails closed on material, boundary, mesh, normalization or mode differences; the mesh-convergence context permits only its intentional mesh difference and requires at least three valid samples before convergence can be established. SLS-2 remains `not_linked`.
+
+Strictly replay source hashes, all artifacts, the R4 chain and cross-contract identities with:
+
+```powershell
+$RfResultProof = Join-Path $RfResultRoot 'r5_rf_result_readiness.2f5b48efb5568f85'
+& $py -m rf_cem.physics validate `
+  --root $RepoRoot `
+  --bundle $RfResultProof
+```
+
+The build refuses an existing content-addressed target. Do not overwrite a prior proof, insert values from historical prose, infer unknown CST locators or relabel Q. Its current manifest is deliberately `no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`. A later live-CST materialization is a separate explicitly authorized action.
+
+### 9.13 RF-CEM Workbench W0/W1/W2/W3/W4/W5 (R0B/R1/R2/R3/R4/R5)
+
+`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W5 build below retains all W0–W4 sources, verifies the R2 compile outputs, independently rechecks the R3 and R4 proofs, and then strictly loads the R5 readiness proof. The current expert prior is indexed automatically by its repository source path.
+
+```powershell
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w5.sqlite'
 $FamilyProof = 'analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.00414d4f'
 $Sls2Baseline = 'analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
 $CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
 $InductionProof = 'analysis_outputs\rf_cem_family_induction\r3_family_induction.2f6c02557798e606'
 $ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation_contract.d06695921d941eee'
+$RfResultProof = 'analysis_outputs\rf_cem_rf_result_contract\r5_rf_result_readiness.2f5b48efb5568f85'
 
 & $py -m rf_cem.workbench rebuild `
   --database $WorkbenchDatabase `
@@ -1094,7 +1128,8 @@ $ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation
   --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
   --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
   --family-induction-bundle $InductionProof `
-  --observation-contract-bundle $ObservationProof
+  --observation-contract-bundle $ObservationProof `
+  --rf-result-bundle $RfResultProof
 
 & $py -m rf_cem.workbench status `
   --database $WorkbenchDatabase `
@@ -1105,7 +1140,7 @@ $ObservationProof = 'analysis_outputs\rf_cem_observation_contract\r4_observation
   --repo-root $RepoRoot
 ```
 
-`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff. W2 additionally requires exactly two unique canonical compile records under immutable bundle `records/` directories and rechecks profile/grammar/graph canonical/raw hashes, instance/region order, landmarks, representation reuse, no-CST/physical status and all output bindings. W3 additionally refuses to run without complete W2, loads one immutable R3 directory, checks its manifest/eight artifacts/two primary PDFs/representation sentinel, rebinds both training graphs and base/patched grammar, requires accepted manual review and an applied patch, revalidates both training graphs, and proves the LEReC graph was held out. W4 refuses to run without complete W3, strictly reloads one immutable R4 bundle, checks its 11 declared sources and 25 artifacts, requires both canonical instances and all exact/shape/registry/bundle/constraint/evaluation bindings, and indexes located findings without treating them as physical acceptance. It writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
+`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff. W2 additionally requires exactly two unique canonical compile records under immutable bundle `records/` directories and rechecks profile/grammar/graph canonical/raw hashes, instance/region order, landmarks, representation reuse, no-CST/physical status and all output bindings. W3 refuses to run without complete W2, loads one immutable R3 directory, checks its manifest/eight artifacts/two primary PDFs/representation sentinel, rebinds both training graphs and base/patched grammar, requires accepted manual review and an applied patch, revalidates both training graphs, and proves the LEReC graph was held out. W4 refuses to run without complete W3, strictly reloads one immutable R4 bundle, checks its 11 declared sources and 25 artifacts, requires both canonical instances and all exact/shape/registry/bundle/constraint/evaluation bindings, and indexes located findings without treating them as physical acceptance. W5 refuses to run without complete W4, strictly replays the R5 source/artifact manifest and R4 binding, then requires all cases, provenance, modes, metric definitions/observations, external fields, convergence, comparability and instance links. It keeps null readiness state distinct from live results and never promotes historical prose values. The indexer writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
 
 The current full W2 source set rebuilds to 17 fresh sources, 372 entities and 534 relations. Two consecutive rebuilds produced input-set SHA-256 `91f6fdc82ba77f73f8b452b3a0499ad56178f23719f0848978af4a743b591a74`; its canonical portable snapshot SHA-256 is `d9139bfe7d3a4e2a536545addc45999a61f5fa337dd23733a3c6379a28b271fc`.
 
@@ -1113,9 +1148,11 @@ The current full W3 source set rebuilds to 29 fresh sources, 418 entities and 57
 
 The current full W4 source set rebuilds to 66 fresh sources, 779 entities and 1484 relations. Two consecutive rebuilds produced input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb`; canonical portable snapshot SHA-256 is `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. W4 adds 2 exact references, 2 shape observations, 20 region observations, 24 landmark observations, 21 descriptor definitions, 240 descriptor values, 6 constraints, 12 evaluations/findings and the passing `w4.observation-contract-hard-gate`.
 
-`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W1 shows both ordered topologies and graph evidence. W2 shows compiler ownership/continuity/baseline/artifact traces. W3 shows the alignment, common backbone, residuals, pending proposal, accepted review, explicit patch/diff and held-out LEReC result. W4 shows exact/shape/scalar separation, both real observation bundles, descriptors, constraints, evaluations, violation locations and source identities. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+The current full W5 source set rebuilds to 146 fresh sources, 855 entities and 1635 relations. Two consecutive rebuilds produced input-set SHA-256 `532de7ce15a16036322088b6b17f552bcf7ddbd9be5f8ebb4ff611444ece90e9`; canonical portable snapshot SHA-256 is `8a56f24287b34108a5741af976b1f818aec5b7e2ffb2fffc20074e42c992fed3`. This full inventory retains the explicit frozen literature package and review-session inputs shown above. W5 adds 2 physics-link states, 3 cases, 3 result-provenance records, 3 mode identities, 3 mode fingerprints, 9 metric definitions, 27 null observations, 3 field bundles, 1 convergence record, 2 comparability decisions and the no-CST readiness gate.
 
-R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by R5.
+`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3**, **Observations & Constraints / W4** and **RF Results / Modes / Fields / W5**. W1 shows both ordered topologies and graph evidence. W2 shows compiler ownership/continuity/baseline/artifact traces. W3 shows the alignment, common backbone, residuals, pending proposal, accepted review, explicit patch/diff and held-out LEReC result. W4 shows exact/shape/scalar separation, both real observation bundles, descriptors, constraints, evaluations, violation locations and source identities. W5 shows the authorization boundary, per-instance linkage, cases, modes/fingerprints, metric definitions/null observations, provenance, external field bindings, convergence and default-deny comparability. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+
+R5 now implements the offline RF result/mode/field contract and readiness proof, but it does not establish a live result, RF metric equivalence, field evidence, convergence or physical acceptance. Those remain behind the explicitly authorized live-CST R5 hard gate.
 
 ## 10. Workflow branch entries
 
@@ -1286,7 +1323,7 @@ RF-CEM geometry/optimisation:
   tests\test_rf_cem_parametric_optimization.py
 ```
 
-RF-CEM R0B–R4 architecture, semantic, compiler, induction, observation and Workbench:
+RF-CEM R0B–R5 architecture, semantic, compiler, induction, observation, RF-result readiness and Workbench:
 
 ```powershell
 & $py -m pytest -q `
@@ -1295,6 +1332,7 @@ RF-CEM R0B–R4 architecture, semantic, compiler, induction, observation and Wor
   tests\test_rf_cem_boundary_compiler.py `
   tests\test_rf_cem_family_induction.py `
   tests\test_rf_cem_observation_contract.py `
+  tests\test_rf_cem_rf_result_contract.py `
   tests\test_rf_cem_workbench.py
 ```
 

@@ -759,6 +759,20 @@ Action backend is `cst_vba`. VBA strings come from verified history or explicit 
 | Run external control macro | official COM/VBA `RunScript` or separately validated bridge |
 | Add CST GUI menu integration | Python scripts/Generic Command JSON |
 
+### 22.1 R5 RF-result extraction boundary
+
+`src/rf_cem/physics/` is a no-CST contract/replay layer, not another CST API wrapper. It may consume only result locators already verified through repository wrappers. At the current R5 readiness boundary those locators are limited to:
+
+| R5 metric | Verified saved-project locator | Native/result-contract unit |
+| --- | --- | --- |
+| eigenfrequency | `Tables\0D Results\Frequency (Mode {mode_index})` | `MHz` / `MHz` |
+| R/Q | `Tables\0D Results\R over Q (Mode {mode_index})` | `Ohm` / `ohm` |
+| Q perturbation | `Tables\0D Results\Q-Factor (Perturbation) (Mode {mode_index})` | dimensionless / `1` |
+
+The contract token change from native `Ohm` to `ohm` and from dimensionless to `1` does not apply a numeric conversion. A live extractor must preserve the native locator/unit evidence and validate the contract unit before accepting the scalar. `Q-Factor (Perturbation)` remains Q perturbation and must not be renamed Q0. Stored energy, Epk, Bpk, Epk/Eacc, Bpk/Eacc, surface loss, field export and mode-shape export remain `not_established` until a documented or bounded live-validated locator/extraction path exists.
+
+Mode identity requires frequency, R/Q and a symmetry or external hash-bound field fingerprint; a solver mode index alone is insufficient. Field payloads, when established, belong in external artifacts referenced by `field_bundle.v0`; they are not embedded in SQLite or scalar JSON. The current readiness proof has null metric values, `live_cst_status=not_run`, and no physical-acceptance claim.
+
 ## 23. Known unknowns
 
 Still requiring live validation or authoritative documentation:

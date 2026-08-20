@@ -16,7 +16,14 @@ RF_CEM = ROOT / "src" / "rf_cem"
 
 
 def test_r0b_architecture_packages_are_importable() -> None:
-    for name in ("semantic", "representation", "compiler", "observation", "workbench"):
+    for name in (
+        "semantic",
+        "representation",
+        "compiler",
+        "observation",
+        "physics",
+        "workbench",
+    ):
         module = importlib.import_module(f"rf_cem.{name}")
         assert module is not None
 
@@ -50,6 +57,17 @@ def test_r0b_architecture_packages_are_importable() -> None:
                 "OCP",
                 "cst",
                 "rf_cem.parametric_geometry.reconstruction",
+            },
+        ),
+        (
+            "physics",
+            {
+                "cadquery",
+                "OCP",
+                "cst",
+                "rf_cem.live_500mhz_diagnostic",
+                "rf_cem.live_500mhz_postprocessing_diagnostic",
+                "rf_cem.live_500mhz_parametric_diagnostic",
             },
         ),
     ],

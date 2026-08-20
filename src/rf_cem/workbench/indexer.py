@@ -1,4 +1,4 @@
-"""Source adapters and deterministic rebuild orchestration for Workbench W0-W4."""
+"""Source adapters and deterministic rebuild orchestration for Workbench W0-W5."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from rf_cem.family_profile import (
 )
 from rf_cem.literature_semantics.validator import assert_valid_semantic_package
 from rf_cem.observation import R4Bundle, load_r4_bundle
+from rf_cem.physics import R5Bundle, load_r5_bundle
 from rf_cem.parametric_geometry.expert_prior import (
     DEFAULT_PRIOR_PATH,
     load_expert_prior,
@@ -66,7 +67,7 @@ class WorkbenchIndexError(WorkbenchRegistryError):
 
 @dataclass(frozen=True)
 class WorkbenchSourceSet:
-    """Explicit source set used for one reproducible W0-W4 registry rebuild."""
+    """Explicit source set used for one reproducible W0-W5 registry rebuild."""
 
     repo_root: Path
     family_profile: Path
@@ -80,6 +81,7 @@ class WorkbenchSourceSet:
     compile_records: tuple[Path, ...] = ()
     family_induction_bundle: Path | None = None
     observation_contract_bundle: Path | None = None
+    rf_result_bundle: Path | None = None
 
 
 _REPRESENTATION_CATALOG = (
@@ -215,6 +217,18 @@ _ALGORITHM_CATALOG = (
         "status": "implemented_r4_no_cst",
         "implementation": "rf_cem.observation.evaluate_constraint",
     },
+    {
+        "id": "rf_cem.rf_result_contract.v0",
+        "label": "Mode-identified RF result and field contract",
+        "status": "implemented_r5_no_cst_readiness",
+        "implementation": "rf_cem.physics",
+    },
+    {
+        "id": "rf_cem.result_comparability.v0",
+        "label": "Default-deny RF result comparability policy",
+        "status": "implemented_r5_no_cst",
+        "implementation": "rf_cem.physics.assess_comparability",
+    },
 )
 
 _ROADMAP_PHASES = (
@@ -237,9 +251,13 @@ _ROADMAP_PHASES = (
     (
         "R4",
         "Observation & Engineering Constraint Contract",
-        "hard_gate_validation_in_progress",
+        "hard_gate_passed_merged",
     ),
-    ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
+    (
+        "R5",
+        "RF Result / Mode / Field Contract",
+        "no_cst_readiness_implemented_live_cst_authorization_pending",
+    ),
 )
 
 _R1_GATES = (
@@ -300,9 +318,26 @@ _R4_GATES = (
     ("constraint_kinds", "Hard, soft, advisory, and diagnostic constraint kinds are supported", "passed", "constraint evaluator contract"),
     ("no_geometry_mutation", "Observation and constraint evaluation do not mutate geometry", "passed", "source hash sentinel + immutable contracts"),
     ("w4_views", "W4 exposes descriptors, constraints, violations, locations, and sources", "implemented", "fixed /observations route"),
-    ("no_cst_regression", "Targeted, cross-representation, and full no-CST suites pass", "pending_phase_closeout", "R4 closeout validation"),
+    ("no_cst_regression", "Targeted, cross-representation, and full no-CST suites pass", "passed", "108 targeted; 767 passed and 11 skipped full suite"),
     ("no_rf_metrics", "R4 defines no RF metrics and runs no CST", "passed", "R4 manifest exclusions"),
-    ("phase_closeout", "One R4 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r4-observation-contract"),
+    ("phase_closeout", "One R4 closeout commit/push and canonical merge", "passed", "PR #9 merge commit 8c6bd0be38e8b2bbf5d72c1254413ee6b552defe"),
+)
+
+_R5_GATES = (
+    ("complete_identity_chain", "Every result binds family, graph, compile, exact geometry, case, solver, material, boundary, mesh, mode, locator, unit, and method", "implemented_no_cst", "physics_case.v0 + metric_observation.v0"),
+    ("q_semantics", "Q perturbation is never mislabeled Q0", "passed_no_cst", "metric_contract.v0 fail-closed semantic guard"),
+    ("normalization_and_mode", "Normalization and mode requirements are explicit", "passed_no_cst", "nine metric_contract.v0 definitions"),
+    ("comparability_default_deny", "Material, boundary, mesh, normalization, or mode incompatibility defaults to not_comparable", "passed_no_cst", "result_comparability.v0 policy tests"),
+    ("rf500_live_bundle", "One complete replayable RF500 live-CST bundle", "pending_explicit_authorization", "not materialized"),
+    ("mesh_convergence", "One representative multi-level mesh convergence", "pending_explicit_authorization", "three planned levels; no values"),
+    ("mode_identity", "Mode identity is not a bare solver index", "passed_no_cst", "mode_fingerprint.v0 + fail-closed tests"),
+    ("external_fields", "Field data remains in external hash-bound artifacts", "passed_contract_pending_live_artifact", "field_bundle.v0 tamper test"),
+    ("w5_views", "W5 exposes cases, modes, metrics, fields, convergence, and comparability", "implemented_no_cst_readiness", "fixed /rf-results route"),
+    ("sls2_not_linked", "SLS-2 stays not_linked without live RF evidence", "passed_no_cst", "physics_link_status.v0"),
+    ("live_authorization", "User explicitly authorizes bounded live-CST validation", "pending_user_authorization", "no authorization received"),
+    ("no_large_campaign", "No large optimization campaign is required or launched", "passed", "readiness manifest exclusions"),
+    ("validation", "No-CST, replay, and bounded live validation pass", "no_cst_in_progress_live_pending", "tests/test_rf_cem_rf_result_contract.py"),
+    ("phase_closeout", "One R5 closeout push and canonical merge", "pending_live_hard_gate", "R5 cannot close before authorized live evidence"),
 )
 
 _R0B_GATES = (
@@ -339,12 +374,14 @@ _CAPABILITY_CATALOG = (
     ("architecture.compiler", "Generic boundary compiler", "implemented_r2_no_cst", "one entry for SLS-2 and RF500"),
     ("architecture.family_induction", "Reviewed graph alignment, proposal, and patch", "implemented_r3_no_cst", "explicit manual review + held-out LEReC validation"),
     ("architecture.observation", "Representation-independent observation", "implemented_r4_no_cst", "exact/shape/scalar contracts + constraints"),
+    ("architecture.physics", "Mode-identified RF result, field, convergence, and provenance contracts", "implemented_r5_no_cst_readiness", "rf_cem.physics"),
     ("workbench.w0", "Derived local project catalog", "implemented_r0b", "SQLite + loopback read-only server"),
     ("workbench.w1", "Semantic graph and grammar review", "implemented_r1", "SQLite + /semantic-graphs"),
     ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
     ("workbench.w3", "Family induction and blind-validation review", "implemented_r3", "SQLite + /family-induction"),
     ("workbench.w4", "Observation and engineering-constraint review", "implemented_r4", "SQLite + /observations"),
-    ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
+    ("workbench.w5", "RF case/mode/metric/field readiness review", "implemented_r5_readiness", "SQLite + /rf-results"),
+    ("physics.rf_result_contract", "Mode-identified RF result/field contract", "implemented_no_cst_live_pending", "live CST requires explicit authorization"),
 )
 
 _VALIDATION_CATALOG = (
@@ -391,6 +428,12 @@ _VALIDATION_CATALOG = (
         "tests/test_rf_cem_observation_contract.py",
     ),
     (
+        "tests.rf_result_contract_r5",
+        "R5 case, mode, metric, field, convergence, provenance, and W5 contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_rf_result_contract.py",
+    ),
+    (
         "tests.literature_review",
         "Literature semantics and review GUI contracts",
         "available_no_cst",
@@ -406,7 +449,7 @@ _VALIDATION_CATALOG = (
 
 
 def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSummary:
-    """Validate explicit sources and atomically rebuild the W0-W4 read model."""
+    """Validate explicit sources and atomically rebuild the W0-W5 read model."""
     root = source_set.repo_root.resolve()
     if not root.is_dir():
         raise WorkbenchIndexError(f"repository root is missing: {root}")
@@ -526,6 +569,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     w2_requested = bool(source_set.compile_records)
     w3_requested = source_set.family_induction_bundle is not None
     w4_requested = source_set.observation_contract_bundle is not None
+    w5_requested = source_set.rf_result_bundle is not None
     if w2_requested and len(source_set.compile_records) != 2:
         raise WorkbenchIndexError(
             "W2 indexing requires exactly two compile_record.v0 inputs"
@@ -541,6 +585,10 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     if w4_requested and not w3_requested:
         raise WorkbenchIndexError(
             "W4 indexing requires the complete W3, W2, and W1 proof sets"
+        )
+    if w5_requested and not w4_requested:
+        raise WorkbenchIndexError(
+            "W5 indexing requires the complete W4, W3, W2, and W1 proof sets"
         )
 
     grammar: FamilyGrammar | None = None
@@ -709,6 +757,26 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             add_relation=add_relation,
         )
 
+    r5_bundle: R5Bundle | None = None
+    if w5_requested:
+        assert source_set.rf_result_bundle is not None
+        (
+            r5_bundle,
+            r5_manifest_source,
+            r5_artifact_sources,
+            r5_declared_sources,
+        ) = _load_r5_bundle_sources(source_set.rf_result_bundle, root=root)
+        source_rows.extend(r5_declared_sources)
+        source_rows.append(r5_manifest_source)
+        source_rows.extend(r5_artifact_sources.values())
+        _index_r5_results(
+            r5_bundle,
+            manifest_source=r5_manifest_source,
+            artifact_sources=r5_artifact_sources,
+            add_entity=add_entity,
+            add_relation=add_relation,
+        )
+
     missing_instances = sorted(REQUIRED_W0_INSTANCES - indexed_instances)
     if missing_instances:
         raise WorkbenchIndexError(
@@ -737,15 +805,19 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         metadata={
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
             "roadmap_phase": (
-                "R4"
-                if w4_requested
+                "R5"
+                if w5_requested
                 else (
-                    "R3"
-                    if w3_requested
+                    "R4"
+                    if w4_requested
                     else (
-                        "R2"
-                        if w2_requested
-                        else ("R1" if w1_requested else "R0B")
+                        "R3"
+                        if w3_requested
+                        else (
+                            "R2"
+                            if w2_requested
+                            else ("R1" if w1_requested else "R0B")
+                        )
                     )
                 )
             ),
@@ -753,6 +825,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             "w2_compile_records": "indexed" if w2_requested else "not_supplied",
             "w3_family_induction": "indexed" if w3_requested else "not_supplied",
             "w4_observation_contract": "indexed" if w4_requested else "not_supplied",
+            "w5_rf_result_contract": "indexed" if w5_requested else "not_supplied",
             "r2_compile_ids": canonical_json(
                 sorted(record.compile_id for record in compile_records)
             ),
@@ -781,6 +854,17 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
                 )
                 if r4_bundle is not None
                 else []
+            ),
+            "r5_bundle_id": r5_bundle.bundle_id if r5_bundle is not None else "",
+            "r5_physics_case_ids": canonical_json(
+                sorted(item.physics_case.physics_case_id for item in r5_bundle.cases)
+                if r5_bundle is not None
+                else []
+            ),
+            "r5_live_cst_status": (
+                str(r5_bundle.manifest["live_cst_status"])
+                if r5_bundle is not None
+                else ""
             ),
         },
     )
@@ -877,6 +961,17 @@ def _index_catalog(
                 status,
                 roadmap_source_id,
                 {"phase": "R4", "evidence": evidence},
+            )
+        )
+    for gate_id, label, status, evidence in _R5_GATES:
+        add_entity(
+            EntityRecord(
+                "roadmap_gate",
+                f"R5.{gate_id}",
+                label,
+                status,
+                roadmap_source_id,
+                {"phase": "R5", "evidence": evidence},
             )
         )
     for capability_id, label, status, evidence in _CAPABILITY_CATALOG:
@@ -2467,6 +2562,455 @@ def _index_r4_observations(
             registry.to_mapping(),
         )
     )
+    _index_r4_observations_tail(
+        bundle=bundle,
+        registry=registry,
+        registry_source=registry_source,
+        artifact_sources=artifact_sources,
+        bundle_instances=bundle_instances,
+        compile_by_instance=compile_by_instance,
+        graph_by_instance=graph_by_instance,
+        manifest_source=manifest_source,
+        add_entity=add_entity,
+        add_relation=add_relation,
+    )
+
+
+def _load_r5_bundle_sources(
+    bundle_path: Path,
+    *,
+    root: Path,
+) -> tuple[R5Bundle, SourceRecord, dict[str, SourceRecord], list[SourceRecord]]:
+    """Strictly load R5 and register every hash-declared input/output."""
+
+    resolved = bundle_path.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(
+            "W5 RF result bundle must be inside the declared repository root"
+        ) from exc
+    try:
+        bundle = load_r5_bundle(resolved, repo_root=root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(f"invalid W5 RF result bundle: {exc}") from exc
+    manifest_path = resolved / "source_binding_manifest.v0.json"
+    manifest_source = _register_source(
+        manifest_path,
+        "r5_rf_result_source_binding_manifest.v0",
+        root,
+    )
+    declared_sources: list[SourceRecord] = []
+    source_values = bundle.manifest.get("sources")
+    if not isinstance(source_values, list):
+        raise WorkbenchIndexError("W5 manifest sources must be an array")
+    for value in source_values:
+        source = _mapping(value, "W5 declared source")
+        relative = str(source.get("path") or "")
+        expected = str(source.get("raw_sha256") or "")
+        if not relative or not expected:
+            raise WorkbenchIndexError("W5 source identity is incomplete")
+        declared_sources.append(
+            _register_source(
+                root / relative,
+                "r5_declared_source",
+                root,
+                expected_raw_sha256=expected,
+            )
+        )
+    artifact_sources: dict[str, SourceRecord] = {}
+    artifact_values = bundle.manifest.get("artifacts")
+    if not isinstance(artifact_values, list):
+        raise WorkbenchIndexError("W5 manifest artifacts must be an array")
+    for value in artifact_values:
+        artifact = _mapping(value, "W5 artifact")
+        relative = str(artifact.get("path") or "")
+        expected = str(artifact.get("raw_sha256") or "")
+        if not relative or relative in artifact_sources or not expected:
+            raise WorkbenchIndexError("W5 artifact identity is invalid or duplicated")
+        artifact_sources[relative] = _register_source(
+            resolved / relative,
+            "r5_rf_result_artifact",
+            root,
+            expected_raw_sha256=expected,
+        )
+    return bundle, manifest_source, artifact_sources, declared_sources
+
+
+def _index_r5_results(
+    bundle: R5Bundle,
+    *,
+    manifest_source: SourceRecord,
+    artifact_sources: Mapping[str, SourceRecord],
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Index R5 cases, modes, metrics, fields, convergence, and comparability."""
+
+    metric_by_ref = {item.identity_ref(): item for item in bundle.metric_contracts}
+    for metric in bundle.metric_contracts:
+        source = artifact_sources[
+            f"metric_contracts/{metric.metric_key}.metric_contract.v0.json"
+        ]
+        add_entity(
+            EntityRecord(
+                "metric_contract",
+                metric.metric_contract_id,
+                metric.display_name,
+                metric.extraction_support,
+                source.source_id,
+                metric.to_mapping(),
+            )
+        )
+
+    for link in bundle.links:
+        source = artifact_sources[
+            f"links/{link.geometry.instance_id}.physics_link_status.v0.json"
+        ]
+        add_entity(
+            EntityRecord(
+                "physics_link_status",
+                link.link_id,
+                f"{link.geometry.instance_id} RF physics link",
+                link.link_status,
+                source.source_id,
+                link.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "instance_has_physics_link_status",
+                "instance",
+                link.geometry.instance_id,
+                "physics_link_status",
+                link.link_id,
+            )
+        )
+        for reference in link.physics_case_refs:
+            add_relation(
+                RelationRecord(
+                    "physics_link_references_case",
+                    "physics_link_status",
+                    link.link_id,
+                    "physics_case",
+                    reference.object_id,
+                )
+            )
+
+    for case_artifacts in bundle.cases:
+        case = case_artifacts.physics_case
+        case_root = f"cases/{case.physics_case_id}"
+        case_source = artifact_sources[f"{case_root}/physics_case.v0.json"]
+        provenance_source = artifact_sources[
+            f"{case_root}/result_provenance.v0.json"
+        ]
+        fingerprint_source = artifact_sources[
+            f"{case_root}/mode_fingerprint.v0.json"
+        ]
+        mode_source = artifact_sources[f"{case_root}/mode_identity.v0.json"]
+        field_source = artifact_sources[f"{case_root}/field_bundle.v0.json"]
+        add_entity(
+            EntityRecord(
+                "physics_case",
+                case.physics_case_id,
+                f"{case.geometry.instance_id} / {case.mesh.level} mesh",
+                case.case_status,
+                case_source.source_id,
+                case.to_mapping(),
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "physics_case_binds_instance",
+                "physics_case",
+                case.physics_case_id,
+                "instance",
+                case.geometry.instance_id,
+            ),
+            RelationRecord(
+                "physics_case_binds_instance_graph",
+                "physics_case",
+                case.physics_case_id,
+                "instance_graph",
+                case.geometry.instance_graph_ref.object_id,
+            ),
+            RelationRecord(
+                "physics_case_binds_compile_record",
+                "physics_case",
+                case.physics_case_id,
+                "compile_record",
+                case.geometry.compile_record_ref.object_id,
+            ),
+            RelationRecord(
+                "physics_case_binds_exact_geometry",
+                "physics_case",
+                case.physics_case_id,
+                "exact_geometry_reference",
+                case.geometry.exact_geometry_ref.object_id,
+            ),
+        ):
+            add_relation(relation)
+
+        provenance = case_artifacts.provenance
+        add_entity(
+            EntityRecord(
+                "result_provenance",
+                provenance.provenance_id,
+                f"{case.mesh.level} result provenance",
+                provenance.run_status,
+                provenance_source.source_id,
+                provenance.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "result_provenance_for_case",
+                "result_provenance",
+                provenance.provenance_id,
+                "physics_case",
+                case.physics_case_id,
+            )
+        )
+
+        fingerprint = case_artifacts.mode_fingerprint
+        add_entity(
+            EntityRecord(
+                "mode_fingerprint",
+                fingerprint.fingerprint_id,
+                f"{case.mesh.level} mode fingerprint",
+                fingerprint.fingerprint_status,
+                fingerprint_source.source_id,
+                fingerprint.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "mode_fingerprint_for_case",
+                "mode_fingerprint",
+                fingerprint.fingerprint_id,
+                "physics_case",
+                case.physics_case_id,
+            )
+        )
+
+        mode = case_artifacts.mode_identity
+        add_entity(
+            EntityRecord(
+                "mode_identity",
+                mode.mode_identity_id,
+                f"{case.mesh.level} {mode.mode_role}",
+                mode.determination_status,
+                mode_source.source_id,
+                mode.to_mapping(),
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "mode_identity_for_case",
+                "mode_identity",
+                mode.mode_identity_id,
+                "physics_case",
+                case.physics_case_id,
+            ),
+            RelationRecord(
+                "mode_identity_uses_fingerprint",
+                "mode_identity",
+                mode.mode_identity_id,
+                "mode_fingerprint",
+                fingerprint.fingerprint_id,
+            ),
+        ):
+            add_relation(relation)
+
+        for observation in case_artifacts.metric_observations:
+            metric = metric_by_ref[observation.metric_contract_ref]
+            source = artifact_sources[
+                f"{case_root}/metrics/{metric.metric_key}.metric_observation.v0.json"
+            ]
+            add_entity(
+                EntityRecord(
+                    "metric_observation",
+                    observation.metric_observation_id,
+                    f"{case.mesh.level} / {metric.display_name}",
+                    observation.validation_status,
+                    source.source_id,
+                    observation.to_mapping(),
+                )
+            )
+            for relation in (
+                RelationRecord(
+                    "metric_observation_for_case",
+                    "metric_observation",
+                    observation.metric_observation_id,
+                    "physics_case",
+                    case.physics_case_id,
+                ),
+                RelationRecord(
+                    "metric_observation_for_mode",
+                    "metric_observation",
+                    observation.metric_observation_id,
+                    "mode_identity",
+                    mode.mode_identity_id,
+                ),
+                RelationRecord(
+                    "metric_observation_uses_contract",
+                    "metric_observation",
+                    observation.metric_observation_id,
+                    "metric_contract",
+                    metric.metric_contract_id,
+                ),
+                RelationRecord(
+                    "metric_observation_uses_provenance",
+                    "metric_observation",
+                    observation.metric_observation_id,
+                    "result_provenance",
+                    provenance.provenance_id,
+                ),
+            ):
+                add_relation(relation)
+
+        field = case_artifacts.field_bundle
+        add_entity(
+            EntityRecord(
+                "field_bundle",
+                field.field_bundle_id,
+                f"{case.mesh.level} external field bundle",
+                field.field_status,
+                field_source.source_id,
+                field.to_mapping(),
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "field_bundle_for_case",
+                "field_bundle",
+                field.field_bundle_id,
+                "physics_case",
+                case.physics_case_id,
+            ),
+            RelationRecord(
+                "field_bundle_for_mode",
+                "field_bundle",
+                field.field_bundle_id,
+                "mode_identity",
+                mode.mode_identity_id,
+            ),
+            RelationRecord(
+                "field_bundle_uses_provenance",
+                "field_bundle",
+                field.field_bundle_id,
+                "result_provenance",
+                provenance.provenance_id,
+            ),
+        ):
+            add_relation(relation)
+
+    for convergence in bundle.convergence:
+        source = artifact_sources[
+            f"convergence/{convergence.convergence_id}.json"
+        ]
+        add_entity(
+            EntityRecord(
+                "mesh_convergence",
+                convergence.convergence_id,
+                "RF500 eigenfrequency mesh convergence",
+                convergence.convergence_status,
+                source.source_id,
+                convergence.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "mesh_convergence_uses_metric",
+                "mesh_convergence",
+                convergence.convergence_id,
+                "metric_contract",
+                convergence.metric_contract_ref.object_id,
+            )
+        )
+        for sample in convergence.samples:
+            add_relation(
+                RelationRecord(
+                    "mesh_convergence_uses_observation",
+                    "mesh_convergence",
+                    convergence.convergence_id,
+                    "metric_observation",
+                    sample.metric_observation_ref.object_id,
+                )
+            )
+
+    for assessment in bundle.comparability:
+        source = artifact_sources[
+            f"comparability/{assessment.assessment_id}.json"
+        ]
+        add_entity(
+            EntityRecord(
+                "result_comparability",
+                assessment.assessment_id,
+                f"{assessment.comparison_purpose} comparability",
+                assessment.decision,
+                source.source_id,
+                assessment.to_mapping(),
+            )
+        )
+        for side, reference in (
+            ("left", assessment.left_observation_ref),
+            ("right", assessment.right_observation_ref),
+        ):
+            add_relation(
+                RelationRecord(
+                    f"comparability_{side}_observation",
+                    "result_comparability",
+                    assessment.assessment_id,
+                    "metric_observation",
+                    reference.object_id,
+                )
+            )
+
+    add_entity(
+        EntityRecord(
+            "validation",
+            "w5.rf-result-readiness",
+            "W5 RF result/mode/field readiness proof",
+            "readiness_pass_live_hard_gate_pending",
+            manifest_source.source_id,
+            {
+                "bundle_id": bundle.bundle_id,
+                "input_sha256": bundle.input_sha256,
+                "case_count": len(bundle.cases),
+                "metric_contract_count": len(bundle.metric_contracts),
+                "metric_observation_count": sum(
+                    len(item.metric_observations) for item in bundle.cases
+                ),
+                "field_bundle_count": len(bundle.cases),
+                "convergence_count": len(bundle.convergence),
+                "comparability_count": len(bundle.comparability),
+                "live_cst_status": bundle.manifest["live_cst_status"],
+                "live_cst_authorization": bundle.manifest["live_cst_authorization"],
+                "physical_acceptance_status": bundle.manifest[
+                    "physical_acceptance_status"
+                ],
+                "hard_gate_status": "pending_explicitly_authorized_live_cst",
+            },
+        )
+    )
+
+
+def _index_r4_observations_tail(
+    *,
+    bundle: R4Bundle,
+    registry: Any,
+    registry_source: SourceRecord,
+    artifact_sources: Mapping[str, SourceRecord],
+    bundle_instances: Mapping[str, Any],
+    compile_by_instance: Mapping[str, CompileRecord],
+    graph_by_instance: Mapping[str, tuple[SourceRecord, InstanceBoundaryGraph]],
+    manifest_source: SourceRecord,
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Finish W4 indexing after its registry identity has been established."""
+
     definition_entity_ids: dict[str, str] = {}
     for definition in registry.definitions:
         definition_id = f"{registry.registry_id}:{definition.descriptor_id}"

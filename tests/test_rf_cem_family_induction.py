@@ -361,7 +361,7 @@ def test_real_r3_bundle_is_reproducible_and_loadable() -> None:
                     assert counts["blind_instance_graph"] == 1
                     assert counts["blind_validation"] == 1
                     assert counts["grammar_diff"] >= 4
-                    assert reader.metadata()["indexer_version"] == "r4.w4.v0"
+                    assert reader.metadata()["indexer_version"] == "r5.w5.v0"
                     assert reader.metadata()["roadmap_phase"] == "R3"
                     entities = {
                         (item["entity_kind"], item["entity_id"]): item

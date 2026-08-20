@@ -1,4 +1,4 @@
-"""Authenticated loopback-only, read-only HTTP Workbench for W0-W4."""
+"""Authenticated loopback-only, read-only HTTP Workbench for W0-W5."""
 
 from __future__ import annotations
 
@@ -97,6 +97,22 @@ _PAGES = {
             "engineering_constraint",
             "constraint_evaluation",
             "constraint_finding",
+        ),
+    ),
+    "/rf-results": (
+        "rf-results",
+        "RF Results / Modes / Fields / W5",
+        (
+            "physics_link_status",
+            "physics_case",
+            "result_provenance",
+            "mode_fingerprint",
+            "mode_identity",
+            "metric_contract",
+            "metric_observation",
+            "field_bundle",
+            "mesh_convergence",
+            "result_comparability",
         ),
     ),
 }
@@ -232,6 +248,7 @@ def create_workbench_handler(
                     compile_records=parsed.path == "/compile-records",
                     family_induction=parsed.path == "/family-induction",
                     observations=parsed.path == "/observations",
+                    physics_results=parsed.path == "/rf-results",
                 ).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
@@ -395,6 +412,7 @@ def _render_page(
     compile_records: bool,
     family_induction: bool,
     observations: bool,
+    physics_results: bool,
 ) -> str:
     counts = reader.entity_counts()
     sources = reader.audit_sources(source_root) if show_sources else []
@@ -422,6 +440,8 @@ def _render_page(
         sections.extend(_family_induction_sections(entities))
     elif observations:
         sections.extend(_observation_sections(entities))
+    elif physics_results:
+        sections.extend(_physics_result_sections(entities))
     elif entities:
         sections.append(_entity_table(title, entities))
     elif not overview:
@@ -445,7 +465,8 @@ table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom
 .compile-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.compile-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.compile-card h3{{margin:0 0 5px;font-size:16px}}.pass-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eafaf0;color:#067647;font-weight:700}}.trace-list{{display:grid;gap:8px}}.trace-row{{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--line)}}.owner{{border-color:#84adff;background:#eef4ff}}.patch-sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
 .induction-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}}.induction-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.induction-card h3{{margin:0 0 7px;font-size:16px}}.pending-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#fff4e5;color:#b54708;font-weight:700}}.held-out{{border-left:5px solid #12b76a}}.backbone{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
 .observation-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}}.observation-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.observation-card h3{{margin:0 0 7px;font-size:16px}}.violation{{border-left:5px solid #f04438;background:#fff7f6}}.layer-stack{{display:grid;gap:7px}}.layer-row{{border:1px solid #b9c5d8;border-radius:7px;padding:8px;background:#fff}}.source-note{{color:var(--muted);overflow-wrap:anywhere}}
-</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2 / W3 / W4</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+.physics-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px}}.physics-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.physics-card h3{{margin:0 0 7px;font-size:16px}}.blocked{{border-left:5px solid #f79009;background:#fffcf5}}
+</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2 / W3 / W4 / W5</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
 
 
 def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
@@ -844,6 +865,156 @@ def _observation_sections(entities: list[dict[str, Any]]) -> list[str]:
         if values:
             sections.append(_entity_table(label, values))
     return sections
+
+
+def _physics_result_sections(entities: list[dict[str, Any]]) -> list[str]:
+    """Render W5 readiness without turning planned objects into RF evidence."""
+
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entity in entities:
+        by_kind.setdefault(str(entity["entity_kind"]), []).append(entity)
+    cases = by_kind.get("physics_case", [])
+    if not cases:
+        return [
+            '<section><p class="empty">No W5 RF result/mode/field bundle was supplied at rebuild.</p></section>'
+        ]
+    links = by_kind.get("physics_link_status", [])
+    modes = by_kind.get("mode_identity", [])
+    fingerprints = by_kind.get("mode_fingerprint", [])
+    metrics = by_kind.get("metric_contract", [])
+    observations = by_kind.get("metric_observation", [])
+    fields = by_kind.get("field_bundle", [])
+    convergence = by_kind.get("mesh_convergence", [])
+    comparisons = by_kind.get("result_comparability", [])
+    established_values = [
+        item
+        for item in observations
+        if isinstance(item.get("payload"), dict)
+        and item["payload"].get("value") is not None
+        and item.get("status") in {"extracted", "replayed"}
+    ]
+    readiness = (
+        '<article class="physics-card blocked"><h3>Live-CST hard gate</h3>'
+        '<p><span class="pending-pill">explicit authorization pending</span></p>'
+        '<p class="facts">No CST execution · no historical scalar promoted to a result · '
+        'physical acceptance not established.</p></article>'
+        '<article class="physics-card"><h3>Contract coverage</h3>'
+        f'<p><span class="pass-pill">{len(cases)} planned cases · {len(metrics)} metric definitions</span></p>'
+        f'<p class="facts">{len(modes)} mode identities · {len(fields)} field bundles · '
+        f'{len(convergence)} convergence records · {len(comparisons)} comparisons.</p></article>'
+        '<article class="physics-card"><h3>Established scalar results</h3>'
+        f'<p><span class="pending-pill">{len(established_values)} values</span></p>'
+        '<p class="facts">Readiness records use null values and remain not_established.</p></article>'
+    )
+    sections = [
+        '<section><h2>R5 readiness boundary</h2>'
+        f'<div class="physics-grid">{readiness}</div></section>'
+    ]
+
+    link_cards: list[str] = []
+    for entity in sorted(links, key=lambda item: str(item["entity_id"])):
+        payload = entity.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        geometry = payload.get("geometry", {})
+        if not isinstance(geometry, dict):
+            geometry = {}
+        link_cards.append(
+            '<article class="physics-card">'
+            f'<h3>{escape(str(geometry.get("instance_id") or entity["label"]))}</h3>'
+            f'<p><span class="{"pass-pill" if entity["status"] == "planned_not_run" else "pending-pill"}">{escape(str(entity["status"]))}</span></p>'
+            f'<p class="facts">{escape(str(payload.get("reason") or ""))}</p>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Per-instance RF linkage</h2>'
+        f'<div class="physics-grid">{"".join(link_cards)}</div></section>'
+    )
+
+    case_cards: list[str] = []
+    for entity in sorted(cases, key=_physics_case_sort_key):
+        payload = entity.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        solver = payload.get("solver", {})
+        mesh = payload.get("mesh", {})
+        materials = payload.get("materials", [])
+        boundaries = payload.get("boundaries", [])
+        if not isinstance(solver, dict):
+            solver = {}
+        if not isinstance(mesh, dict):
+            mesh = {}
+        material_names = [
+            str(item.get("material_name"))
+            for item in materials
+            if isinstance(item, dict)
+        ] if isinstance(materials, list) else []
+        boundary_states = [
+            str(item.get("condition"))
+            for item in boundaries
+            if isinstance(item, dict)
+        ] if isinstance(boundaries, list) else []
+        case_cards.append(
+            '<article class="physics-card">'
+            f'<h3>{escape(str(entity["label"]))}</h3>'
+            f'<p><span class="pending-pill">{escape(str(entity["status"]))}</span></p>'
+            f'<p class="facts">Solver: <code>{escape(str(solver.get("solver_name") or ""))}</code> · '
+            f'version {escape(str(solver.get("version") or ""))} · build {escape(str(solver.get("build") or "not established"))}</p>'
+            f'<p class="facts">Mesh: <code>{escape(str(mesh.get("mesh_id") or ""))}</code> · '
+            f'{escape(str(mesh.get("settings_status") or ""))}</p>'
+            f'<p class="facts">Materials: {escape(", ".join(material_names))} · '
+            f'boundaries: {escape(", ".join(boundary_states))}</p>'
+            f'<p class="facts">Authorization: <b>{escape(str(payload.get("authorization_status") or ""))}</b></p>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Physics cases</h2>'
+        f'<div class="physics-grid">{"".join(case_cards)}</div></section>'
+    )
+
+    mode_cards: list[str] = []
+    for entity in sorted(modes, key=lambda item: str(item["label"])):
+        payload = entity.get("payload", {})
+        if not isinstance(payload, dict):
+            payload = {}
+        mode_cards.append(
+            '<article class="physics-card">'
+            f'<h3>{escape(str(payload.get("mode_role") or entity["label"]))}</h3>'
+            f'<p><span class="pending-pill">{escape(str(entity["status"]))}</span></p>'
+            f'<p class="facts">Family: <code>{escape(str(payload.get("mode_family") or ""))}</code> · '
+            f'index: {escape(str(payload.get("solver_mode_index") or "not established"))}</p>'
+            f'<p class="facts">Identity method: {escape(str(payload.get("determination_method") or ""))}</p>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Mode identity (never a bare index)</h2>'
+        f'<div class="physics-grid">{"".join(mode_cards)}</div></section>'
+    )
+
+    for kind, label in (
+        ("metric_contract", "Scalar metric contracts / units / normalization / mode requirements"),
+        ("metric_observation", "Case-bound scalar observations (null until established)"),
+        ("mode_fingerprint", "Mode fingerprints"),
+        ("result_provenance", "Replay provenance"),
+        ("field_bundle", "External field artifacts and hashes"),
+        ("mesh_convergence", "Mesh convergence"),
+        ("result_comparability", "Default-deny comparability decisions"),
+    ):
+        values = by_kind.get(kind, [])
+        if values:
+            sections.append(_entity_table(label, values))
+    return sections
+
+
+def _physics_case_sort_key(entity: dict[str, Any]) -> tuple[int, str]:
+    payload = entity.get("payload", {})
+    mesh = payload.get("mesh", {}) if isinstance(payload, dict) else {}
+    controls = mesh.get("control_parameters", {}) if isinstance(mesh, dict) else {}
+    ordinal = controls.get("ordinal") if isinstance(controls, dict) else None
+    return (
+        ordinal if isinstance(ordinal, int) and not isinstance(ordinal, bool) else 10**9,
+        str(entity.get("label") or ""),
+    )
 
 
 def _first_entity_payload(

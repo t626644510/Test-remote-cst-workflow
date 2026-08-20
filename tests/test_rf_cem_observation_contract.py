@@ -368,7 +368,7 @@ def test_real_r4_bundle_is_deterministic_tamper_evident_and_w4_visible() -> None
                 assert snapshot == RegistryReader(database).snapshot()
                 reader = RegistryReader(database)
                 counts = reader.entity_counts()
-                assert reader.metadata()["indexer_version"] == "r4.w4.v0"
+                assert reader.metadata()["indexer_version"] == "r5.w5.v0"
                 assert reader.metadata()["roadmap_phase"] == "R4"
                 assert counts["descriptor_registry"] == 1
                 assert counts["descriptor_definition"] == 21

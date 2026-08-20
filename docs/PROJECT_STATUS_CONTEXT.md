@@ -65,7 +65,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 | WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
 | RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
 | Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R3; Stage C/R0B/R1/R2/R3 integrated by PRs #4/#5/#6/#7/#8; R4 local closeout ready | R3 merge commit `585d549c7a5dac0304852a0150f0c4114fd5b6e9`; active R4 branch `codex/rf-cem-r4-observation-contract` |
+| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R4; Stage C/R0B/R1/R2/R3/R4 integrated by PRs #4/#5/#6/#7/#8/#9; R5 no-CST readiness active | R4 merge commit `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; active R5 branch `codex/rf-cem-r5-rf-result-field` |
 
 The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
@@ -113,7 +113,8 @@ WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same comm
 | `src/rf_cem/representation/` | R2 family-independent Line/CircularArc/EllipseArc/Spline-NURBS/Composite boundary contracts, `GeometryPatch` and `RegionGeometry`; imports neither semantic family types nor CST. |
 | `src/rf_cem/compiler/` | R2 sole semantic/representation composition boundary, real-source adapters, Compiler v0, `compile_record.v0`, deterministic no-CST proof bundles and CLI. |
 | `src/rf_cem/observation/` | R4 read-only exact/shape/scalar observation contracts, 21 unit-bound descriptors, non-mutating engineering constraints, deterministic proof bundle and CLI; imports no CST. |
-| `src/rf_cem/workbench/` | R0B/W1/W2/W3/W4 no-CST derived SQLite registry and authenticated loopback read-only catalog, semantic-graph, compiler-trace, family-induction and observation/constraint views. |
+| `src/rf_cem/physics/` | R5 strict RF case/result provenance, mode identity/fingerprint, unit-bound scalar metric, external field-artifact, mesh-convergence and default-deny comparability contracts plus no-CST readiness proof/CLI; imports no CST. |
+| `src/rf_cem/workbench/` | W0–W5 no-CST derived SQLite registry and authenticated loopback read-only catalog, including semantic, compiler, induction, observation/constraint and RF result/mode/field readiness views. |
 | `workflows/rf_cem_500mhz_parametric_opt/` | no-CST scan and live campaign. |
 
 The current literature and geometry-review implementation remains RF-CEM-specific. It is not eligible for `main` promotion until a second real workflow uses a stable subset.
@@ -162,6 +163,8 @@ Architecture terms:
 | RF-CEM Workbench W3 | FM1 | AC3 | Rechecks the complete W2 chain and R3 bundle; exposes alignment, common backbone, residuals, proposal, review, grammar diff and held-out validation. |
 | RF boundary observation/constraint R4 | FM1-2 | AC3 | Separates hash-bound exact geometry, normalized semantic shape and 21 versioned scalar descriptors; evaluates six reviewed, unit-aware non-mutating constraint demonstrations on both real compiled instances. |
 | RF-CEM Workbench W4 | FM1 | AC3 | Rechecks the complete W1–W3 chain and R4 bundle; exposes exact/shape/scalar layers, descriptor provenance, constraints, evaluations and three located demonstration violations. |
+| RF result/mode/field contract R5 readiness | FM1 | AC3 | Defines strict physics-case/provenance, mode identity/fingerprint, nine metric, external field, convergence and comparability contracts; three RF500 mesh cases remain planned and null until authorized live-CST evidence exists. |
+| RF-CEM Workbench W5 | FM1 | AC3 | Rechecks the complete W1–W4 chain and R5 readiness bundle; exposes the authorization hard gate, per-instance linkage, cases, modes, metrics, external fields, convergence and comparability without promoting historical values. |
 | Multi-cell/X-band grammar | FM0 | AC0 | Planned only; STEP semantic profile exists but no RF-CEM generation closure. |
 | Multi-physics/HOM/coupler RF-CEM | FM0 | AC0 | Explicitly out of current scope. |
 
@@ -540,7 +543,7 @@ R3 establishes reviewed semantic family induction only. It adds no geometry gene
 
 ### 7.12 2026-08-20 R4 boundary observation/engineering constraints and Workbench W4
 
-R4 is locally hard-gate complete on `codex/rf-cem-r4-observation-contract`, created exactly from R3 canonical merge `585d549c7a5dac0304852a0150f0c4114fd5b6e9`; one coherent closeout commit/push, PR checks and canonical merge remain. `src/rf_cem/observation/` adds strict finite schemas for `exact_geometry_reference.v0`, `semantic_shape_observation.v0`, `scalar_descriptor_registry.v0`, `observation_bundle.v0`, `engineering_constraint.v0` and `constraint_evaluation.v0`. The package imports no CST and cannot generate or mutate geometry.
+R4 is closed and canonical. PR #9 merged the R4 line into `workflow/rf-cem-literature-review` at `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; it was created exactly from R3 canonical merge `585d549c7a5dac0304852a0150f0c4114fd5b6e9`. `src/rf_cem/observation/` adds strict finite schemas for `exact_geometry_reference.v0`, `semantic_shape_observation.v0`, `scalar_descriptor_registry.v0`, `observation_bundle.v0`, `engineering_constraint.v0` and `constraint_evaluation.v0`. The package imports no CST and cannot generate or mutate geometry.
 
 Each exact reference rechecks its R2 compile record plus all declared compiled profile/STEP identities. The shape observer reads only generic `RegionGeometry` operations and the reviewed R1 semantic graph, never source-native parameter or feature names. It emits 65 arc-length-normalized samples per semantic region with `z/r` in `mm`, tangent/normal, signed curvature in `1/mm`, extrema, convexity, monotonic intervals and compiled landmark coordinates. Exact geometry, sampled shape and scalar descriptors retain independent content identities; the shape layer does not replace the exact geometry.
 
@@ -552,7 +555,21 @@ The canonical ignored immutable proof is `analysis_outputs/rf_cem_observation_co
 
 Workbench indexer `r4.w4.v0` adds `--observation-contract-bundle` and refuses W4 without the complete W1/W2/W3 chain. Two consecutive full-source rebuilds produced 66 fresh sources, 779 entities and 1484 relations with identical input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb` and portable snapshot SHA-256 `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. The fixed `/observations` page displays the three layers, both compiled real instances, 21 definitions, 240 values, six constraints, 12 evaluations, violation locations and source IDs. Authenticated in-app browser QA confirmed every key section appears once, all three violation cards render, no replacement characters or horizontal overflow occur at 1280 px, and the console is empty.
 
-R4 is entirely no-CST: `live_cst_status=not_run` and `physical_acceptance_status=not_established`. It defines no frequency, Q, R/Q, field, power, wake, mode identity or optimization objective. Those remain R5 work, and live-CST R5 validation remains separately blocked until the user explicitly authorizes it.
+R4 is entirely no-CST: `live_cst_status=not_run` and `physical_acceptance_status=not_established`. It defines no frequency, Q, R/Q, field, power, wake, mode identity or optimization objective. R5 now defines the offline contracts for a bounded subset, but live-CST R5 evidence remains separately blocked until the user explicitly authorizes it.
+
+### 7.13 2026-08-20 R5 RF result/mode/field readiness and Workbench W5
+
+R5 is active on `codex/rf-cem-r5-rf-result-field`, created exactly from the canonical R4 merge `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`. The no-CST readiness layer is implemented in `src/rf_cem/physics/`; it imports no CST and defines strict `physics_case.v0`, `result_provenance.v0`, `mode_identity.v0`, `mode_fingerprint.v0`, `metric_contract.v0`, `metric_observation.v0`, `field_bundle.v0` and `mesh_convergence.v0` contracts. `physics_link_status.v0` and `result_comparability.v0` make per-instance linkage and default-deny comparison decisions explicit.
+
+Three RF500 cases bind the same R1 semantic graph, R2 compile record and R4 exact geometry at planned coarse/nominal/fine mesh levels. The repository-verified setup evidence identifies CST 2026 `Solver_HF_TET_E`, Copper (annealed) at `5.8e7 S/m` and Vacuum, but the exact boundary values, numerical mesh controls and CST build remain `not_established`. The nine scalar definitions are eigenfrequency (`MHz`), R/Q (`ohm`), Q perturbation (`1`), stored energy (`J`), Epk (`MV/m`), Bpk (`mT`), Epk/Eacc (`1`), Bpk/Eacc (`mT/(MV/m)`) and surface loss (`W`). Only the existing eigenfrequency, R/Q and `Q-Factor (Perturbation)` result locators are repository-verified; Q perturbation is not relabeled as Q0, and all remaining locators stay `not_established`.
+
+A mode can never be accepted by a bare enumeration index. An established fingerprint requires frequency plus R/Q and symmetry/field evidence. Field data must remain external hash-bound artifacts; inline payloads are forbidden. Mesh convergence needs at least three valid samples, while normal result comparison fails closed on material, boundary, mesh, normalization or mode-identity differences. The special mesh-convergence context relaxes only the intentional mesh difference. SLS-2 remains explicitly `not_linked` because no materialized live-CST result chain exists for that instance.
+
+The canonical ignored immutable readiness proof is `analysis_outputs/rf_cem_rf_result_contract/r5_rf_result_readiness.2f5b48efb5568f85/`, input SHA-256 `2f5b48efb5568f85ce70f12f070ba6372e276b0dd564bbc6b13f7add6847987d`. It contains 56 declared artifacts plus its source-binding manifest: three cases/provenance/mode identities/fingerprints/field bundles, 27 null metric observations, nine metric definitions, one unestablished convergence record, two `not_comparable` decisions and two instance-link records. The loader replays the complete R4 proof, re-hashes 23 sources and all artifacts, recomputes the R5 input preimage, reasserts no-CST/authorization/physical status, rejects duplicate or orphan contracts and substituted comparison objects, and recomputes the two planned comparability decisions. A second fresh build produced the same bundle identity and byte-identical 57 files; the canonical manifest raw SHA-256 is `7b415997574248edf8d26e4f4883c1bdeaafe8ae9839fc0ff21e7cec8ad555dc`.
+
+Workbench indexer `r5.w5.v0` adds `--rf-result-bundle` and refuses W5 without the complete W1/W2/W3/W4 chain. Two consecutive full-source rebuilds, retaining the explicit frozen literature package and review session, produced 146 fresh sources, 855 entities and 1635 relations with identical input-set SHA-256 `532de7ce15a16036322088b6b17f552bcf7ddbd9be5f8ebb4ff611444ece90e9` and portable snapshot SHA-256 `8a56f24287b34108a5741af976b1f818aec5b7e2ffb2fffc20074e42c992fed3`. The fixed `/rf-results` page exposes the authorization hard gate, per-instance linkage, physics cases, mode identity/fingerprints, scalar definitions and null observations, provenance, external fields, convergence and comparability. Authenticated in-app browser QA at 1280 px confirmed every result section appears once, the pending-authorization/no-CST/SLS-2 `not_linked` states render, historical scalar values are absent, and there are no replacement characters, page overflow or console warnings/errors.
+
+This is readiness evidence only. The manifest states `validation_mode=no_cst_readiness_only`, `live_cst_authorization=not_requested`, `live_cst_status=not_run` and `physical_acceptance_status=not_established`; all 27 metric values are null. R5 cannot satisfy its physical hard gate or close until the user explicitly authorizes a bounded live-CST run and the resulting mode/metric/field/convergence provenance passes these contracts.
 
 ## 8. STEP Feature Assistant state
 
@@ -725,17 +742,32 @@ live CST: not run
 
 The R4 checks cover strict schema/identity round trips, both real compiled instances, exact/shape/scalar separation, native-name isolation, 21 descriptor definitions and 240 values, unit/non-finite/landmark failure, cross-representation and cross-patch equivalence, all constraint kinds and required scopes, immutable geometry, located violations, byte-identical content-addressed proofs, source/artifact/manifest tamper rejection, deterministic complete W1→W4 rebuilding, freshness audit, fixed-route rendering and architecture dependency guards. They establish a geometry observation and contract-evaluation layer only; RF metrics, mode/field contracts, live solver validation and physical acceptance remain unestablished.
 
+R5 no-CST readiness verification on 2026-08-20:
+
+```text
+targeted R0B–R5 semantic/compiler/induction/observation/physics/Workbench/architecture: 59 passed in 23.59s
+full branch-local no-CST: 785 passed, 11 skipped in 32.51s
+compileall for rf_cem.physics and rf_cem.workbench: pass
+strict canonical R5 replay: pass; 3 cases, 9 metric contracts, 27 null observations, SLS-2 not_linked
+W5 source audit: 146/146 fresh; indexer r5.w5.v0; roadmap phase R5
+git diff --check: pass
+authenticated in-app browser QA: all W5 sections unique and visible; authorization/no-CST states explicit; historical scalar values absent; no replacement characters, horizontal page overflow or console warnings/errors
+live CST: not run; authorization not requested
+```
+
+The R5 checks cover strict finite/unit/path/hash schemas; complete R1/R2/R4 case binding; rejection of bare mode indices; fingerprint evidence rules; null-versus-established metric invariants; Q perturbation/Q0 separation; external field tamper rejection; unique three-sample convergence; default-deny comparability with referenced-object rebinding checks; result provenance; full R4 replay; source/artifact/manifest/status tamper rejection; duplicate/orphan contract rejection; byte-identical 57-file readiness builds; deterministic complete W1→W5 rebuilding; freshness audit; fixed-route rendering; and architecture dependency guards. They establish only an auditable extraction/readiness boundary. No CST process, RF value, field artifact, convergence result or physical acceptance was established.
+
 Historical branch-specific pass counts from 2026-07-10 are archived and must not be copied as current evidence without rerunning those worktrees.
 
 ## 13. Current priorities
 
 Priority order:
 
-1. Close R4 as one coherent commit/push/PR from `codex/rf-cem-r4-observation-contract` into `workflow/rf-cem-literature-review`; preserve its immutable proof bundle and W4 registry as ignored, rebuildable no-CST artifacts.
-2. Start R5 only from the resulting canonical R4 merge and define RF result/mode/field contracts no-CST first.
-3. Keep representation classes family-independent and treat R2 compile, R3 induction and R4 observations/constraints as auditable layers, not as RF physical evidence.
-4. Preserve exact geometry authority: normalized shape samples and scalar descriptors never replace R2 profile/STEP identities.
-5. Any live-CST R5 validation remains separately blocked on explicit user authorization.
+1. Preserve the canonical R5 readiness proof and W5 registry as ignored, rebuildable no-CST artifacts; do not hand-edit or overwrite either one.
+2. Obtain explicit user authorization before any bounded live-CST R5 validation; without it, keep every metric null and physical acceptance unestablished.
+3. When authorized, materialize exact boundary/mesh/build settings, prove mode identity without a bare index, extract only verified metrics/fields, and demonstrate three-level convergence before deciding physical acceptance.
+4. Keep representation classes family-independent and treat R2 compile, R3 induction, R4 observations/constraints and R5 readiness records as auditable layers, not interchangeable RF physical evidence.
+5. Preserve exact geometry authority: normalized shape samples, scalar descriptors and result contracts never replace R2 profile/STEP identities.
 6. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
 7. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
 

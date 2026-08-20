@@ -312,7 +312,7 @@ def _assert_real_w2_integration(sources: R2SourceSet, workdir: Path) -> None:
     assert entities[("validation", "w2.boundary-compiler-hard-gate")][
         "status"
     ] == "pass"
-    assert reader.metadata()["indexer_version"] == "r4.w4.v0"
+    assert reader.metadata()["indexer_version"] == "r5.w5.v0"
 
     with WorkbenchServer(
         database,

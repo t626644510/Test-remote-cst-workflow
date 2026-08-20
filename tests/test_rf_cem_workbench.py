@@ -233,6 +233,7 @@ def test_server_is_loopback_authenticated_read_only_and_fixed_route(
             ("/coverage", "Capability Coverage"),
             ("/compile-records", "Compile Records"),
             ("/family-induction", "Family Induction / W3"),
+            ("/rf-results", "RF Results / Modes / Fields / W5"),
         ):
             status, _, body = _request(server, "GET", f"{path}?token={TOKEN}")
             assert status == 200

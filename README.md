@@ -12,7 +12,7 @@
 3. 用代理模型、恢复机制和评估数据库组织不同工作流；
 4. 在 RF-CEM 路线上，把论文证据、人工语义审核、参数化几何、STEP、CSTTranslator 和本征模结果连成可审计链路。
 
-当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`、R1 两种真实拓扑共用的 `family_grammar.v0`、R2 共用编译入口生成的 20 个 region / 22 个 patch 和有效 STEP/B-Rep no-CST 证明、R3 不依赖公共参数名的语义图归纳与真实 LEReC 704 MHz 盲测，以及 R4 的 exact/shape/scalar 三层观测、21 项单位化描述符和非变异工程约束。R0B/R1/R2/R3 已分别通过 PR #5/#6/#7/#8 合入；Workbench W0–W4 只提供 no-CST 派生视图，不替代任何源数据、求解结果或物理验收。
+当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`、R1 两种真实拓扑共用的 `family_grammar.v0`、R2 共用编译入口生成的 20 个 region / 22 个 patch 和有效 STEP/B-Rep no-CST 证明、R3 不依赖公共参数名的语义图归纳与真实 LEReC 704 MHz 盲测，以及 R4 的 exact/shape/scalar 三层观测、21 项单位化描述符和非变异工程约束。R0B/R1/R2/R3/R4 已分别通过 PR #5/#6/#7/#8/#9 合入。R5 已完成 RF result/mode/field 的 no-CST readiness 合同与 Workbench W5，但 27 个结果值仍为空，真实 CST 验证和物理接受尚未授权或建立；W0–W5 始终只是派生视图，不替代源数据或求解证据。
 
 > **RF 备注：**“几何生成成功”只说明模型能被构造，不等于频率、R/Q、Q 或峰值场已经复现。最终物理结论仍要由明确的求解器设置、材料、边界、网格和结果定义支持。
 >
@@ -185,7 +185,7 @@ reviewed labels / expert prior
 >
 > **软件工程备注：**组合 corpus 页面适合完整性统计，不适合作为人工接受入口。人工审核应保持“一篇论文、一个 operating regime、一个 session”。
 
-### 4.8 Stage C、R0B–R4 与 Workbench W0–W4
+### 4.8 Stage C、R0B–R5 与 Workbench W0–W5
 
 Stage C 已通过 PR #4 合入 `workflow/rf-cem-literature-review`，形成 `nc_axisymmetric_single_cell_rf_vacuum` 的 source-lossless 两实例 profile：`sls2.r149.6593e02e` 与 `rf500.2c27faee.b1r3`。该契约保存两者原生 schema、参数名、分组、单位、维数和来源哈希，但明确不声称它们共享 RF 指标定义；`live_cst` 与 `physical_acceptance` 也仍是独立、未建立的状态。
 
@@ -197,7 +197,9 @@ R2 在 `representation` 层实现了与腔族无关的 Line、CircularArc、Elli
 
 R3 在 `semantic/induction` 中只读取已评审 graph 的 `(side, region_type)`，从 SLS-2/RF500 得到九区域 common backbone 和 RF500-only 成对 nose residual，产生带 evidence、locator、adjacency、confidence、algorithm/review 状态的 optional-motif proposal，并已通过 PR #8 合入。proposal 默认 pending 且不修改 grammar；accepted manual review 才能产生显式 hash-bound patch，rejected/needs-evidence 会保持原 grammar 完全不变。第三个真实实例 LEReC 704 MHz 在归纳完成后才作为 held-out graph 构建并分类为 `known_optional_motif_present`，且不要求修改 representation 核心。当前证明位于被忽略的 `analysis_outputs/rf_cem_family_induction/r3_family_induction.2f6c02557798e606/`；Workbench W3 的 **Family Induction / W3** 页面显示 alignment、backbone、proposal/review、grammar diff 和 blind result。R3 不从 raw pixels/STEP 声称无监督发现，也不运行 CST、不建立 RF physical acceptance。使用方法见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`。
 
-R4 在 `observation` 层只读取两份 R2 compile record/精确几何及其匹配的 R1 semantic graph，不读取原生参数名，也不生成或修改几何。它把 exact geometry reference、每个 region 65 点弧长归一化的 semantic shape observation、以及 21 项带单位/定义/算法版本/容差/provenance 的 scalar descriptor 分开保存；全局量包含总长、最大半径、最小 aperture、体积、表面积、region count、nose 与最小曲率半径，区域量包含长度/半径/曲率、端点切向与 nose/equator 特征。六条 reviewed contract demonstration 覆盖 hard/soft/advisory/diagnostic 约束和违反位置，但不构成制造规范或物理接受。当前证明位于被忽略的 `analysis_outputs/rf_cem_observation_contract/r4_observation_contract.d06695921d941eee/`；Workbench W4 的 **Observations & Constraints / W4** 页面显示三层身份、描述符、约束、评价、违反位置和来源。R4 全程 no-CST，使用方法见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`。
+R4 在 `observation` 层只读取两份 R2 compile record/精确几何及其匹配的 R1 semantic graph，不读取原生参数名，也不生成或修改几何。它把 exact geometry reference、每个 region 65 点弧长归一化的 semantic shape observation、以及 21 项带单位/定义/算法版本/容差/provenance 的 scalar descriptor 分开保存；全局量包含总长、最大半径、最小 aperture、体积、表面积、region count、nose 与最小曲率半径，区域量包含长度/半径/曲率、端点切向与 nose/equator 特征。六条 reviewed contract demonstration 覆盖 hard/soft/advisory/diagnostic 约束和违反位置，但不构成制造规范或物理接受。规范证明位于被忽略的 `analysis_outputs/rf_cem_observation_contract/r4_observation_contract.d06695921d941eee/`；Workbench W4 的 **Observations & Constraints / W4** 页面显示三层身份、描述符、约束、评价、违反位置和来源。R4 全程 no-CST，并已通过 PR #9 合入。
+
+R5 在 `physics` 层定义了三组 RF500 coarse/nominal/fine mesh 计划 case、result provenance、非裸 mode index 的 mode identity/fingerprint、九项带单位和归一化要求的 scalar metric、外置哈希绑定 field artifact、三点 mesh convergence 与默认拒绝的 comparability。当前只确认已有 eigenfrequency、R/Q 和 `Q-Factor (Perturbation)` 三条结果路径；后者不能当作 Q0，另外六项结果路径仍标为 `not_established`。规范 readiness proof 位于被忽略的 `analysis_outputs/rf_cem_rf_result_contract/r5_rf_result_readiness.2f5b48efb5568f85/`；Workbench W5 的 **RF Results / Modes / Fields / W5** 页面明确显示授权硬门、三组计划 case、九项定义、27 个 null 观测、field/convergence/comparability 和 SLS-2 `not_linked`。它没有启动 CST、没有复制历史数值，也没有建立物理接受；真实验证仍需用户明确授权。构建、校验和 W5 重建命令见 `docs/FUNCTIONS_AND_ENTRYPOINTS.md`。
 
 ## 5. 新同事如何开始
 
@@ -286,10 +288,10 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
 ## 7. 建议的近期工作顺序
 
-1. R0B–R3 已完成并合入：架构边界、语义拓扑、通用边界编译、腔族归纳/盲测、完整 no-CST 回归与单一 canonical owner；
-2. R4 三层观测、单位化描述符、工程约束、内容寻址 proof 与 Workbench W4 已通过本地 hard gate，下一步是一次 closeout push/PR/merge；
-3. 不要把 R2 的有效 STEP/B-Rep、R3 的 accepted proposal/blind classification 或 R4 的 descriptor/constraint result 误写成 RF 物理接受；
-4. R5 从 R4 canonical merge 建立，先离线定义 RF result/mode/field contract；只有用户明确授权后才做 live-CST 验证；
+1. R0B–R4 已完成并合入：架构边界、语义拓扑、通用边界编译、腔族归纳/盲测、三层观测与工程约束均已有 canonical owner；
+2. R5 no-CST readiness proof 与 Workbench W5 已完成；保留所有结果为 null，直到用户明确授权真实 CST；
+3. 授权后先固化 boundary、mesh、CST build 与 mode fingerprint，再提取已验证指标、外置 field artifact 并完成三层网格收敛；
+4. 不要把 R2 的有效 STEP/B-Rep、R3 的 accepted proposal/blind classification、R4 的 descriptor/constraint result 或 R5 readiness 状态误写成 RF 物理接受；
 5. 原有 candidate、objective、seed 与 campaign 工作继续由 `workflow/rf-cem-500mhz` 所有，不与此路线静默混合；
 6. 只有出现第二个真实消费者和稳定契约后，才讨论把通用组件提级到 `main`。
 

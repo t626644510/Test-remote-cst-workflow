@@ -1,4 +1,4 @@
-"""Command-line entry points for deterministic W0-W4 rebuild and serving."""
+"""Command-line entry points for deterministic W0-W5 rebuild and serving."""
 
 from __future__ import annotations
 
@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--observation-contract-bundle",
         type=Path,
         help="immutable R4 observation/constraint proof-bundle directory",
+    )
+    rebuild.add_argument(
+        "--rf-result-bundle",
+        type=Path,
+        help="immutable R5 RF result/mode/field proof-bundle directory",
     )
 
     serve = subparsers.add_parser(
@@ -106,6 +111,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 observation_contract_bundle=_resolve_optional(
                     root, args.observation_contract_bundle
                 ),
+                rf_result_bundle=_resolve_optional(root, args.rf_result_bundle),
             )
             summary = rebuild_workbench(args.database, source_set)
             print(

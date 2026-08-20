@@ -689,6 +689,12 @@ This verifies one automation chain. It does not establish universal CST template
 
 Consequently, R2 `status=pass` means only that topology/representation composition, patch ownership, required continuity, profile validity, B-Rep/STEP export, provenance and the declared no-CST baseline comparison passed. Every R2 record must retain `live_cst_status=not_run` and `physical_acceptance_status=not_established`. Frequency, Q, R/Q, accelerating gradient, power, field metrics, wake/impedance and mode identity are not inferred from STEP/B-Rep validity; they remain gated by the later RF result contract and a separately authorized live-CST action.
 
+### 19.2 R3 family induction is also deliberately outside the CST path
+
+`rf_cem.semantic.induction` consumes reviewed semantic graph JSON and primary literature evidence only. Its alignment, proposal, manual review, grammar patch and held-out LEReC validation do not import `rf_cem.representation`, generate STEP, open a CST project, call `cst.interface`/`cst.results`, execute COM/VBA or run a solver. The R3 representation sentinel proves that the existing R2 representation core file remained byte-identical; it is not a runtime dependency.
+
+R3 `status=pass` therefore means only that the reviewed SLS-2/RF500 semantic structures aligned without common parameter names, the optional-nose proposal remained non-mutating until accepted manual review, the explicit patch revalidated both training graphs, and the separately reviewed real LEReC graph classified after induction. It does not establish geometry equivalence, frequency, Q, R/Q, accelerating gradient, power, fields, wake/impedance, mode identity or physical acceptance. W3 is a read-only derived view of that no-CST chain. None of these states authorizes live CST; R5 remains separately blocked on explicit user authorization.
+
 ## 20. `EvaluateResultTemplates` behavior
 
 Evidence: command executed through existing `CSTProject.execute_vba`; live behavior is mixed.

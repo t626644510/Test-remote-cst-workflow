@@ -24,7 +24,7 @@ The maintained project-document set is:
 | `docs/AGENT_CONTEXT_RECOVERY.md` | Recovery procedure after crash, compaction, or agent handoff. |
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | Feature and executable-entry inventory. |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
-| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM architecture decisions, Workbench W0/W1/W2 contract, and R0B–R5 gates. |
+| `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM architecture decisions, Workbench W0–W3 contract, and R0B–R5 gates. |
 | `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` | Active autonomous R0B–R5 execution and phase-closeout contract. |
 | `AGENTS.md` | Automatically loaded governance/index stub; not a status document. |
 | `.github/pull_request_template.md` | Maintained review checklist; collaboration infrastructure, not project state. |
@@ -65,7 +65,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 | WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
 | RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
 | Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical; Stage C/R0B/R1 integrated by PRs #4/#5/#6; R2 closeout pending | R1 merge commit `5ae1ba07b841d6adf6e180ec1eedfd073657987b`; active R2 branch `codex/rf-cem-r2-boundary-compiler` |
+| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R2; Stage C/R0B/R1/R2 integrated by PRs #4/#5/#6/#7; R3 closeout pending | R2 merge commit `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`; active R3 branch `codex/rf-cem-r3-family-induction` |
 
 The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
@@ -108,11 +108,12 @@ WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same comm
 | `src/rf_cem/parametric_geometry/` | STEP ingest, feature projection, grammar, reconstruction, validation, interfaces. |
 | `src/rf_cem/literature_semantics/` | arXiv/PDF evidence, semantic schema, prior draft, audits, GUI, geometry candidate. |
 | `src/rf_cem/family_profile/` | Source-lossless `family_profile.v0` and two real-instance adapters. |
-| `src/rf_cem/semantic/` | R1 representation-independent `family_grammar.v0`, instance graphs, ontologies, motifs, interfaces, graph diff, source adapters, and deterministic proof bundles. |
+| `src/rf_cem/semantic/` | R1 representation-independent grammar/instance-graph core plus R3 reviewed graph alignment, extension proposal, explicit review/patch and held-out validation; imports neither representations nor CST. |
+| `src/rf_cem/semantic/induction/` | R3 `graph_alignment.v0`, `family_extension_proposal.v0`, manual review, hash-bound grammar patch/application, real LEReC blind adapter, deterministic proof bundle and CLI. |
 | `src/rf_cem/representation/` | R2 family-independent Line/CircularArc/EllipseArc/Spline-NURBS/Composite boundary contracts, `GeometryPatch` and `RegionGeometry`; imports neither semantic family types nor CST. |
 | `src/rf_cem/compiler/` | R2 sole semantic/representation composition boundary, real-source adapters, Compiler v0, `compile_record.v0`, deterministic no-CST proof bundles and CLI. |
 | `src/rf_cem/observation/` | Read-only observation boundary; full R4 contract is not yet implemented. |
-| `src/rf_cem/workbench/` | R0B/W1/W2 no-CST derived SQLite registry and authenticated loopback read-only catalog, semantic-graph and compiler-trace views. |
+| `src/rf_cem/workbench/` | R0B/W1/W2/W3 no-CST derived SQLite registry and authenticated loopback read-only catalog, semantic-graph, compiler-trace and family-induction views. |
 | `workflows/rf_cem_500mhz_parametric_opt/` | no-CST scan and live campaign. |
 
 The current literature and geometry-review implementation remains RF-CEM-specific. It is not eligible for `main` promotion until a second real workflow uses a stable subset.
@@ -157,6 +158,8 @@ Architecture terms:
 | RF-CEM Workbench W1 | FM1 | AC3 | W0 registry extended with grammar, ontology, motif, graph, interface, nose-state and graph-diff views. |
 | RF boundary representation/compiler R2 | FM1-2 | AC3 | One compiler entry produces owner-safe region/patch geometry and deterministic valid STEP/B-Rep for both real topologies with source-native/baseline evidence. |
 | RF-CEM Workbench W2 | FM1 | AC3 | Hash-verifies two compile records and output artifacts; exposes ownership, representation, landmark, continuity, validation, baseline and warning traces. |
+| RF family induction/extension R3 | FM1-2 | AC3 | Aligns reviewed SLS-2/RF500 graphs without parameter names, proposes paired optional nose structure, requires accepted manual review for an explicit grammar patch and validates held-out real LEReC 704 MHz. |
+| RF-CEM Workbench W3 | FM1 | AC3 | Rechecks the complete W2 chain and R3 bundle; exposes alignment, common backbone, residuals, proposal, review, grammar diff and held-out validation. |
 | Multi-cell/X-band grammar | FM0 | AC0 | Planned only; STEP semantic profile exists but no RF-CEM generation closure. |
 | Multi-physics/HOM/coupler RF-CEM | FM0 | AC0 | Explicitly out of current scope. |
 
@@ -502,7 +505,7 @@ Workbench indexer `r1.w1.v0` adds a fixed `/semantic-graphs` view and indexes gr
 
 ### 7.10 2026-08-20 R2 boundary representation/compiler and Workbench W2
 
-R2 is locally hard-gate complete on `codex/rf-cem-r2-boundary-compiler`, based exactly on the R1 canonical merge `5ae1ba07b841d6adf6e180ec1eedfd073657987b`; its one closeout push, PR checks and canonical merge remain. `src/rf_cem/representation/` now owns strict finite/versioned family-independent contracts for `LineRepresentation`, `CircularArcRepresentation`, `EllipseArcRepresentation`, `SplineNurbsRepresentation`, `CompositeRegionRepresentation`, `GeometryPatch` and `RegionGeometry`. The package imports neither `rf_cem.semantic` nor CST. One `RegionGeometry` owns 1..N ordered primitive patches; every patch has exactly one opaque region owner, deterministic global/local order and left-to-right orientation.
+R2 is closed and canonical. PR #7 merged implementation commit `f6df4c5589cf3c952c177e02dc053c6b7970b4d5` into `workflow/rf-cem-literature-review` as merge commit `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`. `src/rf_cem/representation/` owns strict finite/versioned family-independent contracts for `LineRepresentation`, `CircularArcRepresentation`, `EllipseArcRepresentation`, `SplineNurbsRepresentation`, `CompositeRegionRepresentation`, `GeometryPatch` and `RegionGeometry`. The package imports neither `rf_cem.semantic` nor CST. One `RegionGeometry` owns 1..N ordered primitive patches; every patch has exactly one opaque region owner, deterministic global/local order and left-to-right orientation.
 
 `src/rf_cem/compiler/ProfileCompiler.compile` is the sole composition entry for both real cases. Its strict inputs bind the Stage C profile, R1 grammar/graph, source-native payload/artifacts, semantic-region-to-representation assignments and declared baseline tolerances. The adapters reconstruct the six-segment SLS-2 analytic line/ellipse source and the seven-segment RF500 line/arc/spline source without changing their native schemas. Parameter-domain splitting maps these source curves to the 9-region SLS-2 graph and 11-region RF500 graph without allowing a patch to cross a semantic boundary. Landmark coordinates bind endpoints, region interfaces, internal patch joins and symmetry; continuity records C0, G1 and G2 diagnostics. Partitions of one native geometric segment require G2; other semantic-region interfaces require C0. Diagnostic G1/G2 failures above the required level remain explicit warnings and do not become false required-pass claims.
 
@@ -516,6 +519,22 @@ Both source-profile maximum deviations are `2.842170943040401e-14 mm` against `1
 Workbench indexer `r2.w2.v0` requires the complete W1 proof and exactly two canonical `compile_record.v0` sources. It rechecks contract canonical hashes, raw source hashes, instance/region order, landmark coverage, representation reuse, output paths/sizes/hashes and no-CST/physical-status exclusions before indexing. The fixed `/compile-records` page shows the two compiler cards, 20 region→representation→patch traces, 24 landmark bindings, 20 continuity checks, B-Rep/STEP validation, baseline comparisons/warnings, 22 patch ownership records and four hash-verified output artifacts. Two consecutive full real-source rebuilds produced 17 fresh sources, 372 entities and 534 relations; final input-set SHA-256 is `91f6fdc82ba77f73f8b452b3a0499ad56178f23719f0848978af4a743b591a74` and portable snapshot SHA-256 is `d9139bfe7d3a4e2a536545addc45999a61f5fa337dd23733a3c6379a28b271fc`. Browser QA found no replacement characters, horizontal page overflow or console errors and also rechecked the W1 topology page.
 
 All R2 geometry validation is no-CST via the existing isolated CadQuery/OCP worker. Length is `mm`, tangent angle `deg`, curvature `1/mm`, area `mm^2` and volume `mm^3`. Every record retains `live_cst_status=not_run` and `physical_acceptance_status=not_established`. R2 does not define frequency/Q/R/Q/field/power/wake objectives, run a solver, establish RF equivalence, perform family induction or launch optimisation.
+
+### 7.11 2026-08-20 R3 family induction/extension and Workbench W3
+
+R3 is locally hard-gate complete on `codex/rf-cem-r3-family-induction`, based exactly on the canonical R2 merge `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`; its one closeout push, PR checks and canonical merge remain. `src/rf_cem/semantic/induction/` adds strict finite/versioned contracts for `graph_alignment.v0`, `family_extension_proposal.v0`, `family_extension_review.v0`, `family_grammar_patch.v0`, `family_grammar_patch_application.v0` and `family_induction_blind_validation.v0`. It remains inside the semantic dependency boundary: it imports neither `rf_cem.representation`, geometry kernels nor CST.
+
+`rf_cem_family_induction.v0` consumes only reviewed `instance_boundary_graph.v0` contracts. Its deterministic progressive-LCS alignment reads each ordered `(side, region_type)` token and the graph/source hashes needed for audit; it does not read roles, native feature/parameter names or geometry vectors. The canonical SLS-2/RF500 alignment has nine common backbone slots and two RF500-only `NoseRegion` residuals. Those paired, mirrored residuals yield one `optional_motif` proposal for `motif.nose_pair.v0`, counts `{0, 2}`, explicit left/right insertion adjacencies, graph JSON locators, source evidence, algorithm version, limitations and confidence `0.95`. That confidence is deterministic evidence completeness, not a statistical probability. Unpaired residuals follow the separately tested `alternative_topology` path.
+
+Every new proposal persists as `review_status=pending` and `grammar_mutation_status=not_applied`. Rejected and `needs_evidence` decisions return the exact original grammar bytes, no patch and no diff. The canonical closeout uses explicit accepted manual review revision 1 by `codex.r3-explicit-review`; only that hash-bound review authorizes the patch. Because the R1 grammar already contains the nose motif, the patch records `confirm_optional_motif`, updates the grammar identity to `nc_axisymmetric_single_cell_rf_vacuum.family_grammar.r3.v0`, appends induction evidence, replaces the review binding and updates the induction exclusions. Both canonical training graphs revalidate after application. No pending proposal mutates the grammar implicitly.
+
+The held-out real case is the BNL LEReC 704 MHz normal-conducting single-cell cavity from the primary IPAC2015 design paper and 2018 design/test preprint. Their ignored source PDFs have raw SHA-256 `d806257972ae33208f5244ed31e1329064d120b82491bc4cb9a9e6afb544ba82` and `01b6a72aedf32783568cec6e0ab567cd6870d7f4ec7a2e98558d24b790baffab`. The adapter is deliberately limited to the axisymmetric main-cell RF-vacuum wall shown by the cited cross-sections; non-axisymmetric FPC, tuner, pickup, pump and flange details are excluded. The reviewed blind graph has the nine-slot backbone plus paired left/right nose regions. It is constructed only after proposal review/patch application, is absent from the alignment training IDs and validates as `known_optional_motif_present`. This is post-induction classification of reviewed literature geometry, not raw-pixel/STEP unsupervised semantic discovery.
+
+The canonical ignored immutable proof is `analysis_outputs/rf_cem_family_induction/r3_family_induction.2f6c02557798e606/`, input SHA-256 `2f6c02557798e6062e961d6dea3b4220e4d4076310579754567d570f6ae7c4f0`. Its key identities are alignment `nc_axisymmetric_single_cell_rf_vacuum.alignment.a337c02c967c3ca2`, proposal `nc_axisymmetric_single_cell_rf_vacuum.proposal.d251b136d1f083ee`, review `nc_axisymmetric_single_cell_rf_vacuum.proposal.d251b136d1f083ee.review.89d6484b1e098d35`, patch `nc_axisymmetric_single_cell_rf_vacuum.family_grammar.v0.patch.41648ea3abc8d689`, application `nc_axisymmetric_single_cell_rf_vacuum.proposal.d251b136d1f083ee.application.8d3102fd549c2767` and blind validation `lerec704.wepwi061.arxiv1804-02007.blind_validation.7555433415beb669`. Two fresh test builds from the same sources/review are byte-identical; the loader rechecks all eight artifact sizes/hashes and their cross-contract identities. Older R3 proof directories are preserved and not overwritten.
+
+Workbench indexer `r3.w3.v0` adds `--family-induction-bundle` and requires the complete W1 and W2 inputs before W3 can be indexed. It independently rechecks the two training graph bindings, base/patched grammar hashes, proposal/alignment binding, accepted manual review, applied patch, both training revalidations, blind separation/classification, manifest inventory, two primary PDFs and the unchanged `src/rf_cem/representation/core.py` hash sentinel. The full source set yields 29 fresh sources, 418 entities and 571 relations; input-set SHA-256 is `97fab22424ed421108f99b81ca6d629a52d7e6e8d2d368589ee1cdddb95ded18` and canonical portable snapshot SHA-256 is `f51eadc28ad97d1b2207e15a96ccedd5b42bcec280a43667587a573abcc6c66e`. The fixed `/family-induction` page exposes the alignment summary, common backbone, residual evidence, pending/non-mutating proposal, accepted review, grammar before/after diff and held-out LEReC result. Authenticated in-app browser QA confirmed every section is present exactly once and the page reports parameter names unread, blind training use false, representation not imported/modified and no live CST.
+
+R3 establishes reviewed semantic family induction only. It adds no geometry generation, observation/constraint contract, frequency/Q/R/Q/field/power/wake result, CST execution, physical acceptance or optimization search. Geometry lengths in the cited LEReC evidence remain source units; no new RF metric or derived engineering objective is inferred from them.
 
 ## 8. STEP Feature Assistant state
 
@@ -660,7 +679,20 @@ authenticated loopback browser QA: W2 compile trace and W1 semantic graphs rende
 live CST: not run
 ```
 
-The R2 checks cover every representation round trip, strict finite schemas, ownership and component mismatch rejection, the same compiler entry on two topology sizes, incomplete partition failure, kernel-fallback failure, output tamper detection, two byte-identical real proof builds, strict record loading, complete W2/W1 linkage, deterministic registry rebuild, UI rendering and source/artifact hash fail-closed behavior. They establish no-CST geometry compilation only; family induction, observation/RF metric contracts, live solver results and physical acceptance remain unestablished.
+The R2 checks cover every representation round trip, strict finite schemas, ownership and component mismatch rejection, the same compiler entry on two topology sizes, incomplete partition failure, kernel-fallback failure, output tamper detection, two byte-identical real proof builds, strict record loading, complete W2/W1 linkage, deterministic registry rebuild, UI rendering and source/artifact hash fail-closed behavior. They establish no-CST geometry compilation only; R3 subsequently establishes reviewed family induction, while observation/RF metric contracts, live solver results and physical acceptance remain unestablished.
+
+R3 closeout verification on 2026-08-20:
+
+```text
+targeted R3 induction + R2 compiler + R1 semantic + W0–W3 + architecture: 36 passed in 14.33s
+explicit no-CST marker set: 762 passed, 11 skipped in 26.84s
+full default branch suite (CST-required tests skipped): 762 passed, 11 skipped in 29.32s
+compileall: pass
+authenticated in-app browser QA: W3 hard-gate cards/backbone/review/diff/blind sections rendered once; no functional error
+live CST: not run
+```
+
+The R3 checks cover side/type-only alignment and invariance to native names/roles, common-backbone/residual extraction, optional-motif and alternative-topology proposals, strict finite/hash identities, pending nonmutation, accepted patch application, rejected/needs-evidence exact grammar preservation, existing-instance revalidation, held-out classification, representation isolation, byte-identical real bundles, artifact/manifest tamper rejection, deterministic complete W2→W3 rebuild, source freshness, fixed-route rendering and architecture dependency guards. They establish reviewed semantic induction only; observation/engineering constraints, RF metrics/mode/field results, live solver validation and physical acceptance remain unestablished.
 
 Historical branch-specific pass counts from 2026-07-10 are archived and must not be copied as current evidence without rerunning those worktrees.
 
@@ -668,10 +700,10 @@ Historical branch-specific pass counts from 2026-07-10 are archived and must not
 
 Priority order:
 
-1. Close and merge R2 from `codex/rf-cem-r2-boundary-compiler` into `workflow/rf-cem-literature-review`; preserve its immutable proof bundle and W2 registry as ignored, rebuildable no-CST artifacts.
-2. Start R3 only from the canonical R2 merge, then implement evidence-gated family induction/extension without silent migration of legacy artifacts.
-3. Keep representation classes family-independent and treat R2 compile warnings/status as inputs to later review, not as RF physical evidence.
-4. R4: implement representation-independent observations and engineering constraints with explicit units and validation states.
+1. Close and merge R3 from `codex/rf-cem-r3-family-induction` into `workflow/rf-cem-literature-review`; preserve its immutable proof bundle and W3 registry as ignored, rebuildable no-CST artifacts.
+2. Start R4 only from the canonical R3 merge; implement representation-independent observations and engineering constraints with explicit units, sources and validation states.
+3. Keep representation classes family-independent and treat R2 compile/R3 proposal statuses as auditable inputs, not as RF physical evidence.
+4. Preserve LEReC as the held-out R3 instance; do not feed it back into the R3 training set or claim unsupervised raw-image/STEP discovery.
 5. R5: define RF result/mode/field contracts no-CST first. Any live-CST validation remains separately blocked on explicit user authorization.
 6. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
 7. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.

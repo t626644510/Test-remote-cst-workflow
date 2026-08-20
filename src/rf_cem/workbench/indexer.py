@@ -1,4 +1,4 @@
-"""Source adapters and deterministic rebuild orchestration for Workbench W0/W1/W2."""
+"""Source adapters and deterministic rebuild orchestration for Workbench W0-W3."""
 
 from __future__ import annotations
 
@@ -30,6 +30,19 @@ from rf_cem.semantic.contracts import (
     load_instance_graph_diff,
     validate_graph_against_grammar,
 )
+from rf_cem.semantic.induction import (
+    ALIGNMENT_FILE,
+    BLIND_GRAPH_FILE,
+    BLIND_VALIDATION_FILE,
+    MANIFEST_FILE as R3_MANIFEST_FILE,
+    PATCHED_GRAMMAR_FILE,
+    PATCH_APPLICATION_FILE,
+    PATCH_FILE,
+    PROPOSAL_FILE,
+    REVIEW_FILE,
+    R3Bundle,
+    load_r3_bundle,
+)
 
 from .registry import (
     BuildSummary,
@@ -52,7 +65,7 @@ class WorkbenchIndexError(WorkbenchRegistryError):
 
 @dataclass(frozen=True)
 class WorkbenchSourceSet:
-    """Explicit source set used for one reproducible W0/W1/W2 registry rebuild."""
+    """Explicit source set used for one reproducible W0-W3 registry rebuild."""
 
     repo_root: Path
     family_profile: Path
@@ -64,6 +77,7 @@ class WorkbenchSourceSet:
     instance_boundary_graphs: tuple[Path, ...] = ()
     instance_graph_diff: Path | None = None
     compile_records: tuple[Path, ...] = ()
+    family_induction_bundle: Path | None = None
 
 
 _REPRESENTATION_CATALOG = (
@@ -175,6 +189,12 @@ _ALGORITHM_CATALOG = (
         "status": "implemented_r2_no_cst",
         "implementation": "rf_cem.compiler.ProfileCompiler.compile",
     },
+    {
+        "id": "rf_cem_family_induction.v0",
+        "label": "Reviewed semantic-graph family induction",
+        "status": "implemented_r3_no_cst",
+        "implementation": "rf_cem.semantic.induction",
+    },
 )
 
 _ROADMAP_PHASES = (
@@ -187,9 +207,13 @@ _ROADMAP_PHASES = (
     (
         "R2",
         "Boundary Representation Core + Compiler v0",
+        "hard_gate_passed_merged",
+    ),
+    (
+        "R3",
+        "Family Induction / Extension v0",
         "hard_gate_validation_passed_closeout_pending",
     ),
-    ("R3", "Family Induction / Extension v0", "planned"),
     ("R4", "Observation & Engineering Constraint Contract", "planned"),
     ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
 )
@@ -220,7 +244,25 @@ _R2_GATES = (
     ("w2_views", "W2 exposes compile, ownership, landmark, continuity, baseline, warning, and artifact traces", "implemented", "fixed /compile-records route"),
     ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "R2 compiler/Workbench tests and branch closeout suite"),
     ("no_live_cst", "R2 has no live-CST or physical-acceptance claim", "passed", "live_cst_status=not_run"),
-    ("phase_closeout", "One R2 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r2-boundary-compiler"),
+    ("phase_closeout", "One R2 closeout commit/push and canonical merge", "passed", "PR #7 merge commit e81ad20942258380cccb93d17cfdf0ca7e2d0e21"),
+)
+
+_R3_GATES = (
+    ("semantic_only_alignment", "Alignment reads reviewed semantic side/type tokens, never common parameter names", "passed", "graph_alignment.v0"),
+    ("common_backbone", "SLS-2 and RF500 yield one explicit common semantic backbone", "passed", "common_backbone slots"),
+    ("optional_nose_proposal", "The paired nose contrast yields an evidence-bound optional motif proposal", "passed", "family_extension_proposal.v0"),
+    ("alternative_topology_proposal", "Unpaired residual structure yields an explicit alternative-topology proposal", "passed", "family-induction contract test"),
+    ("no_automatic_mutation", "A pending proposal cannot mutate the family grammar", "passed", "proposal/review separation"),
+    ("explicit_review_patch", "Only an accepted manual review authorizes a hash-bound grammar patch", "passed", "family_extension_review.v0 + family_grammar_patch.v0"),
+    ("withheld_review_nonmutation", "Rejected and needs-evidence reviews preserve the exact original grammar", "passed", "parameterized nonmutation test"),
+    ("existing_instances_revalidate", "Both induction instances revalidate after the explicit patch", "passed", "family_grammar_patch_application.v0"),
+    ("held_out_real_instance", "Real LEReC 704 MHz is classified only after induction as a held-out instance", "passed", "family_induction_blind_validation.v0"),
+    ("representation_unchanged", "R3 neither imports nor modifies the R2 representation contract", "passed", "representation-core hash sentinel"),
+    ("deterministic_bundle", "Fresh R3 proof builds are byte-identical and tampering fails closed", "passed", "R3 bundle/Workbench integration test"),
+    ("w3_views", "W3 exposes alignment, backbone, proposal, review, grammar diff, and blind validation", "implemented", "fixed /family-induction route"),
+    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "36 targeted; 762 passed and 11 skipped full suite"),
+    ("no_live_cst", "R3 remains a reviewed-semantic no-CST proof", "passed", "R3 source-binding manifest"),
+    ("phase_closeout", "One R3 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r3-family-induction"),
 )
 
 _R0B_GATES = (
@@ -255,10 +297,12 @@ _CAPABILITY_CATALOG = (
     ("architecture.semantic", "Representation-independent semantic layer", "implemented_r1", "family grammar + instance boundary graphs"),
     ("architecture.representation", "Family-independent representation layer", "implemented_r2", "versioned primitive/composite contracts"),
     ("architecture.compiler", "Generic boundary compiler", "implemented_r2_no_cst", "one entry for SLS-2 and RF500"),
+    ("architecture.family_induction", "Reviewed graph alignment, proposal, and patch", "implemented_r3_no_cst", "explicit manual review + held-out LEReC validation"),
     ("architecture.observation", "Representation-independent observation", "boundary_only_r0b", "R4 implementation planned"),
     ("workbench.w0", "Derived local project catalog", "implemented_r0b", "SQLite + loopback read-only server"),
     ("workbench.w1", "Semantic graph and grammar review", "implemented_r1", "SQLite + /semantic-graphs"),
     ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
+    ("workbench.w3", "Family induction and blind-validation review", "implemented_r3", "SQLite + /family-induction"),
     ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
 )
 
@@ -294,6 +338,12 @@ _VALIDATION_CATALOG = (
         "tests/test_rf_cem_boundary_compiler.py",
     ),
     (
+        "tests.family_induction_r3",
+        "R3 alignment, review, patch, blind-validation, bundle, and W3 contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_family_induction.py",
+    ),
+    (
         "tests.literature_review",
         "Literature semantics and review GUI contracts",
         "available_no_cst",
@@ -309,7 +359,7 @@ _VALIDATION_CATALOG = (
 
 
 def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSummary:
-    """Validate explicit sources and atomically rebuild the W0/W1 read model."""
+    """Validate explicit sources and atomically rebuild the W0-W3 read model."""
     root = source_set.repo_root.resolve()
     if not root.is_dir():
         raise WorkbenchIndexError(f"repository root is missing: {root}")
@@ -427,6 +477,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         )
     )
     w2_requested = bool(source_set.compile_records)
+    w3_requested = source_set.family_induction_bundle is not None
     if w2_requested and len(source_set.compile_records) != 2:
         raise WorkbenchIndexError(
             "W2 indexing requires exactly two compile_record.v0 inputs"
@@ -434,6 +485,10 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     if w2_requested and not w1_requested:
         raise WorkbenchIndexError(
             "W2 indexing requires the complete W1 grammar, graph, and diff proof set"
+        )
+    if w3_requested and not w2_requested:
+        raise WorkbenchIndexError(
+            "W3 indexing requires the complete W2 compile and W1 semantic proof sets"
         )
 
     grammar: FamilyGrammar | None = None
@@ -543,6 +598,37 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
             add_relation=add_relation,
         )
 
+    r3_bundle: R3Bundle | None = None
+    if w3_requested:
+        if grammar is None or grammar_source is None:
+            raise WorkbenchIndexError("W3 indexing requires loaded W1 contracts")
+        assert source_set.family_induction_bundle is not None
+        (
+            r3_bundle,
+            r3_manifest_source,
+            r3_artifact_sources,
+            r3_declared_sources,
+        ) = _load_r3_bundle_sources(
+            source_set.family_induction_bundle,
+            root=root,
+            grammar_source=grammar_source,
+            graph_sources=tuple(graph_sources),
+        )
+        source_rows.extend(r3_declared_sources)
+        source_rows.append(r3_manifest_source)
+        source_rows.extend(r3_artifact_sources.values())
+        _index_r3_induction(
+            family_id=str(profile["family_id"]),
+            grammar=grammar,
+            grammar_source=grammar_source,
+            graph_sources=tuple(graph_sources),
+            bundle=r3_bundle,
+            manifest_source=r3_manifest_source,
+            artifact_sources=r3_artifact_sources,
+            add_entity=add_entity,
+            add_relation=add_relation,
+        )
+
     missing_instances = sorted(REQUIRED_W0_INSTANCES - indexed_instances)
     if missing_instances:
         raise WorkbenchIndexError(
@@ -570,11 +656,28 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         relations=relation_rows,
         metadata={
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
-            "roadmap_phase": "R2" if w2_requested else ("R1" if w1_requested else "R0B"),
+            "roadmap_phase": (
+                "R3"
+                if w3_requested
+                else ("R2" if w2_requested else ("R1" if w1_requested else "R0B"))
+            ),
             "w1_semantic_graphs": "indexed" if w1_requested else "not_supplied",
             "w2_compile_records": "indexed" if w2_requested else "not_supplied",
+            "w3_family_induction": "indexed" if w3_requested else "not_supplied",
             "r2_compile_ids": canonical_json(
                 sorted(record.compile_id for record in compile_records)
+            ),
+            "r3_bundle_id": r3_bundle.bundle_id if r3_bundle is not None else "",
+            "r3_alignment_id": (
+                r3_bundle.alignment.alignment_id if r3_bundle is not None else ""
+            ),
+            "r3_proposal_id": (
+                r3_bundle.proposal.proposal_id if r3_bundle is not None else ""
+            ),
+            "r3_blind_validation_id": (
+                r3_bundle.blind_validation.validation_id
+                if r3_bundle is not None
+                else ""
             ),
         },
     )
@@ -649,6 +752,17 @@ def _index_catalog(
                 status,
                 roadmap_source_id,
                 {"phase": "R2", "evidence": evidence},
+            )
+        )
+    for gate_id, label, status, evidence in _R3_GATES:
+        add_entity(
+            EntityRecord(
+                "roadmap_gate",
+                f"R3.{gate_id}",
+                label,
+                status,
+                roadmap_source_id,
+                {"phase": "R3", "evidence": evidence},
             )
         )
     for capability_id, label, status, evidence in _CAPABILITY_CATALOG:
@@ -1702,6 +1816,738 @@ def _index_r2_compiles(
                 "live_cst_status": "not_run",
                 "physical_acceptance_status": "not_established",
             },
+        )
+    )
+
+
+_R3_ARTIFACT_SOURCE_KINDS = {
+    ALIGNMENT_FILE: "graph_alignment.v0",
+    PROPOSAL_FILE: "family_extension_proposal.v0",
+    REVIEW_FILE: "family_extension_review.v0",
+    PATCH_FILE: "family_grammar_patch.v0",
+    PATCHED_GRAMMAR_FILE: "family_grammar.r3.v0",
+    PATCH_APPLICATION_FILE: "family_grammar_patch_application.v0",
+    BLIND_GRAPH_FILE: "instance_boundary_graph.v0.blind",
+    BLIND_VALIDATION_FILE: "family_induction_blind_validation.v0",
+}
+
+
+def _load_r3_bundle_sources(
+    bundle_path: Path,
+    *,
+    root: Path,
+    grammar_source: SourceRecord,
+    graph_sources: tuple[tuple[SourceRecord, InstanceBoundaryGraph], ...],
+) -> tuple[R3Bundle, SourceRecord, dict[str, SourceRecord], list[SourceRecord]]:
+    """Load an immutable R3 bundle and register every independently auditable file."""
+
+    candidate = bundle_path if bundle_path.is_absolute() else root / bundle_path
+    bundle_root = candidate.resolve()
+    try:
+        bundle_root.relative_to(root)
+    except ValueError as exc:
+        raise WorkbenchIndexError(
+            "W3 family-induction bundle must be inside the declared repository root"
+        ) from exc
+    try:
+        bundle = load_r3_bundle(bundle_root)
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        raise WorkbenchIndexError(f"invalid W3 family-induction bundle: {exc}") from exc
+
+    manifest_path = bundle_root / R3_MANIFEST_FILE
+    manifest_source = _register_source(
+        manifest_path,
+        "r3_family_induction_source_binding_manifest.v0",
+        root,
+    )
+    raw_artifacts = bundle.manifest.get("artifacts")
+    if not isinstance(raw_artifacts, list):
+        raise WorkbenchIndexError("W3 manifest artifacts must be a list")
+    artifact_entries: dict[str, Mapping[str, Any]] = {}
+    for value in raw_artifacts:
+        if not isinstance(value, Mapping):
+            raise WorkbenchIndexError("W3 manifest artifact entry must be an object")
+        relative = str(value.get("path") or "")
+        if relative in artifact_entries:
+            raise WorkbenchIndexError(f"duplicate W3 artifact path: {relative}")
+        artifact_entries[relative] = value
+    if set(artifact_entries) != set(_R3_ARTIFACT_SOURCE_KINDS):
+        raise WorkbenchIndexError("W3 manifest artifact inventory is incomplete")
+
+    artifact_sources: dict[str, SourceRecord] = {}
+    for relative in sorted(artifact_entries):
+        value = artifact_entries[relative]
+        expected_size = value.get("size_bytes")
+        if (
+            not isinstance(expected_size, int)
+            or isinstance(expected_size, bool)
+            or expected_size < 0
+        ):
+            raise WorkbenchIndexError(f"W3 artifact size is invalid: {relative}")
+        record = _register_source(
+            bundle_root / relative,
+            _R3_ARTIFACT_SOURCE_KINDS[relative],
+            root,
+            expected_raw_sha256=str(value.get("raw_sha256") or ""),
+        )
+        if record.size_bytes != expected_size:
+            raise WorkbenchIndexError(f"W3 artifact size mismatch: {relative}")
+        artifact_sources[relative] = record
+
+    known_sources = {
+        grammar_source.display_path: grammar_source,
+        **{
+            source.display_path: source
+            for source, _ in graph_sources
+        },
+    }
+    raw_declared_sources = bundle.manifest.get("sources")
+    if not isinstance(raw_declared_sources, list):
+        raise WorkbenchIndexError("W3 manifest sources must be a list")
+    declared_paths: set[str] = set()
+    new_declared_sources: list[SourceRecord] = []
+    for value in raw_declared_sources:
+        if not isinstance(value, Mapping):
+            raise WorkbenchIndexError("W3 manifest source entry must be an object")
+        relative = str(value.get("path") or "")
+        if not relative or relative in declared_paths:
+            raise WorkbenchIndexError("W3 manifest source paths must be non-empty and unique")
+        declared_paths.add(relative)
+        expected_hash = str(value.get("raw_sha256") or "")
+        expected_size = value.get("size_bytes")
+        if (
+            not isinstance(expected_size, int)
+            or isinstance(expected_size, bool)
+            or expected_size < 0
+        ):
+            raise WorkbenchIndexError(f"W3 declared source size is invalid: {relative}")
+        known = known_sources.get(relative)
+        if known is not None:
+            if known.raw_sha256 != expected_hash or known.size_bytes != expected_size:
+                raise WorkbenchIndexError(
+                    f"W3 declared W1 source identity mismatch: {relative}"
+                )
+            continue
+        source_kind = (
+            "r3_representation_contract_sentinel"
+            if relative == "src/rf_cem/representation/core.py"
+            else "r3_blind_primary_source"
+        )
+        record = _register_source(
+            root / relative,
+            source_kind,
+            root,
+            expected_raw_sha256=expected_hash,
+        )
+        if record.size_bytes != expected_size:
+            raise WorkbenchIndexError(f"W3 declared source size mismatch: {relative}")
+        new_declared_sources.append(record)
+
+    expected_w1_paths = set(known_sources)
+    if not expected_w1_paths.issubset(declared_paths):
+        raise WorkbenchIndexError("W3 manifest omits a W1 induction contract source")
+    if "src/rf_cem/representation/core.py" not in declared_paths:
+        raise WorkbenchIndexError("W3 manifest omits the R2 representation sentinel")
+    pdf_paths = {path for path in declared_paths if path.lower().endswith(".pdf")}
+    if len(pdf_paths) != 2:
+        raise WorkbenchIndexError("W3 manifest requires both LEReC primary PDF sources")
+    if len(declared_paths) != 6:
+        raise WorkbenchIndexError("W3 manifest must bind exactly six canonical inputs")
+    return (
+        bundle,
+        manifest_source,
+        artifact_sources,
+        new_declared_sources,
+    )
+
+
+def _index_r3_induction(
+    *,
+    family_id: str,
+    grammar: FamilyGrammar,
+    grammar_source: SourceRecord,
+    graph_sources: tuple[tuple[SourceRecord, InstanceBoundaryGraph], ...],
+    bundle: R3Bundle,
+    manifest_source: SourceRecord,
+    artifact_sources: Mapping[str, SourceRecord],
+    add_entity: Any,
+    add_relation: Any,
+) -> None:
+    """Recheck and index the complete reviewed R3 induction hard-gate chain."""
+
+    alignment = bundle.alignment
+    proposal = bundle.proposal
+    review = bundle.review
+    patch = bundle.patch
+    updated = bundle.patched_grammar
+    application = bundle.patch_application
+    blind_graph = bundle.blind_graph
+    blind_validation = bundle.blind_validation
+    graphs = {graph.instance_id: graph for _, graph in graph_sources}
+    graph_source_by_instance = {
+        graph.instance_id: source for source, graph in graph_sources
+    }
+    if set(graphs) != REQUIRED_W0_INSTANCES:
+        raise WorkbenchIndexError("W3 requires the canonical SLS-2 and RF500 graphs")
+    if alignment.family_id != family_id or set(alignment.source_instance_ids) != set(
+        REQUIRED_W0_INSTANCES
+    ):
+        raise WorkbenchIndexError("W3 alignment training set/family mismatch")
+    if alignment.parameter_names_read is not False or (
+        alignment.input_contract != "reviewed_instance_boundary_graphs_only"
+    ):
+        raise WorkbenchIndexError("W3 alignment depends on an unsupported input contract")
+    refs = {item.instance_id: item for item in alignment.graph_refs}
+    for instance_id in sorted(REQUIRED_W0_INSTANCES):
+        graph = graphs[instance_id]
+        source = graph_source_by_instance[instance_id]
+        reference = refs.get(instance_id)
+        if reference is None or (
+            reference.graph_id,
+            reference.source_path,
+            reference.source_raw_sha256,
+            reference.contract_sha256,
+        ) != (
+            graph.graph_id,
+            source.display_path,
+            source.raw_sha256,
+            semantic_sha256(graph.to_mapping()),
+        ):
+            raise WorkbenchIndexError(
+                f"W3 alignment graph/source binding mismatch: {instance_id}"
+            )
+
+    expected_backbone = tuple(
+        f"{slot.side}:{slot.region_type}" for slot in grammar.backbone_slots
+    )
+    actual_backbone = tuple(slot.semantic_key for slot in alignment.common_backbone)
+    if actual_backbone != expected_backbone:
+        raise WorkbenchIndexError("W3 common backbone differs from the W1 grammar")
+    if proposal.alignment_id != alignment.alignment_id or (
+        proposal.alignment_content_sha256 != alignment.content_sha256
+    ):
+        raise WorkbenchIndexError("W3 proposal/alignment identity mismatch")
+    if proposal.proposal_kind != "optional_motif" or (
+        proposal.region_type,
+        proposal.occurrence_rule,
+        proposal.allowed_counts,
+    ) != ("NoseRegion", "paired_optional", (0, 2)):
+        raise WorkbenchIndexError("W3 canonical proposal is not the paired optional nose motif")
+    if proposal.common_backbone_keys != actual_backbone:
+        raise WorkbenchIndexError("W3 proposal/common-backbone binding mismatch")
+    if set(proposal.present_instance_ids) | set(proposal.absent_instance_ids) != set(
+        REQUIRED_W0_INSTANCES
+    ):
+        raise WorkbenchIndexError("W3 proposal does not partition both training instances")
+    if review.decision != "accepted" or review.manual_confirmation is not True:
+        raise WorkbenchIndexError("W3 closeout requires an accepted manual proposal review")
+    if review.proposal_id != proposal.proposal_id or (
+        review.proposal_content_sha256 != proposal.content_sha256
+    ):
+        raise WorkbenchIndexError("W3 proposal/review identity mismatch")
+
+    base_sha = semantic_sha256(grammar.to_mapping())
+    updated_sha = semantic_sha256(updated.to_mapping())
+    if (
+        patch.base_grammar_id != grammar.grammar_id
+        or patch.base_grammar_sha256 != base_sha
+        or application.before_grammar_id != grammar.grammar_id
+        or application.before_grammar_sha256 != base_sha
+    ):
+        raise WorkbenchIndexError("W3 patch does not target the indexed W1 grammar")
+    if (
+        patch.target_grammar_id != updated.grammar_id
+        or patch.target_grammar_sha256 != updated_sha
+        or application.after_grammar_id != updated.grammar_id
+        or application.after_grammar_sha256 != updated_sha
+    ):
+        raise WorkbenchIndexError("W3 patch target/patched grammar identity mismatch")
+    if (
+        patch.proposal_id != proposal.proposal_id
+        or patch.proposal_content_sha256 != proposal.content_sha256
+        or patch.review_id != review.review_id
+        or patch.review_content_sha256 != review.content_sha256
+    ):
+        raise WorkbenchIndexError("W3 patch proposal/review binding mismatch")
+    if not application.applied or application.review_decision != "accepted" or (
+        application.patch_id != patch.patch_id
+    ):
+        raise WorkbenchIndexError("W3 accepted patch was not explicitly applied")
+    if (
+        application.proposal_id != proposal.proposal_id
+        or application.review_id != review.review_id
+        or application.patch_content_sha256 != patch.content_sha256
+    ):
+        raise WorkbenchIndexError("W3 patch application contract binding mismatch")
+    if not application.all_instances_valid or set(
+        application.validated_instance_ids
+    ) != set(REQUIRED_W0_INSTANCES):
+        raise WorkbenchIndexError("W3 patch did not revalidate both training instances")
+    try:
+        for graph in graphs.values():
+            validate_graph_against_grammar(updated, graph)
+        validate_graph_against_grammar(updated, blind_graph)
+    except (SemanticContractError, ValueError) as exc:
+        raise WorkbenchIndexError(f"W3 patched grammar validation failed: {exc}") from exc
+
+    if updated.family_id != family_id or blind_graph.family_id != family_id:
+        raise WorkbenchIndexError("W3 patched grammar/blind graph family mismatch")
+    patched_motif = next(
+        (
+            motif
+            for motif in updated.motifs
+            if motif.motif_id == patch.proposed_motif.motif_id
+        ),
+        None,
+    )
+    proposal_insertions = tuple(
+        sorted(
+            (
+                item.side,
+                item.before_region_type,
+                item.after_region_type,
+            )
+            for item in proposal.insertion_adjacencies
+        )
+    )
+    patch_insertions = tuple(
+        sorted(
+            (item.side, *item.between_region_types)
+            for item in patch.proposed_motif.insertion_rules
+        )
+    )
+    patch_motif_shape = patch.proposed_motif.to_mapping()
+    patch_motif_shape.pop("evidence")
+    patched_motif_shape = patched_motif.to_mapping() if patched_motif is not None else {}
+    patched_motif_shape.pop("evidence", None)
+    if (
+        proposal.motif_id != patch.proposed_motif.motif_id
+        or proposal.region_type != patch.proposed_motif.region_type
+        or proposal.allowed_counts != patch.proposed_motif.allowed_counts
+        or proposal_insertions != patch_insertions
+        or patched_motif is None
+        or patched_motif_shape != patch_motif_shape
+    ):
+        raise WorkbenchIndexError("W3 proposal/patch/patched-motif binding mismatch")
+    if blind_graph.instance_id in REQUIRED_W0_INSTANCES or (
+        blind_validation.blind_instance_id != blind_graph.instance_id
+    ):
+        raise WorkbenchIndexError("W3 blind instance is not held out")
+    if set(blind_validation.training_instance_ids) != set(REQUIRED_W0_INSTANCES) or (
+        blind_validation.blind_instance_used_for_induction is not False
+    ):
+        raise WorkbenchIndexError("W3 blind instance leaked into induction")
+    blind_graph_source = artifact_sources[BLIND_GRAPH_FILE]
+    if (
+        blind_validation.blind_graph_ref.contract_sha256
+        != semantic_sha256(blind_graph.to_mapping())
+        or blind_validation.blind_graph_ref.source_raw_sha256
+        != blind_graph_source.raw_sha256
+    ):
+        raise WorkbenchIndexError("W3 blind graph/source binding mismatch")
+    if (
+        blind_validation.proposal_id != proposal.proposal_id
+        or blind_validation.proposal_content_sha256 != proposal.content_sha256
+        or blind_validation.grammar_id != updated.grammar_id
+        or blind_validation.grammar_sha256 != updated_sha
+    ):
+        raise WorkbenchIndexError("W3 blind validation contract binding mismatch")
+    if blind_validation.representation_contract != "not_imported_or_modified":
+        raise WorkbenchIndexError("W3 altered or imported the R2 representation contract")
+
+    manifest = bundle.manifest
+    required_checks = {
+        "alignment_reads_reviewed_semantic_side_and_type_only",
+        "sls2_and_rf500_common_backbone_extracted",
+        "nose_pair_proposed_as_optional_motif",
+        "pending_proposal_does_not_mutate_grammar",
+        "accepted_manual_review_authorizes_explicit_hash_bound_patch",
+        "all_training_instances_revalidate_after_patch",
+        "held_out_real_lerec704_classified_after_induction",
+        "blind_instance_not_used_for_induction",
+        "representation_core_not_imported_or_modified",
+        "live_cst_not_run",
+    }
+    manifest_checks = manifest.get("checks")
+    if (
+        manifest.get("status") != "pass"
+        or not isinstance(manifest_checks, list)
+        or not all(isinstance(value, str) for value in manifest_checks)
+        or not required_checks.issubset(set(manifest_checks))
+    ):
+        raise WorkbenchIndexError("W3 source-binding manifest hard-gate checks are incomplete")
+    if manifest.get("validation_mode") != "reviewed_semantic_graphs_no_cst":
+        raise WorkbenchIndexError("W3 manifest validation mode is unsupported")
+    expected_manifest_identities = {
+        "bundle_id": bundle.bundle_id,
+        "input_sha256": bundle.input_sha256,
+        "training_instance_ids": list(alignment.source_instance_ids),
+        "blind_instance_id": blind_graph.instance_id,
+        "alignment_id": alignment.alignment_id,
+        "proposal_id": proposal.proposal_id,
+        "review_id": review.review_id,
+        "review_decision": review.decision,
+        "patch_id": patch.patch_id,
+        "patched_grammar_id": updated.grammar_id,
+        "patched_grammar_sha256": updated_sha,
+        "patch_application_id": application.application_id,
+        "blind_validation_id": blind_validation.validation_id,
+        "blind_classification": blind_validation.classification,
+    }
+    for key, expected in expected_manifest_identities.items():
+        if manifest.get(key) != expected:
+            raise WorkbenchIndexError(f"W3 manifest contract identity mismatch: {key}")
+
+    add_entity(
+        EntityRecord(
+            "family_induction_bundle",
+            bundle.bundle_id,
+            "R3 reviewed family-induction proof bundle",
+            "pass_no_cst",
+            manifest_source.source_id,
+            dict(manifest),
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "family_has_induction_bundle",
+            "family",
+            family_id,
+            "family_induction_bundle",
+            bundle.bundle_id,
+        )
+    )
+
+    add_entity(
+        EntityRecord(
+            "graph_alignment",
+            alignment.alignment_id,
+            "SLS-2 / RF500 reviewed graph alignment",
+            "pass_semantic_only",
+            artifact_sources[ALIGNMENT_FILE].source_id,
+            alignment.to_mapping(),
+        )
+    )
+    for relation in (
+        RelationRecord(
+            "bundle_has_alignment",
+            "family_induction_bundle",
+            bundle.bundle_id,
+            "graph_alignment",
+            alignment.alignment_id,
+        ),
+        RelationRecord(
+            "alignment_uses_algorithm",
+            "graph_alignment",
+            alignment.alignment_id,
+            "algorithm",
+            alignment.algorithm_version,
+        ),
+    ):
+        add_relation(relation)
+    for reference in alignment.graph_refs:
+        add_relation(
+            RelationRecord(
+                "alignment_uses_training_graph",
+                "graph_alignment",
+                alignment.alignment_id,
+                "instance_graph",
+                reference.graph_id,
+            )
+        )
+
+    for slot in alignment.common_backbone:
+        slot_id = f"{alignment.alignment_id}:backbone:{slot.slot_index:02d}"
+        add_entity(
+            EntityRecord(
+                "common_backbone_slot",
+                slot_id,
+                f"Backbone {slot.slot_index}: {slot.semantic_key}",
+                "shared_all_training_instances",
+                artifact_sources[ALIGNMENT_FILE].source_id,
+                slot.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "alignment_has_backbone_slot",
+                "graph_alignment",
+                alignment.alignment_id,
+                "common_backbone_slot",
+                slot_id,
+            )
+        )
+    for index, residual in enumerate(alignment.residuals):
+        residual_id = f"{alignment.alignment_id}:residual:{index:02d}"
+        add_entity(
+            EntityRecord(
+                "alignment_residual",
+                residual_id,
+                f"Residual {residual.side}:{residual.region_type}",
+                "proposal_evidence",
+                artifact_sources[ALIGNMENT_FILE].source_id,
+                residual.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "alignment_has_residual",
+                "graph_alignment",
+                alignment.alignment_id,
+                "alignment_residual",
+                residual_id,
+            )
+        )
+
+    add_entity(
+        EntityRecord(
+            "family_extension_proposal",
+            proposal.proposal_id,
+            "Paired optional nose-motif proposal",
+            "pending_non_mutating",
+            artifact_sources[PROPOSAL_FILE].source_id,
+            proposal.to_mapping(),
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "proposal_from_alignment",
+            "family_extension_proposal",
+            proposal.proposal_id,
+            "graph_alignment",
+            alignment.alignment_id,
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "bundle_has_proposal",
+            "family_induction_bundle",
+            bundle.bundle_id,
+            "family_extension_proposal",
+            proposal.proposal_id,
+        )
+    )
+    for instance_id in proposal.present_instance_ids:
+        add_relation(
+            RelationRecord(
+                "proposal_motif_present_in",
+                "family_extension_proposal",
+                proposal.proposal_id,
+                "instance",
+                instance_id,
+            )
+        )
+    for instance_id in proposal.absent_instance_ids:
+        add_relation(
+            RelationRecord(
+                "proposal_motif_absent_in",
+                "family_extension_proposal",
+                proposal.proposal_id,
+                "instance",
+                instance_id,
+            )
+        )
+
+    add_entity(
+        EntityRecord(
+            "proposal_review",
+            review.review_id,
+            f"Manual proposal review by {review.reviewer_id}",
+            review.decision,
+            artifact_sources[REVIEW_FILE].source_id,
+            review.to_mapping(),
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "proposal_has_manual_review",
+            "family_extension_proposal",
+            proposal.proposal_id,
+            "proposal_review",
+            review.review_id,
+        )
+    )
+
+    add_entity(
+        EntityRecord(
+            "grammar_patch",
+            patch.patch_id,
+            "Accepted-review grammar patch",
+            "authorized",
+            artifact_sources[PATCH_FILE].source_id,
+            patch.to_mapping(),
+        )
+    )
+    add_entity(
+        EntityRecord(
+            "family_grammar",
+            updated.grammar_id,
+            "R3 reviewed family grammar",
+            "reviewed_r3",
+            artifact_sources[PATCHED_GRAMMAR_FILE].source_id,
+            updated.to_mapping(),
+        )
+    )
+    add_entity(
+        EntityRecord(
+            "grammar_patch_application",
+            application.application_id,
+            "Explicit grammar patch application",
+            "pass",
+            artifact_sources[PATCH_APPLICATION_FILE].source_id,
+            application.to_mapping(),
+        )
+    )
+    for relation in (
+        RelationRecord(
+            "review_authorizes_patch",
+            "proposal_review",
+            review.review_id,
+            "grammar_patch",
+            patch.patch_id,
+        ),
+        RelationRecord(
+            "patch_transforms_from_grammar",
+            "grammar_patch",
+            patch.patch_id,
+            "family_grammar",
+            grammar.grammar_id,
+        ),
+        RelationRecord(
+            "patch_transforms_to_grammar",
+            "grammar_patch",
+            patch.patch_id,
+            "family_grammar",
+            updated.grammar_id,
+        ),
+        RelationRecord(
+            "patch_has_application",
+            "grammar_patch",
+            patch.patch_id,
+            "grammar_patch_application",
+            application.application_id,
+        ),
+        RelationRecord(
+            "family_has_reviewed_r3_grammar",
+            "family",
+            family_id,
+            "family_grammar",
+            updated.grammar_id,
+        ),
+    ):
+        add_relation(relation)
+    for index, difference in enumerate(application.grammar_diff):
+        difference_id = f"{application.application_id}:diff:{index:02d}"
+        add_entity(
+            EntityRecord(
+                "grammar_diff",
+                difference_id,
+                f"Grammar diff: {difference.path}",
+                "applied",
+                artifact_sources[PATCH_APPLICATION_FILE].source_id,
+                difference.to_mapping(),
+            )
+        )
+        add_relation(
+            RelationRecord(
+                "application_has_grammar_diff",
+                "grammar_patch_application",
+                application.application_id,
+                "grammar_diff",
+                difference_id,
+            )
+        )
+
+    add_entity(
+        EntityRecord(
+            "blind_instance_graph",
+            blind_graph.graph_id,
+            "LEReC 704 MHz held-out reviewed boundary graph",
+            "held_out_real_instance",
+            blind_graph_source.source_id,
+            blind_graph.to_mapping(),
+        )
+    )
+    add_entity(
+        EntityRecord(
+            "blind_validation",
+            blind_validation.validation_id,
+            "LEReC 704 MHz post-induction blind validation",
+            "pass",
+            artifact_sources[BLIND_VALIDATION_FILE].source_id,
+            blind_validation.to_mapping(),
+        )
+    )
+    for relation in (
+        RelationRecord(
+            "blind_validation_uses_graph",
+            "blind_validation",
+            blind_validation.validation_id,
+            "blind_instance_graph",
+            blind_graph.graph_id,
+        ),
+        RelationRecord(
+            "blind_validation_uses_proposal",
+            "blind_validation",
+            blind_validation.validation_id,
+            "family_extension_proposal",
+            proposal.proposal_id,
+        ),
+        RelationRecord(
+            "blind_validation_uses_reviewed_grammar",
+            "blind_validation",
+            blind_validation.validation_id,
+            "family_grammar",
+            updated.grammar_id,
+        ),
+        RelationRecord(
+            "bundle_has_blind_validation",
+            "family_induction_bundle",
+            bundle.bundle_id,
+            "blind_validation",
+            blind_validation.validation_id,
+        ),
+    ):
+        add_relation(relation)
+
+    hard_gate_payload = {
+        "bundle_id": bundle.bundle_id,
+        "alignment_id": alignment.alignment_id,
+        "training_instance_ids": sorted(alignment.source_instance_ids),
+        "backbone_slot_count": len(alignment.common_backbone),
+        "residual_count": len(alignment.residuals),
+        "proposal_id": proposal.proposal_id,
+        "proposal_kind": proposal.proposal_kind,
+        "proposal_confidence": proposal.confidence,
+        "review_id": review.review_id,
+        "review_decision": review.decision,
+        "patch_id": patch.patch_id,
+        "patch_applied": application.applied,
+        "revalidated_instance_ids": sorted(application.validated_instance_ids),
+        "blind_instance_id": blind_graph.instance_id,
+        "blind_classification": blind_validation.classification,
+        "blind_instance_used_for_induction": False,
+        "parameter_names_read": False,
+        "representation_contract": blind_validation.representation_contract,
+        "live_cst_status": "not_run",
+    }
+    add_entity(
+        EntityRecord(
+            "validation",
+            "w3.family-induction-hard-gate",
+            "W3 family-induction hard-gate proof",
+            "pass",
+            manifest_source.source_id,
+            hard_gate_payload,
+        )
+    )
+    add_relation(
+        RelationRecord(
+            "bundle_has_hard_gate_validation",
+            "family_induction_bundle",
+            bundle.bundle_id,
+            "validation",
+            "w3.family-induction-hard-gate",
         )
     )
 

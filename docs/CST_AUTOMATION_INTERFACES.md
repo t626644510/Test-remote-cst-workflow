@@ -1,6 +1,6 @@
 # CST Automation Interfaces and Project-File Evidence
 
-Updated: 2026-07-13
+Updated: 2026-08-20
 
 Audited CST generation: CST Studio Suite 2026
 
@@ -682,6 +682,12 @@ Q        = 45867.1264209
 ```
 
 This verifies one automation chain. It does not establish universal CST template portability or RF equivalence of all generated geometries.
+
+### 19.1 R2 boundary compiler is deliberately outside the CST path
+
+`rf_cem.compiler.ProfileCompiler` and its `compile_record.v0` artifacts are no-CST geometry contracts. R2 uses the existing isolated CadQuery/OCP worker to build and validate a closed STEP/B-Rep, records length in `mm`, tangent angle in `deg` and curvature in `1/mm`, and compares source-native profiles plus any materialized accepted STEP within declared tolerances. It does not call `cst.interface`, `cst.results`, COM/VBA, CST command-line batch mode, a solver, or the verified live sequence above.
+
+Consequently, R2 `status=pass` means only that topology/representation composition, patch ownership, required continuity, profile validity, B-Rep/STEP export, provenance and the declared no-CST baseline comparison passed. Every R2 record must retain `live_cst_status=not_run` and `physical_acceptance_status=not_established`. Frequency, Q, R/Q, accelerating gradient, power, field metrics, wake/impedance and mode identity are not inferred from STEP/B-Rep validity; they remain gated by the later RF result contract and a separately authorized live-CST action.
 
 ## 20. `EvaluateResultTemplates` behavior
 

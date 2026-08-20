@@ -1,4 +1,4 @@
-"""Authenticated loopback-only, read-only HTTP Workbench for W0/W1."""
+"""Authenticated loopback-only, read-only HTTP Workbench for W0/W1/W2."""
 
 from __future__ import annotations
 
@@ -53,8 +53,17 @@ _PAGES = {
     "/coverage": ("coverage", "Capability Coverage", ("capability",)),
     "/compile-records": (
         "compile-records",
-        "Compile Records",
-        ("compile_record",),
+        "Compile Records / W2",
+        (
+            "compile_record",
+            "region_geometry",
+            "geometry_patch",
+            "landmark_geometry_binding",
+            "continuity_check",
+            "geometry_validation",
+            "baseline_comparison",
+            "geometry_artifact",
+        ),
     ),
 }
 
@@ -186,6 +195,7 @@ def create_workbench_handler(
                     overview=parsed.path == "/",
                     show_sources=parsed.path in {"/", "/validation"},
                     semantic_graphs=parsed.path == "/semantic-graphs",
+                    compile_records=parsed.path == "/compile-records",
                 ).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
@@ -230,7 +240,7 @@ def create_workbench_handler(
                     "ok": False,
                     "error": {
                         "code": "method_not_allowed",
-                        "message": "Workbench W0/W1 is read-only and CORS is disabled",
+                        "message": "Workbench W0/W1/W2 is read-only and CORS is disabled",
                     },
                 },
             )
@@ -346,6 +356,7 @@ def _render_page(
     overview: bool,
     show_sources: bool,
     semantic_graphs: bool,
+    compile_records: bool,
 ) -> str:
     counts = reader.entity_counts()
     sources = reader.audit_sources(source_root) if show_sources else []
@@ -367,11 +378,13 @@ def _render_page(
         sections.append(_entity_table("Roadmap status", overview_entities))
     if semantic_graphs:
         sections.extend(_semantic_graph_sections(entities))
+    elif compile_records:
+        sections.extend(_compile_record_sections(entities))
     elif entities:
         sections.append(_entity_table(title, entities))
     elif not overview:
         sections.append(
-            '<section><p class="empty">No indexed records for this fixed W0 view.</p></section>'
+            '<section><p class="empty">No indexed records for this fixed read-only view.</p></section>'
         )
     if show_sources:
         sections.append(_source_table(sources))
@@ -387,7 +400,8 @@ main{{max-width:1500px;margin:0 auto;padding:22px}}section{{background:var(--pap
 .metrics{{display:flex;gap:10px;flex-wrap:wrap}}.metric{{min-width:140px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fbfcfe}}.metric b{{display:block;font-size:22px}}.metric span{{color:var(--muted)}}
 table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}}th{{color:#475467;background:#f8fafc}}code,pre{{font:12px/1.4 ui-monospace,Consolas,monospace}}pre{{white-space:pre-wrap;max-width:780px;margin:0}}.status{{font-weight:650}}.empty{{color:var(--muted)}}
 .graph-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.graph-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.graph-card h3{{margin:0 0 5px;font-size:16px}}.nose{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eaf2ff;color:#1849a9;font-weight:700}}.sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:12px}}.chip{{display:inline-block;border:1px solid #b9c5d8;border-radius:6px;background:#fff;padding:4px 7px;font:12px ui-monospace,Consolas,monospace}}.arrow{{color:var(--muted)}}.facts{{color:var(--muted);margin:7px 0 0}}
-</style></head><body><header><h1>RF-CEM Workbench W0 / W1</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+.compile-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.compile-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.compile-card h3{{margin:0 0 5px;font-size:16px}}.pass-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eafaf0;color:#067647;font-weight:700}}.trace-list{{display:grid;gap:8px}}.trace-row{{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--line)}}.owner{{border-color:#84adff;background:#eef4ff}}.patch-sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
+</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
 
 
 def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
@@ -444,6 +458,111 @@ def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
         sections.append(
             '<section><p class="empty">No W1 semantic graph proof set was supplied at rebuild.</p></section>'
         )
+    return sections
+
+
+def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entity in entities:
+        by_kind.setdefault(str(entity["entity_kind"]), []).append(entity)
+    records = by_kind.get("compile_record", [])
+    r2_records = [
+        item
+        for item in records
+        if isinstance(item.get("payload"), dict)
+        and item["payload"].get("schema_version") == "compile_record.v0"
+    ]
+    if not r2_records:
+        return [
+            '<section><p class="empty">No W2 compile_record.v0 proof set was supplied at rebuild.</p></section>'
+        ]
+
+    sections: list[str] = []
+    cards: list[str] = []
+    for item in sorted(r2_records, key=lambda value: str(value["entity_id"])):
+        payload = item["payload"]
+        validation = payload.get("geometry_validation", {})
+        if not isinstance(validation, dict):
+            validation = {}
+        warnings = payload.get("warnings", [])
+        warning_values = warnings if isinstance(warnings, list) else []
+        warning_html = (
+            "".join(f"<li>{escape(str(value))}</li>" for value in warning_values)
+            if warning_values
+            else "<li>None</li>"
+        )
+        brep_label = "BRep valid" if validation.get("brep_valid") is True else "BRep invalid"
+        cards.append(
+            '<article class="compile-card">'
+            f'<h3>{escape(str(payload.get("instance_id") or item["label"]))}</h3>'
+            f'<p><span class="pass-pill">{escape(str(item["status"]))}</span></p>'
+            f'<p class="facts"><b>{escape(str(payload.get("region_count", 0)))}</b> regions · '
+            f'<b>{escape(str(payload.get("patch_count", 0)))}</b> patches · '
+            f'{escape(brep_label)}</p>'
+            f'<p class="facts">Compiler: <code>{escape(str(payload.get("compiler_version") or ""))}</code></p>'
+            f'<p class="facts">No live CST: <b>{escape(str(payload.get("live_cst_status") == "not_run"))}</b> · '
+            f'RF physical acceptance: <b>{escape(str(payload.get("physical_acceptance_status") or ""))}</b></p>'
+            '<details><summary>Warnings / reviewed limitations</summary>'
+            f'<ul>{warning_html}</ul></details>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Validated no-CST compiles</h2>'
+        f'<div class="compile-grid">{"".join(cards)}</div></section>'
+    )
+
+    region_traces: list[str] = []
+    for item in sorted(
+        by_kind.get("region_geometry", []),
+        key=lambda value: (
+            str(value.get("payload", {}).get("instance_id", "")),
+            int(value.get("payload", {}).get("region_order", 0)),
+        ),
+    ):
+        payload = item.get("payload", {})
+        if not isinstance(payload, dict):
+            continue
+        representation = payload.get("representation", {})
+        if not isinstance(representation, dict):
+            representation = {}
+        patches = payload.get("patches", [])
+        patch_values = patches if isinstance(patches, list) else []
+        patch_chips = '<span class="arrow">→</span>'.join(
+            '<span class="chip">'
+            f'{escape(str(patch.get("patch_id") or "patch"))}: '
+            f'{escape(str((patch.get("representation") or {}).get("representation_type") or "unknown"))}'
+            '</span>'
+            for patch in patch_values
+            if isinstance(patch, dict)
+        )
+        region_traces.append(
+            '<article class="trace-row">'
+            f'<span class="chip owner">{escape(str(payload.get("owner_region_id") or item["entity_id"]))}</span>'
+            '<span class="arrow">→</span>'
+            f'<span class="chip">{escape(str(representation.get("representation_type") or "CompositeRegionRepresentation"))}</span>'
+            '<span class="arrow">→</span>'
+            f'<span class="patch-sequence">{patch_chips}</span>'
+            '</article>'
+        )
+    sections.append(
+        '<section><h2>Region → representation → patches</h2>'
+        f'<div class="trace-list">{"".join(region_traces)}</div></section>'
+    )
+
+    for kind, label in (
+        ("landmark_geometry_binding", "Landmark geometry bindings"),
+        ("continuity_check", "C0 / G1 / G2 continuity checks"),
+        ("geometry_validation", "Closed profile and BRep / STEP validation"),
+        ("baseline_comparison", "Accepted baseline comparisons and warnings"),
+        ("geometry_artifact", "Hash-verified compiled artifacts"),
+        ("geometry_patch", "Geometry patch ownership details"),
+        ("compile_record", "Raw compile_record.v0 contracts"),
+    ):
+        values = by_kind.get(kind, [])
+        if kind == "compile_record":
+            values = r2_records
+        if values:
+            sections.append(_entity_table(label, values))
     return sections
 
 

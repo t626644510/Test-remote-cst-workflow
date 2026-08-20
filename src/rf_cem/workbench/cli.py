@@ -1,4 +1,4 @@
-"""Command-line entry points for deterministic W0/W1 rebuild and serving."""
+"""Command-line entry points for deterministic W0/W1/W2 rebuild and serving."""
 
 from __future__ import annotations
 
@@ -39,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--instance-boundary-graph", type=Path, action="append", default=[]
     )
     rebuild.add_argument("--instance-graph-diff", type=Path)
+    rebuild.add_argument(
+        "--compile-record", type=Path, action="append", default=[]
+    )
 
     serve = subparsers.add_parser(
         "serve", help="serve one existing registry on authenticated loopback"
@@ -83,6 +86,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 instance_graph_diff=_resolve_optional(
                     root, args.instance_graph_diff
+                ),
+                compile_records=tuple(
+                    _resolve(root, path) for path in args.compile_record
                 ),
             )
             summary = rebuild_workbench(args.database, source_set)

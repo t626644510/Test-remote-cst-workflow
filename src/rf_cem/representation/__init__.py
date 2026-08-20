@@ -1,11 +1,46 @@
-"""Family-agnostic mathematical boundary-representation layer.
+"""Family-agnostic mathematical boundary-representation layer."""
 
-R0B establishes the package boundary without prematurely standardising the
-legacy RF500 and SLS-2 curve payloads.  The versioned representation protocol
-and concrete core types are an R2 deliverable.  This package must not depend
-on concrete cavity families, semantic-region classes, or CST.
-"""
+from .core import (
+    BOUNDARY_REPRESENTATION_SCHEMA_VERSION,
+    BoundaryRepresentation,
+    CircularArcRepresentation,
+    CompositeRegionRepresentation,
+    DEFAULT_JOIN_TOLERANCE_MM,
+    EllipseArcRepresentation,
+    GEOMETRY_PATCH_SCHEMA_VERSION,
+    GeometryPatch,
+    LineRepresentation,
+    Point2D,
+    PrimitiveRepresentation,
+    REGION_GEOMETRY_SCHEMA_VERSION,
+    RegionGeometry,
+    Representation,
+    RepresentationContractError,
+    SplineNurbsRepresentation,
+    representation_from_mapping,
+    trim_representation,
+)
 
 ARCHITECTURE_LAYER = "representation"
 
-__all__ = ["ARCHITECTURE_LAYER"]
+__all__ = [
+    "ARCHITECTURE_LAYER",
+    "BOUNDARY_REPRESENTATION_SCHEMA_VERSION",
+    "BoundaryRepresentation",
+    "CircularArcRepresentation",
+    "CompositeRegionRepresentation",
+    "DEFAULT_JOIN_TOLERANCE_MM",
+    "EllipseArcRepresentation",
+    "GEOMETRY_PATCH_SCHEMA_VERSION",
+    "GeometryPatch",
+    "LineRepresentation",
+    "Point2D",
+    "PrimitiveRepresentation",
+    "REGION_GEOMETRY_SCHEMA_VERSION",
+    "RegionGeometry",
+    "Representation",
+    "RepresentationContractError",
+    "SplineNurbsRepresentation",
+    "representation_from_mapping",
+    "trim_representation",
+]

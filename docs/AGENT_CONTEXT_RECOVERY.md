@@ -1,6 +1,6 @@
 # Agent Context Recovery and Maintenance Runbook
 
-Updated: 2026-08-19
+Updated: 2026-08-20
 
 Purpose: restore reliable context after a crash, context compaction, task handoff, stale GUI process, interrupted no-CST run, or branch confusion.
 
@@ -76,7 +76,7 @@ Use this decision table before editing:
 | HOM eigenmode campaign behavior | `workflow/4-rfgun-hom-eigenmode` |
 | 500 MHz parametric RF-CEM or live campaign | `workflow/rf-cem-500mhz` |
 | Literature evidence, semantics, geometry review or GUI | `workflow/rf-cem-literature-review` |
-| RF-CEM family contract, R1 semantic topology, Workbench W0/W1, representation/compiler/observation roadmap | `workflow/rf-cem-literature-review` |
+| RF-CEM family contract, R1 semantic topology, R2 representation/compiler, Workbench W0/W1/W2, observation roadmap | `workflow/rf-cem-literature-review` |
 
 If current cwd is the wrong owner:
 
@@ -233,18 +233,22 @@ Policy:
 
 CadQuery/OCP teardown faults require the same distinction: check whether the isolated worker produced a valid structured result before classifying the geometry action.
 
-### 7.4 Recover the RF-CEM semantic proof and Workbench W0/W1
+### 7.4 Recover the RF-CEM semantic/compiler proofs and Workbench W0/W1/W2
 
-The R1 content-addressed semantic proof is generated from the Stage C profile and frozen SLS-2 generation/semantics/review sources. Workbench W0/W1 is a derived database, not a session and not a source artifact. First inspect the branch and source state; then use the exact `semantic validate`, Workbench `status`, and rebuild commands in `FUNCTIONS_AND_ENTRYPOINTS.md`.
+The R1 content-addressed semantic proof is generated from the Stage C profile and frozen SLS-2 generation/semantics/review sources. The R2 compiler proof binds that profile and R1 proof to two deterministic no-CST STEP/B-Rep compiles. Workbench W0/W1/W2 is a derived database, not a session and not a source artifact. First inspect the branch and source state; then use the exact semantic/compiler validation, Workbench `status`, and rebuild commands in `FUNCTIONS_AND_ENTRYPOINTS.md`.
 
 ```powershell
-$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w0.sqlite'
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w2.sqlite'
 & $py -m rf_cem.workbench status --database $WorkbenchDatabase --repo-root $RepoRoot
 ```
 
 If the database is absent, or any source reports `stale`/`missing`, do not patch SQLite or copy an older database. Rebuild the explicitly named target from the canonical profile, validation, frozen semantic/review inputs and architecture document. The rebuild is atomic and does not run CST. A running Workbench is a foreground loopback process; stop that owned foreground process normally and start a new `serve` command after rebuild. Never kill unrelated processes or alter source sessions as a Workbench recovery shortcut.
 
-For W1, also supply exactly one `family_grammar.v0`, both canonical instance graphs and the directed SLS-2-to-RF500 graph diff from the same proof directory. The indexer revalidates both graphs and recomputes the diff; never mix files from different content-addressed proofs. If a semantic proof source hash or review binding fails, return to the named frozen source files and diagnose the mismatch. Do not edit a proof JSON, overwrite an existing proof directory, weaken a review state, infer a missing nose parameter, or regenerate geometry as a recovery shortcut. R1 recovery remains no-CST and does not authorize Compiler v0 or a solver.
+For W1, also supply exactly one `family_grammar.v0`, both canonical instance graphs and the directed SLS-2-to-RF500 graph diff from the same proof directory. The indexer revalidates both graphs and recomputes the diff; never mix files from different content-addressed proofs. If a semantic proof source hash or review binding fails, return to the named frozen source files and diagnose the mismatch. Do not edit a proof JSON, overwrite an existing proof directory, weaken a review state or infer a missing nose parameter.
+
+For W2, the canonical local proof is `analysis_outputs/rf_cem_boundary_compiler/r2_boundary_compiler.aa66a3e90125437b/`. First run `python -m rf_cem.compiler validate` on both records with that bundle as `--bundle-root`; it rechecks strict `compile_record.v0` identity and all output sizes/hashes. Then rebuild Workbench with the complete W1 inputs plus exactly these two record paths. The W2 indexer independently rebinds grammar/graph/profile hashes, region order, landmarks and output artifacts. If validation fails, do not hand-edit JSON/STEP, copy a record from another bundle, weaken a tolerance, overwrite the immutable target or delete the prior proof. Diagnose the named source or code change and intentionally build into a fresh output root; `build` refuses an existing content-addressed target.
+
+R1/R2 recovery remains no-CST. A valid STEP/B-Rep or `status=pass` does not authorize CST, establish RF metrics or establish physical acceptance. Do not open CST, run a solver, kill processes, remove locks or clean results as a semantic/compiler/Workbench recovery shortcut.
 
 ## 8. Recovering a live-CST campaign
 
@@ -368,7 +372,7 @@ workflow/rf-cem-500mhz
   -> workflow/rf-cem-literature-review
 ```
 
-`workflow/rf-cem-literature-review` is now the canonical owner of literature ingestion, semantic review, geometry projection, the local GUI, Stage C family profile, R1 semantic topology and Workbench W0/W1. Stage C was merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`; R0B was merged by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`. `workflow/rf-cem-500mhz` remains the canonical owner of the 500 MHz live geometry/campaign workflow. Do not merge the complete literature branch into either `workflow/rf-cem-500mhz` or `main`.
+`workflow/rf-cem-literature-review` is now the canonical owner of literature ingestion, semantic review, geometry projection, the local GUI, Stage C family profile, R1 semantic topology, R2 boundary representation/compiler and Workbench W0/W1/W2. Stage C was merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`; R0B was merged by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`; R1 was merged by PR #6 at `5ae1ba07b841d6adf6e180ec1eedfd073657987b`. R2 is locally hard-gate complete on `codex/rf-cem-r2-boundary-compiler` and is not canonical until its closeout PR merges. `workflow/rf-cem-500mhz` remains the canonical owner of the 500 MHz live geometry/campaign workflow. Do not merge the complete literature branch into either `workflow/rf-cem-500mhz` or `main`.
 
 Before integrating a reusable subset elsewhere:
 

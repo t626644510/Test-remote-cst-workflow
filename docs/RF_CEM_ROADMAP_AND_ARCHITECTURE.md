@@ -1,7 +1,7 @@
 # RF-CEM 路线与架构：语义拓扑编译架构及 R0B–R5 Roadmap
 
-**版本**：Roadmap 2.2
-**日期**：2026-08-19
+**版本**：Roadmap 2.3
+**日期**：2026-08-20
 **用途**：供项目负责人、人类工程师和后续参与者复盘 RF-CEM 的目标、当前基础、架构决策、工作台设计及 R0B–R5 的阶段出门条件。
 **适用范围**：RF 真空边界语义、边界表示、几何编译、腔族扩展、公共观测、工程约束、RF 结果/模态/场合同；暂不展开复杂曲线方程、可变维数优化、多物理场、HOM、耦合器和冷却结构的具体实现。
 
@@ -749,6 +749,16 @@ CompositeRegionRepresentation
 - 不实现 family induction；
 - 不要求完美重构所有历史 candidate。
 
+### 2026-08-20 实现状态
+
+R2 已在 `codex/rf-cem-r2-boundary-compiler` 完成本地 Hard Gate 验证，phase closeout 尚待单次 push、PR 检查与 canonical merge。`rf_cem.representation` 已实现与 family/semantic/CST 无关的 Line、CircularArc、EllipseArc、Spline/NURBS 和 Composite 合同；`rf_cem.compiler.ProfileCompiler.compile` 是 SLS-2 与 RF500 共用的唯一编译入口。
+
+当前 no-CST 内容寻址证明为 `analysis_outputs/rf_cem_boundary_compiler/r2_boundary_compiler.aa66a3e90125437b/`，输入 SHA-256 为 `aa66a3e90125437b32ef900feb296f4512ee4a199b372474cb4c24fb7740813c`。SLS-2 编译为 9 个 `RegionGeometry` / 10 个 patch；RF500 编译为 11 个 `RegionGeometry` / 12 个 patch。所有 patch 均有唯一 owner，语义边界通过 landmark/interface 连接，region/patch 顺序和方向固定；同一原生曲线内部切分要求 G2，其余跨区域连接要求 C0，所有 required continuity gate 均通过。额外 G1/G2 诊断失败仅作为 warning 保存，不被误报为 required pass。
+
+两条 profile 相对各自 source-native 曲线的最大偏差均为 `2.842170943040401e-14 mm`，声明容差为 `1e-6 mm`。SLS-2 还与已物化 frozen STEP 比较：最大 bbox 误差约 `3.37e-8 mm`，体积相对误差约 `1.95e-5`，表面积相对误差约 `3.33e-5`，均小于声明容差。RF500 已接受 STEP 只保留 raw SHA-256 `766365b6b78f3d0a6929f2500cfb49fc306e54be048a638bc813e9c8aeb9e3cd`，本地未物化，因此其 gate 明确限定为 source-native profile 等价、新 B-Rep 有效和未物化基线 warning，不声称完成旧 STEP 的几何量比较。
+
+Workbench indexer 已升级到 `r2.w2.v0`；W2 从完整 W1 proof 与两份 `compile_record.v0` 重建，显示 region→representation→patch、landmark binding、C0/G1/G2、B-Rep/STEP validation、baseline、warning 与 hash-verified artifacts。真实重建包含 20 个 region geometry、22 个 patch、24 个 landmark binding 和 20 个 continuity check；loopback 浏览器验收无乱码、横向页面溢出或控制台错误。R2 全程 `live_cst_status=not_run`、`physical_acceptance_status=not_established`。
+
 ---
 
 ## R3：Family Induction / Extension v0
@@ -1116,9 +1126,10 @@ Agent 长期目标放在：
 ## 9. 当前状态与立即动作
 
 1. Stage C 已通过 PR #4 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `3867a9a8eae502359556a83bcad15b3a519e64de`；
-2. R0B phase 分支为 `codex/rf-cem-r0b-workbench`，从上述 canonical merge commit 建立；
-3. canonical 架构档案为 `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md`；
-4. Agent 目标文档为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`；
-5. 当前动作是完成 Workbench W0、Markdown inventory、完整 no-CST 验证和 R0B 单次收口；
-6. R0B 只建立派生 registry、可视入口和依赖边界，不实现完整 grammar/compiler，也不运行 CST；
-7. 只有通过 R0B Hard Gate 并集成到 canonical owner 后再进入 R1。
+2. R0B 已通过 PR #5 合入，canonical merge commit 为 `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`；
+3. R1 已通过 PR #6 合入，canonical merge commit 为 `5ae1ba07b841d6adf6e180ec1eedfd073657987b`；
+4. 当前 phase 分支为 `codex/rf-cem-r2-boundary-compiler`，从上述 R1 canonical merge 建立；
+5. 当前动作是完成 R2 文档、完整 no-CST 验证、单次 closeout push、PR 检查与 canonical merge；
+6. R2 只建立数学边界表示、通用几何编译、确定性 STEP/B-Rep 证明和 Workbench W2，不实现 family induction、observation/RF result contract 或优化搜索；
+7. R2 不运行 CST，不建立 RF physical acceptance；只有 R2 Hard Gate 合入 canonical owner 后再从该 merge 建立 R3 分支；
+8. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。

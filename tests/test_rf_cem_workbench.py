@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 import hashlib
 from http.client import HTTPConnection
 import json
@@ -174,6 +175,27 @@ def test_rebuild_refuses_sources_outside_repository(
 
     with pytest.raises(WorkbenchIndexError, match="inside the declared repository"):
         rebuild_workbench(tmp_path / "workbench.sqlite", outside)
+
+
+def test_w2_requires_two_compile_records_and_the_complete_w1_proof_set(
+    tmp_path: Path, source_set: WorkbenchSourceSet
+) -> None:
+    one_record = replace(
+        source_set,
+        compile_records=(source_set.family_profile,),
+    )
+    with pytest.raises(WorkbenchIndexError, match="exactly two"):
+        rebuild_workbench(tmp_path / "one.sqlite", one_record)
+
+    no_w1 = replace(
+        source_set,
+        compile_records=(
+            source_set.family_profile,
+            source_set.literature_packages[0],
+        ),
+    )
+    with pytest.raises(WorkbenchIndexError, match="complete W1"):
+        rebuild_workbench(tmp_path / "no-w1.sqlite", no_w1)
 
 
 def test_server_is_loopback_authenticated_read_only_and_fixed_route(

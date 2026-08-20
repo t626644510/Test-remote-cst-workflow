@@ -1,6 +1,6 @@
 # Functions and Entrypoints Catalog
 
-Updated: 2026-08-19
+Updated: 2026-08-20
 
 Audience: agents and maintainers locating an existing capability before adding code.
 
@@ -61,7 +61,8 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m workflows.rf_cem_500mhz_parametric_opt.live_campaign` | RF-CEM | yes | Repeated quick-live or SAO campaign |
 | `python -m rf_cem.literature_semantics ...` | `workflow/rf-cem-literature-review` | no | Literature discovery, evidence, semantics, audits, GUI |
 | `python -m rf_cem.semantic ...` | `workflow/rf-cem-literature-review` | no | Build, validate and diff R1 semantic topology contracts |
-| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0/W1 registry |
+| `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build and validate the two canonical R2 boundary compiles and `compile_record.v0` artifacts |
+| `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0/W1/W2 registry |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
 | `python run_workflow_3.py` | WF3 branch only | yes | Recovery optimisation |
@@ -942,17 +943,71 @@ $SemanticProof = Join-Path $SemanticRoot 'r1_semantic_core.28e8d6fa9efa221f'
   --right (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json')
 ```
 
-The grammar has a nine-region backbone and `motif.nose_pair.v0` with exact allowed counts 0 or 2. SLS-2 supplies reviewed absence evidence; RF500 supplies the reviewed paired `NoseCone` topology. The diff is semantic/topological and explicitly declines common-parameter comparison. These commands do not implement `RegionGeometry`, Compiler v0, family induction, RF result contracts, or physical acceptance.
+The grammar has a nine-region backbone and `motif.nose_pair.v0` with exact allowed counts 0 or 2. SLS-2 supplies reviewed absence evidence; RF500 supplies the reviewed paired `NoseCone` topology. The diff is semantic/topological and explicitly declines common-parameter comparison. These semantic commands do not compile geometry; the R2 compiler below consumes their contracts without moving representations into the semantic package.
 
-### 9.9 RF-CEM Workbench W0/W1 (R0B/R1)
+### 9.9 RF boundary representation and Compiler v0 (R2)
 
-`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W1 build below retains all W0 sources and adds the R1 family grammar, both instance graphs and canonical graph diff. The current expert prior is indexed automatically by its repository source path.
+Public contracts:
+
+```text
+rf_cem.representation.BoundaryRepresentation
+rf_cem.representation.LineRepresentation
+rf_cem.representation.CircularArcRepresentation
+rf_cem.representation.EllipseArcRepresentation
+rf_cem.representation.SplineNurbsRepresentation
+rf_cem.representation.CompositeRegionRepresentation
+rf_cem.representation.GeometryPatch
+rf_cem.representation.RegionGeometry
+rf_cem.compiler.CompileRequest
+rf_cem.compiler.CompileRecord
+rf_cem.compiler.ProfileCompiler.compile
+```
+
+`ProfileCompiler.compile` is the single semantic/representation composition entry. Length is in `mm`, tangent angle in `deg`, curvature in `1/mm`, area in `mm^2` and volume in `mm^3`. It creates an oriented outer r-z profile, defines the implicit axis return for closure, validates simplicity/nonnegative radius, generates STEP through the existing isolated CadQuery/OCP worker, validates B-Rep, compares declared baselines, and writes exact artifact hashes into `compile_record.v0`. It never calls CST.
+
+Build both canonical cases into one immutable content-addressed bundle:
 
 ```powershell
-$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w0.sqlite'
+$CompilerRoot = 'analysis_outputs\rf_cem_boundary_compiler'
 $FamilyProof = 'analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.00414d4f'
 $Sls2Baseline = 'analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
+
+& $py -m rf_cem.compiler build `
+  --repo-root $RepoRoot `
+  --family-profile (Join-Path $FamilyProof 'family_profile.v0.json') `
+  --family-grammar (Join-Path $SemanticProof 'family_grammar.v0.json') `
+  --instance-boundary-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
+  --instance-boundary-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
+  --sls2-generation (Join-Path $Sls2Baseline 'generation.core.json') `
+  --sls2-baseline-step (Join-Path $Sls2Baseline 'cavity.step') `
+  --output-root $CompilerRoot
+```
+
+The current bundle is `r2_boundary_compiler.aa66a3e90125437b`. `build` refuses an existing target; use a fresh output root when intentionally proving byte reproducibility. It writes two compiled profiles, two normalized STEP files, two records and a source-binding manifest. Normalization changes only the STEP `FILE_NAME` timestamp, not geometry. SLS-2 contains 9 regions/10 patches; RF500 contains 11 regions/12 patches.
+
+Validate strict record identity and every output artifact size/hash:
+
+```powershell
+$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.aa66a3e90125437b'
+& $py -m rf_cem.compiler validate `
+  --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
+  --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
+  --bundle-root $CompilerProof
+```
+
+The RF500 accepted STEP is hash-bound but not locally materialized. Its passing comparison is deliberately limited to source-native profile equivalence plus new B-Rep validity and retains an explicit warning. Neither command defines RF metrics, runs CST, claims physical acceptance, induces a family or performs optimisation.
+
+### 9.10 RF-CEM Workbench W0/W1/W2 (R0B/R1/R2)
+
+`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W2 build below retains all W0/W1 sources, adds the two R2 compile records, and verifies their output artifacts. The current expert prior is indexed automatically by its repository source path.
+
+```powershell
+$WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w2.sqlite'
+$FamilyProof = 'analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.00414d4f'
+$Sls2Baseline = 'analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e'
+$SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
+$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
 
 & $py -m rf_cem.workbench rebuild `
   --database $WorkbenchDatabase `
@@ -965,7 +1020,9 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
   --family-grammar (Join-Path $SemanticProof 'family_grammar.v0.json') `
   --instance-boundary-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
   --instance-boundary-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
-  --instance-graph-diff (Join-Path $SemanticProof 'instance_graph_diff.v0.json')
+  --instance-graph-diff (Join-Path $SemanticProof 'instance_graph_diff.v0.json') `
+  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
+  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json')
 
 & $py -m rf_cem.workbench status `
   --database $WorkbenchDatabase `
@@ -976,11 +1033,13 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
   --repo-root $RepoRoot
 ```
 
-`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff before indexing. It writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
+`rebuild` validates required source schemas, requires the real instance IDs `sls2.r149.6593e02e` and `rf500.2c27faee.b1r3`, and requires the complete W1 triple (one grammar, exactly two graphs, one diff) when any W1 source is supplied. It revalidates both graphs against the grammar and recomputes the directed SLS-2-to-RF500 diff. W2 additionally requires exactly two unique canonical compile records under one or more immutable bundle `records/` directories. It rechecks profile/grammar/graph canonical and raw hashes, instance/region order, landmarks, representation reuse, no-CST/physical status and all output path/size/hash bindings before indexing. It writes to a temporary database, atomically replaces the named target and refuses source paths outside the repository. Rebuilding from identical bytes yields the same canonical registry snapshot and input-set SHA-256; SQLite file bytes themselves are not the contract. The database belongs under ignored `analysis_outputs/`, is never committed, and can always be rebuilt from the listed truth sources.
 
-`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage and deliberately limited legacy compile placeholders. The W1 view shows both ordered topologies, reviewed nose state, grammar, optional motif, ontologies, regions, landmarks, interfaces and graph diff. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+The current full W2 source set rebuilds to 17 fresh sources, 372 entities and 534 relations. Two consecutive rebuilds produced input-set SHA-256 `91f6fdc82ba77f73f8b452b3a0499ad56178f23719f0848978af4a743b591a74`; its canonical portable snapshot SHA-256 is `d9139bfe7d3a4e2a536545addc45999a61f5fa337dd23733a3c6379a28b271fc`.
 
-W1 does not implement `RegionGeometry`, `GeometryPatch`, `compile_record.v0`, Compiler v0, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by later roadmap phases.
+`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage and **Compile Records / W2**. W1 shows both ordered topologies, reviewed nose state, grammar, optional motif, ontologies, regions, landmarks, interfaces and graph diff. W2 shows both compile cards, region→representation→patch, landmarks, continuity, validation, accepted-baseline warnings and hash-verified artifacts. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+
+W2 implements geometry compilation but not family induction, observation/RF result contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by later roadmap phases.
 
 ## 10. Workflow branch entries
 

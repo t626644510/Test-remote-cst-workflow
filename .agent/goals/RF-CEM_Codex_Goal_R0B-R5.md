@@ -121,6 +121,14 @@ Before new architecture work:
    - merge or prepare one PR into `workflow/rf-cem-literature-review`.
 7. Start R0B from the updated canonical owner, not from an obsolete duplicate worktree.
 
+### 2.1 Execution progress as of 2026-08-20
+
+- Stage C: merged by PR #4 at `3867a9a8eae502359556a83bcad15b3a519e64de`.
+- R0B: merged by PR #5 at `c0b4574ee2dc87ee98938b282ec023aeebfa12d3`.
+- R1: merged by PR #6 at `5ae1ba07b841d6adf6e180ec1eedfd073657987b`.
+- R2: implementation, real no-CST proof, deterministic W2 rebuild, targeted tests, and browser QA passed locally on `codex/rf-cem-r2-boundary-compiler`; documentation/full-suite/one-push closeout and canonical merge remain before R3 may start.
+- R3/R4/R5: not started. R5 live-CST work remains separately blocked on explicit user authorization.
+
 ---
 
 ## 3. Development policy
@@ -659,15 +667,15 @@ Do not create multiple dated mini-reports. Update canonical status and use the p
 
 ## 13. Immediate goal
 
-Begin with:
+Close R2, then continue from its canonical merge:
 
 ```text
-Stage C closeout
-→ R0B Architecture Re-baseline
-→ Workbench W0
+R2 full no-CST/documentation closeout
+→ one push + PR checks + canonical merge
+→ R3 Family Induction / Extension v0
 ```
 
-Do not begin R1 until R0B Hard Gate passes.
+Do not begin R3 until R2 Hard Gate passes and the R2 phase is integrated into the canonical owner.
 
 Proceed autonomously using repository code, tests and maintained documentation. Ask the user only when:
 

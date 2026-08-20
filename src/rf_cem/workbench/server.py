@@ -1,4 +1,4 @@
-"""Authenticated loopback-only, read-only HTTP Workbench for W0/W1/W2."""
+"""Authenticated loopback-only, read-only HTTP Workbench for W0-W3."""
 
 from __future__ import annotations
 
@@ -63,6 +63,23 @@ _PAGES = {
             "geometry_validation",
             "baseline_comparison",
             "geometry_artifact",
+        ),
+    ),
+    "/family-induction": (
+        "family-induction",
+        "Family Induction / W3",
+        (
+            "family_induction_bundle",
+            "graph_alignment",
+            "common_backbone_slot",
+            "alignment_residual",
+            "family_extension_proposal",
+            "proposal_review",
+            "grammar_patch",
+            "grammar_patch_application",
+            "grammar_diff",
+            "blind_instance_graph",
+            "blind_validation",
         ),
     ),
 }
@@ -196,6 +213,7 @@ def create_workbench_handler(
                     show_sources=parsed.path in {"/", "/validation"},
                     semantic_graphs=parsed.path == "/semantic-graphs",
                     compile_records=parsed.path == "/compile-records",
+                    family_induction=parsed.path == "/family-induction",
                 ).encode("utf-8")
                 self._send(200, body, "text/html; charset=utf-8")
                 return
@@ -240,7 +258,7 @@ def create_workbench_handler(
                     "ok": False,
                     "error": {
                         "code": "method_not_allowed",
-                        "message": "Workbench W0/W1/W2 is read-only and CORS is disabled",
+                        "message": "Workbench W0-W3 is read-only and CORS is disabled",
                     },
                 },
             )
@@ -357,6 +375,7 @@ def _render_page(
     show_sources: bool,
     semantic_graphs: bool,
     compile_records: bool,
+    family_induction: bool,
 ) -> str:
     counts = reader.entity_counts()
     sources = reader.audit_sources(source_root) if show_sources else []
@@ -380,6 +399,8 @@ def _render_page(
         sections.extend(_semantic_graph_sections(entities))
     elif compile_records:
         sections.extend(_compile_record_sections(entities))
+    elif family_induction:
+        sections.extend(_family_induction_sections(entities))
     elif entities:
         sections.append(_entity_table(title, entities))
     elif not overview:
@@ -401,7 +422,8 @@ main{{max-width:1500px;margin:0 auto;padding:22px}}section{{background:var(--pap
 table{{border-collapse:collapse;width:100%;min-width:760px}}th,td{{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}}th{{color:#475467;background:#f8fafc}}code,pre{{font:12px/1.4 ui-monospace,Consolas,monospace}}pre{{white-space:pre-wrap;max-width:780px;margin:0}}.status{{font-weight:650}}.empty{{color:var(--muted)}}
 .graph-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.graph-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.graph-card h3{{margin:0 0 5px;font-size:16px}}.nose{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eaf2ff;color:#1849a9;font-weight:700}}.sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:12px}}.chip{{display:inline-block;border:1px solid #b9c5d8;border-radius:6px;background:#fff;padding:4px 7px;font:12px ui-monospace,Consolas,monospace}}.arrow{{color:var(--muted)}}.facts{{color:var(--muted);margin:7px 0 0}}
 .compile-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}}.compile-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.compile-card h3{{margin:0 0 5px;font-size:16px}}.pass-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#eafaf0;color:#067647;font-weight:700}}.trace-list{{display:grid;gap:8px}}.trace-row{{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px;border-bottom:1px solid var(--line)}}.owner{{border-color:#84adff;background:#eef4ff}}.patch-sequence{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
-</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
+.induction-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:12px}}.induction-card{{border:1px solid var(--line);border-radius:9px;padding:14px;background:#fbfcfe}}.induction-card h3{{margin:0 0 7px;font-size:16px}}.pending-pill{{display:inline-block;padding:3px 8px;border-radius:999px;background:#fff4e5;color:#b54708;font-weight:700}}.held-out{{border-left:5px solid #12b76a}}.backbone{{display:flex;align-items:center;gap:5px;flex-wrap:wrap}}
+</style></head><body><header><h1>RF-CEM Workbench W0 / W1 / W2 / W3</h1><p>Derived read model · no CST · fixed read-only routes</p></header><nav>{nav}</nav><main><h2>{escape(title)}</h2>{''.join(sections)}</main></body></html>"""
 
 
 def _semantic_graph_sections(entities: list[dict[str, Any]]) -> list[str]:
@@ -564,6 +586,124 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
         if values:
             sections.append(_entity_table(label, values))
     return sections
+
+
+def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
+    """Render the complete W3 alignment-to-blind-validation audit chain."""
+
+    by_kind: dict[str, list[dict[str, Any]]] = {}
+    for entity in entities:
+        by_kind.setdefault(str(entity["entity_kind"]), []).append(entity)
+    alignments = by_kind.get("graph_alignment", [])
+    if not alignments:
+        return [
+            '<section><p class="empty">No W3 family-induction proof bundle was supplied at rebuild.</p></section>'
+        ]
+
+    alignment = alignments[0]
+    alignment_payload = alignment.get("payload", {})
+    if not isinstance(alignment_payload, dict):
+        alignment_payload = {}
+    proposal = _first_entity_payload(by_kind, "family_extension_proposal")
+    review = _first_entity_payload(by_kind, "proposal_review")
+    application = _first_entity_payload(by_kind, "grammar_patch_application")
+    blind = _first_entity_payload(by_kind, "blind_validation")
+    blind_graph = _first_entity_payload(by_kind, "blind_instance_graph")
+
+    slots = sorted(
+        by_kind.get("common_backbone_slot", []),
+        key=lambda item: int(
+            (item.get("payload") or {}).get("slot_index", 0)
+            if isinstance(item.get("payload"), dict)
+            else 0
+        ),
+    )
+    backbone_chips = '<span class="arrow">&rarr;</span>'.join(
+        f'<span class="chip">{escape(str((item.get("payload") or {}).get("semantic_key") or item["label"]))}</span>'
+        for item in slots
+        if isinstance(item.get("payload"), dict)
+    )
+    residuals = by_kind.get("alignment_residual", [])
+    confidence = proposal.get("confidence", "")
+    parameter_names_read = alignment_payload.get("parameter_names_read")
+    training_ids = alignment_payload.get("graph_refs", [])
+    training_count = len(training_ids) if isinstance(training_ids, list) else 0
+    review_decision = str(review.get("decision") or "missing")
+    patch_applied = application.get("applied") is True
+    grammar_diff = application.get("grammar_diff", [])
+    grammar_diff_count = len(grammar_diff) if isinstance(grammar_diff, list) else 0
+    blind_instance_id = str(
+        blind.get("blind_instance_id")
+        or blind_graph.get("instance_id")
+        or "unknown"
+    )
+
+    cards = (
+        '<article class="induction-card">'
+        '<h3>Reviewed semantic-graph alignment</h3>'
+        f'<p><span class="pass-pill">{escape(str(alignment["status"]))}</span></p>'
+        f'<p class="facts"><b>{training_count}</b> training graphs · '
+        f'<b>{len(slots)}</b> common slots · <b>{len(residuals)}</b> residuals</p>'
+        f'<p class="facts">Algorithm: <code>{escape(str(alignment_payload.get("algorithm_version") or ""))}</code></p>'
+        f'<p class="facts">Parameter names read: <b>{escape(str(parameter_names_read))}</b></p>'
+        '</article>'
+        '<article class="induction-card">'
+        '<h3>Optional motif proposal</h3>'
+        '<p><span class="pending-pill">pending · non-mutating</span></p>'
+        f'<p class="facts">Kind: <b>{escape(str(proposal.get("proposal_kind") or ""))}</b> · '
+        f'confidence: <b>{escape(str(confidence))}</b></p>'
+        f'<p class="facts">Region: <code>{escape(str(proposal.get("region_type") or ""))}</code> · '
+        f'counts: <code>{escape(json.dumps(proposal.get("allowed_counts", [])))}</code></p>'
+        '<p class="facts">Pending proposal does not mutate grammar.</p>'
+        '</article>'
+        '<article class="induction-card">'
+        '<h3>Manual review and explicit patch</h3>'
+        f'<p><span class="pass-pill">{escape(review_decision)}</span></p>'
+        f'<p class="facts">Accepted manual review: <b>{escape(str(review_decision == "accepted"))}</b> · '
+        f'patch applied: <b>{escape(str(patch_applied))}</b></p>'
+        f'<p class="facts">Grammar diff entries: <b>{grammar_diff_count}</b> · '
+        f'all training instances valid: <b>{escape(str(application.get("all_instances_valid")))}</b></p>'
+        '</article>'
+        '<article class="induction-card held-out">'
+        '<h3>Held-out real instance: LEReC 704 MHz</h3>'
+        f'<p><span class="pass-pill">{escape(str(blind.get("status") or ""))}</span></p>'
+        f'<p class="facts">Instance: <code>{escape(blind_instance_id)}</code></p>'
+        f'<p class="facts">Classification: <b>{escape(str(blind.get("classification") or ""))}</b></p>'
+        f'<p class="facts">Used for induction: <b>{escape(str(blind.get("blind_instance_used_for_induction")))}</b></p>'
+        f'<p class="facts">Representation contract: <b>{escape(str(blind.get("representation_contract") or ""))}</b> · No live CST</p>'
+        '</article>'
+    )
+    sections = [
+        '<section><h2>W3 hard-gate chain</h2>'
+        f'<div class="induction-grid">{cards}</div></section>',
+        '<section><h2>Common semantic backbone</h2>'
+        f'<div class="backbone">{backbone_chips}</div></section>',
+    ]
+    if residuals:
+        sections.append(_entity_table("Alignment residuals / motif evidence", residuals))
+    for kind, label in (
+        ("family_extension_proposal", "Evidence-bound extension proposal"),
+        ("proposal_review", "Explicit proposal review"),
+        ("grammar_patch", "Authorized grammar patch"),
+        ("grammar_diff", "Grammar before / after diff"),
+        ("blind_instance_graph", "Held-out LEReC reviewed semantic graph"),
+        ("blind_validation", "Post-induction blind validation"),
+        ("family_induction_bundle", "R3 source-bound proof bundle"),
+    ):
+        values = by_kind.get(kind, [])
+        if values:
+            sections.append(_entity_table(label, values))
+    return sections
+
+
+def _first_entity_payload(
+    by_kind: dict[str, list[dict[str, Any]]], kind: str
+) -> dict[str, Any]:
+    values = by_kind.get(kind, [])
+    if not values:
+        return {}
+    payload = values[0].get("payload", {})
+    return payload if isinstance(payload, dict) else {}
 
 
 def _entity_table(title: str, entities: list[dict[str, Any]]) -> str:

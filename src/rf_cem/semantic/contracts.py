@@ -1270,6 +1270,25 @@ def validate_graph_against_grammar(
             raise SemanticContractError("paired motif must occur once on each side")
 
 
+def validate_reviewed_graph_intrinsic(graph: InstanceBoundaryGraph) -> None:
+    """Revalidate one reviewed graph without requiring family admission.
+
+    ``InstanceBoundaryGraph`` construction already enforces the ontology, ID,
+    linear topology, landmark/interface, evidence, review-state, and portable
+    finite-value contracts.  The canonical round trip repeats those intrinsic
+    checks at an explicit R3 boundary while deliberately consulting no
+    ``FamilyGrammar``.  A reviewed motif may therefore be intrinsic-valid even
+    when it has not yet been admitted to a seed grammar.
+    """
+
+    mapping = graph.to_mapping()
+    loaded = InstanceBoundaryGraph.from_mapping(mapping)
+    if loaded != graph or loaded.to_mapping() != mapping:
+        raise SemanticContractError(
+            "reviewed instance graph is not canonically round-trippable"
+        )
+
+
 @dataclass(frozen=True)
 class InstanceGraphDiff:
     """Deterministic semantic/topology comparison of two instance graphs."""

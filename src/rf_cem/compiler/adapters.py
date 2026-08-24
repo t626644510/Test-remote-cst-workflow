@@ -23,7 +23,7 @@ from rf_cem.representation import (
     LineRepresentation,
     Point2D,
     PrimitiveRepresentation,
-    SplineNurbsRepresentation,
+    SplineApproxRepresentation,
     trim_representation,
 )
 from rf_cem.semantic import (
@@ -40,12 +40,16 @@ from rf_cem.semantic.contracts import canonical_sha256, file_sha256
 
 from .contracts import (
     BaselineContract,
+    BoundaryContinuityPolicy,
     CompileContractError,
     CompileRequest,
+    ContinuityInterfaceOverride,
+    ContinuityRequirement,
     ContractSourceRef,
     NativeArtifactRef,
     RegionRepresentationBinding,
     SourceNativeProvenance,
+    default_boundary_continuity_policy,
 )
 
 
@@ -177,6 +181,7 @@ def prepare_r2_cases(sources: R2SourceSet) -> tuple[PreparedCompileCase, ...]:
             source_native_provenance=_source_native_provenance(instance, profile_ref),
             baseline=baseline,
             region_bindings=bindings,
+            continuity_policy=_continuity_policy(graph),
         )
         cases.append(
             PreparedCompileCase(
@@ -186,6 +191,35 @@ def prepare_r2_cases(sources: R2SourceSet) -> tuple[PreparedCompileCase, ...]:
             )
         )
     return tuple(cases)
+
+
+def _continuity_policy(graph: InstanceBoundaryGraph) -> BoundaryContinuityPolicy:
+    """Declare RF-wall G1 defaults and reviewed RF500 sharp nose corners."""
+
+    region_types = {item.region_id: item.region_type for item in graph.regions}
+    overrides: list[ContinuityInterfaceOverride] = []
+    for interface in graph.interfaces:
+        pair = {
+            region_types[interface.left_region_id],
+            region_types[interface.right_region_id],
+        }
+        if pair == {"IrisRegion", "NoseRegion"}:
+            overrides.append(
+                ContinuityInterfaceOverride(
+                    interface_id=interface.interface_id,
+                    requirement=ContinuityRequirement("C0"),
+                    intentional_corner=True,
+                    rationale=(
+                        "Reviewed RF500 iris-to-nose sharp transition is an "
+                        "intentional geometric corner."
+                    ),
+                )
+            )
+    return default_boundary_continuity_policy(
+        graph.family_id,
+        overrides=tuple(overrides),
+        policy_id=f"{graph.instance_id}.boundary_continuity_policy.v0",
+    )
 
 
 def _sls2_source_curves(
@@ -351,12 +385,12 @@ def _rf500_source_curves(
             )
             if not control_points:
                 raise CompileContractError(f"RF500 NURBS lacks source control points: {source_ref}")
-            representation = SplineNurbsRepresentation(
+            representation = SplineApproxRepresentation(
                 f"{instance.instance_id}.source.{source_ref}",
-                degree=_integer(curve.get("degree", 3), f"{source_ref}.degree"),
-                fit_points=fit_points,
-                control_points=control_points,
-                backend_point_source="control_points",
+                max_degree=_integer(curve.get("degree", 3), f"{source_ref}.degree"),
+                fit_input_points=fit_points,
+                source_control_point_hints=control_points,
+                backend_input_source="source_control_point_hints",
             )
         else:
             raise CompileContractError(f"unsupported RF500 native segment kind: {kind}")

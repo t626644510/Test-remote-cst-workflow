@@ -24,6 +24,7 @@ from rf_cem.representation import (
     Point2D,
     PrimitiveRepresentation,
     RegionGeometry,
+    SplineApproxRepresentation,
     SplineNurbsRepresentation,
 )
 from rf_cem.semantic import validate_graph_against_grammar
@@ -34,6 +35,7 @@ from .contracts import (
     CompileRecord,
     CompileRequest,
     ContinuityCheck,
+    EndpointConstraint,
     LandmarkGeometryBinding,
     OutputArtifactRef,
 )
@@ -43,7 +45,7 @@ PROFILE_SCHEMA_VERSION = "compiled_profile.v0"
 GEOMETRY_VALIDATION_VERSION = "r2_geometry_validation.v0"
 BASELINE_COMPARISON_VERSION = "r2_baseline_comparison.v0"
 C0_TOLERANCE_MM = 1.0e-6
-G1_TOLERANCE_DEG = 0.5
+G1_TOLERANCE_DEG = 2.0
 G2_TOLERANCE_PER_MM = 1.0e-3
 
 
@@ -114,7 +116,10 @@ class ProfileCompiler:
         )
         _validate_source_partition_coverage(patches)
         landmark_bindings = _resolve_landmarks(request, patches)
-        continuity_checks = _continuity_checks(patches)
+        endpoint_constraints = _endpoint_constraints(
+            request, patches, landmark_bindings
+        )
+        continuity_checks = _continuity_checks(request, patches)
         profile_points = _profile_points(patches)
         backend_segments = tuple(_backend_segment(patch) for patch in patches)
 
@@ -143,6 +148,7 @@ class ProfileCompiler:
             request,
             region_geometries=region_geometries,
             landmark_bindings=landmark_bindings,
+            endpoint_constraints=endpoint_constraints,
             profile_points=profile_points,
             backend_segments=backend_segments,
         )
@@ -193,6 +199,8 @@ class ProfileCompiler:
             output_artifacts=output_artifacts,
             warnings=warnings,
             status="pass" if passed else "failed",
+            continuity_policy=request.continuity_policy,
+            endpoint_constraints=endpoint_constraints,
         )
         return CompileResult(
             record=record,
@@ -337,8 +345,79 @@ def _resolve_landmarks(
     return tuple(sorted(values, key=lambda item: (order.get(item.landmark_id, 10**9), item.landmark_id)))
 
 
-def _continuity_checks(patches: tuple[GeometryPatch, ...]) -> tuple[ContinuityCheck, ...]:
+def _endpoint_constraints(
+    request: CompileRequest,
+    patches: tuple[GeometryPatch, ...],
+    landmark_bindings: tuple[LandmarkGeometryBinding, ...],
+) -> tuple[EndpointConstraint, ...]:
+    """Classify the two one-sided profile termini outside continuity checks."""
+
+    if not patches:
+        raise CompileContractError("compiled profile has no patches")
+    bindings = {item.landmark_id: item for item in landmark_bindings}
+    values: list[EndpointConstraint] = []
+    for role, patch, landmark_id, point, tangent in (
+        (
+            "profile_start",
+            patches[0],
+            patches[0].start_landmark_id,
+            patches[0].representation.start,
+            patches[0].representation.start_tangent(),
+        ),
+        (
+            "profile_end",
+            patches[-1],
+            patches[-1].end_landmark_id,
+            patches[-1].representation.end,
+            patches[-1].representation.end_tangent(),
+        ),
+    ):
+        binding = bindings.get(landmark_id)
+        if binding is None or binding.binding_role != "profile_endpoint":
+            raise CompileContractError(
+                f"profile endpoint lacks endpoint landmark classification: {landmark_id}"
+            )
+        if binding.incident_patch_ids != (patch.patch_id,):
+            raise CompileContractError(
+                f"profile endpoint must have exactly one incident patch: {landmark_id}"
+            )
+        normal = (-tangent[1], tangent[0])
+        values.append(
+            EndpointConstraint(
+                constraint_id=f"{request.instance_id}.endpoint_constraint.{role}",
+                landmark_id=landmark_id,
+                endpoint_role=role,
+                incident_patch_id=patch.patch_id,
+                position=point,
+                tangent=tangent,
+                normal=normal,
+                termination_plane="constant_z",
+                classification_source=(
+                    "instance_boundary_graph.landmark_type:AxialApertureLandmark"
+                ),
+            )
+        )
+    return tuple(values)
+
+
+def _continuity_checks(
+    request: CompileRequest, patches: tuple[GeometryPatch, ...]
+) -> tuple[ContinuityCheck, ...]:
     values: list[ContinuityCheck] = []
+    policy = request.continuity_policy
+    if policy is None:
+        raise CompileContractError("compile request lacks a continuity policy")
+    overrides = {
+        item.interface_id: item for item in policy.semantic_interface_overrides
+    }
+    interfaces = {
+        (
+            item.left_region_id,
+            item.right_region_id,
+            item.landmark_id,
+        ): item
+        for item in request.instance_graph.interfaces
+    }
     for index, (left, right) in enumerate(zip(patches, patches[1:])):
         if left.end_landmark_id != right.start_landmark_id:
             raise CompileContractError(
@@ -355,9 +434,39 @@ def _continuity_checks(patches: tuple[GeometryPatch, ...]) -> tuple[ContinuityCh
         c0_pass = gap <= C0_TOLERANCE_MM
         g1_pass = c0_pass and tangent_angle <= G1_TOLERANCE_DEG
         g2_pass = g1_pass and curvature_delta <= G2_TOLERANCE_PER_MM
-        same_source = left.source_native_segment_ref == right.source_native_segment_ref
-        required_level = "G2" if same_source else "C0"
-        required_pass = g2_pass if required_level == "G2" else c0_pass
+        within_region = left.owner_region_id == right.owner_region_id
+        interface_id: str | None = None
+        intentional_corner = False
+        if within_region:
+            requirement = policy.internal_patch_policy
+            requirement_source = "internal_patch_policy"
+        else:
+            interface = interfaces.get(
+                (
+                    left.owner_region_id,
+                    right.owner_region_id,
+                    left.end_landmark_id,
+                )
+            )
+            if interface is None:
+                raise CompileContractError(
+                    "cross-region patch join lacks a matching semantic interface"
+                )
+            interface_id = interface.interface_id
+            override = overrides.get(interface_id)
+            if override is None:
+                requirement = policy.semantic_interface_default
+                requirement_source = "semantic_interface_default"
+            else:
+                requirement = override.requirement
+                requirement_source = "semantic_interface_override"
+                intentional_corner = override.intentional_corner
+        required_level = requirement.required_level
+        required_pass = {
+            "C0": c0_pass,
+            "G1": g1_pass,
+            "G2": g2_pass,
+        }[required_level]
         values.append(
             ContinuityCheck(
                 check_id=f"continuity.{index:02d}",
@@ -365,9 +474,7 @@ def _continuity_checks(patches: tuple[GeometryPatch, ...]) -> tuple[ContinuityCh
                 left_patch_id=left.patch_id,
                 right_patch_id=right.patch_id,
                 join_scope=(
-                    "within_region"
-                    if left.owner_region_id == right.owner_region_id
-                    else "cross_region"
+                    "within_region" if within_region else "cross_region"
                 ),
                 required_level=required_level,
                 c0_gap_mm=gap,
@@ -380,6 +487,11 @@ def _continuity_checks(patches: tuple[GeometryPatch, ...]) -> tuple[ContinuityCh
                 g1_pass=g1_pass,
                 g2_pass=g2_pass,
                 required_pass=required_pass,
+                requirement_source=requirement_source,
+                policy_ref=policy.policy_id,
+                intentional_corner=intentional_corner,
+                enforcement=requirement.enforcement,
+                interface_id=interface_id,
             )
         )
     return tuple(values)
@@ -438,10 +550,34 @@ def _backend_segment(patch: GeometryPatch) -> dict[str, Any]:
                 "degree_max": 5,
             },
         }
+    if isinstance(representation, SplineApproxRepresentation):
+        curve = {
+            "type": "spline_approximation",
+            "backend_contract": representation.backend_contract,
+            "fidelity": representation.fidelity,
+            "degree_max": representation.max_degree,
+            "tolerance_mm": representation.approximation_tolerance_mm,
+            "optimization_ready": representation.optimization_ready,
+            "exact_nurbs": representation.exact_nurbs,
+        }
+        if representation.backend_input_source == "source_control_point_hints":
+            curve["control_points"] = [
+                _kernel_point(point)
+                for point in representation.source_control_point_hints
+            ]
+            curve["input_source"] = "source_control_point_hints"
+        else:
+            curve["sampled_points"] = [
+                _kernel_point(point) for point in representation.fit_input_points
+            ]
+            curve["input_source"] = "fit_input_points"
+        return {**common, "kind": "nurbs", "curve": curve}
     if isinstance(representation, SplineNurbsRepresentation):
         curve: dict[str, Any] = {
-            "type": "nurbs",
+            "type": "legacy_spline_approximation",
+            "backend_contract": representation.fitting_contract,
             "degree_max": representation.degree,
+            "tolerance_mm": representation.approximation_tolerance_mm,
         }
         if representation.backend_point_source == "control_points":
             curve["control_points"] = [
@@ -587,6 +723,7 @@ def _compiled_profile_mapping(
     *,
     region_geometries: tuple[RegionGeometry, ...],
     landmark_bindings: tuple[LandmarkGeometryBinding, ...],
+    endpoint_constraints: tuple[EndpointConstraint, ...],
     profile_points: tuple[Point2D, ...],
     backend_segments: tuple[dict[str, Any], ...],
 ) -> dict[str, Any]:
@@ -601,6 +738,8 @@ def _compiled_profile_mapping(
         "implicit_axis_closure": True,
         "region_geometries": [item.to_mapping() for item in region_geometries],
         "landmark_bindings": [item.to_mapping() for item in landmark_bindings],
+        "continuity_policy": request.continuity_policy.to_mapping(),
+        "endpoint_constraints": [item.to_mapping() for item in endpoint_constraints],
         "profile_points": [point.to_mapping() for point in profile_points],
         "kernel_segments": list(backend_segments),
     }

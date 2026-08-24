@@ -138,7 +138,7 @@ def build_exact_geometry_reference(
         compile_content_sha256=loaded.content_sha256,
         compiler_version=loaded.compiler_version,
         compile_record_source=EvidenceRef(
-            source_kind="compile_record.v0",
+            source_kind=loaded.schema_version,
             source_path=record_path.relative_to(root).as_posix(),
             source_raw_sha256=file_sha256(record_path),
             locator="#",

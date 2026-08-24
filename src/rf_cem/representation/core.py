@@ -14,6 +14,7 @@ from typing import Any, ClassVar, Mapping, Protocol, Sequence, Union, runtime_ch
 
 
 BOUNDARY_REPRESENTATION_SCHEMA_VERSION = "boundary_representation.v0"
+BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1 = "boundary_representation.v1"
 GEOMETRY_PATCH_SCHEMA_VERSION = "geometry_patch.v0"
 REGION_GEOMETRY_SCHEMA_VERSION = "region_geometry.v0"
 DEFAULT_JOIN_TOLERANCE_MM = 1.0e-6
@@ -303,7 +304,7 @@ class EllipseArcRepresentation:
 
 @dataclass(frozen=True)
 class SplineNurbsRepresentation:
-    """A source-native spline/NURBS fit contract.
+    """Deprecated v0 compatibility path for historical spline/NURBS payloads.
 
     ``fit_points`` are the deterministic validation trace.  The explicit
     ``backend_point_source`` preserves whether the legacy CadQuery adapter used
@@ -376,11 +377,169 @@ class SplineNurbsRepresentation:
         }
 
 
+@dataclass(frozen=True)
+class SplineApproxRepresentation:
+    """Optimization-ready CadQuery/OCCT spline approximation contract.
+
+    The input points and optional source control-point hints are not represented
+    as exact NURBS poles.  The backend fits them with ``splineApprox`` at the
+    declared 1 micrometre tolerance.
+    """
+
+    representation_type: ClassVar[str] = "SplineApprox"
+    representation_id: str
+    max_degree: int
+    fit_input_points: tuple[Point2D, ...]
+    source_control_point_hints: tuple[Point2D, ...] = ()
+    backend_input_source: str = "fit_input_points"
+    backend_contract: str = "cadquery.splineApprox.v0"
+    approximation_tolerance_mm: float = 1.0e-3
+    fidelity: str = "approximate"
+    optimization_ready: bool = True
+    exact_nurbs: bool = False
+
+    def __post_init__(self) -> None:
+        _non_empty(self.representation_id, "spline_approx.representation_id")
+        if (
+            isinstance(self.max_degree, bool)
+            or not isinstance(self.max_degree, int)
+            or not 1 <= self.max_degree <= 5
+        ):
+            raise RepresentationContractError(
+                "spline_approx.max_degree must be an integer from 1 through 5"
+            )
+        _point_sequence(self.fit_input_points, "spline_approx.fit_input_points")
+        if self.source_control_point_hints:
+            _point_sequence(
+                self.source_control_point_hints,
+                "spline_approx.source_control_point_hints",
+            )
+        if self.backend_input_source not in {
+            "fit_input_points",
+            "source_control_point_hints",
+        }:
+            raise RepresentationContractError(
+                "unsupported spline approximation backend_input_source"
+            )
+        if (
+            self.backend_input_source == "source_control_point_hints"
+            and not self.source_control_point_hints
+        ):
+            raise RepresentationContractError(
+                "control-point-hint backend source requires source_control_point_hints"
+            )
+        if self.backend_contract != "cadquery.splineApprox.v0":
+            raise RepresentationContractError(
+                "unsupported spline approximation backend contract"
+            )
+        _positive(
+            self.approximation_tolerance_mm,
+            "spline_approx.approximation_tolerance_mm",
+        )
+        if self.fidelity != "approximate":
+            raise RepresentationContractError("spline approximation fidelity must be approximate")
+        if self.optimization_ready is not True:
+            raise RepresentationContractError("spline approximation must remain optimization ready")
+        if self.exact_nurbs is not False:
+            raise RepresentationContractError("spline approximation cannot claim exact NURBS")
+
+    @property
+    def start(self) -> Point2D:
+        return self.fit_input_points[0]
+
+    @property
+    def end(self) -> Point2D:
+        return self.fit_input_points[-1]
+
+    @property
+    def parameter_count(self) -> int:
+        return (
+            2 * len(self.fit_input_points)
+            + 2 * len(self.source_control_point_hints)
+            + 2
+        )
+
+    def sample(self) -> tuple[Point2D, ...]:
+        return self.fit_input_points
+
+    def start_tangent(self) -> tuple[float, float]:
+        return _secant(
+            self.fit_input_points[0],
+            self.fit_input_points[1],
+            "spline approximation start tangent",
+        )
+
+    def end_tangent(self) -> tuple[float, float]:
+        return _secant(
+            self.fit_input_points[-2],
+            self.fit_input_points[-1],
+            "spline approximation end tangent",
+        )
+
+    def start_curvature_per_mm(self) -> float:
+        return _three_point_curvature(self.fit_input_points[:3])
+
+    def end_curvature_per_mm(self) -> float:
+        return _three_point_curvature(self.fit_input_points[-3:])
+
+    @property
+    def degree(self) -> int:
+        """Deprecated Python compatibility view of ``max_degree``."""
+
+        return self.max_degree
+
+    @property
+    def fit_points(self) -> tuple[Point2D, ...]:
+        """Deprecated Python compatibility view of ``fit_input_points``."""
+
+        return self.fit_input_points
+
+    @property
+    def control_points(self) -> tuple[Point2D, ...]:
+        """Deprecated compatibility view of source control-point hints."""
+
+        return self.source_control_point_hints
+
+    @property
+    def backend_point_source(self) -> str:
+        return (
+            "fit_points"
+            if self.backend_input_source == "fit_input_points"
+            else "control_points"
+        )
+
+    @property
+    def fitting_contract(self) -> str:
+        return "cadquery_spline_approximation.v0"
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "schema_version": BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1,
+            "representation_type": self.representation_type,
+            "representation_id": self.representation_id,
+            "representation_family": "spline",
+            "fidelity": self.fidelity,
+            "fit_input_points": [
+                point.to_mapping() for point in self.fit_input_points
+            ],
+            "source_control_point_hints": [
+                point.to_mapping() for point in self.source_control_point_hints
+            ],
+            "max_degree": self.max_degree,
+            "backend_input_source": self.backend_input_source,
+            "backend_contract": self.backend_contract,
+            "approximation_tolerance_mm": float(self.approximation_tolerance_mm),
+            "optimization_ready": self.optimization_ready,
+            "exact_nurbs": self.exact_nurbs,
+        }
+
+
 PrimitiveRepresentation = Union[
     LineRepresentation,
     CircularArcRepresentation,
     EllipseArcRepresentation,
     SplineNurbsRepresentation,
+    SplineApproxRepresentation,
 ]
 
 
@@ -652,10 +811,79 @@ def representation_from_mapping(value: Mapping[str, Any]) -> Representation:
     """Parse one strict versioned representation mapping."""
 
     mapping = _mapping(value, "representation")
-    if mapping.get("schema_version") != BOUNDARY_REPRESENTATION_SCHEMA_VERSION:
+    schema_version = mapping.get("schema_version")
+    if schema_version not in {
+        BOUNDARY_REPRESENTATION_SCHEMA_VERSION,
+        BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1,
+    }:
         raise RepresentationContractError("unsupported boundary representation schema")
     kind = _string(mapping.get("representation_type"), "representation.representation_type")
     representation_id = _string(mapping.get("representation_id"), "representation.representation_id")
+    if kind == SplineApproxRepresentation.representation_type:
+        if schema_version != BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1:
+            raise RepresentationContractError(
+                "SplineApprox requires boundary_representation.v1"
+            )
+        _exact_keys(
+            mapping,
+            {
+                "schema_version",
+                "representation_type",
+                "representation_id",
+                "representation_family",
+                "fidelity",
+                "fit_input_points",
+                "source_control_point_hints",
+                "max_degree",
+                "backend_input_source",
+                "backend_contract",
+                "approximation_tolerance_mm",
+                "optimization_ready",
+                "exact_nurbs",
+            },
+            "spline_approx",
+        )
+        if mapping["representation_family"] != "spline":
+            raise RepresentationContractError(
+                "SplineApprox representation_family must be spline"
+            )
+        if not isinstance(mapping["optimization_ready"], bool):
+            raise RepresentationContractError(
+                "spline_approx.optimization_ready must be boolean"
+            )
+        if not isinstance(mapping["exact_nurbs"], bool):
+            raise RepresentationContractError(
+                "spline_approx.exact_nurbs must be boolean"
+            )
+        return SplineApproxRepresentation(
+            representation_id=representation_id,
+            max_degree=_integer(mapping["max_degree"], "spline_approx.max_degree"),
+            fit_input_points=_points(
+                mapping["fit_input_points"], "spline_approx.fit_input_points"
+            ),
+            source_control_point_hints=_points(
+                mapping["source_control_point_hints"],
+                "spline_approx.source_control_point_hints",
+            ),
+            backend_input_source=_string(
+                mapping["backend_input_source"],
+                "spline_approx.backend_input_source",
+            ),
+            backend_contract=_string(
+                mapping["backend_contract"], "spline_approx.backend_contract"
+            ),
+            approximation_tolerance_mm=_number(
+                mapping["approximation_tolerance_mm"],
+                "spline_approx.approximation_tolerance_mm",
+            ),
+            fidelity=_string(mapping["fidelity"], "spline_approx.fidelity"),
+            optimization_ready=mapping["optimization_ready"],
+            exact_nurbs=mapping["exact_nurbs"],
+        )
+    if schema_version != BOUNDARY_REPRESENTATION_SCHEMA_VERSION:
+        raise RepresentationContractError(
+            "boundary_representation.v1 is currently reserved for SplineApprox"
+        )
     if kind == LineRepresentation.representation_type:
         _exact_keys(mapping, {"schema_version", "representation_type", "representation_id", "start", "end"}, "line")
         return LineRepresentation(
@@ -815,6 +1043,18 @@ def trim_representation(
             sample_count=sample_count or representation.sample_count,
         )
     fit_points = _trim_trace(representation.fit_points, start_fraction, end_fraction)
+    if isinstance(representation, SplineApproxRepresentation):
+        return SplineApproxRepresentation(
+            representation_id=representation_id,
+            max_degree=min(
+                representation.max_degree, max(1, len(fit_points) - 1)
+            ),
+            fit_input_points=fit_points,
+            source_control_point_hints=(),
+            backend_input_source="fit_input_points",
+            backend_contract=representation.backend_contract,
+            approximation_tolerance_mm=representation.approximation_tolerance_mm,
+        )
     return SplineNurbsRepresentation(
         representation_id=representation_id,
         degree=min(representation.degree, max(1, len(fit_points) - 1)),
@@ -987,6 +1227,7 @@ def _exact_keys(mapping: Mapping[str, Any], required: set[str], path: str) -> No
 
 __all__ = [
     "BOUNDARY_REPRESENTATION_SCHEMA_VERSION",
+    "BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1",
     "BoundaryRepresentation",
     "CircularArcRepresentation",
     "CompositeRegionRepresentation",
@@ -1002,6 +1243,7 @@ __all__ = [
     "Representation",
     "RepresentationContractError",
     "SplineNurbsRepresentation",
+    "SplineApproxRepresentation",
     "representation_from_mapping",
     "trim_representation",
 ]

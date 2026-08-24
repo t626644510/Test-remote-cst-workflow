@@ -1,6 +1,6 @@
 # Agent Project Status Context
 
-Status timestamp: 2026-08-20 Asia/Shanghai
+Status timestamp: 2026-08-24 Asia/Shanghai
 
 Repository family: CST accelerator-cavity automation and surrogate optimisation
 
@@ -25,7 +25,9 @@ The maintained project-document set is:
 | `docs/FUNCTIONS_AND_ENTRYPOINTS.md` | Feature and executable-entry inventory. |
 | `docs/CST_AUTOMATION_INTERFACES.md` | CST official APIs, verified wrappers, and direct-file evidence. |
 | `docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md` | RF-CEM architecture decisions, Workbench W0–W4 contract, and R0B–R5 gates. |
+| `docs/RF_CEM_TECHNICAL_RECORD_2_TD1_TD3_WORKBENCH_DESKTOP.md` | TD1–TD3 decisions, Desktop v0 contract and closeout evidence. |
 | `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md` | Active autonomous R0B–R5 execution and phase-closeout contract. |
+| `.agent/goals/RF-CEM_Codex_Goal_TD1-TD3_Workbench_Desktop.md` | Current bounded TD1–TD3/Desktop execution and closeout contract; R5 remains paused. |
 | `AGENTS.md` | Automatically loaded governance/index stub; not a status document. |
 | `.github/pull_request_template.md` | Maintained review checklist; collaboration infrastructure, not project state. |
 | `.github/workflows/no-cst.yml` | Cross-branch offline validation gate; collaboration infrastructure, not project state. |
@@ -65,7 +67,7 @@ State observed on 2026-07-13. Worktree directories are local choices and deliber
 | WF4 HOM eigenmode | `workflow/4-rfgun-hom-eigenmode` | canonical | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
 | RF-CEM live geometry/campaign | `workflow/rf-cem-500mhz` | canonical | `af690d5d946406e2876679d62489574d4fa3807d` |
 | Literature semantics staging | `codex/rf-cem-literature-semantics-hardening` | historical staging ref | `38039219bdce73ef9aaf490d911ba0a1dffe758a` |
-| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R3; Stage C/R0B/R1/R2/R3 integrated by PRs #4/#5/#6/#7/#8; R4 local closeout ready | R3 merge commit `585d549c7a5dac0304852a0150f0c4114fd5b6e9`; active R4 branch `codex/rf-cem-r4-observation-contract` |
+| RF-CEM literature review/GUI and R0B–R5 architecture | `workflow/rf-cem-literature-review` | canonical through R4; Stage C/R0B/R1/R2/R3/R4 integrated by PRs #4/#5/#6/#7/#8/#9; TD1–TD3/Desktop closeout in progress | R4 merge `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; active branch `codex/rf-cem-td1-td3-workbench-desktop` |
 
 The runtime-feature baseline originally audited here was exactly 3 commits ahead and 0 commits behind `workflow/rf-cem-500mhz`:
 
@@ -109,11 +111,11 @@ WF2 compatibility ref `codex/S01-known-mode-pso-closure` points to the same comm
 | `src/rf_cem/literature_semantics/` | arXiv/PDF evidence, semantic schema, prior draft, audits, GUI, geometry candidate. |
 | `src/rf_cem/family_profile/` | Source-lossless `family_profile.v0` and two real-instance adapters. |
 | `src/rf_cem/semantic/` | R1 representation-independent grammar/instance-graph core plus R3 reviewed graph alignment, extension proposal, explicit review/patch and held-out validation; imports neither representations nor CST. |
-| `src/rf_cem/semantic/induction/` | R3 `graph_alignment.v0`, `family_extension_proposal.v0`, manual review, hash-bound grammar patch/application, real LEReC blind adapter, deterministic proof bundle and CLI. |
-| `src/rf_cem/representation/` | R2 family-independent Line/CircularArc/EllipseArc/Spline-NURBS/Composite boundary contracts, `GeometryPatch` and `RegionGeometry`; imports neither semantic family types nor CST. |
-| `src/rf_cem/compiler/` | R2 sole semantic/representation composition boundary, real-source adapters, Compiler v0, `compile_record.v0`, deterministic no-CST proof bundles and CLI. |
+| `src/rf_cem/semantic/induction/` | R3 reviewed-graph intrinsic/admission separation, paired/single/fallback detector engine, v1 structured support, seed-grammar ablation, explicit review/patch, v0 compatibility, real LEReC blind adapter and deterministic proof CLI. |
+| `src/rf_cem/representation/` | R2 family-independent Line/CircularArc/EllipseArc/accurately named SplineApprox/Composite boundary contracts, deprecated v0 spline compatibility, `GeometryPatch` and `RegionGeometry`; imports neither semantic family types nor CST. |
+| `src/rf_cem/compiler/` | R2 sole semantic/representation composition boundary, explicit continuity/endpoint policy, real-source adapters, `compile_record.v1` plus v0 compatibility, deterministic no-CST proof bundles and CLI. |
 | `src/rf_cem/observation/` | R4 read-only exact/shape/scalar observation contracts, 21 unit-bound descriptors, non-mutating engineering constraints, deterministic proof bundle and CLI; imports no CST. |
-| `src/rf_cem/workbench/` | R0B/W1/W2/W3/W4 no-CST derived SQLite registry and authenticated loopback read-only catalog, semantic-graph, compiler-trace, family-induction and observation/constraint views. |
+| `src/rf_cem/workbench/` | R0B/W1/W2/W3/W4 no-CST derived SQLite registry, strict portable profile/freshness contract, authenticated loopback read-only views and thin fixed-action Windows Desktop launcher. |
 | `workflows/rf_cem_500mhz_parametric_opt/` | no-CST scan and live campaign. |
 
 The current literature and geometry-review implementation remains RF-CEM-specific. It is not eligible for `main` promotion until a second real workflow uses a stable subset.
@@ -540,7 +542,7 @@ R3 establishes reviewed semantic family induction only. It adds no geometry gene
 
 ### 7.12 2026-08-20 R4 boundary observation/engineering constraints and Workbench W4
 
-R4 is locally hard-gate complete on `codex/rf-cem-r4-observation-contract`, created exactly from R3 canonical merge `585d549c7a5dac0304852a0150f0c4114fd5b6e9`; one coherent closeout commit/push, PR checks and canonical merge remain. `src/rf_cem/observation/` adds strict finite schemas for `exact_geometry_reference.v0`, `semantic_shape_observation.v0`, `scalar_descriptor_registry.v0`, `observation_bundle.v0`, `engineering_constraint.v0` and `constraint_evaluation.v0`. The package imports no CST and cannot generate or mutate geometry.
+R4 is closed and canonical. PR #9 merged implementation commit `6cd5860` into `workflow/rf-cem-literature-review` as merge commit `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`. `src/rf_cem/observation/` adds strict finite schemas for `exact_geometry_reference.v0`, `semantic_shape_observation.v0`, `scalar_descriptor_registry.v0`, `observation_bundle.v0`, `engineering_constraint.v0` and `constraint_evaluation.v0`. The package imports no CST and cannot generate or mutate geometry.
 
 Each exact reference rechecks its R2 compile record plus all declared compiled profile/STEP identities. The shape observer reads only generic `RegionGeometry` operations and the reviewed R1 semantic graph, never source-native parameter or feature names. It emits 65 arc-length-normalized samples per semantic region with `z/r` in `mm`, tangent/normal, signed curvature in `1/mm`, extrema, convexity, monotonic intervals and compiled landmark coordinates. Exact geometry, sampled shape and scalar descriptors retain independent content identities; the shape layer does not replace the exact geometry.
 
@@ -548,11 +550,25 @@ Registry `scalar_descriptor_registry.da3b02daef2b8d88` defines 21 descriptors wi
 
 The six reviewed contract demonstrations exercise `hard`, `soft`, `advisory` and `diagnostic` behavior for total length, maximum radius, minimum aperture, minimum curvature radius, nose presence and regional equator radius. Every constraint binds its registry/descriptor version, unit, scope, operator, tolerance, author, rationale and provenance. The evaluator is immutable and stores measured values, deviation and semantic/sample locations; `geometry_mutation_authority=none`. Across both instances there are 12 evaluations and three intentionally visible demonstration violations: RF500 minimum aperture, SLS-2 total length and SLS-2 nose presence. These thresholds demonstrate the contract only and are not manufacturing rules or physical acceptance.
 
-The canonical ignored immutable proof is `analysis_outputs/rf_cem_observation_contract/r4_observation_contract.d06695921d941eee/`, input SHA-256 `d06695921d941eee06972ad11de7d2b8f5ad1cddb7d932c795385876db869b59`. It contains 25 declared artifacts bound to 11 repository sources. RF500 has exact identity `rf500.2c27faee.b1r3.exact_geometry.58105c1e869d0cde`, shape identity `rf500.2c27faee.b1r3.shape_observation.5e9d74d21db4ba5d`, 11 regions and 132 descriptor values; SLS-2 has exact identity `sls2.r149.6593e02e.exact_geometry.7dad12661b126be5`, shape identity `sls2.r149.6593e02e.shape_observation.4625ea7c0317a83d`, 9 regions and 108 values. The strict loader re-hashes every source/artifact, recomputes the input preimage and rechecks all cross-contract identities. Build refuses overwrite of an existing content-addressed target; older proofs must be preserved.
+The canonical ignored immutable proof is `analysis_outputs/rf_cem_observation_contract/r4_observation_contract.d06695921d941eee/`, input SHA-256 `d06695921d941eee06972ad11de7d2b8f5ad1cddb7d932c795385876db869b59`. It contains 25 declared artifacts bound to 11 repository sources. RF500 has exact identity `rf500.2c27faee.b1r3.exact_geometry.58105c1e869d0cde`, shape identity `rf500.2c27faee.b1r3.shape_observation.5e9d74d21db4ba5d`, 11 regions and 132 descriptor values; SLS-2 has exact identity `sls2.r149.6593e02e.exact_geometry.7dad12661b126be5`, shape identity `sls2.r149.6593e02e.shape_observation.4625ea7c0317a83d`, 9 regions and 108 values. The loader re-hashes every artifact, recomputes the input preimage and rechecks all cross-contract identities. For this exact historical bundle only, three evolved tracked source bindings use an explicit bundle/path/old-hash/old-size allowlist; all other source mismatches fail closed. Build refuses overwrite of an existing content-addressed target; older proofs must be preserved.
 
 Workbench indexer `r4.w4.v0` adds `--observation-contract-bundle` and refuses W4 without the complete W1/W2/W3 chain. Two consecutive full-source rebuilds produced 66 fresh sources, 779 entities and 1484 relations with identical input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb` and portable snapshot SHA-256 `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. The fixed `/observations` page displays the three layers, both compiled real instances, 21 definitions, 240 values, six constraints, 12 evaluations, violation locations and source IDs. Authenticated in-app browser QA confirmed every key section appears once, all three violation cards render, no replacement characters or horizontal overflow occur at 1280 px, and the console is empty.
 
 R4 is entirely no-CST: `live_cst_status=not_run` and `physical_acceptance_status=not_established`. It defines no frequency, Q, R/Q, field, power, wake, mode identity or optimization objective. Those remain R5 work, and live-CST R5 validation remains separately blocked until the user explicitly authorizes it.
+
+### 7.13 2026-08-24 TD1–TD3 technical-debt closeout and Workbench Desktop v0
+
+This bounded branch starts exactly from R4 canonical merge `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`; R5 and its live branch are untouched. TD1 replaces provenance-driven join selection with `boundary_continuity_policy.v0`: internal patches and ordinary semantic RF-wall interfaces default to G1 hard, explicit intentional corners may require C0 hard, G2 remains supported, endpoints have a separate contract, and every join records C0 gap/tangent angle/curvature delta plus all three pass states and policy provenance. The new immutable no-CST R2 proof is `analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.8f47ca735db8ce8a/`, input SHA-256 `8f47ca735db8ce8ae4f0d6bb55555e22e5aa3726a72b8f9a661f5d3a492c9610`; both `compile_record.v1` cases pass while the old v0 proof remains unchanged/readable.
+
+TD2 makes `SplineApproxRepresentation` / `boundary_representation.v1` canonical with `fidelity=approximate`, `backend_contract=cadquery.splineApprox.v0`, `approximation_tolerance_mm=0.001`, `optimization_ready=true` and `exact_nurbs=false`. Historical `SplineNurbsRepresentation` and v0 payloads remain a deprecated compatibility path and produce equivalent accepted geometry. Workbench names the current implementation as approximate and treats exact NURBS only as planned/not implemented.
+
+TD3 separates intrinsic reviewed-graph validity from family admission and implements `FamilyInductionEngine` with paired optional, single optional and alternative-topology fallback detectors. The real seed grammar removes nose motif/cardinality/insertion adjacency; RF500 remains intrinsically valid but is not admitted before patch. The paired detector creates a pending `family_extension_proposal.v1` without native parameter names; structured support records detector/version, structure/evidence/review/cross-instance support, population and symmetry, with `score_semantics=heuristic_support_not_probability`. Accepted review creates `add_optional_motif`; rejected/needs-evidence do not mutate grammar; the patched grammar admits both real graphs. The immutable v1 proof is `analysis_outputs/rf_cem_family_induction_ablation/r3_family_induction_ablation.59db0a7b5f8e158c/`, input SHA-256 `59db0a7b5f8e158cddd713f6ff8c4bafd8b2fa56ac08eb000c819c3c70054312`; the original R3 v0 proof remains unchanged/readable.
+
+The current R4 regression proof consumes the two v1 compiles and stable architecture/source loader: `analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.a0fd43bd4bf4de2f/`, input SHA-256 `a0fd43bd4bf4de2f8a2ea9e6777154b541556a189ee888f4c2e895c0e0383b20`. It passes for both instances, 21 descriptor definitions, 240 values, six constraints and 12 evaluations without mutating geometry or defining RF acceptance. The original R4 proof remains immutable and loads through the exact historical binding rule above.
+
+`config/rf_cem_workbench_profile.v0.json` is the tracked repository-relative W0–W4 recipe with optional W5 reservation. `status/rebuild/serve --profile` verifies missing sources, indexed source hashes and the profile recipe hash. `src/rf_cem/workbench/desktop.py` exposes exactly ten native actions; commands are fixed argument arrays with `shell=False`, there is no arbitrary command or CST action, and only the owned server child can be stopped. `%LOCALAPPDATA%\RF-CEM\workbench_launcher_config.v0.json` stores the local repo/profile selection. `scripts/build_rf_cem_workbench_desktop.ps1` creates ignored `dist/RF-CEM-Workbench.exe`; the thin 10,634,218-byte local build excludes CST/CadQuery/OCP/scientific stacks and passes an independent `--self-test`. Native-window QA confirmed all buttons, automatic source check/rebuild, tokenized loopback URL and default-browser opening; automated launcher integration opens W0–W4 and verifies POST is rejected.
+
+Two consecutive profile rebuilds produced 65 fresh sources, 738 entities and 1539 relations with identical input-set SHA-256 `6bcfd185b18fb3011aff2279c383db4984158fb7e926cce749b5834c8c06e7ad` and portable snapshot SHA-256 `56d8d9a8b63358fa8a12f02d3183bf9f78ab05477b810c895f8b631ac8fd302c`. Metadata binds both v1 compile IDs, the ablation R3 bundle and current R4 bundle. SQLite bytes are not the contract; the profile, source identities and deterministic portable snapshot are.
 
 ## 8. STEP Feature Assistant state
 
@@ -725,19 +741,34 @@ live CST: not run
 
 The R4 checks cover strict schema/identity round trips, both real compiled instances, exact/shape/scalar separation, native-name isolation, 21 descriptor definitions and 240 values, unit/non-finite/landmark failure, cross-representation and cross-patch equivalence, all constraint kinds and required scopes, immutable geometry, located violations, byte-identical content-addressed proofs, source/artifact/manifest tamper rejection, deterministic complete W1→W4 rebuilding, freshness audit, fixed-route rendering and architecture dependency guards. They establish a geometry observation and contract-evaluation layer only; RF metrics, mode/field contracts, live solver validation and physical acceptance remain unestablished.
 
+TD1–TD3 and Workbench Desktop v0 closeout verification on 2026-08-24:
+
+```text
+targeted TD1–TD3/R4/Workbench/Desktop/architecture: 54 passed in 17.53s
+full no-CST: 787 passed, 11 skipped in 28.83s
+old and current R2/R3/R4 strict CLI validation: pass
+two consecutive portable-profile rebuilds and fresh status: pass
+compileall: pass
+git diff --check: pass
+native EXE --self-test and launcher/default-browser smoke: pass
+live CST / licence / cleanup / R5: not run or changed
+```
+
+These checks cover the explicit continuity policy and diagnostics, approximate-spline v1 migration plus v0 geometry compatibility, real grammar ablation/detectors/structured support/manual patch gate, old canonical R4 historical source-binding compatibility, current R4 regression, portable W0–W4 profile freshness, fixed-action Desktop subprocess/loopback security and thin Windows packaging. They do not establish RF metrics, physical acceptance or live-CST evidence.
+
 Historical branch-specific pass counts from 2026-07-10 are archived and must not be copied as current evidence without rerunning those worktrees.
 
 ## 13. Current priorities
 
 Priority order:
 
-1. Close R4 as one coherent commit/push/PR from `codex/rf-cem-r4-observation-contract` into `workflow/rf-cem-literature-review`; preserve its immutable proof bundle and W4 registry as ignored, rebuildable no-CST artifacts.
-2. Start R5 only from the resulting canonical R4 merge and define RF result/mode/field contracts no-CST first.
-3. Keep representation classes family-independent and treat R2 compile, R3 induction and R4 observations/constraints as auditable layers, not as RF physical evidence.
+1. Close TD1–TD3 and Workbench Desktop v0 as one commit/push/PR from `codex/rf-cem-td1-td3-workbench-desktop` to `workflow/rf-cem-literature-review`; preserve all old and new proofs plus the profile database as ignored artifacts.
+2. Keep explicit continuity policy, accurate spline-approximation naming, intrinsic/admission separation, detector strategy and structured non-probability support stable and backward-compatible.
+3. Keep representation classes family-independent and treat R2 compile, R3 induction and R4 observations/constraints as auditable layers, not RF physical evidence.
 4. Preserve exact geometry authority: normalized shape samples and scalar descriptors never replace R2 profile/STEP identities.
-5. Any live-CST R5 validation remains separately blocked on explicit user authorization.
-6. Keep the entire R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`.
-7. Promote only demonstrated cross-workflow contracts to `main`, using a separate focused change and compatibility evidence.
+5. Pause R5 live work. Future R5 Translator/result/mode/field design requires a separate review; live-CST remains blocked on explicit user authorization.
+6. Plan Semantic Graph Acquisition separately; do not make reviewed-graph induction responsible for raw text/image/STEP semantic acquisition.
+7. Keep the R0B–R5 line on `workflow/rf-cem-literature-review`; do not merge the concrete workflow into `workflow/rf-cem-500mhz` or `main`. Promote only demonstrated cross-workflow contracts in a separate focused change.
 
 ## 14. Backup and recovery references
 

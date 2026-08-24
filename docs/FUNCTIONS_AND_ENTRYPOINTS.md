@@ -61,10 +61,12 @@ Do not install or upgrade dependencies during a bounded audit unless necessary a
 | `python -m workflows.rf_cem_500mhz_parametric_opt.live_campaign` | RF-CEM | yes | Repeated quick-live or SAO campaign |
 | `python -m rf_cem.literature_semantics ...` | `workflow/rf-cem-literature-review` | no | Literature discovery, evidence, semantics, audits, GUI |
 | `python -m rf_cem.semantic ...` | `workflow/rf-cem-literature-review` | no | Build, validate and diff R1 semantic topology contracts |
-| `python -m rf_cem.semantic.induction ...` | `workflow/rf-cem-literature-review` | no | Build and validate the reviewed R3 alignment/proposal/review/patch/held-out proof |
-| `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build and validate the two canonical R2 boundary compiles and `compile_record.v0` artifacts |
+| `python -m rf_cem.semantic.induction ...` | `workflow/rf-cem-literature-review` | no | Build/validate reviewed R3 v0 or seed-ablation/v1 detector/support proofs |
+| `python -m rf_cem.compiler ...` | `workflow/rf-cem-literature-review` | no | Build/validate both R2 boundary compiles with explicit continuity and v0/v1 records |
 | `python -m rf_cem.observation ...` | `workflow/rf-cem-literature-review` | no | Build and validate the R4 exact/shape/scalar observation and engineering-constraint proof |
 | `python -m rf_cem.workbench ...` | `workflow/rf-cem-literature-review` | no | Rebuild, audit and browse the derived Workbench W0–W4 registry |
+| `python -m rf_cem.workbench.desktop ...` | `workflow/rf-cem-literature-review` | no | Run/self-test the fixed-action Workbench Desktop launcher source |
+| `scripts/build_rf_cem_workbench_desktop.ps1` | `workflow/rf-cem-literature-review` | no | Build and self-test ignored `dist/RF-CEM-Workbench.exe` |
 | `python run_workflow_1.py` | WF1 branch only | normally yes | RF gun SAO |
 | `python run_workflow_2.py` | WF2 branch only | yes | Dual-project HOM antenna workflow |
 | `python run_workflow_3.py` | WF3 branch only | yes | Recovery optimisation |
@@ -947,7 +949,7 @@ $SemanticProof = Join-Path $SemanticRoot 'r1_semantic_core.28e8d6fa9efa221f'
 
 The grammar has a nine-region backbone and `motif.nose_pair.v0` with exact allowed counts 0 or 2. SLS-2 supplies reviewed absence evidence; RF500 supplies the reviewed paired `NoseCone` topology. The diff is semantic/topological and explicitly declines common-parameter comparison. These semantic commands do not compile geometry; the R2 compiler below consumes their contracts without moving representations into the semantic package.
 
-### 9.9 RF boundary representation and Compiler v0 (R2)
+### 9.9 RF boundary representation and Compiler v0/v1 (R2 + TD1/TD2)
 
 Public contracts:
 
@@ -956,21 +958,25 @@ rf_cem.representation.BoundaryRepresentation
 rf_cem.representation.LineRepresentation
 rf_cem.representation.CircularArcRepresentation
 rf_cem.representation.EllipseArcRepresentation
-rf_cem.representation.SplineNurbsRepresentation
+rf_cem.representation.SplineApproxRepresentation
+rf_cem.representation.SplineNurbsRepresentation  # deprecated v0 compatibility
 rf_cem.representation.CompositeRegionRepresentation
 rf_cem.representation.GeometryPatch
 rf_cem.representation.RegionGeometry
 rf_cem.compiler.CompileRequest
 rf_cem.compiler.CompileRecord
+rf_cem.compiler.BoundaryContinuityPolicy
 rf_cem.compiler.ProfileCompiler.compile
 ```
 
-`ProfileCompiler.compile` is the single semantic/representation composition entry. Length is in `mm`, tangent angle in `deg`, curvature in `1/mm`, area in `mm^2` and volume in `mm^3`. It creates an oriented outer r-z profile, defines the implicit axis return for closure, validates simplicity/nonnegative radius, generates STEP through the existing isolated CadQuery/OCP worker, validates B-Rep, compares declared baselines, and writes exact artifact hashes into `compile_record.v0`. It never calls CST.
+`ProfileCompiler.compile` is the single semantic/representation composition entry. Length is in `mm`, tangent angle in `deg`, curvature in `1/mm`, area in `mm^2` and volume in `mm^3`. `boundary_continuity_policy.v0` makes internal and ordinary cross-semantic RF-wall joins G1 hard by default, allows C0 only through an explicit intentional-corner override, supports explicit G2, and classifies endpoints separately. `source_native_segment_ref` is provenance only. Every join records C0 gap, tangent angle, curvature delta and C0/G1/G2 pass regardless of the required level. It creates an oriented outer r-z profile, validates simplicity/nonnegative radius, generates STEP through the isolated CadQuery/OCP worker, validates B-Rep and writes exact hashes into `compile_record.v1`; strict v0 loading remains supported. It never calls CST.
+
+`SplineApproxRepresentation` is canonical `boundary_representation.v1`: `fidelity=approximate`, `backend_contract=cadquery.splineApprox.v0`, `approximation_tolerance_mm=0.001`, `optimization_ready=true`, `exact_nurbs=false`. `SplineNurbsRepresentation` remains only as a deprecated v0 compatibility route; no exact-NURBS runtime exists.
 
 Build both canonical cases into one immutable content-addressed bundle:
 
 ```powershell
-$CompilerRoot = 'analysis_outputs\rf_cem_boundary_compiler'
+$CompilerRoot = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2'
 $FamilyProof = 'analysis_outputs\rf_cem_family_profiles\nc_axisymmetric_single_cell_rf_vacuum.00414d4f'
 $Sls2Baseline = 'analysis_outputs\rf_cem_literature_pilot_20260710\frozen_baselines\sls2.r149.6593e02e'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
@@ -986,23 +992,23 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
   --output-root $CompilerRoot
 ```
 
-The current bundle is `r2_boundary_compiler.aa66a3e90125437b`. `build` refuses an existing target; use a fresh output root when intentionally proving byte reproducibility. It writes two compiled profiles, two normalized STEP files, two records and a source-binding manifest. Normalization changes only the STEP `FILE_NAME` timestamp, not geometry. SLS-2 contains 9 regions/10 patches; RF500 contains 11 regions/12 patches.
+The current TD1/TD2 bundle is `r2_boundary_compiler.8f47ca735db8ce8a`, input SHA-256 `8f47ca735db8ce8ae4f0d6bb55555e22e5aa3726a72b8f9a661f5d3a492c9610`. `build` refuses an existing target. It writes two compiled profiles, two normalized STEP files, two v1 records and a source-binding manifest. SLS-2 contains 9 regions/10 patches; RF500 contains 11 regions/12 patches. The original v0 bundle `r2_boundary_compiler.aa66a3e90125437b` remains unchanged and readable.
 
 Validate strict record identity and every output artifact size/hash:
 
 ```powershell
-$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.aa66a3e90125437b'
+$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.8f47ca735db8ce8a'
 & $py -m rf_cem.compiler validate `
-  --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
-  --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
+  --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v1.json') `
+  --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v1.json') `
   --bundle-root $CompilerProof
 ```
 
 The RF500 accepted STEP is hash-bound but not locally materialized. Its passing comparison is deliberately limited to source-native profile equivalence plus new B-Rep validity and retains an explicit warning. Neither command defines RF metrics, runs CST, claims physical acceptance, induces a family or performs optimisation.
 
-### 9.10 RF family induction/extension v0 (R3)
+### 9.10 RF family induction/extension v0/v1 (R3 + TD3)
 
-`src/rf_cem/semantic/induction/` aligns reviewed instance graphs and emits a proposal; it does not discover semantics from raw pixels/STEP or import the representation package. The alignment key is the ordered semantic pair `(side, region_type)`. A new proposal is always pending and non-mutating. `review_proposal` returns the original grammar unchanged for `rejected`/`needs_evidence`; only an accepted manual review can create and apply a hash-bound patch.
+`src/rf_cem/semantic/induction/` aligns intrinsically valid reviewed instance graphs and emits a proposal; family admission is a separate post-patch check. It does not discover semantics from raw pixels/STEP or import the representation package. `FamilyInductionEngine` runs paired optional, single optional and alternative-topology fallback detectors. A new proposal is always pending/non-mutating. v1 support contains structure/evidence/review/cross-instance fields, population, symmetry and detector identity; `proposal_score` is explicitly `heuristic_support_not_probability`. `review_proposal` keeps grammar byte-identical for `rejected`/`needs_evidence`; only accepted review can create/apply a hash-bound patch.
 
 Build the canonical accepted-review proof from the two R1 training graphs and the two held-out LEReC primary PDFs:
 
@@ -1011,56 +1017,56 @@ $InductionRoot = 'analysis_outputs\rf_cem_family_induction'
 $InductionSources = Join-Path $InductionRoot 'sources\lerec704'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
 
-& $py -m rf_cem.semantic.induction build `
+& $py -m rf_cem.semantic.induction build-ablation `
   --repo-root $RepoRoot `
   --family-grammar (Join-Path $SemanticProof 'family_grammar.v0.json') `
   --training-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
   --training-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
   --lerec-design-pdf (Join-Path $InductionSources 'source.pdf') `
   --lerec-test-pdf (Join-Path $InductionSources 'design_and_test_2018.pdf') `
-  --output-root $InductionRoot `
+  --output-root 'analysis_outputs\rf_cem_family_induction_ablation' `
   --review-decision accepted `
   --reviewer-id codex.r3-explicit-review `
   --review-rationale 'Explicit closeout review: graph locators and paired residual adjacency support the optional nose motif; LEReC remains held out until after patch application.' `
   --review-revision 1
 ```
 
-The current immutable proof is `r3_family_induction.2f6c02557798e606`, input SHA-256 `2f6c02557798e6062e961d6dea3b4220e4d4076310579754567d570f6ae7c4f0`. The command refuses an existing content-addressed target; never delete or overwrite an older proof to reuse its name. Two fresh test output roots built with identical inputs/review produce the same bundle ID and byte-identical files.
+The current ablation proof is `r3_family_induction_ablation.59db0a7b5f8e158c`, input SHA-256 `59db0a7b5f8e158cddd713f6ff8c4bafd8b2fa56ac08eb000c819c3c70054312`. Its seed removes nose motif/cardinality/insertion adjacency while RF500 retains reviewed NoseRegion; accepted review emits `add_optional_motif` and both real graphs then pass admission. The command refuses an existing target. The original v0 proof `r3_family_induction.2f6c02557798e606` remains unchanged/readable.
 
 Validate the manifest, all eight artifacts and every cross-contract identity:
 
 ```powershell
-$InductionProof = Join-Path $InductionRoot 'r3_family_induction.2f6c02557798e606'
+$InductionProof = 'analysis_outputs\rf_cem_family_induction_ablation\r3_family_induction_ablation.59db0a7b5f8e158c'
 & $py -m rf_cem.semantic.induction validate --bundle $InductionProof
 ```
 
-The output contains `graph_alignment.v0.json`, `family_extension_proposal.v0.json`, `family_extension_review.v0.json`, `family_grammar_patch.v0.json`, `family_grammar.r3.v0.json`, `family_grammar_patch_application.v0.json`, `blind/lerec704.instance_boundary_graph.v0.json`, `family_induction_blind_validation.v0.json` and the source-binding manifest. The canonical result has nine common backbone slots, two nose residuals, an evidence-completeness confidence of `0.95`, accepted manual review, six visible grammar differences, both training graphs revalidated and held-out classification `known_optional_motif_present`. `representation_contract=not_imported_or_modified` and `live_cst_status=not_run`; no RF metric or physical acceptance is established.
+The output additionally contains `family_grammar.seed_ablation.v0.json`, `family_extension_proposal.v1.json` and a v1 manifest. The real result selects `paired_optional_motif`; a synthetic test covers a non-symmetric single optional motif and fallback tests cover alternative topology. It records accepted review, explicit add/diff, both training graphs admitted and held-out classification `known_optional_motif_present`. `representation_contract=not_imported_or_modified` and `live_cst_status=not_run`; no RF metric or physical acceptance is established.
 
 ### 9.11 RF boundary observation and engineering constraints (R4)
 
 `src/rf_cem/observation/` observes passing R2 compiled geometry through generic representation operations plus reviewed R1 topology. It never reads source-native parameter/feature names, generates geometry, mutates geometry or calls CST. Exact geometry, normalized semantic shape and scalar descriptors are separate hash-bound layers. Build the canonical proof from exactly two compile records and their matching graphs:
 
 ```powershell
-$ObservationRoot = 'analysis_outputs\rf_cem_observation_contract'
+$ObservationRoot = 'analysis_outputs\rf_cem_observation_contract_td'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
-$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler\r2_boundary_compiler.aa66a3e90125437b'
+$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_compiler.8f47ca735db8ce8a'
 
 & $py -m rf_cem.observation build `
   --root $RepoRoot `
   --output-root $ObservationRoot `
-  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v0.json') `
-  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v0.json') `
+  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v1.json') `
+  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v1.json') `
   --instance-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
   --instance-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
   --architecture-document 'docs\RF_CEM_ROADMAP_AND_ARCHITECTURE.md'
 ```
 
-The canonical ignored immutable proof is `r4_observation_contract.d06695921d941eee`, input SHA-256 `d06695921d941eee06972ad11de7d2b8f5ad1cddb7d932c795385876db869b59`. It binds 11 source files and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two observation bundles with 240 total descriptor values, and 12 constraint evaluations. The six constraints cover hard/soft/advisory/diagnostic length, radius, aperture, curvature, nose and regional-equator cases; they have no geometry mutation authority and are not physical acceptance.
+The current TD1/TD2 regression proof is `r4_observation_contract.a0fd43bd4bf4de2f`, input SHA-256 `a0fd43bd4bf4de2f8a2ea9e6777154b541556a189ee888f4c2e895c0e0383b20`. It binds 11 sources and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two bundles with 240 values, and 12 evaluations. The original R4 proof remains unchanged/readable through an exact canonical bundle/path/hash/size compatibility allowlist for its three evolved tracked inputs; arbitrary source mismatches still fail closed.
 
 The command refuses an existing content-addressed target. Never delete or overwrite a proof to reuse its name. Strictly validate its source hashes, artifact inventory, input preimage and cross-contract identities with:
 
 ```powershell
-$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.d06695921d941eee'
+$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.a0fd43bd4bf4de2f'
 & $py -m rf_cem.observation validate --bundle $ObservationProof
 ```
 
@@ -1068,7 +1074,26 @@ R4 length/radius values use `mm`, curvature uses `1/mm`, area uses `mm^2`, volum
 
 ### 9.12 RF-CEM Workbench W0/W1/W2/W3/W4 (R0B/R1/R2/R3/R4)
 
-`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The explicit W4 build below retains all W0/W1/W2/W3 sources, verifies the two R2 compile records/output artifacts, independently rechecks the R3 proof, and then strictly loads the R4 observation proof. The current expert prior is indexed automatically by its repository source path.
+`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The tracked `config/rf_cem_workbench_profile.v0.json` is the canonical portable W0–W4 recipe: every path is repository-relative, the database remains ignored, and `optional_w5_bundle` is reserved. Profile status verifies declared-source presence, every indexed source hash, and the profile recipe hash itself. Use the profile interface for ordinary status/rebuild/serve:
+
+```powershell
+$WorkbenchProfile = 'config\rf_cem_workbench_profile.v0.json'
+
+& $py -m rf_cem.workbench status `
+  --repo-root $RepoRoot `
+  --profile $WorkbenchProfile
+
+& $py -m rf_cem.workbench rebuild `
+  --repo-root $RepoRoot `
+  --profile $WorkbenchProfile
+
+& $py -m rf_cem.workbench serve `
+  --repo-root $RepoRoot `
+  --profile $WorkbenchProfile `
+  --port 0
+```
+
+`blocked_missing_sources` lists exact missing repository-relative paths and is not rebuildable; `missing`, `stale` or `invalid` with complete sources requires an atomic rebuild; only `fresh` should be served. The explicit-source form below remains a compatibility/recovery interface for intentionally selected historical v0 proofs.
 
 ```powershell
 $WorkbenchDatabase = 'analysis_outputs\rf_cem_workbench\w4.sqlite'
@@ -1113,9 +1138,25 @@ The current full W3 source set rebuilds to 29 fresh sources, 418 entities and 57
 
 The current full W4 source set rebuilds to 66 fresh sources, 779 entities and 1484 relations. Two consecutive rebuilds produced input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb`; canonical portable snapshot SHA-256 is `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. W4 adds 2 exact references, 2 shape observations, 20 region observations, 24 landmark observations, 21 descriptor definitions, 240 descriptor values, 6 constraints, 12 evaluations/findings and the passing `w4.observation-contract-hard-gate`.
 
-`status` opens SQLite in read-only mode and re-hashes every indexed source as `fresh`, `stale`, or `missing`. Do not treat a stale/missing view as current. `serve` binds only to `127.0.0.1`, chooses a random port and token, and prints the initial authenticated URL. It exposes fixed read-only pages and JSON GET APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W1 shows both ordered topologies and graph evidence. W2 shows compiler ownership/continuity/baseline/artifact traces. W3 shows the alignment, common backbone, residuals, pending proposal, accepted review, explicit patch/diff and held-out LEReC result. W4 shows exact/shape/scalar separation, both real observation bundles, descriptors, constraints, evaluations, violation locations and source identities. Host/Origin and token checks are fail-closed; there is no shell, arbitrary file browser, CST action, filesystem mutation, or write API. Stop the foreground process with Ctrl+C.
+The tracked TD1–TD3/Desktop profile uses the v1 R2 compile pair, ablation R3 and current R4 regression proof. Two consecutive rebuilds produce 65 fresh sources, 738 entities and 1539 relations, input-set SHA-256 `6bcfd185b18fb3011aff2279c383db4984158fb7e926cce749b5834c8c06e7ad` and portable snapshot SHA-256 `56d8d9a8b63358fa8a12f02d3183bf9f78ab05477b810c895f8b631ac8fd302c`. The lower entity count than the historical full W4 recipe reflects removal of optional literature/review display sources from this portable profile, not loss of W1–W4 hard-gate entities.
+
+`status` opens SQLite in read-only mode and re-hashes every indexed source. `serve` binds only to `127.0.0.1`, chooses a random port/token and prints the authenticated URL. It exposes fixed GET pages/APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W2 shows explicit policy source/required level/endpoints and all continuity diagnostics. W3 v1 shows seed grammar, selected detector, structured support, symmetry/population, pending proposal, accepted review, `add_optional_motif`, diff, final admission, single-detector fixture and blind result. Host/Origin/token checks are fail-closed; POST is rejected and there is no shell, arbitrary file browser, CST action, filesystem mutation or write API. Stop a foreground CLI process with Ctrl+C.
 
 R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by R5.
+
+### 9.13 Workbench Desktop v0
+
+Source entry and local Windows build:
+
+```powershell
+& $py -m rf_cem.workbench.desktop --self-test --repo-root $RepoRoot --no-browser
+& .\scripts\build_rf_cem_workbench_desktop.ps1
+& .\dist\RF-CEM-Workbench.exe --self-test --repo-root $RepoRoot --no-browser
+```
+
+The build script requires PyInstaller in the active repository `.venv`, builds one ignored `dist/RF-CEM-Workbench.exe`, excludes CST/CadQuery/OCP/scientific stacks from the thin launcher, and automatically runs the EXE self-test. The binary is local output and must not be committed. Normal double-click use finds the repository in this order: explicit `--repo-root`, EXE parents, cwd parents, saved config, then a folder picker. `%LOCALAPPDATA%\RF-CEM\workbench_launcher_config.v0.json` stores only the chosen absolute repo plus repository-relative profile; logs are in the same user-local directory.
+
+The native window has exactly these fixed actions: Open/Start Workbench, Rebuild Database, Refresh Source Status, Stop Workbench, Open Roadmap, Open Project Status, Open `analysis_outputs`, Copy Workbench URL, Run Quick no-CST Self Check, and View Logs. There is no arbitrary command field. Every subprocess uses a fixed argument tuple and `shell=False`; the launcher can stop only its held child. Open/Start serves a fresh database immediately, atomically rebuilds a complete missing/stale database, or shows missing-source diagnostics. It starts only the existing token-authenticated loopback GET-only Web Workbench and opens the default browser unless `--no-browser` is passed. It has no CST/live/R5/license/cleanup/process-sweep action.
 
 ## 10. Workflow branch entries
 
@@ -1295,7 +1336,8 @@ RF-CEM R0B–R4 architecture, semantic, compiler, induction, observation and Wor
   tests\test_rf_cem_boundary_compiler.py `
   tests\test_rf_cem_family_induction.py `
   tests\test_rf_cem_observation_contract.py `
-  tests\test_rf_cem_workbench.py
+  tests\test_rf_cem_workbench.py `
+  tests\test_rf_cem_workbench_desktop.py
 ```
 
 History/STEP:

@@ -23,6 +23,7 @@ from rf_cem.semantic import (
     SemanticMotif,
     SemanticRegion,
     validate_graph_against_grammar,
+    validate_reviewed_graph_intrinsic,
 )
 from rf_cem.semantic.contracts import (
     NOSE_PAIR_MOTIF_ID,
@@ -32,13 +33,19 @@ from rf_cem.semantic.contracts import (
 from rf_cem.semantic.induction import (
     BlindValidation,
     FamilyExtensionProposal,
+    FamilyExtensionProposalV1,
+    FamilyInductionEngine,
     GraphAlignment,
     GraphContractRef,
     InductionContractError,
     MANIFEST_FILE,
+    MANIFEST_FILE_V1,
     ProposalReview,
     PROPOSAL_FILE,
+    PROPOSAL_FILE_V1,
     R3SourceSet,
+    SCORE_SEMANTICS,
+    ablate_optional_motif,
     align_reviewed_graphs,
     load_r3_bundle,
     make_proposal_review,
@@ -46,6 +53,7 @@ from rf_cem.semantic.induction import (
     review_proposal,
     select_optional_motif_proposal,
     validate_blind_instance,
+    write_r3_ablation_bundle,
     write_r3_bundle,
 )
 from rf_cem.workbench import (
@@ -129,6 +137,115 @@ def test_alignment_is_invariant_to_roles_and_source_feature_names() -> None:
     encoded = canonical_json_bytes(changed_alignment.to_mapping())
     assert b"replacement_parameter" not in encoded
     assert b"changed role" not in encoded
+
+
+def test_v1_paired_detector_has_structured_non_probability_support() -> None:
+    absent = _graph("fixture.v1.absent", nose_sides=(), feature_prefix="native_a")
+    present = _graph(
+        "fixture.v1.present",
+        nose_sides=("left", "right"),
+        feature_prefix="native_b",
+    )
+    alignment = align_reviewed_graphs(
+        (absent, present), (_graph_ref(absent), _graph_ref(present))
+    )
+    engine = FamilyInductionEngine()
+    proposal = select_optional_motif_proposal(
+        engine.propose(alignment, (present, absent)),
+        region_type="NoseRegion",
+    )
+    assert isinstance(proposal, FamilyExtensionProposalV1)
+    assert FamilyExtensionProposalV1.from_mapping(proposal.to_mapping()) == proposal
+    assert proposal.schema_version == "family_extension_proposal.v1"
+    assert proposal.support.detector_id == "paired_optional_motif"
+    assert proposal.support.symmetry_assumption_used is True
+    assert proposal.support.population_size == 2
+    assert proposal.score_semantics == SCORE_SEMANTICS
+    assert "probability" not in proposal.to_mapping()
+    assert "confidence" not in proposal.to_mapping()
+    assert proposal.to_mapping() == select_optional_motif_proposal(
+        engine.propose(alignment, (absent, present)),
+        region_type="NoseRegion",
+    ).to_mapping()
+
+
+def test_ablation_separates_intrinsic_validation_from_family_admission() -> None:
+    absent = _graph("fixture.ablation.absent", nose_sides=(), feature_prefix="a")
+    present = _graph(
+        "fixture.ablation.present",
+        nose_sides=("left", "right"),
+        feature_prefix="b",
+    )
+    seed = ablate_optional_motif(
+        _grammar(include_nose=True), motif_id=NOSE_PAIR_MOTIF_ID
+    )
+    assert not seed.motifs
+    assert "NoseRegion" not in seed.cardinalities
+    assert not any("NoseRegion" in pair for pair in seed.allowed_adjacencies)
+    validate_reviewed_graph_intrinsic(present)
+    validate_graph_against_grammar(seed, absent)
+    with pytest.raises(ValueError):
+        validate_graph_against_grammar(seed, present)
+
+    alignment = align_reviewed_graphs(
+        (absent, present), (_graph_ref(absent), _graph_ref(present))
+    )
+    proposal = select_optional_motif_proposal(
+        FamilyInductionEngine().propose(alignment, (absent, present)),
+        region_type="NoseRegion",
+    )
+    before = canonical_json_bytes(seed.to_mapping())
+    for decision in ("rejected", "needs_evidence"):
+        review = make_proposal_review(
+            proposal,
+            decision=decision,
+            reviewer_id="fixture.ablation-reviewer",
+            rationale="Exercise the non-acceptance ablation path.",
+        )
+        outcome = review_proposal(
+            seed, proposal, review, existing_graphs=(absent, present)
+        )
+        assert outcome.patch is None
+        assert canonical_json_bytes(outcome.grammar.to_mapping()) == before
+
+    review = make_proposal_review(
+        proposal,
+        decision="accepted",
+        reviewer_id="fixture.ablation-reviewer",
+        rationale="Accept reviewed paired nose evidence after seed ablation.",
+    )
+    outcome = review_proposal(
+        seed, proposal, review, existing_graphs=(absent, present)
+    )
+    assert outcome.patch is not None
+    assert "add_optional_motif" in outcome.patch.operations
+    assert outcome.application.all_instances_valid is True
+    validate_graph_against_grammar(outcome.grammar, absent)
+    validate_graph_against_grammar(outcome.grammar, present)
+
+
+def test_single_optional_detector_and_alternative_fallback_are_not_symmetric() -> None:
+    absent = _graph("fixture.single.absent", nose_sides=(), feature_prefix="a")
+    left = _graph("fixture.single.left", nose_sides=("left",), feature_prefix="b")
+    alignment = align_reviewed_graphs(
+        (absent, left), (_graph_ref(absent), _graph_ref(left))
+    )
+    proposal = FamilyInductionEngine().propose(alignment, (absent, left))[0]
+    assert proposal.occurrence_rule == "single_optional"
+    assert proposal.allowed_counts == (0, 1)
+    assert proposal.support.detector_id == "single_optional_motif"
+    assert proposal.support.symmetry_assumption_used is False
+
+    right = _graph("fixture.single.right", nose_sides=("right",), feature_prefix="c")
+    fallback_alignment = align_reviewed_graphs(
+        (absent, left, right),
+        (_graph_ref(absent), _graph_ref(left), _graph_ref(right)),
+    )
+    fallback = FamilyInductionEngine().propose(
+        fallback_alignment, (absent, left, right)
+    )[0]
+    assert fallback.proposal_kind == "alternative_topology"
+    assert fallback.support.detector_id == "alternative_topology_fallback"
 
 
 @pytest.mark.parametrize("decision", ["rejected", "needs_evidence"])
@@ -435,6 +552,120 @@ def test_real_r3_bundle_is_reproducible_and_loadable() -> None:
             scratch.rmdir()
         except OSError:
             pass
+
+
+def test_real_r3_ablation_bundle_is_reproducible_and_v0_remains_readable() -> None:
+    sources = _real_source_set()
+    if sources is None:
+        pytest.skip("ignored R1 graphs and LEReC primary PDFs are not materialized")
+    scratch = ROOT / ".codex_tmp"
+    scratch.mkdir(exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="r3-ablation-a-", dir=scratch) as first_dir:
+            with tempfile.TemporaryDirectory(
+                prefix="r3-ablation-b-", dir=scratch
+            ) as second_dir:
+                first = write_r3_ablation_bundle(
+                    sources,
+                    Path(first_dir),
+                    review_decision="accepted",
+                    reviewer_id="test.td3-ablation-reviewer",
+                    review_rationale=(
+                        "Accept the intrinsically valid paired nose motif after seed ablation."
+                    ),
+                )
+                second = write_r3_ablation_bundle(
+                    sources,
+                    Path(second_dir),
+                    review_decision="accepted",
+                    reviewer_id="test.td3-ablation-reviewer",
+                    review_rationale=(
+                        "Accept the intrinsically valid paired nose motif after seed ablation."
+                    ),
+                )
+                assert first.bundle_id == second.bundle_id
+                assert first.input_sha256 == second.input_sha256
+                assert _bundle_files(first.path) == _bundle_files(second.path)
+                assert first.seed_grammar is not None
+                assert first.manifest_file == MANIFEST_FILE_V1
+                assert first.proposal_file == PROPOSAL_FILE_V1
+                assert isinstance(first.proposal, FamilyExtensionProposalV1)
+                assert first.proposal.support.detector_id == "paired_optional_motif"
+                assert first.proposal.score_semantics == SCORE_SEMANTICS
+                assert "add_optional_motif" in first.patch.operations
+                assert first.manifest["pre_patch_admission"] == {
+                    "rf500.2c27faee.b1r3": False,
+                    "sls2.r149.6593e02e": True,
+                }
+                assert set(first.manifest["final_admission"]) == {
+                    "rf500.2c27faee.b1r3",
+                    "sls2.r149.6593e02e",
+                }
+                loaded = load_r3_bundle(first.path)
+                assert loaded.bundle_id == first.bundle_id
+                assert loaded.proposal.to_mapping() == first.proposal.to_mapping()
+                workbench_sources = _real_w3_workbench_source_set(
+                    sources, first.path
+                )
+                if workbench_sources is not None:
+                    database = Path(first_dir) / "workbench-w3-ablation.sqlite"
+                    summary = rebuild_workbench(database, workbench_sources)
+                    snapshot = RegistryReader(database).snapshot()
+                    second_summary = rebuild_workbench(database, workbench_sources)
+                    assert summary.input_set_sha256 == second_summary.input_set_sha256
+                    assert snapshot == RegistryReader(database).snapshot()
+                    counts = RegistryReader(database).entity_counts()
+                    assert counts["seed_grammar_ablation"] == 1
+                    assert counts["induction_detector_fixture"] == 1
+                    with WorkbenchServer(
+                        database,
+                        source_root=ROOT,
+                        token="r3-ablation-workbench-test-token",
+                    ) as server:
+                        connection = HTTPConnection(server.host, server.port, timeout=5)
+                        connection.request(
+                            "GET",
+                            "/family-induction?token=r3-ablation-workbench-test-token",
+                        )
+                        response = connection.getresponse()
+                        body = response.read().decode("utf-8")
+                        connection.close()
+                    assert response.status == 200
+                    for text in (
+                        "Seed grammar before ablation patch",
+                        "RF500 admitted before patch: <b>False</b>",
+                        "Selected detector",
+                        "paired_optional_motif",
+                        "Structured support",
+                        "Population size",
+                        "symmetry assumption",
+                        "heuristic_support_not_probability",
+                        "pending &middot; non-mutating",
+                        "Accepted review and explicit grammar patch",
+                        "add_optional_motif",
+                        "Grammar before/after diff entries",
+                        "Final admission",
+                        "Synthetic single optional detector fixture",
+                    ):
+                        assert text in body
+    finally:
+        try:
+            scratch.rmdir()
+        except OSError:
+            pass
+
+    legacy = (
+        ROOT
+        / "analysis_outputs"
+        / "rf_cem_family_induction"
+        / "r3_family_induction.2f6c02557798e606"
+    )
+    if legacy.is_dir():
+        loaded_legacy = load_r3_bundle(legacy)
+        assert loaded_legacy.proposal.schema_version == "family_extension_proposal.v0"
+        assert loaded_legacy.proposal.to_mapping()["confidence_basis"] == (
+            "deterministic_evidence_completeness_not_probability"
+        )
 
 
 def _induce(

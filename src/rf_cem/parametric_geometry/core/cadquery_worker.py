@@ -155,9 +155,16 @@ def _workplane_from_segments(cq, profile_segments: list[dict]):
                 raise ValueError(
                     f"nurbs segment {segment.get('id')} degree_max must be from 1 to 5"
                 )
+            tolerance_mm = float(
+                curve.get("tolerance_mm", _SPLINE_APPROX_TOLERANCE_MM)
+            )
+            if not math.isfinite(tolerance_mm) or tolerance_mm <= 0.0:
+                raise ValueError(
+                    f"nurbs segment {segment.get('id')} tolerance_mm must be positive and finite"
+                )
             wp = wp.splineApprox(
                 points,
-                tol=_SPLINE_APPROX_TOLERANCE_MM,
+                tol=tolerance_mm,
                 maxDeg=max_degree,
                 smoothing=None,
                 includeCurrent=True,
@@ -191,8 +198,12 @@ def _segment_approximation_reports(profile_segments: list[dict]) -> list[dict]:
                 "input_source": "sampled_points" if sampled else "control_points",
                 "input_point_count": len(sampled or controls),
                 "max_degree": int(curve.get("degree_max") or 3),
-                "tolerance_mm": _SPLINE_APPROX_TOLERANCE_MM,
+                "tolerance_mm": float(
+                    curve.get("tolerance_mm", _SPLINE_APPROX_TOLERANCE_MM)
+                ),
                 "smoothing": None,
+                "backend_contract": curve.get("backend_contract"),
+                "fidelity": curve.get("fidelity"),
                 "declared_source_curve": curve.get("source_curve"),
             }
         )

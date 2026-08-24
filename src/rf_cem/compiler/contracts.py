@@ -22,9 +22,12 @@ from rf_cem.semantic import EvidenceRef, FamilyGrammar, InstanceBoundaryGraph
 from rf_cem.semantic.contracts import canonical_sha256
 
 
-COMPILE_REQUEST_SCHEMA_VERSION = "compile_request.v0"
-COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v0"
-COMPILER_VERSION = "rf_cem_profile_compiler.v0"
+BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION = "boundary_continuity_policy.v0"
+LEGACY_COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v0"
+COMPILE_REQUEST_SCHEMA_VERSION = "compile_request.v1"
+COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v1"
+LEGACY_COMPILER_VERSION = "rf_cem_profile_compiler.v0"
+COMPILER_VERSION = "rf_cem_profile_compiler.v1"
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -287,6 +290,231 @@ class BaselineContract:
 
 
 @dataclass(frozen=True)
+class ContinuityRequirement:
+    """One hard geometric-continuity requirement in a policy."""
+
+    required_level: str
+    enforcement: str = "hard"
+
+    def __post_init__(self) -> None:
+        if self.required_level not in {"C0", "G1", "G2"}:
+            raise CompileContractError("unsupported continuity requirement level")
+        if self.enforcement != "hard":
+            raise CompileContractError("boundary continuity policy v0 supports hard enforcement only")
+
+    def to_mapping(self) -> dict[str, str]:
+        return {
+            "required_continuity": self.required_level,
+            "enforcement": self.enforcement,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ContinuityRequirement":
+        mapping = _mapping(value, "continuity_requirement")
+        _exact_keys(
+            mapping,
+            {"required_continuity", "enforcement"},
+            "continuity_requirement",
+        )
+        return cls(
+            required_level=_string(
+                mapping["required_continuity"],
+                "continuity_requirement.required_continuity",
+            ),
+            enforcement=_string(
+                mapping["enforcement"], "continuity_requirement.enforcement"
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class ContinuityInterfaceOverride:
+    """Explicit continuity intent for one semantic boundary interface."""
+
+    interface_id: str
+    requirement: ContinuityRequirement
+    intentional_corner: bool
+    rationale: str
+
+    def __post_init__(self) -> None:
+        _non_empty(self.interface_id, "continuity_override.interface_id")
+        _non_empty(self.rationale, "continuity_override.rationale")
+        if not isinstance(self.intentional_corner, bool):
+            raise CompileContractError(
+                "continuity_override.intentional_corner must be boolean"
+            )
+        if self.requirement.required_level == "C0" and not self.intentional_corner:
+            raise CompileContractError(
+                "C0 interface override requires an explicit intentional corner"
+            )
+        if self.intentional_corner and self.requirement.required_level != "C0":
+            raise CompileContractError(
+                "intentional-corner override must require C0"
+            )
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "interface_id": self.interface_id,
+            **self.requirement.to_mapping(),
+            "intentional_corner": self.intentional_corner,
+            "rationale": self.rationale,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "ContinuityInterfaceOverride":
+        mapping = _mapping(value, "continuity_override")
+        _exact_keys(
+            mapping,
+            {
+                "interface_id",
+                "required_continuity",
+                "enforcement",
+                "intentional_corner",
+                "rationale",
+            },
+            "continuity_override",
+        )
+        intentional_corner = mapping["intentional_corner"]
+        if not isinstance(intentional_corner, bool):
+            raise CompileContractError(
+                "continuity_override.intentional_corner must be boolean"
+            )
+        return cls(
+            interface_id=_string(
+                mapping["interface_id"], "continuity_override.interface_id"
+            ),
+            requirement=ContinuityRequirement(
+                required_level=_string(
+                    mapping["required_continuity"],
+                    "continuity_override.required_continuity",
+                ),
+                enforcement=_string(
+                    mapping["enforcement"], "continuity_override.enforcement"
+                ),
+            ),
+            intentional_corner=intentional_corner,
+            rationale=_string(mapping["rationale"], "continuity_override.rationale"),
+        )
+
+
+@dataclass(frozen=True)
+class BoundaryContinuityPolicy:
+    """Versioned family policy independent of concrete curve implementations."""
+
+    policy_id: str
+    family_id: str
+    internal_patch_policy: ContinuityRequirement
+    semantic_interface_default: ContinuityRequirement
+    semantic_interface_overrides: tuple[ContinuityInterfaceOverride, ...] = ()
+    supported_levels: tuple[str, ...] = ("C0", "G1", "G2")
+    policy_provenance: str = (
+        "docs/RF-CEM_Technical_Record_2_TD1-TD3_Workbench_Desktop.md#td1"
+    )
+    schema_version: str = BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION:
+            raise CompileContractError("unsupported boundary continuity policy schema")
+        _non_empty(self.policy_id, "continuity_policy.policy_id")
+        _non_empty(self.family_id, "continuity_policy.family_id")
+        _non_empty(self.policy_provenance, "continuity_policy.policy_provenance")
+        if self.internal_patch_policy.required_level != "G1":
+            raise CompileContractError("internal patch default must be G1 hard")
+        if self.semantic_interface_default.required_level != "G1":
+            raise CompileContractError("semantic interface default must be G1 hard")
+        if self.supported_levels != ("C0", "G1", "G2"):
+            raise CompileContractError("continuity policy must support C0, G1 and G2")
+        override_ids = [item.interface_id for item in self.semantic_interface_overrides]
+        if len(override_ids) != len(set(override_ids)):
+            raise CompileContractError("continuity interface overrides must be unique")
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "policy_id": self.policy_id,
+            "family_id": self.family_id,
+            "internal_patch_policy": self.internal_patch_policy.to_mapping(),
+            "semantic_interface_default": self.semantic_interface_default.to_mapping(),
+            "semantic_interface_overrides": [
+                item.to_mapping() for item in self.semantic_interface_overrides
+            ],
+            "supported_levels": list(self.supported_levels),
+            "policy_provenance": self.policy_provenance,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "BoundaryContinuityPolicy":
+        mapping = _mapping(value, "continuity_policy")
+        _exact_keys(
+            mapping,
+            {
+                "schema_version",
+                "policy_id",
+                "family_id",
+                "internal_patch_policy",
+                "semantic_interface_default",
+                "semantic_interface_overrides",
+                "supported_levels",
+                "policy_provenance",
+            },
+            "continuity_policy",
+        )
+        return cls(
+            schema_version=_string(
+                mapping["schema_version"], "continuity_policy.schema_version"
+            ),
+            policy_id=_string(mapping["policy_id"], "continuity_policy.policy_id"),
+            family_id=_string(mapping["family_id"], "continuity_policy.family_id"),
+            internal_patch_policy=ContinuityRequirement.from_mapping(
+                _mapping(
+                    mapping["internal_patch_policy"],
+                    "continuity_policy.internal_patch_policy",
+                )
+            ),
+            semantic_interface_default=ContinuityRequirement.from_mapping(
+                _mapping(
+                    mapping["semantic_interface_default"],
+                    "continuity_policy.semantic_interface_default",
+                )
+            ),
+            semantic_interface_overrides=tuple(
+                ContinuityInterfaceOverride.from_mapping(
+                    _mapping(item, "continuity_policy.semantic_interface_override")
+                )
+                for item in _sequence(
+                    mapping["semantic_interface_overrides"],
+                    "continuity_policy.semantic_interface_overrides",
+                )
+            ),
+            supported_levels=_string_tuple(
+                mapping["supported_levels"], "continuity_policy.supported_levels"
+            ),
+            policy_provenance=_string(
+                mapping["policy_provenance"],
+                "continuity_policy.policy_provenance",
+            ),
+        )
+
+
+def default_boundary_continuity_policy(
+    family_id: str,
+    *,
+    overrides: tuple[ContinuityInterfaceOverride, ...] = (),
+    policy_id: str | None = None,
+) -> BoundaryContinuityPolicy:
+    """Return the explicit RF-wall G1 policy used when no override is declared."""
+
+    _non_empty(family_id, "continuity_policy.family_id")
+    return BoundaryContinuityPolicy(
+        policy_id=policy_id or f"{family_id}.boundary_continuity_policy.v0",
+        family_id=family_id,
+        internal_patch_policy=ContinuityRequirement("G1"),
+        semantic_interface_default=ContinuityRequirement("G1"),
+        semantic_interface_overrides=overrides,
+    )
+
+
+@dataclass(frozen=True)
 class RegionRepresentationBinding:
     """One semantic-region-to-mathematical-representation compile input."""
 
@@ -352,6 +580,7 @@ class CompileRequest:
     source_native_provenance: SourceNativeProvenance
     baseline: BaselineContract
     region_bindings: tuple[RegionRepresentationBinding, ...]
+    continuity_policy: BoundaryContinuityPolicy | None = None
     compiler_version: str = COMPILER_VERSION
 
     def __post_init__(self) -> None:
@@ -369,6 +598,23 @@ class CompileRequest:
             raise CompileContractError("region bindings must exactly follow instance graph order")
         if [item.region_order for item in self.region_bindings] != list(range(len(binding_ids))):
             raise CompileContractError("region binding order must be contiguous from zero")
+        policy = self.continuity_policy
+        if policy is None:
+            policy = default_boundary_continuity_policy(self.instance_graph.family_id)
+            object.__setattr__(self, "continuity_policy", policy)
+        if policy.family_id != self.instance_graph.family_id:
+            raise CompileContractError("continuity policy and instance graph family mismatch")
+        interface_ids = {
+            _string(getattr(item, "interface_id", None), "interface.interface_id")
+            for item in self.instance_graph.interfaces
+        }
+        unknown_overrides = {
+            item.interface_id for item in policy.semantic_interface_overrides
+        } - interface_ids
+        if unknown_overrides:
+            raise CompileContractError(
+                f"continuity policy overrides unknown interfaces: {sorted(unknown_overrides)}"
+            )
 
     @property
     def family_id(self) -> str:
@@ -389,6 +635,7 @@ class CompileRequest:
             "source_native_provenance": self.source_native_provenance.to_mapping(),
             "baseline": self.baseline.to_mapping(),
             "region_bindings": [item.to_mapping() for item in self.region_bindings],
+            "continuity_policy": self.continuity_policy.to_mapping(),
         }
 
 
@@ -445,6 +692,107 @@ class LandmarkGeometryBinding:
 
 
 @dataclass(frozen=True)
+class EndpointConstraint:
+    """One classified one-sided profile endpoint, never a fake continuity join."""
+
+    constraint_id: str
+    landmark_id: str
+    endpoint_role: str
+    incident_patch_id: str
+    position: Point2D
+    tangent: tuple[float, float]
+    normal: tuple[float, float]
+    termination_plane: str
+    classification_source: str
+    two_sided_continuity_applicable: bool = False
+
+    def __post_init__(self) -> None:
+        for value, path in (
+            (self.constraint_id, "endpoint_constraint.constraint_id"),
+            (self.landmark_id, "endpoint_constraint.landmark_id"),
+            (self.incident_patch_id, "endpoint_constraint.incident_patch_id"),
+            (self.classification_source, "endpoint_constraint.classification_source"),
+        ):
+            _non_empty(value, path)
+        if self.endpoint_role not in {"profile_start", "profile_end"}:
+            raise CompileContractError("unsupported profile endpoint role")
+        if self.termination_plane != "constant_z":
+            raise CompileContractError("unsupported endpoint termination plane")
+        for vector, path in (
+            (self.tangent, "endpoint_constraint.tangent"),
+            (self.normal, "endpoint_constraint.normal"),
+        ):
+            if len(vector) != 2:
+                raise CompileContractError(f"{path} must contain two components")
+            length = math.hypot(
+                _number(vector[0], f"{path}[0]"),
+                _number(vector[1], f"{path}[1]"),
+            )
+            if abs(length - 1.0) > 1.0e-9:
+                raise CompileContractError(f"{path} must be a unit vector")
+        if self.two_sided_continuity_applicable is not False:
+            raise CompileContractError(
+                "profile endpoint cannot be classified as a two-sided continuity join"
+            )
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "constraint_id": self.constraint_id,
+            "landmark_id": self.landmark_id,
+            "endpoint_role": self.endpoint_role,
+            "incident_patch_id": self.incident_patch_id,
+            "position": self.position.to_mapping(),
+            "tangent": list(self.tangent),
+            "normal": list(self.normal),
+            "termination_plane": self.termination_plane,
+            "classification_source": self.classification_source,
+            "two_sided_continuity_applicable": self.two_sided_continuity_applicable,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "EndpointConstraint":
+        mapping = _mapping(value, "endpoint_constraint")
+        required = set(cls.__dataclass_fields__)
+        _exact_keys(mapping, required, "endpoint_constraint")
+        tangent = _number_pair(mapping["tangent"], "endpoint_constraint.tangent")
+        normal = _number_pair(mapping["normal"], "endpoint_constraint.normal")
+        applicable = mapping["two_sided_continuity_applicable"]
+        if not isinstance(applicable, bool):
+            raise CompileContractError(
+                "endpoint_constraint.two_sided_continuity_applicable must be boolean"
+            )
+        return cls(
+            constraint_id=_string(
+                mapping["constraint_id"], "endpoint_constraint.constraint_id"
+            ),
+            landmark_id=_string(
+                mapping["landmark_id"], "endpoint_constraint.landmark_id"
+            ),
+            endpoint_role=_string(
+                mapping["endpoint_role"], "endpoint_constraint.endpoint_role"
+            ),
+            incident_patch_id=_string(
+                mapping["incident_patch_id"],
+                "endpoint_constraint.incident_patch_id",
+            ),
+            position=Point2D.from_mapping(
+                _mapping(mapping["position"], "endpoint_constraint.position")
+            ),
+            tangent=tangent,
+            normal=normal,
+            termination_plane=_string(
+                mapping["termination_plane"],
+                "endpoint_constraint.termination_plane",
+            ),
+            classification_source=_string(
+                mapping["classification_source"],
+                "endpoint_constraint.classification_source",
+            ),
+            two_sided_continuity_applicable=applicable,
+        )
+
+
+@dataclass(frozen=True)
 class ContinuityCheck:
     """C0/G1/G2 diagnostic at one deterministic oriented patch join."""
 
@@ -464,6 +812,11 @@ class ContinuityCheck:
     g1_pass: bool
     g2_pass: bool
     required_pass: bool
+    requirement_source: str = "legacy_source_native_segment_rule"
+    policy_ref: str = "legacy.compile_record.v0"
+    intentional_corner: bool = False
+    enforcement: str = "hard"
+    interface_id: str | None = None
 
     def __post_init__(self) -> None:
         for value, path in (
@@ -477,6 +830,31 @@ class ContinuityCheck:
             raise CompileContractError("unsupported continuity join scope")
         if self.required_level not in {"C0", "G1", "G2"}:
             raise CompileContractError("unsupported continuity required level")
+        if self.requirement_source not in {
+            "legacy_source_native_segment_rule",
+            "internal_patch_policy",
+            "semantic_interface_default",
+            "semantic_interface_override",
+        }:
+            raise CompileContractError("unsupported continuity requirement source")
+        _non_empty(self.policy_ref, "continuity.policy_ref")
+        if not isinstance(self.intentional_corner, bool):
+            raise CompileContractError("continuity.intentional_corner must be boolean")
+        if self.enforcement != "hard":
+            raise CompileContractError("continuity enforcement must be hard")
+        if self.join_scope == "within_region" and self.interface_id is not None:
+            raise CompileContractError("within-region continuity cannot reference an interface")
+        if self.join_scope == "cross_region":
+            if self.requirement_source == "legacy_source_native_segment_rule":
+                if self.interface_id is not None:
+                    raise CompileContractError("legacy continuity cannot add an interface ID")
+            else:
+                _non_empty(self.interface_id, "continuity.interface_id")
+        if self.intentional_corner:
+            if self.required_level != "C0" or self.requirement_source != "semantic_interface_override":
+                raise CompileContractError(
+                    "intentional corner requires an explicit C0 interface override"
+                )
         for value, path in (
             (self.c0_gap_mm, "continuity.c0_gap_mm"),
             (self.tangent_angle_deg, "continuity.tangent_angle_deg"),
@@ -500,8 +878,8 @@ class ContinuityCheck:
             if not isinstance(value, bool):
                 raise CompileContractError(f"{path} must be boolean")
 
-    def to_mapping(self) -> dict[str, Any]:
-        return {
+    def to_mapping(self, *, legacy: bool = False) -> dict[str, Any]:
+        mapping = {
             "check_id": self.check_id,
             "landmark_id": self.landmark_id,
             "left_patch_id": self.left_patch_id,
@@ -519,11 +897,45 @@ class ContinuityCheck:
             "g2_pass": self.g2_pass,
             "required_pass": self.required_pass,
         }
+        if not legacy:
+            mapping.update(
+                {
+                    "requirement_source": self.requirement_source,
+                    "policy_ref": self.policy_ref,
+                    "intentional_corner": self.intentional_corner,
+                    "enforcement": self.enforcement,
+                    "interface_id": self.interface_id,
+                }
+            )
+        return mapping
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ContinuityCheck":
+    def from_mapping(
+        cls, value: Mapping[str, Any], *, legacy: bool = False
+    ) -> "ContinuityCheck":
         mapping = _mapping(value, "continuity")
-        required = set(cls.__dataclass_fields__)
+        required = {
+            field
+            for field in cls.__dataclass_fields__
+            if field
+            not in {
+                "requirement_source",
+                "policy_ref",
+                "intentional_corner",
+                "enforcement",
+                "interface_id",
+            }
+        }
+        if not legacy:
+            required.update(
+                {
+                    "requirement_source",
+                    "policy_ref",
+                    "intentional_corner",
+                    "enforcement",
+                    "interface_id",
+                }
+            )
         _exact_keys(mapping, required, "continuity")
         boolean_fields = {"c0_pass", "g1_pass", "g2_pass", "required_pass"}
         for field in boolean_fields:
@@ -556,6 +968,29 @@ class ContinuityCheck:
             g1_pass=mapping["g1_pass"],
             g2_pass=mapping["g2_pass"],
             required_pass=mapping["required_pass"],
+            requirement_source=(
+                "legacy_source_native_segment_rule"
+                if legacy
+                else _string(
+                    mapping["requirement_source"], "continuity.requirement_source"
+                )
+            ),
+            policy_ref=(
+                "legacy.compile_record.v0"
+                if legacy
+                else _string(mapping["policy_ref"], "continuity.policy_ref")
+            ),
+            intentional_corner=(False if legacy else mapping["intentional_corner"]),
+            enforcement=(
+                "hard"
+                if legacy
+                else _string(mapping["enforcement"], "continuity.enforcement")
+            ),
+            interface_id=(
+                None
+                if legacy or mapping["interface_id"] is None
+                else _string(mapping["interface_id"], "continuity.interface_id")
+            ),
         )
 
 
@@ -622,6 +1057,9 @@ class CompileRecord:
     parent_compile_id: str | None = None
     compile_id: str = ""
     content_sha256: str = ""
+    continuity_policy: BoundaryContinuityPolicy | None = None
+    endpoint_constraints: tuple[EndpointConstraint, ...] = ()
+    schema_version: str = COMPILE_RECORD_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         for value, path in (
@@ -629,7 +1067,17 @@ class CompileRecord:
             (self.instance_id, "compile_record.instance_id"),
         ):
             _non_empty(value, path)
-        if self.compiler_version != COMPILER_VERSION:
+        if self.schema_version not in {
+            LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+            COMPILE_RECORD_SCHEMA_VERSION,
+        }:
+            raise CompileContractError("unsupported compile record schema")
+        expected_compiler = (
+            LEGACY_COMPILER_VERSION
+            if self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+            else COMPILER_VERSION
+        )
+        if self.compiler_version != expected_compiler:
             raise CompileContractError("unsupported compiler version in compile record")
         if self.status not in {"pass", "failed"}:
             raise CompileContractError("compile record status must be pass or failed")
@@ -663,6 +1111,40 @@ class CompileRecord:
         for check in self.continuity_checks:
             if check.left_patch_id not in patch_ids or check.right_patch_id not in patch_ids:
                 raise CompileContractError("continuity check references an unknown patch")
+        if self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
+            if self.continuity_policy is not None or self.endpoint_constraints:
+                raise CompileContractError(
+                    "legacy compile record cannot contain v1 policy or endpoint contracts"
+                )
+            if any(
+                check.requirement_source != "legacy_source_native_segment_rule"
+                for check in self.continuity_checks
+            ):
+                raise CompileContractError("legacy continuity source marker changed")
+        else:
+            if self.continuity_policy is None:
+                raise CompileContractError("compile_record.v1 requires a continuity policy")
+            if self.continuity_policy.family_id != self.family_id:
+                raise CompileContractError("compile record continuity policy family mismatch")
+            if len(self.endpoint_constraints) != 2 or {
+                item.endpoint_role for item in self.endpoint_constraints
+            } != {"profile_start", "profile_end"}:
+                raise CompileContractError(
+                    "compile_record.v1 requires classified start and end constraints"
+                )
+            endpoint_landmarks = {item.landmark_id for item in self.endpoint_constraints}
+            if endpoint_landmarks & {item.landmark_id for item in self.continuity_checks}:
+                raise CompileContractError(
+                    "profile endpoint was emitted as a two-sided continuity check"
+                )
+            for endpoint in self.endpoint_constraints:
+                if endpoint.incident_patch_id not in patch_ids:
+                    raise CompileContractError(
+                        "endpoint constraint references an unknown incident patch"
+                    )
+            for check in self.continuity_checks:
+                if check.policy_ref != self.continuity_policy.policy_id:
+                    raise CompileContractError("continuity check policy reference mismatch")
         _finite_json(self.geometry_validation, "compile_record.geometry_validation")
         _finite_json(self.baseline_comparison, "compile_record.baseline_comparison")
         if not self.output_artifacts:
@@ -694,8 +1176,8 @@ class CompileRecord:
         return sum(item.patch_count for item in self.region_geometries)
 
     def _content_mapping(self) -> dict[str, Any]:
-        return {
-            "schema_version": COMPILE_RECORD_SCHEMA_VERSION,
+        mapping = {
+            "schema_version": self.schema_version,
             "family_id": self.family_id,
             "instance_id": self.instance_id,
             "compiler_version": self.compiler_version,
@@ -705,7 +1187,12 @@ class CompileRecord:
             "baseline": self.baseline.to_mapping(),
             "region_geometries": [item.to_mapping() for item in self.region_geometries],
             "landmark_bindings": [item.to_mapping() for item in self.landmark_bindings],
-            "continuity_checks": [item.to_mapping() for item in self.continuity_checks],
+            "continuity_checks": [
+                item.to_mapping(
+                    legacy=self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                )
+                for item in self.continuity_checks
+            ],
             "geometry_validation": dict(self.geometry_validation),
             "baseline_comparison": dict(self.baseline_comparison),
             "output_artifacts": [item.to_mapping() for item in self.output_artifacts],
@@ -717,6 +1204,18 @@ class CompileRecord:
             "region_count": len(self.region_geometries),
             "patch_count": self.patch_count,
         }
+        if self.schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            if self.continuity_policy is None:
+                raise CompileContractError("compile_record.v1 requires a continuity policy")
+            mapping.update(
+                {
+                    "continuity_policy": self.continuity_policy.to_mapping(),
+                    "endpoint_constraints": [
+                        item.to_mapping() for item in self.endpoint_constraints
+                    ],
+                }
+            )
+        return mapping
 
     def to_mapping(self) -> dict[str, Any]:
         return {
@@ -728,6 +1227,14 @@ class CompileRecord:
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "CompileRecord":
         mapping = _mapping(value, "compile_record")
+        schema_version = _string(
+            mapping.get("schema_version"), "compile_record.schema_version"
+        )
+        if schema_version not in {
+            LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+            COMPILE_RECORD_SCHEMA_VERSION,
+        }:
+            raise CompileContractError("unsupported compile record schema")
         required = {
             "schema_version",
             "family_id",
@@ -753,9 +1260,9 @@ class CompileRecord:
             "compile_id",
             "content_sha256",
         }
+        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            required.update({"continuity_policy", "endpoint_constraints"})
         _exact_keys(mapping, required, "compile_record")
-        if mapping["schema_version"] != COMPILE_RECORD_SCHEMA_VERSION:
-            raise CompileContractError("unsupported compile record schema")
         parent = mapping["parent_compile_id"]
         if parent is not None and not isinstance(parent, str):
             raise CompileContractError("parent_compile_id must be a string or null")
@@ -791,7 +1298,10 @@ class CompileRecord:
                 for item in _sequence(mapping["landmark_bindings"], "compile_record.landmark_bindings")
             ),
             continuity_checks=tuple(
-                ContinuityCheck.from_mapping(_mapping(item, "compile_record.continuity"))
+                ContinuityCheck.from_mapping(
+                    _mapping(item, "compile_record.continuity"),
+                    legacy=schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+                )
                 for item in _sequence(mapping["continuity_checks"], "compile_record.continuity_checks")
             ),
             geometry_validation=dict(
@@ -816,6 +1326,30 @@ class CompileRecord:
             parent_compile_id=parent,
             compile_id=_string(mapping["compile_id"], "compile_record.compile_id"),
             content_sha256=_hash(mapping["content_sha256"], "compile_record.content_sha256"),
+            continuity_policy=(
+                None
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                else BoundaryContinuityPolicy.from_mapping(
+                    _mapping(
+                        mapping["continuity_policy"],
+                        "compile_record.continuity_policy",
+                    )
+                )
+            ),
+            endpoint_constraints=(
+                ()
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                else tuple(
+                    EndpointConstraint.from_mapping(
+                        _mapping(item, "compile_record.endpoint_constraint")
+                    )
+                    for item in _sequence(
+                        mapping["endpoint_constraints"],
+                        "compile_record.endpoint_constraints",
+                    )
+                )
+            ),
+            schema_version=schema_version,
         )
         if mapping["region_count"] != len(result.region_geometries):
             raise CompileContractError("compile record region_count mismatch")
@@ -912,6 +1446,13 @@ def _string_tuple(value: object, path: str) -> tuple[str, ...]:
     return tuple(_string(item, f"{path}[]") for item in _sequence(value, path))
 
 
+def _number_pair(value: object, path: str) -> tuple[float, float]:
+    values = _sequence(value, path)
+    if len(values) != 2:
+        raise CompileContractError(f"{path} must contain two values")
+    return (_number(values[0], f"{path}[0]"), _number(values[1], f"{path}[1]"))
+
+
 def _mapping(value: object, path: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise CompileContractError(f"{path} must be an object")
@@ -935,6 +1476,8 @@ def _exact_keys(mapping: Mapping[str, Any], required: set[str], path: str) -> No
 
 __all__ = [
     "BaselineContract",
+    "BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION",
+    "BoundaryContinuityPolicy",
     "COMPILE_RECORD_SCHEMA_VERSION",
     "COMPILE_REQUEST_SCHEMA_VERSION",
     "COMPILER_VERSION",
@@ -942,11 +1485,17 @@ __all__ = [
     "CompileRecord",
     "CompileRequest",
     "ContinuityCheck",
+    "ContinuityInterfaceOverride",
+    "ContinuityRequirement",
     "ContractSourceRef",
+    "EndpointConstraint",
     "LandmarkGeometryBinding",
+    "LEGACY_COMPILE_RECORD_SCHEMA_VERSION",
+    "LEGACY_COMPILER_VERSION",
     "load_compile_record",
     "NativeArtifactRef",
     "OutputArtifactRef",
     "RegionRepresentationBinding",
     "SourceNativeProvenance",
+    "default_boundary_continuity_policy",
 ]

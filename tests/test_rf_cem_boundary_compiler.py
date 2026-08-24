@@ -18,12 +18,15 @@ from rf_cem.compiler import (
     CompileContractError,
     CompileRecord,
     CompileRequest,
+    ContinuityInterfaceOverride,
+    ContinuityRequirement,
     ContractSourceRef,
     NativeArtifactRef,
     ProfileCompiler,
     R2SourceSet,
     RegionRepresentationBinding,
     SourceNativeProvenance,
+    default_boundary_continuity_policy,
     load_compile_record,
     write_r2_bundle,
 )
@@ -37,6 +40,7 @@ from rf_cem.representation import (
     Point2D,
     RegionGeometry,
     RepresentationContractError,
+    SplineApproxRepresentation,
     SplineNurbsRepresentation,
     representation_from_mapping,
     trim_representation,
@@ -76,8 +80,8 @@ def test_representation_contracts_round_trip_and_remain_generic() -> None:
         end_angle_rad=math.pi / 2.0,
         sample_count=9,
     )
-    spline = SplineNurbsRepresentation(
-        "spline",
+    legacy_spline = SplineNurbsRepresentation(
+        "spline.legacy",
         degree=3,
         fit_points=(Point2D(0.0, 1.0), Point2D(0.5, 1.2), Point2D(1.0, 1.0)),
         control_points=(
@@ -88,11 +92,87 @@ def test_representation_contracts_round_trip_and_remain_generic() -> None:
         ),
         backend_point_source="control_points",
     )
+    spline = SplineApproxRepresentation(
+        "spline.canonical",
+        max_degree=legacy_spline.degree,
+        fit_input_points=legacy_spline.fit_points,
+        source_control_point_hints=legacy_spline.control_points,
+        backend_input_source="source_control_point_hints",
+    )
     composite = CompositeRegionRepresentation("composite", (line, circle))
-    for representation in (line, circle, ellipse, spline, composite):
+    for representation in (line, circle, ellipse, legacy_spline, spline, composite):
         assert representation_from_mapping(representation.to_mapping()) == representation
         assert representation.parameter_count > 0
         assert len(representation.sample()) >= 2
+
+    legacy_mapping = legacy_spline.to_mapping()
+    assert representation_from_mapping(legacy_mapping).to_mapping() == legacy_mapping
+    assert spline.to_mapping() == {
+        "schema_version": "boundary_representation.v1",
+        "representation_type": "SplineApprox",
+        "representation_id": "spline.canonical",
+        "representation_family": "spline",
+        "fidelity": "approximate",
+        "fit_input_points": [point.to_mapping() for point in legacy_spline.fit_points],
+        "source_control_point_hints": [
+            point.to_mapping() for point in legacy_spline.control_points
+        ],
+        "max_degree": 3,
+        "backend_input_source": "source_control_point_hints",
+        "backend_contract": "cadquery.splineApprox.v0",
+        "approximation_tolerance_mm": 1.0e-3,
+        "optimization_ready": True,
+        "exact_nurbs": False,
+    }
+    assert spline.sample() == legacy_spline.sample()
+    assert spline.start_tangent() == legacy_spline.start_tangent()
+    assert spline.end_tangent() == legacy_spline.end_tangent()
+    legacy_patch = GeometryPatch(
+        patch_id="legacy.patch",
+        owner_region_id="region",
+        region_order=0,
+        patch_order=0,
+        global_order=0,
+        representation=legacy_spline,
+        start_landmark_id="landmark.start",
+        end_landmark_id="landmark.end",
+        source_native_segment_ref="native.curve",
+        source_parameter_interval=(0.0, 1.0),
+    )
+    canonical_patch = GeometryPatch(
+        patch_id="canonical.patch",
+        owner_region_id="region",
+        region_order=0,
+        patch_order=0,
+        global_order=0,
+        representation=spline,
+        start_landmark_id="landmark.start",
+        end_landmark_id="landmark.end",
+        source_native_segment_ref="native.curve",
+        source_parameter_interval=(0.0, 1.0),
+    )
+    legacy_backend = compiler_core._backend_segment(legacy_patch)
+    canonical_backend = compiler_core._backend_segment(canonical_patch)
+    assert legacy_backend["curve"]["control_points"] == canonical_backend["curve"][
+        "control_points"
+    ]
+    assert legacy_backend["curve"]["degree_max"] == canonical_backend["curve"][
+        "degree_max"
+    ]
+    assert legacy_backend["curve"]["tolerance_mm"] == canonical_backend["curve"][
+        "tolerance_mm"
+    ] == 1.0e-3
+    optimized = replace(
+        spline,
+        fit_input_points=(
+            spline.fit_input_points[0],
+            Point2D(0.5, 1.25),
+            spline.fit_input_points[-1],
+        ),
+    )
+    assert optimized.fit_input_points[1].r_mm == 1.25
+    assert optimized.parameter_count == spline.parameter_count
+    assert representation_from_mapping(optimized.to_mapping()) == optimized
 
     left = trim_representation(
         ellipse, start_fraction=0.0, end_fraction=0.5, representation_id="ellipse.left"
@@ -163,6 +243,184 @@ def test_one_compiler_entry_handles_two_topologies_and_records_ownership(
 
     assert type(results[0].record.region_geometries[0].representation.components[0]) is (
         type(results[1].record.region_geometries[0].representation.components[0])
+    )
+
+
+def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> None:
+    request, _ = _compile_request("fixture.continuity", 2)
+    first, second = request.region_bindings
+    line = LineRepresentation(
+        "fixture.line", Point2D(0.0, 1.0), Point2D(1.0, 1.0)
+    )
+    arc = CircularArcRepresentation(
+        "fixture.arc",
+        center=Point2D(1.0, 2.0),
+        radius_mm=1.0,
+        start_angle_rad=-math.pi / 2.0,
+        end_angle_rad=0.0,
+        sample_count=9,
+    )
+    vertical = LineRepresentation(
+        "fixture.vertical", Point2D(2.0, 2.0), Point2D(2.0, 3.0)
+    )
+    internal_landmark = "fixture.continuity.landmark.internal"
+    first = replace(
+        first,
+        representation=CompositeRegionRepresentation(
+            "fixture.composite.line-arc", (line, arc)
+        ),
+        source_native_segment_refs=("source.same", "source.same"),
+        source_parameter_intervals=((0.0, 0.5), (0.5, 1.0)),
+        internal_landmark_ids=(internal_landmark,),
+    )
+    second = replace(
+        second,
+        representation=CompositeRegionRepresentation(
+            "fixture.composite.vertical", (vertical,)
+        ),
+    )
+    tangent_request = replace(request, region_bindings=(first, second))
+    tangent_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(tangent_request)
+        for patch in geometry.patches
+    )
+    tangent_checks = compiler_core._continuity_checks(
+        tangent_request, tangent_patches
+    )
+    internal = tangent_checks[0]
+    ordinary_interface = tangent_checks[1]
+    assert internal.join_scope == "within_region"
+    assert internal.required_level == "G1"
+    assert internal.requirement_source == "internal_patch_policy"
+    assert internal.g1_pass is True
+    assert internal.g2_pass is False
+    assert ordinary_interface.required_level == "G1"
+    assert ordinary_interface.requirement_source == "semantic_interface_default"
+    assert ordinary_interface.required_pass is True
+
+    changed_refs = replace(
+        first,
+        source_native_segment_refs=("source.left", "source.right"),
+    )
+    changed_request = replace(
+        tangent_request, region_bindings=(changed_refs, second)
+    )
+    changed_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(changed_request)
+        for patch in geometry.patches
+    )
+    assert [item.required_level for item in compiler_core._continuity_checks(
+        changed_request, changed_patches
+    )] == [item.required_level for item in tangent_checks]
+
+    corner_request, _ = _compile_request("fixture.corner", 2)
+    corner_first, corner_second = corner_request.region_bindings
+    corner_second = replace(
+        corner_second,
+        representation=CompositeRegionRepresentation(
+            "fixture.corner.vertical",
+            (
+                LineRepresentation(
+                    "fixture.corner.vertical.line",
+                    Point2D(1.0, 1.0),
+                    Point2D(1.0, 2.0),
+                ),
+            ),
+        ),
+    )
+    corner_interface_id = corner_request.instance_graph.interfaces[0].interface_id
+    corner_policy = default_boundary_continuity_policy(
+        corner_request.family_id,
+        overrides=(
+            ContinuityInterfaceOverride(
+                interface_id=corner_interface_id,
+                requirement=ContinuityRequirement("C0"),
+                intentional_corner=True,
+                rationale="Synthetic reviewed intentional corner.",
+            ),
+        ),
+    )
+    corner_request = replace(
+        corner_request,
+        region_bindings=(corner_first, corner_second),
+        continuity_policy=corner_policy,
+    )
+    corner_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(corner_request)
+        for patch in geometry.patches
+    )
+    corner = compiler_core._continuity_checks(corner_request, corner_patches)[0]
+    assert corner.g1_pass is False
+    assert corner.required_level == "C0"
+    assert corner.required_pass is True
+    assert corner.intentional_corner is True
+    assert corner.requirement_source == "semantic_interface_override"
+
+    g2_request, _ = _compile_request("fixture.g2", 2)
+    g2_first, g2_second = g2_request.region_bindings
+    g2_second = replace(
+        g2_second,
+        representation=CompositeRegionRepresentation(
+            "fixture.g2.arc", (arc,)
+        ),
+    )
+    g2_interface_id = g2_request.instance_graph.interfaces[0].interface_id
+    g2_policy = default_boundary_continuity_policy(
+        g2_request.family_id,
+        overrides=(
+            ContinuityInterfaceOverride(
+                interface_id=g2_interface_id,
+                requirement=ContinuityRequirement("G2"),
+                intentional_corner=False,
+                rationale="Synthetic explicit curvature-continuity extension.",
+            ),
+        ),
+    )
+    g2_request = replace(
+        g2_request,
+        region_bindings=(g2_first, g2_second),
+        continuity_policy=g2_policy,
+    )
+    g2_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(g2_request)
+        for patch in geometry.patches
+    )
+    g2 = compiler_core._continuity_checks(g2_request, g2_patches)[0]
+    assert g2.g1_pass is True
+    assert g2.g2_pass is False
+    assert g2.required_level == "G2"
+    assert g2.required_pass is False
+
+
+def test_profile_endpoints_are_explicit_and_not_two_sided_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        compiler_core, "validate_graph_against_grammar", lambda grammar, graph: None
+    )
+    request, source_points = _compile_request("fixture.endpoints", 2)
+    result = ProfileCompiler(_FakeKernel()).compile(
+        request,
+        bundle_root=tmp_path,
+        source_profile_points=source_points,
+    )
+    assert {item.endpoint_role for item in result.record.endpoint_constraints} == {
+        "profile_start",
+        "profile_end",
+    }
+    endpoint_landmarks = {
+        item.landmark_id for item in result.record.endpoint_constraints
+    }
+    assert endpoint_landmarks.isdisjoint(
+        item.landmark_id for item in result.record.continuity_checks
+    )
+    assert all(
+        item.two_sided_continuity_applicable is False
+        for item in result.record.endpoint_constraints
     )
 
 
@@ -251,6 +509,36 @@ def test_real_r2_bundle_is_reproducible_and_loadable(tmp_path: Path) -> None:
     assert all(record.status == "pass" for record in first.records)
     assert [len(record.region_geometries) for record in first.records] == [9, 11]
     assert [record.patch_count for record in first.records] == [10, 12]
+    assert all(record.schema_version == "compile_record.v1" for record in first.records)
+    assert all(record.continuity_policy is not None for record in first.records)
+    assert all(len(record.endpoint_constraints) == 2 for record in first.records)
+    compiled_primitives = tuple(
+        patch.representation
+        for record in first.records
+        for region in record.region_geometries
+        for patch in region.patches
+    )
+    assert any(
+        isinstance(representation, SplineApproxRepresentation)
+        for representation in compiled_primitives
+    )
+    assert not any(
+        isinstance(representation, SplineNurbsRepresentation)
+        for representation in compiled_primitives
+    )
+    assert all(
+        check.required_level == "G1"
+        for record in first.records
+        for check in record.continuity_checks
+        if check.requirement_source
+        in {"internal_patch_policy", "semantic_interface_default"}
+    )
+    rf500 = next(record for record in first.records if record.instance_id.startswith("rf500"))
+    corners = [
+        check for check in rf500.continuity_checks if check.intentional_corner
+    ]
+    assert len(corners) == 2
+    assert all(check.required_level == "C0" and check.required_pass for check in corners)
     loaded = tuple(
         load_compile_record(path)
         for path in sorted((first.path / "records").glob("*.json"))
@@ -326,17 +614,59 @@ def _assert_real_w2_integration(sources: R2SourceSet, workdir: Path) -> None:
         response = connection.getresponse()
         body = response.read().decode("utf-8")
         connection.close()
+        representation_connection = HTTPConnection(server.host, server.port, timeout=5)
+        representation_connection.request(
+            "GET", "/representations?token=r2-workbench-test-token"
+        )
+        representation_response = representation_connection.getresponse()
+        representation_body = representation_response.read().decode("utf-8")
+        representation_connection.close()
     assert response.status == 200
     assert "Compile Records / W2" in body
     assert "Region → representation → patches" in body
     assert "BRep valid" in body
+    assert "Boundary continuity policies" in body
+    assert "requirement_source" in body
+    assert "semantic_interface_default" in body
+    assert "One-sided profile endpoint constraints" in body
     assert "No live CST" in body
     assert "RF physical acceptance" in body
+    assert representation_response.status == 200
+    assert "SplineApproxRepresentation" in representation_body
+    assert "Approximate" in representation_body
+    assert "CadQuery/OCCT splineApprox" in representation_body
+    assert "0.001 mm (1 micrometre)" in representation_body
+    assert "optimization_ready" in representation_body
+    assert "ExactNurbsRepresentation" in representation_body
+    assert "planned_not_implemented" in representation_body
+    assert "implemented exact NURBS" not in representation_body
 
     tampered_artifact = bundle.path / bundle.records[0].output_artifacts[0].path
     tampered_artifact.write_bytes(tampered_artifact.read_bytes() + b"tampered")
     with pytest.raises(WorkbenchIndexError, match="SHA-256 mismatch"):
         rebuild_workbench(workdir / "tampered.sqlite", workbench_sources)
+
+
+def test_legacy_compile_record_v0_proof_remains_readable() -> None:
+    proof = (
+        ROOT
+        / "analysis_outputs"
+        / "rf_cem_boundary_compiler"
+        / "r2_boundary_compiler.aa66a3e90125437b"
+    )
+    records = tuple(sorted((proof / "records").glob("*.compile_record.v0.json")))
+    if len(records) != 2:
+        pytest.skip("ignored canonical R2 v0 proof is not materialized")
+    loaded = tuple(load_compile_record(path) for path in records)
+    assert all(record.schema_version == "compile_record.v0" for record in loaded)
+    assert all(record.continuity_policy is None for record in loaded)
+    assert all(not record.endpoint_constraints for record in loaded)
+    assert {
+        record.compile_id for record in loaded
+    } == {
+        "rf500.2c27faee.b1r3.compile.40891d70493951aa",
+        "sls2.r149.6593e02e.compile.ebe8e2827948ff96",
+    }
 
 
 @dataclass(frozen=True)
@@ -353,6 +683,7 @@ class _FakeLandmark:
 
 @dataclass(frozen=True)
 class _FakeInterface:
+    interface_id: str
     left_region_id: str
     right_region_id: str
     landmark_id: str
@@ -454,7 +785,12 @@ def _compile_request(
         regions=tuple(_FakeRegion(value) for value in region_ids),
         landmarks=landmarks,
         interfaces=tuple(
-            _FakeInterface(region_ids[index], region_ids[index + 1], junction_ids[index])
+            _FakeInterface(
+                f"{instance_id}.interface.{index}",
+                region_ids[index],
+                region_ids[index + 1],
+                junction_ids[index],
+            )
             for index in range(region_count - 1)
         ),
     )

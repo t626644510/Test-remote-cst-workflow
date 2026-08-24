@@ -77,6 +77,12 @@ R3_ROOT = (
     / "rf_cem_family_induction"
     / "r3_family_induction.2f6c02557798e606"
 )
+HISTORICAL_R4_ROOT = (
+    ROOT
+    / "analysis_outputs"
+    / "rf_cem_observation_contract"
+    / "r4_observation_contract.d06695921d941eee"
+)
 FAMILY_PROFILE = (
     ROOT
     / "analysis_outputs"
@@ -85,6 +91,18 @@ FAMILY_PROFILE = (
     / "family_profile.v0.json"
 )
 ROADMAP = ROOT / "docs" / "RF_CEM_ROADMAP_AND_ARCHITECTURE.md"
+
+
+def test_historical_canonical_r4_bundle_remains_strictly_loadable() -> None:
+    if not HISTORICAL_R4_ROOT.is_dir():
+        pytest.skip("ignored historical R4 canonical proof is not materialized")
+    loaded = load_r4_bundle(HISTORICAL_R4_ROOT, repo_root=ROOT)
+    assert loaded.bundle_id == "r4_observation_contract.d06695921d941eee"
+    assert {item.exact_geometry.instance_id for item in loaded.instances} == {
+        "rf500.2c27faee.b1r3",
+        "sls2.r149.6593e02e",
+    }
+    assert len(loaded.constraints) == 6
 
 
 def test_real_compiled_instances_produce_separate_strict_observation_layers() -> None:

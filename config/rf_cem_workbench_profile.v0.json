@@ -1,0 +1,23 @@
+{
+  "schema_version": "rf_cem_workbench_profile.v0",
+  "profile_id": "rf-cem-w0-w4-td1-td3-desktop",
+  "database": "analysis_outputs/rf_cem_workbench/td1_td3_desktop.v0.sqlite",
+  "family_profile": "analysis_outputs/rf_cem_family_profiles/nc_axisymmetric_single_cell_rf_vacuum.00414d4f/family_profile.v0.json",
+  "family_profile_validation": "analysis_outputs/rf_cem_family_profiles/nc_axisymmetric_single_cell_rf_vacuum.00414d4f/family_profile_validation.v0.json",
+  "architecture_document": "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+  "literature_packages": [],
+  "review_sessions": [],
+  "family_grammar": "analysis_outputs/rf_cem_semantic_core/r1_semantic_core.28e8d6fa9efa221f/family_grammar.v0.json",
+  "instance_boundary_graphs": [
+    "analysis_outputs/rf_cem_semantic_core/r1_semantic_core.28e8d6fa9efa221f/instances/sls2.r149.6593e02e.instance_boundary_graph.v0.json",
+    "analysis_outputs/rf_cem_semantic_core/r1_semantic_core.28e8d6fa9efa221f/instances/rf500.2c27faee.b1r3.instance_boundary_graph.v0.json"
+  ],
+  "instance_graph_diff": "analysis_outputs/rf_cem_semantic_core/r1_semantic_core.28e8d6fa9efa221f/instance_graph_diff.v0.json",
+  "compile_records": [
+    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.8f47ca735db8ce8a/records/sls2.r149.6593e02e.compile_record.v1.json",
+    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.8f47ca735db8ce8a/records/rf500.2c27faee.b1r3.compile_record.v1.json"
+  ],
+  "family_induction_bundle": "analysis_outputs/rf_cem_family_induction_ablation/r3_family_induction_ablation.59db0a7b5f8e158c",
+  "observation_contract_bundle": "analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.a0fd43bd4bf4de2f",
+  "optional_w5_bundle": null
+}

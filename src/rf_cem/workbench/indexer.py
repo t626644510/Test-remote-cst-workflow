@@ -30,18 +30,22 @@ from rf_cem.semantic.contracts import (
     load_instance_boundary_graph,
     load_instance_graph_diff,
     validate_graph_against_grammar,
+    validate_reviewed_graph_intrinsic,
 )
 from rf_cem.semantic.induction import (
     ALIGNMENT_FILE,
     BLIND_GRAPH_FILE,
     BLIND_VALIDATION_FILE,
     MANIFEST_FILE as R3_MANIFEST_FILE,
+    MANIFEST_FILE_V1 as R3_MANIFEST_FILE_V1,
     PATCHED_GRAMMAR_FILE,
     PATCH_APPLICATION_FILE,
     PATCH_FILE,
     PROPOSAL_FILE,
+    PROPOSAL_FILE_V1,
     REVIEW_FILE,
     R3Bundle,
+    SEED_GRAMMAR_FILE,
     load_r3_bundle,
 )
 
@@ -57,7 +61,22 @@ from .registry import (
 )
 
 
-REQUIRED_W0_INSTANCES = {"sls2.r149.6593e02e", "rf500.2c27faee.b1r3"}
+SLS2_INSTANCE_ID = "sls2.r149.6593e02e"
+RF500_INSTANCE_ID = "rf500.2c27faee.b1r3"
+REQUIRED_W0_INSTANCES = {SLS2_INSTANCE_ID, RF500_INSTANCE_ID}
+
+# The original canonical R3 proof pinned the then-current representation module
+# as a build sentinel.  That source file is intentionally expected to evolve as
+# versioned representation contracts are added.  Keep this one reviewed legacy
+# identity readable without treating the historical code hash as a live W0-W4
+# source; the immutable v0 manifest still preserves the exact old identity.
+_LEGACY_R3_REPRESENTATION_SENTINELS = {
+    (
+        "r3_family_induction.2f6c02557798e606",
+        "02745cdbe657584eb0f892085bf8d6d1f8ba7ed4d41c71fd66404a94f5dfdceb",
+        39690,
+    )
+}
 
 
 class WorkbenchIndexError(WorkbenchRegistryError):
@@ -105,11 +124,32 @@ _REPRESENTATION_CATALOG = (
         "scope": "family-independent boundary primitive",
     },
     {
-        "id": "r2.SplineNurbsRepresentation",
-        "label": "SplineNurbsRepresentation",
+        "id": "r2.SplineApproxRepresentation",
+        "label": "SplineApproxRepresentation",
         "status": "implemented_r2_generic",
+        "implementation": "rf_cem.representation.SplineApproxRepresentation",
+        "scope": "family-independent spline approximation boundary primitive",
+        "fidelity": "Approximate",
+        "backend": "CadQuery/OCCT splineApprox",
+        "tolerance": "0.001 mm (1 micrometre)",
+        "optimization_ready": True,
+        "exact_nurbs": False,
+    },
+    {
+        "id": "compat.SplineNurbsRepresentation",
+        "label": "SplineNurbsRepresentation (v0 compatibility)",
+        "status": "deprecated_compatibility_loader",
         "implementation": "rf_cem.representation.SplineNurbsRepresentation",
-        "scope": "family-independent spline/NURBS boundary primitive",
+        "scope": "historical boundary_representation.v0 payloads only",
+        "fidelity": "Approximate",
+        "exact_nurbs": False,
+    },
+    {
+        "id": "future.ExactNurbsRepresentation",
+        "label": "ExactNurbsRepresentation",
+        "status": "planned_not_implemented",
+        "implementation": "none",
+        "scope": "future exact poles/knots/weights/multiplicity/parameter-domain contract",
     },
     {
         "id": "r2.CompositeRegionRepresentation",
@@ -405,7 +445,12 @@ _VALIDATION_CATALOG = (
 )
 
 
-def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSummary:
+def rebuild_workbench(
+    database: Path,
+    source_set: WorkbenchSourceSet,
+    *,
+    registry_metadata: Mapping[str, str] | None = None,
+) -> BuildSummary:
     """Validate explicit sources and atomically rebuild the W0-W4 read model."""
     root = source_set.repo_root.resolve()
     if not root.is_dir():
@@ -528,7 +573,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
     w4_requested = source_set.observation_contract_bundle is not None
     if w2_requested and len(source_set.compile_records) != 2:
         raise WorkbenchIndexError(
-            "W2 indexing requires exactly two compile_record.v0 inputs"
+            "W2 indexing requires exactly two compatible compile record inputs"
         )
     if w2_requested and not w1_requested:
         raise WorkbenchIndexError(
@@ -600,7 +645,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         ] = []
         for record_path in sorted(resolved_record_paths, key=str):
             record_source = _register_source(
-                record_path, "compile_record.v0", root
+                record_path, "compile_record.v0_or_v1", root
             )
             source_rows.append(record_source)
             try:
@@ -735,6 +780,7 @@ def rebuild_workbench(database: Path, source_set: WorkbenchSourceSet) -> BuildSu
         entities=entity_rows,
         relations=relation_rows,
         metadata={
+            **dict(registry_metadata or {}),
             "required_w0_instances": canonical_json(sorted(REQUIRED_W0_INSTANCES)),
             "roadmap_phase": (
                 "R4"
@@ -1768,6 +1814,73 @@ def _index_r2_compiles(
                     )
                 )
 
+        if record.continuity_policy is not None:
+            policy = record.continuity_policy
+            add_entity(
+                EntityRecord(
+                    "boundary_continuity_policy",
+                    policy.policy_id,
+                    f"{record.instance_id} continuity policy",
+                    "explicit_g1_default",
+                    record_source.source_id,
+                    {
+                        **policy.to_mapping(),
+                        "compile_id": record.compile_id,
+                        "instance_id": record.instance_id,
+                    },
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "compile_uses_continuity_policy",
+                    "compile_record",
+                    record.compile_id,
+                    "boundary_continuity_policy",
+                    policy.policy_id,
+                )
+            )
+
+        for endpoint in record.endpoint_constraints:
+            endpoint_entity_id = f"{record.compile_id}:{endpoint.constraint_id}"
+            add_entity(
+                EntityRecord(
+                    "profile_endpoint_constraint",
+                    endpoint_entity_id,
+                    f"{endpoint.endpoint_role}: {endpoint.landmark_id}",
+                    "classified_one_sided",
+                    record_source.source_id,
+                    {
+                        **endpoint.to_mapping(),
+                        "compile_id": record.compile_id,
+                        "instance_id": record.instance_id,
+                    },
+                )
+            )
+            for relation in (
+                RelationRecord(
+                    "compile_has_endpoint_constraint",
+                    "compile_record",
+                    record.compile_id,
+                    "profile_endpoint_constraint",
+                    endpoint_entity_id,
+                ),
+                RelationRecord(
+                    "endpoint_constraint_at_landmark",
+                    "profile_endpoint_constraint",
+                    endpoint_entity_id,
+                    "landmark_geometry_binding",
+                    binding_entity_ids[endpoint.landmark_id],
+                ),
+                RelationRecord(
+                    "endpoint_constraint_incident_to_patch",
+                    "profile_endpoint_constraint",
+                    endpoint_entity_id,
+                    "geometry_patch",
+                    endpoint.incident_patch_id,
+                ),
+            ):
+                add_relation(relation)
+
         for check in record.continuity_checks:
             total_continuity_checks += 1
             check_entity_id = f"{record.compile_id}:{check.check_id}"
@@ -1817,6 +1930,26 @@ def _index_r2_compiles(
                 ),
             ):
                 add_relation(relation)
+            if record.continuity_policy is not None:
+                add_relation(
+                    RelationRecord(
+                        "continuity_check_uses_policy",
+                        "continuity_check",
+                        check_entity_id,
+                        "boundary_continuity_policy",
+                        record.continuity_policy.policy_id,
+                    )
+                )
+            if check.interface_id is not None:
+                add_relation(
+                    RelationRecord(
+                        "continuity_check_resolves_interface",
+                        "continuity_check",
+                        check_entity_id,
+                        "boundary_interface",
+                        check.interface_id,
+                    )
+                )
 
         geometry_validation_id = f"{record.compile_id}:geometry-validation"
         add_entity(
@@ -1937,12 +2070,36 @@ def _index_r2_compiles(
 _R3_ARTIFACT_SOURCE_KINDS = {
     ALIGNMENT_FILE: "graph_alignment.v0",
     PROPOSAL_FILE: "family_extension_proposal.v0",
+    PROPOSAL_FILE_V1: "family_extension_proposal.v1",
+    SEED_GRAMMAR_FILE: "family_grammar.seed_ablation.v0",
     REVIEW_FILE: "family_extension_review.v0",
     PATCH_FILE: "family_grammar_patch.v0",
     PATCHED_GRAMMAR_FILE: "family_grammar.r3.v0",
     PATCH_APPLICATION_FILE: "family_grammar_patch_application.v0",
     BLIND_GRAPH_FILE: "instance_boundary_graph.v0.blind",
     BLIND_VALIDATION_FILE: "family_induction_blind_validation.v0",
+}
+
+_R3_V0_ARTIFACTS = {
+    ALIGNMENT_FILE,
+    PROPOSAL_FILE,
+    REVIEW_FILE,
+    PATCH_FILE,
+    PATCHED_GRAMMAR_FILE,
+    PATCH_APPLICATION_FILE,
+    BLIND_GRAPH_FILE,
+    BLIND_VALIDATION_FILE,
+}
+_R3_V1_ARTIFACTS = {
+    ALIGNMENT_FILE,
+    SEED_GRAMMAR_FILE,
+    PROPOSAL_FILE_V1,
+    REVIEW_FILE,
+    PATCH_FILE,
+    PATCHED_GRAMMAR_FILE,
+    PATCH_APPLICATION_FILE,
+    BLIND_GRAPH_FILE,
+    BLIND_VALIDATION_FILE,
 }
 
 
@@ -1968,10 +2125,14 @@ def _load_r3_bundle_sources(
     except (KeyError, OSError, TypeError, ValueError) as exc:
         raise WorkbenchIndexError(f"invalid W3 family-induction bundle: {exc}") from exc
 
-    manifest_path = bundle_root / R3_MANIFEST_FILE
+    manifest_path = bundle_root / bundle.manifest_file
     manifest_source = _register_source(
         manifest_path,
-        "r3_family_induction_source_binding_manifest.v0",
+        (
+            "r3_family_induction_ablation_source_binding_manifest.v1"
+            if bundle.manifest_file == R3_MANIFEST_FILE_V1
+            else "r3_family_induction_source_binding_manifest.v0"
+        ),
         root,
     )
     raw_artifacts = bundle.manifest.get("artifacts")
@@ -1985,7 +2146,10 @@ def _load_r3_bundle_sources(
         if relative in artifact_entries:
             raise WorkbenchIndexError(f"duplicate W3 artifact path: {relative}")
         artifact_entries[relative] = value
-    if set(artifact_entries) != set(_R3_ARTIFACT_SOURCE_KINDS):
+    expected_artifacts = (
+        _R3_V1_ARTIFACTS if bundle.seed_grammar is not None else _R3_V0_ARTIFACTS
+    )
+    if set(artifact_entries) != expected_artifacts:
         raise WorkbenchIndexError("W3 manifest artifact inventory is incomplete")
 
     artifact_sources: dict[str, SourceRecord] = {}
@@ -2047,8 +2211,24 @@ def _load_r3_bundle_sources(
             if relative == "src/rf_cem/representation/core.py"
             else "r3_blind_primary_source"
         )
+        current_path = root / relative
+        legacy_sentinel_identity = (
+            bundle.bundle_id,
+            expected_hash,
+            expected_size,
+        )
+        if (
+            relative == "src/rf_cem/representation/core.py"
+            and legacy_sentinel_identity
+            in _LEGACY_R3_REPRESENTATION_SENTINELS
+            and current_path.is_file()
+            and file_sha256(current_path) != expected_hash
+        ):
+            # Compatibility read: the manifest is the historical identity.
+            # Do not register the current, different module under the old hash.
+            continue
         record = _register_source(
-            root / relative,
+            current_path,
             source_kind,
             root,
             expected_raw_sha256=expected_hash,
@@ -2097,12 +2277,45 @@ def _index_r3_induction(
     application = bundle.patch_application
     blind_graph = bundle.blind_graph
     blind_validation = bundle.blind_validation
+    base_grammar = bundle.seed_grammar or grammar
     graphs = {graph.instance_id: graph for _, graph in graph_sources}
     graph_source_by_instance = {
         graph.instance_id: source for source, graph in graph_sources
     }
     if set(graphs) != REQUIRED_W0_INSTANCES:
         raise WorkbenchIndexError("W3 requires the canonical SLS-2 and RF500 graphs")
+    for graph in graphs.values():
+        try:
+            validate_reviewed_graph_intrinsic(graph)
+        except SemanticContractError as exc:
+            raise WorkbenchIndexError(
+                f"W3 reviewed graph is not intrinsic-valid: {graph.instance_id}: {exc}"
+            ) from exc
+    if bundle.seed_grammar is not None:
+        seed = bundle.seed_grammar
+        if (
+            seed.family_id != grammar.family_id
+            or any(item.region_type == "NoseRegion" for item in seed.motifs)
+            or "NoseRegion" in seed.cardinalities
+            or any("NoseRegion" in pair for pair in seed.allowed_adjacencies)
+        ):
+            raise WorkbenchIndexError(
+                "W3 seed grammar did not fully ablate the nose motif contract"
+            )
+        try:
+            validate_graph_against_grammar(seed, graphs[SLS2_INSTANCE_ID])
+        except SemanticContractError as exc:
+            raise WorkbenchIndexError(
+                f"W3 seed grammar does not admit SLS-2: {exc}"
+            ) from exc
+        try:
+            validate_graph_against_grammar(seed, graphs[RF500_INSTANCE_ID])
+        except SemanticContractError:
+            pass
+        else:
+            raise WorkbenchIndexError(
+                "W3 seed grammar unexpectedly admits RF500 before patch"
+            )
     if alignment.family_id != family_id or set(alignment.source_instance_ids) != set(
         REQUIRED_W0_INSTANCES
     ):
@@ -2132,7 +2345,7 @@ def _index_r3_induction(
             )
 
     expected_backbone = tuple(
-        f"{slot.side}:{slot.region_type}" for slot in grammar.backbone_slots
+        f"{slot.side}:{slot.region_type}" for slot in base_grammar.backbone_slots
     )
     actual_backbone = tuple(slot.semantic_key for slot in alignment.common_backbone)
     if actual_backbone != expected_backbone:
@@ -2160,15 +2373,15 @@ def _index_r3_induction(
     ):
         raise WorkbenchIndexError("W3 proposal/review identity mismatch")
 
-    base_sha = semantic_sha256(grammar.to_mapping())
+    base_sha = semantic_sha256(base_grammar.to_mapping())
     updated_sha = semantic_sha256(updated.to_mapping())
     if (
-        patch.base_grammar_id != grammar.grammar_id
+        patch.base_grammar_id != base_grammar.grammar_id
         or patch.base_grammar_sha256 != base_sha
-        or application.before_grammar_id != grammar.grammar_id
+        or application.before_grammar_id != base_grammar.grammar_id
         or application.before_grammar_sha256 != base_sha
     ):
-        raise WorkbenchIndexError("W3 patch does not target the indexed W1 grammar")
+        raise WorkbenchIndexError("W3 patch does not target the indexed seed grammar")
     if (
         patch.target_grammar_id != updated.grammar_id
         or patch.target_grammar_sha256 != updated_sha
@@ -2275,13 +2488,32 @@ def _index_r3_induction(
         "sls2_and_rf500_common_backbone_extracted",
         "nose_pair_proposed_as_optional_motif",
         "pending_proposal_does_not_mutate_grammar",
-        "accepted_manual_review_authorizes_explicit_hash_bound_patch",
         "all_training_instances_revalidate_after_patch",
         "held_out_real_lerec704_classified_after_induction",
         "blind_instance_not_used_for_induction",
         "representation_core_not_imported_or_modified",
         "live_cst_not_run",
     }
+    if bundle.seed_grammar is None:
+        required_checks.add(
+            "accepted_manual_review_authorizes_explicit_hash_bound_patch"
+        )
+        expected_validation_mode = "reviewed_semantic_graphs_no_cst"
+    else:
+        required_checks.update(
+            {
+                "reviewed_graphs_intrinsic_valid_before_family_admission",
+                "seed_grammar_nose_motif_cardinality_and_adjacencies_removed",
+                "seed_grammar_admits_sls2_and_rejects_rf500_before_patch",
+                "paired_optional_detector_selected",
+                "structured_support_is_heuristic_not_probability",
+                "accepted_manual_review_authorizes_add_optional_motif",
+                "synthetic_single_optional_detector_fixture_implemented",
+            }
+        )
+        expected_validation_mode = (
+            "intrinsic_reviewed_graph_then_family_admission_no_cst"
+        )
     manifest_checks = manifest.get("checks")
     if (
         manifest.get("status") != "pass"
@@ -2290,7 +2522,7 @@ def _index_r3_induction(
         or not required_checks.issubset(set(manifest_checks))
     ):
         raise WorkbenchIndexError("W3 source-binding manifest hard-gate checks are incomplete")
-    if manifest.get("validation_mode") != "reviewed_semantic_graphs_no_cst":
+    if manifest.get("validation_mode") != expected_validation_mode:
         raise WorkbenchIndexError("W3 manifest validation mode is unsupported")
     expected_manifest_identities = {
         "bundle_id": bundle.bundle_id,
@@ -2311,6 +2543,31 @@ def _index_r3_induction(
     for key, expected in expected_manifest_identities.items():
         if manifest.get(key) != expected:
             raise WorkbenchIndexError(f"W3 manifest contract identity mismatch: {key}")
+    if bundle.seed_grammar is not None:
+        seed = bundle.seed_grammar
+        v1_identities = {
+            "canonical_grammar_id": grammar.grammar_id,
+            "canonical_grammar_sha256": semantic_sha256(grammar.to_mapping()),
+            "seed_grammar_id": seed.grammar_id,
+            "seed_grammar_sha256": semantic_sha256(seed.to_mapping()),
+            "proposal_schema_version": "family_extension_proposal.v1",
+            "patch_operation": "add_optional_motif",
+            "score_semantics": "heuristic_support_not_probability",
+        }
+        for key, expected in v1_identities.items():
+            if manifest.get(key) != expected:
+                raise WorkbenchIndexError(
+                    f"W3 ablation manifest identity mismatch: {key}"
+                )
+        selected_detector = manifest.get("selected_detector")
+        if not isinstance(selected_detector, Mapping) or (
+            selected_detector.get("detector_id") != "paired_optional_motif"
+            or selected_detector.get("population_size") != 2
+            or selected_detector.get("symmetry_assumption_used") is not True
+        ):
+            raise WorkbenchIndexError(
+                "W3 ablation manifest detector/support contract is invalid"
+            )
 
     add_entity(
         EntityRecord(
@@ -2331,9 +2588,64 @@ def _index_r3_induction(
             bundle.bundle_id,
         )
     )
+    if bundle.seed_grammar is not None:
+        seed_payload = {
+            **bundle.seed_grammar.to_mapping(),
+            "ablation": manifest.get("seed_ablation"),
+            "pre_patch_admission": manifest.get("pre_patch_admission"),
+        }
+        add_entity(
+            EntityRecord(
+                "seed_grammar_ablation",
+                bundle.seed_grammar.grammar_id,
+                "TD3 seed grammar before nose-motif patch",
+                "rf500_not_admitted_before_patch",
+                artifact_sources[SEED_GRAMMAR_FILE].source_id,
+                seed_payload,
+            )
+        )
+        add_entity(
+            EntityRecord(
+                "induction_detector_fixture",
+                "single_optional_motif.synthetic.v1",
+                "Synthetic single optional motif detector fixture",
+                str(
+                    manifest.get(
+                        "synthetic_single_optional_detector_fixture_status"
+                    )
+                ),
+                manifest_source.source_id,
+                {
+                    "detector_id": "single_optional_motif",
+                    "detector_version": "single_optional_motif.v1",
+                    "symmetry_assumption_used": False,
+                    "fixture_kind": "synthetic_reviewed_graphs_no_cst",
+                    "status": manifest.get(
+                        "synthetic_single_optional_detector_fixture_status"
+                    ),
+                },
+            )
+        )
+        for relation in (
+            RelationRecord(
+                "bundle_has_seed_grammar_ablation",
+                "family_induction_bundle",
+                bundle.bundle_id,
+                "seed_grammar_ablation",
+                bundle.seed_grammar.grammar_id,
+            ),
+            RelationRecord(
+                "bundle_declares_detector_fixture",
+                "family_induction_bundle",
+                bundle.bundle_id,
+                "induction_detector_fixture",
+                "single_optional_motif.synthetic.v1",
+            ),
+        ):
+            add_relation(relation)
     _index_r3_induction_tail(
         family_id=family_id,
-        grammar=grammar,
+        grammar=base_grammar,
         bundle=bundle,
         alignment=alignment,
         proposal=proposal,
@@ -2980,7 +3292,7 @@ def _index_r3_induction_tail(
             proposal.proposal_id,
             "Paired optional nose-motif proposal",
             "pending_non_mutating",
-            artifact_sources[PROPOSAL_FILE].source_id,
+            artifact_sources[bundle.proposal_file].source_id,
             proposal.to_mapping(),
         )
     )
@@ -3085,7 +3397,11 @@ def _index_r3_induction_tail(
             "patch_transforms_from_grammar",
             "grammar_patch",
             patch.patch_id,
-            "family_grammar",
+            (
+                "seed_grammar_ablation"
+                if bundle.seed_grammar is not None
+                else "family_grammar"
+            ),
             grammar.grammar_id,
         ),
         RelationRecord(
@@ -3193,7 +3509,6 @@ def _index_r3_induction_tail(
         "residual_count": len(alignment.residuals),
         "proposal_id": proposal.proposal_id,
         "proposal_kind": proposal.proposal_kind,
-        "proposal_confidence": proposal.confidence,
         "review_id": review.review_id,
         "review_decision": review.decision,
         "patch_id": patch.patch_id,
@@ -3206,6 +3521,26 @@ def _index_r3_induction_tail(
         "representation_contract": blind_validation.representation_contract,
         "live_cst_status": "not_run",
     }
+    proposal_mapping = proposal.to_mapping()
+    if proposal_mapping.get("schema_version") == "family_extension_proposal.v1":
+        hard_gate_payload.update(
+            {
+                "proposal_score": proposal_mapping.get("proposal_score"),
+                "score_semantics": proposal_mapping.get("score_semantics"),
+                "structured_support": proposal_mapping.get("support"),
+                "seed_grammar_id": (
+                    bundle.seed_grammar.grammar_id
+                    if bundle.seed_grammar is not None
+                    else None
+                ),
+                "pre_patch_admission": bundle.manifest.get(
+                    "pre_patch_admission"
+                ),
+                "final_admission": bundle.manifest.get("final_admission"),
+            }
+        )
+    else:
+        hard_gate_payload["proposal_confidence"] = proposal.confidence
     add_entity(
         EntityRecord(
             "validation",

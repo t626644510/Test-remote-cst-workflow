@@ -18,7 +18,7 @@ from ..contracts import (
     validate_graph_against_grammar,
 )
 from .contracts import (
-    FamilyExtensionProposal,
+    FamilyExtensionProposalContract,
     GrammarDiffEntry,
     GrammarPatch,
     GrammarPatchApplication,
@@ -37,8 +37,55 @@ class ReviewOutcome:
     application: GrammarPatchApplication
 
 
+def ablate_optional_motif(
+    grammar: FamilyGrammar,
+    *,
+    motif_id: str,
+) -> FamilyGrammar:
+    """Derive a valid seed grammar with one reviewed optional motif removed."""
+
+    motifs_by_id = {item.motif_id: item for item in grammar.motifs}
+    removed = motifs_by_id.pop(motif_id, None)
+    if removed is None:
+        raise InductionContractError(f"grammar does not contain motif {motif_id}")
+    motifs = tuple(motifs_by_id[key] for key in sorted(motifs_by_id))
+    cardinality_counts: dict[str, int] = {}
+    for slot in grammar.backbone_slots:
+        cardinality_counts[slot.region_type] = (
+            cardinality_counts.get(slot.region_type, 0) + 1
+        )
+    cardinalities: dict[str, tuple[int, ...]] = {
+        region_type: (count,) for region_type, count in cardinality_counts.items()
+    }
+    for motif in motifs:
+        cardinalities[motif.region_type] = motif.allowed_counts
+    adjacencies = {
+        (left.region_type, right.region_type)
+        for left, right in zip(grammar.backbone_slots, grammar.backbone_slots[1:])
+    }
+    for motif in motifs:
+        for rule in motif.insertion_rules:
+            before, after = rule.between_region_types
+            adjacencies.add((before, motif.region_type))
+            adjacencies.add((motif.region_type, after))
+    return FamilyGrammar(
+        grammar_id=f"{grammar.family_id}.family_grammar.td3_seed_ablation.v0",
+        family_id=grammar.family_id,
+        backbone_slots=grammar.backbone_slots,
+        motifs=motifs,
+        type_cardinality=tuple(
+            (region_type, cardinalities[region_type])
+            for region_type in sorted(cardinalities)
+        ),
+        allowed_adjacencies=tuple(sorted(adjacencies)),
+        evidence=grammar.evidence,
+        review=grammar.review,
+        exclusions=tuple(sorted({*grammar.exclusions, "td3_seed_grammar_ablation"})),
+    )
+
+
 def make_proposal_review(
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     *,
     decision: str,
     reviewer_id: str,
@@ -61,7 +108,7 @@ def make_proposal_review(
 
 def review_proposal(
     grammar: FamilyGrammar,
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     review: ProposalReview,
     *,
     existing_graphs: Sequence[InstanceBoundaryGraph],
@@ -112,7 +159,7 @@ def review_proposal(
 
 def build_grammar_patch(
     grammar: FamilyGrammar,
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     review: ProposalReview,
 ) -> GrammarPatch:
     """Authorize one deterministic patch only after an accepted manual review."""
@@ -150,7 +197,7 @@ def build_grammar_patch(
 
 def apply_grammar_patch(
     grammar: FamilyGrammar,
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     review: ProposalReview,
     patch: GrammarPatch,
     *,
@@ -204,7 +251,7 @@ def apply_grammar_patch(
 
 def _patched_grammar(
     grammar: FamilyGrammar,
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     review: ProposalReview,
     proposed_motif: SemanticMotif,
 ) -> FamilyGrammar:
@@ -266,11 +313,15 @@ def _patched_grammar(
     )
 
 
-def _proposal_motif(proposal: FamilyExtensionProposal) -> SemanticMotif:
+def _proposal_motif(proposal: FamilyExtensionProposalContract) -> SemanticMotif:
     if proposal.proposal_kind != "optional_motif":
         raise InductionContractError("only an optional-motif proposal can patch this grammar")
     if proposal.motif_id is None or proposal.region_type is None:
         raise InductionContractError("optional motif proposal is incomplete")
+    if proposal.occurrence_rule != "paired_optional":
+        raise InductionContractError(
+            "semantic_motif.v0 can patch only reviewed paired-optional proposals"
+        )
     return SemanticMotif(
         motif_id=proposal.motif_id,
         label=(
@@ -303,7 +354,7 @@ def _same_motif_shape(left: SemanticMotif, right: SemanticMotif) -> bool:
 
 
 def _validate_review_binding(
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     review: ProposalReview,
 ) -> None:
     if review.proposal_id != proposal.proposal_id or (
@@ -384,6 +435,7 @@ def _dedupe_evidence(values: Iterable[EvidenceRef]) -> tuple[EvidenceRef, ...]:
 
 __all__ = [
     "ReviewOutcome",
+    "ablate_optional_motif",
     "apply_grammar_patch",
     "build_grammar_patch",
     "make_proposal_review",

@@ -72,7 +72,10 @@ def test_architecture_layer_has_no_forbidden_imports(
 def test_compiler_is_the_implemented_composition_layer() -> None:
     compiler = importlib.import_module("rf_cem.compiler")
     assert compiler.ARCHITECTURE_LAYER == "compiler"
-    assert compiler.COMPILER_VERSION == "rf_cem_profile_compiler.v0"
+    assert compiler.COMPILER_VERSION == "rf_cem_profile_compiler.v1"
+    assert compiler.BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION == (
+        "boundary_continuity_policy.v0"
+    )
     assert callable(compiler.ProfileCompiler)
     assert callable(compiler.prepare_r2_cases)
 

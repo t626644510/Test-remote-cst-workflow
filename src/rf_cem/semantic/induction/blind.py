@@ -25,7 +25,7 @@ from ..contracts import (
 )
 from .contracts import (
     BlindValidation,
-    FamilyExtensionProposal,
+    FamilyExtensionProposalContract,
     GraphContractRef,
     InductionContractError,
 )
@@ -227,7 +227,7 @@ def blind_graph_ref(
 
 def validate_blind_instance(
     grammar: FamilyGrammar,
-    proposal: FamilyExtensionProposal,
+    proposal: FamilyExtensionProposalContract,
     blind_graph: InstanceBoundaryGraph,
     graph_ref: GraphContractRef,
 ) -> BlindValidation:

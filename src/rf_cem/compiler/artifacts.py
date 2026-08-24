@@ -18,12 +18,12 @@ from rf_cem.semantic.contracts import (
 )
 
 from .adapters import R2SourceSet, prepare_r2_cases
-from .contracts import COMPILE_RECORD_SCHEMA_VERSION, CompileContractError, CompileRecord
+from .contracts import CompileContractError, CompileRecord
 from .core import ProfileCompiler
 
 
-R2_BUNDLE_SCHEMA_VERSION = "r2_boundary_compiler_bundle.v0"
-R2_MANIFEST_SCHEMA_VERSION = "r2_compile_source_binding_manifest.v0"
+R2_BUNDLE_SCHEMA_VERSION = "r2_boundary_compiler_bundle.v1"
+R2_MANIFEST_SCHEMA_VERSION = "r2_compile_source_binding_manifest.v1"
 R2_BUNDLE_PREFIX = "r2_boundary_compiler"
 
 
@@ -72,7 +72,7 @@ def write_r2_bundle(sources: R2SourceSet, output_root: Path) -> R2Bundle:
             record_path = (
                 temporary
                 / "records"
-                / f"{result.record.instance_id}.compile_record.v0.json"
+                / f"{result.record.instance_id}.compile_record.v1.json"
             )
             record_path.parent.mkdir(parents=True, exist_ok=True)
             record_path.write_bytes(canonical_json_bytes(result.record.to_mapping()) + b"\n")
@@ -162,7 +162,7 @@ def _manifest_mapping(
                 "instance_id": record.instance_id,
                 "compile_id": record.compile_id,
                 "content_sha256": record.content_sha256,
-                "schema_version": COMPILE_RECORD_SCHEMA_VERSION,
+                "schema_version": record.schema_version,
                 "status": record.status,
                 "region_count": len(record.region_geometries),
                 "patch_count": record.patch_count,
@@ -181,6 +181,8 @@ def _manifest_mapping(
             "shared_landmarks_resolved",
             "deterministic_region_patch_order_and_orientation",
             "required_continuity_passed_and_g1_g2_diagnostics_recorded",
+            "continuity_policy_not_source_provenance_selects_required_level",
+            "profile_endpoints_classified_outside_two_sided_continuity",
             "profile_simple_nonnegative_and_axis_closable",
             "step_exported_and_brep_valid",
             "accepted_baseline_comparison_passed",

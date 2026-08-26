@@ -266,20 +266,20 @@ _ROADMAP_PHASES = (
     ("R1", "RF Boundary Semantic Core", "hard_gate_passed_merged"),
     (
         "R2",
-        "Boundary Representation Core + Compiler v0",
+        "Boundary Representation Core + Compiler v1 (v0 compatible)",
         "hard_gate_passed_merged",
     ),
     (
         "R3",
-        "Family Induction / Extension v0",
+        "Family Induction / Extension v1 (v0 compatible)",
         "hard_gate_passed_merged",
     ),
     (
         "R4",
         "Observation & Engineering Constraint Contract",
-        "hard_gate_validation_in_progress",
+        "hard_gate_passed_merged",
     ),
-    ("R5", "RF Result / Mode / Field Contract", "planned_requires_live_cst_authorization"),
+    ("R5", "RF Result / Mode / Field Contract", "paused_or_deferred_by_user"),
 )
 
 _R1_GATES = (
@@ -297,16 +297,16 @@ _R1_GATES = (
 )
 
 _R2_GATES = (
-    ("generic_representation_contract", "Line, circular arc, ellipse arc, spline/NURBS, and composite contracts are generic", "passed", "rf_cem.representation + contract tests"),
-    ("one_compiler_entry", "One ProfileCompiler entry compiles both canonical topologies", "passed", "two compile_record.v0 proofs"),
+    ("generic_representation_contract", "Line, circular arc, ellipse arc, SplineApprox, and composite contracts are generic", "passed", "SplineApproxRepresentation / boundary_representation.v1 with v0 compatibility"),
+    ("one_compiler_entry", "One ProfileCompiler entry compiles both canonical topologies", "passed", "compile_record.v1 pair in r2_boundary_compiler.2980548dcdd5a85e"),
     ("region_patch_ownership", "Every semantic region owns 1..N patches and every patch has exactly one region owner", "passed", "RegionGeometry and GeometryPatch fail-closed contracts"),
-    ("landmark_and_continuity", "Landmark bindings and required C0/G1/G2 diagnostics are explicit", "passed", "compile_record.v0 continuity checks"),
+    ("landmark_and_continuity", "Landmark bindings and required C0/G1/G2 diagnostics are explicit", "passed", "boundary_continuity_policy.v0 + compile_record.v1 continuity checks"),
     ("brep_step_valid", "Both profiles close into valid no-CST BRep/STEP outputs", "passed", "isolated CadQuery worker validation"),
-    ("baseline_comparison", "Accepted source-native/baseline comparisons pass declared tolerances", "passed", "compile_record.v0 baseline comparison"),
+    ("baseline_comparison", "Accepted source-native/baseline comparisons pass declared tolerances", "passed", "r2_boundary_compiler.2980548dcdd5a85e baseline comparison"),
     ("source_native_provenance", "Stage C source-native payload and artifact bindings survive compilation", "passed", "hash-bound compile inputs"),
-    ("deterministic_bundle", "Fresh R2 proof builds are byte-identical", "passed", "input-addressed bundle reproducibility test"),
+    ("deterministic_bundle", "Fresh R2 proof builds are byte-identical", "passed", "r2_boundary_compiler.2980548dcdd5a85e reproducibility test"),
     ("w2_views", "W2 exposes compile, ownership, landmark, continuity, baseline, warning, and artifact traces", "implemented", "fixed /compile-records route"),
-    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "R2 compiler/Workbench tests and branch closeout suite"),
+    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "PR #10 TD1/TD2 compiler and Workbench no-CST closeout"),
     ("no_live_cst", "R2 has no live-CST or physical-acceptance claim", "passed", "live_cst_status=not_run"),
     ("phase_closeout", "One R2 closeout commit/push and canonical merge", "passed", "PR #7 merge commit e81ad20942258380cccb93d17cfdf0ca7e2d0e21"),
 )
@@ -314,35 +314,35 @@ _R2_GATES = (
 _R3_GATES = (
     ("semantic_only_alignment", "Alignment reads reviewed semantic side/type tokens, never common parameter names", "passed", "graph_alignment.v0"),
     ("common_backbone", "SLS-2 and RF500 yield one explicit common semantic backbone", "passed", "common_backbone slots"),
-    ("optional_nose_proposal", "The paired nose contrast yields an evidence-bound optional motif proposal", "passed", "family_extension_proposal.v0"),
-    ("alternative_topology_proposal", "Unpaired residual structure yields an explicit alternative-topology proposal", "passed", "family-induction contract test"),
+    ("optional_nose_proposal", "The paired nose contrast yields an evidence-bound optional motif proposal", "passed", "family_extension_proposal.v1 structured support in r3_family_induction_ablation.59db0a7b5f8e158c"),
+    ("alternative_topology_proposal", "Paired, single, and fallback detectors yield explicit explainable proposals", "passed", "FamilyInductionEngine detector strategy and fixtures"),
     ("no_automatic_mutation", "A pending proposal cannot mutate the family grammar", "passed", "proposal/review separation"),
-    ("explicit_review_patch", "Only an accepted manual review authorizes a hash-bound grammar patch", "passed", "family_extension_review.v0 + family_grammar_patch.v0"),
+    ("explicit_review_patch", "Only an accepted manual review authorizes a hash-bound grammar patch", "passed", "accepted review + add_optional_motif patch"),
     ("withheld_review_nonmutation", "Rejected and needs-evidence reviews preserve the exact original grammar", "passed", "parameterized nonmutation test"),
     ("existing_instances_revalidate", "Both induction instances revalidate after the explicit patch", "passed", "family_grammar_patch_application.v0"),
     ("held_out_real_instance", "Real LEReC 704 MHz is classified only after induction as a held-out instance", "passed", "family_induction_blind_validation.v0"),
     ("representation_unchanged", "R3 neither imports nor modifies the R2 representation contract", "passed", "representation-core hash sentinel"),
-    ("deterministic_bundle", "Fresh R3 proof builds are byte-identical and tampering fails closed", "passed", "R3 bundle/Workbench integration test"),
+    ("deterministic_bundle", "Fresh R3 proof builds are byte-identical and tampering fails closed", "passed", "r3_family_induction_ablation.59db0a7b5f8e158c validation"),
     ("w3_views", "W3 exposes alignment, backbone, proposal, review, grammar diff, and blind validation", "implemented", "fixed /family-induction route"),
-    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "36 targeted; 762 passed and 11 skipped full suite"),
+    ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "PR #10 TD3 ablation and structured-support no-CST closeout"),
     ("no_live_cst", "R3 remains a reviewed-semantic no-CST proof", "passed", "R3 source-binding manifest"),
     ("phase_closeout", "One R3 closeout commit/push and canonical merge", "passed", "PR #8 merge commit 585d549c7a5dac0304852a0150f0c4114fd5b6e9"),
 )
 
 _R4_GATES = (
-    ("two_real_observations", "Both real instances produce observations from compiled geometry", "evaluated_at_rebuild", "observation_bundle.v0 pair"),
+    ("two_real_observations", "Both real instances produce observations from compiled geometry", "passed", "r4_observation_contract.dc4d7d12fb9a8c84"),
     ("native_parameter_independence", "Observations do not read instance-native parameter names", "passed", "semantic arc observer contract"),
     ("three_layer_separation", "Exact geometry, semantic shape, and scalar layers remain separate", "passed", "identity-bound R4 contracts"),
     ("descriptor_registry", "Descriptors have definitions, units, versions, tolerances, and provenance", "passed", "scalar_descriptor_registry.v0"),
     ("invalid_values_fail_closed", "Unknown units, non-finite values, and invalid landmarks fail closed", "passed", "R4 contract tests"),
     ("cross_representation_equivalence", "Equivalent geometry with changed representation/patching has equivalent descriptors", "passed", "cross-representation no-CST test"),
-    ("engineering_constraints", "Length, radius, aperture, curvature, nose, and regional constraints evaluate", "evaluated_at_rebuild", "engineering_constraint.v0 + constraint_evaluation.v0"),
+    ("engineering_constraints", "Length, radius, aperture, curvature, nose, and regional constraints evaluate", "passed", "engineering_constraint.v0 + constraint_evaluation.v0"),
     ("constraint_kinds", "Hard, soft, advisory, and diagnostic constraint kinds are supported", "passed", "constraint evaluator contract"),
     ("no_geometry_mutation", "Observation and constraint evaluation do not mutate geometry", "passed", "source hash sentinel + immutable contracts"),
     ("w4_views", "W4 exposes descriptors, constraints, violations, locations, and sources", "implemented", "fixed /observations route"),
-    ("no_cst_regression", "Targeted, cross-representation, and full no-CST suites pass", "pending_phase_closeout", "R4 closeout validation"),
+    ("no_cst_regression", "Targeted, cross-representation, and full no-CST suites pass", "passed", "PR #9 closeout and current TD regression proof"),
     ("no_rf_metrics", "R4 defines no RF metrics and runs no CST", "passed", "R4 manifest exclusions"),
-    ("phase_closeout", "One R4 closeout commit/push and canonical merge", "pending_phase_closeout", "codex/rf-cem-r4-observation-contract"),
+    ("phase_closeout", "One R4 closeout commit/push and canonical merge", "passed", "PR #9 merge commit 8c6bd0be38e8b2bbf5d72c1254413ee6b552defe"),
 )
 
 _R0B_GATES = (
@@ -384,7 +384,11 @@ _CAPABILITY_CATALOG = (
     ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
     ("workbench.w3", "Family induction and blind-validation review", "implemented_r3", "SQLite + /family-induction"),
     ("workbench.w4", "Observation and engineering-constraint review", "implemented_r4", "SQLite + /observations"),
-    ("physics.rf_result_contract", "Mode-identified RF result/field contract", "planned_r5", "live CST requires explicit authorization"),
+    ("technical_debt.td1_continuity", "TD1 Explicit Continuity Contract", "implemented_no_cst", "boundary_continuity_policy.v0 + compile_record.v1"),
+    ("technical_debt.td2_spline_approx", "TD2 Spline Approximation Contract", "implemented_no_cst", "SplineApproxRepresentation / boundary_representation.v1"),
+    ("technical_debt.td3_grammar_ablation", "TD3 Grammar Ablation and Structured Support", "implemented_no_cst", "family_extension_proposal.v1 + add_optional_motif"),
+    ("workbench.desktop.v0", "Workbench Desktop v0", "implemented_no_cst", "fixed-action thin Windows launcher"),
+    ("physics.rf_result_contract", "Mode-identified RF result/field contract", "paused_or_deferred_by_user", "R5 live paused; translator generalization deferred"),
 )
 
 _VALIDATION_CATALOG = (
@@ -414,13 +418,13 @@ _VALIDATION_CATALOG = (
     ),
     (
         "tests.boundary_compiler_r2",
-        "R2 representation, compiler, proof-bundle, and W2 contracts",
+        "R2/TD1/TD2 representation v1, continuity, proof-bundle, and W2 contracts",
         "available_no_cst",
         "tests/test_rf_cem_boundary_compiler.py",
     ),
     (
         "tests.family_induction_r3",
-        "R3 alignment, review, patch, blind-validation, bundle, and W3 contracts",
+        "R3/TD3 ablation, structured support, review, patch, blind-validation, and W3 contracts",
         "available_no_cst",
         "tests/test_rf_cem_family_induction.py",
     ),
@@ -429,6 +433,12 @@ _VALIDATION_CATALOG = (
         "R4 observation, descriptors, constraints, proof bundle, and W4 contracts",
         "available_no_cst",
         "tests/test_rf_cem_observation_contract.py",
+    ),
+    (
+        "tests.workbench_desktop",
+        "Portable full-profile Workbench and Desktop launcher contracts",
+        "available_no_cst",
+        "tests/test_rf_cem_workbench_desktop.py",
     ),
     (
         "tests.literature_review",

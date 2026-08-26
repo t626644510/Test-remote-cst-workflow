@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import math
 from pathlib import Path
@@ -43,8 +43,6 @@ from .contracts import (
     BoundaryContinuityPolicy,
     CompileContractError,
     CompileRequest,
-    ContinuityInterfaceOverride,
-    ContinuityRequirement,
     ContractSourceRef,
     NativeArtifactRef,
     RegionRepresentationBinding,
@@ -194,30 +192,10 @@ def prepare_r2_cases(sources: R2SourceSet) -> tuple[PreparedCompileCase, ...]:
 
 
 def _continuity_policy(graph: InstanceBoundaryGraph) -> BoundaryContinuityPolicy:
-    """Declare RF-wall G1 defaults and reviewed RF500 sharp nose corners."""
+    """Declare the family-default G1 contract for ordinary RF-wall joins."""
 
-    region_types = {item.region_id: item.region_type for item in graph.regions}
-    overrides: list[ContinuityInterfaceOverride] = []
-    for interface in graph.interfaces:
-        pair = {
-            region_types[interface.left_region_id],
-            region_types[interface.right_region_id],
-        }
-        if pair == {"IrisRegion", "NoseRegion"}:
-            overrides.append(
-                ContinuityInterfaceOverride(
-                    interface_id=interface.interface_id,
-                    requirement=ContinuityRequirement("C0"),
-                    intentional_corner=True,
-                    rationale=(
-                        "Reviewed RF500 iris-to-nose sharp transition is an "
-                        "intentional geometric corner."
-                    ),
-                )
-            )
     return default_boundary_continuity_policy(
         graph.family_id,
-        overrides=tuple(overrides),
         policy_id=f"{graph.instance_id}.boundary_continuity_policy.v0",
     )
 
@@ -402,7 +380,66 @@ def _rf500_source_curves(
         source_points.extend(points)
     if not curves or len(source_points) < 2:
         raise CompileContractError("RF500 source-native profile is empty")
-    return tuple(curves), tuple(source_points)
+    return _rf500_g1_source_curves(tuple(curves)), tuple(source_points)
+
+
+def _rf500_g1_source_curves(
+    curves: tuple[_SourceCurve, ...],
+) -> tuple[_SourceCurve, ...]:
+    """Add sub-tolerance tangent anchors at the two RF500 line/spline joins."""
+
+    values = list(curves)
+    adjusted = 0
+    for index, (left, right) in enumerate(zip(curves, curves[1:])):
+        if isinstance(left.representation, LineRepresentation) and isinstance(
+            right.representation, SplineApproxRepresentation
+        ):
+            spline = right.representation
+            tangent = left.representation.end_tangent()
+            offset = spline.approximation_tolerance_mm * 0.1
+            anchor = Point2D(
+                spline.start.z_mm + tangent[0] * offset,
+                spline.start.r_mm + tangent[1] * offset,
+            )
+            values[index + 1] = _SourceCurve(
+                right.source_segment_ref,
+                replace(
+                    spline,
+                    fit_input_points=(
+                        spline.fit_input_points[0],
+                        anchor,
+                        *spline.fit_input_points[1:],
+                    ),
+                ),
+            )
+            adjusted += 1
+        elif isinstance(left.representation, SplineApproxRepresentation) and isinstance(
+            right.representation, LineRepresentation
+        ):
+            spline = left.representation
+            tangent = right.representation.start_tangent()
+            offset = spline.approximation_tolerance_mm * 0.1
+            anchor = Point2D(
+                spline.end.z_mm - tangent[0] * offset,
+                spline.end.r_mm - tangent[1] * offset,
+            )
+            values[index] = _SourceCurve(
+                left.source_segment_ref,
+                replace(
+                    spline,
+                    fit_input_points=(
+                        *spline.fit_input_points[:-1],
+                        anchor,
+                        spline.fit_input_points[-1],
+                    ),
+                ),
+            )
+            adjusted += 1
+    if adjusted != 2:
+        raise CompileContractError(
+            "RF500 profile must contain exactly two line/spline G1 joins"
+        )
+    return tuple(values)
 
 
 def _region_bindings(

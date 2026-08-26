@@ -1,7 +1,7 @@
 # RF-CEM 路线与架构：语义拓扑编译架构及 R0B–R5 Roadmap
 
-**版本**：Roadmap 2.5
-**日期**：2026-08-24
+**版本**：Roadmap 2.6
+**日期**：2026-08-26
 **用途**：供项目负责人、人类工程师和后续参与者复盘 RF-CEM 的目标、当前基础、架构决策、工作台设计及 R0B–R5 的阶段出门条件。
 **适用范围**：RF 真空边界语义、边界表示、几何编译、腔族扩展、公共观测、工程约束、RF 结果/模态/场合同；暂不展开复杂曲线方程、可变维数优化、多物理场、HOM、耦合器和冷却结构的具体实现。
 
@@ -363,7 +363,7 @@ cell_count
 
 ### 3.2 当前真正缺失的横向核心
 
-R0B–R4 已填充几何前向链路的横向核心。仍未正式建立的是：
+R0B–R4 已填充几何前向链路的横向核心。R5 已由项目负责人暂停/延后，RF result/mode/field translator generalization 将另行规划；尚未正式建立的是：
 
 - 完整 RF result/mode/field contract；
 - mode identity、field map identity 与单位/归一化/边界/网格绑定；
@@ -380,13 +380,13 @@ R4 已通过 PR #9 合入 canonical owner，canonical merge commit 为：
 8c6bd0be38e8b2bbf5d72c1254413ee6b552defe
 ```
 
-TD1–TD3 与 Workbench Desktop v0 在该 canonical R4 merge 上作为一个有界 no-CST closeout 开发：
+TD1–TD3 与 Workbench Desktop v0 已在该 canonical R4 merge 上完成有界 no-CST 实现，并由现有 PR #10 收口：
 
 ```text
 codex/rf-cem-td1-td3-workbench-desktop
 ```
 
-R5 live 工作保持暂停，`codex/rf-cem-r5-rf-result-field` 不属于本轮。具体 proof ID、Workbench 快照、测试结果和 closeout/merge 状态由 `docs/PROJECT_STATUS_CONTEXT.md` 记录；本档案只保存会被 R4 proof 哈希绑定的稳定架构事实，避免 proof 对自身标识形成循环依赖。
+R5 整体状态为 `paused_or_deferred_by_user`；live 工作保持暂停，RF result/mode/field translator generalization 后续单独规划，`codex/rf-cem-r5-rf-result-field` 不属于本轮。具体 proof ID、Workbench 快照、测试结果和 closeout/merge 状态由 `docs/PROJECT_STATUS_CONTEXT.md` 记录；本档案只保存会被 R4 proof 哈希绑定的稳定架构事实，避免 proof 对自身标识形成循环依赖。
 
 ---
 
@@ -499,7 +499,7 @@ W0 首版：
 - 不启动 solver；
 - 写操作只生成 proposal、annotation 或 review event。
 
-Workbench Web 在 W0–W4 继续保持 GET-only、token-authenticated、`127.0.0.1`、SQLite read-only、无 shell、无 CST 和无 mutation endpoint。Windows Desktop v0 是独立的薄控制层：它只允许固定动作，以 argument array 和 `shell=False` 调用仓库 `.venv`，只停止自己启动的 Workbench child，并把 repo/profile 选择保存在 `%LOCALAPPDATA%\RF-CEM\`。tracked profile 只含仓库相对路径并预留 optional W5 bundle；数据库和 proof 仍是可删除、可重建的 ignored artifact，不成为工程真值。
+Workbench Web 在 W0–W4 继续保持 GET-only、token-authenticated、`127.0.0.1`、SQLite read-only、无 shell、无 CST 和无 mutation endpoint。Windows Desktop v0 是独立的薄控制层：它只允许固定动作，以 argument array 和 `shell=False` 调用仓库 `.venv`，只停止自己启动的 Workbench child，并把 repo/profile 选择保存在 `%LOCALAPPDATA%\RF-CEM\`。唯一 tracked 默认 profile 只含仓库相对路径，包含 literature semantics、frozen review session 和完整 W0–W4 人类可见来源，并预留 optional W5 bundle；不建立 full/core 双 profile 或 profile selector。数据库和 proof 仍是可删除、可重建的 ignored artifact，不成为工程真值。
 
 ---
 
@@ -741,7 +741,7 @@ CompositeRegionRepresentation
 10. profile 无自交、可封闭并能生成合法 B-Rep/STEP。
 11. 与现有 SLS-2/RF500 generator 的基准输出在约定几何容差内一致，或差异被明确记录和人工接受。
 12. source-native payload 和 Stage C provenance 不因迁移丢失。
-13. 每次 compile 生成 `compile_record.v0`，且 Workbench 可浏览：
+13. 每次 compile 生成 `compile_record.v1`，历史 `compile_record.v0` 保持兼容读取，且 Workbench 可浏览：
     - region→representation；
     - region→patch；
     -landmarks；
@@ -760,11 +760,13 @@ CompositeRegionRepresentation
 - 不实现 family induction；
 - 不要求完美重构所有历史 candidate。
 
-### 2026-08-24 实现状态
+### 2026-08-26 实现状态
 
 R2 已通过 PR #7 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`。TD1/TD2 在 R4 canonical 上收敛其合同：`rf_cem.representation` 的当前样条实现准确命名为 `SplineApproxRepresentation`，合同为 `boundary_representation.v1`、`fidelity=approximate`、`backend_contract=cadquery.splineApprox.v0`、`approximation_tolerance_mm=0.001`、`optimization_ready=true`、`exact_nurbs=false`。历史 `SplineNurbsRepresentation` / v0 payload 继续可读且几何等价，但只作为 deprecated compatibility path；未来 exact NURBS 仅是未实现能力，不存在伪 runtime class。
 
-原始 R2 v0 内容寻址证明 `r2_boundary_compiler.aa66a3e90125437b` 保持字节与身份不变。TD1/TD2 的新 `compile_record.v1` proof 仍由同一个 `ProfileCompiler.compile` 入口生成 SLS-2 的 9 个 `RegionGeometry` / 10 个 patch 和 RF500 的 11 个 `RegionGeometry` / 12 个 patch。连续性不再由 `source_native_segment_ref` 决策：representation 内部 join 默认 G1 hard，普通跨 semantic RF wall interface 默认 G1 hard，只有显式 intentional-corner override 才允许 C0 hard，G2 是受支持但非默认的扩展；profile 起止点使用 endpoint contract，不伪装成双侧 join。每个真实 join 无论 required level 都记录 C0 gap、tangent angle、curvature delta 以及 C0/G1/G2 pass，另记录 policy/ref、requirement source 和 intentional-corner。source-native ref 只保留 provenance 角色。
+原始 R2 v0 内容寻址证明 `r2_boundary_compiler.aa66a3e90125437b` 和前一份 v1 证明 `r2_boundary_compiler.8f47ca735db8ce8a` 均保持字节与身份不变。当前 v1 证明为 `r2_boundary_compiler.2980548dcdd5a85e`：同一个 `ProfileCompiler.compile` 入口生成 SLS-2 的 9 个 `RegionGeometry` / 10 个 patch（compile ID `sls2.r149.6593e02e.compile.a22fd5f932c1ffff`）和 RF500 的 11 个 `RegionGeometry` / 12 个 patch（compile ID `rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6`）。连续性不再由 `source_native_segment_ref` 决策：representation 内部 join 默认 G1 hard，普通跨 semantic RF wall interface 默认 G1 hard，只有经人工明确声明的特殊设计才允许 intentional-corner C0 override，G2 是受支持但非默认的扩展；profile 起止点使用 endpoint contract，不伪装成双侧 join。每个真实 join 无论 required level 都记录 C0 gap、tangent angle、curvature delta 以及 C0/G1/G2 pass，另记录 policy/ref、requirement source 和 intentional-corner。source-native ref 只保留 provenance 角色。
+
+RF500 两侧 `IrisRegion ↔ NoseRegion` 均使用 `semantic_interface_default` 的 G1 hard 合同，`intentional_corner=false`，切向角为 `0.0 deg` 且 `g1_pass=true`；真实 RF500 的 intentional-corner 数为 0。adapter 只在 `SplineApproxRepresentation.fit_input_points` 中加入低于既有 1 μm backend tolerance 的 0.1 μm endpoint tangent anchor，使实际近似样条端点满足普通 RF-wall 相切意图；既有 G1 数值容差仍为 `2.0 deg`，未放宽。C0 override 与 synthetic intentional-corner 回归继续保留，供 port cut、flange edge、入口/出口截断或未来经人工确认的特殊非连续设计使用。
 
 两条 profile 相对各自 source-native 曲线的最大偏差均为 `2.842170943040401e-14 mm`，声明容差为 `1e-6 mm`。SLS-2 还与已物化 frozen STEP 比较：最大 bbox 误差约 `3.37e-8 mm`，体积相对误差约 `1.95e-5`，表面积相对误差约 `3.33e-5`，均小于声明容差。RF500 已接受 STEP 只保留 raw SHA-256 `766365b6b78f3d0a6929f2500cfb49fc306e54be048a638bc813e9c8aeb9e3cd`，本地未物化，因此其 gate 明确限定为 source-native profile 等价、新 B-Rep 有效和未物化基线 warning，不声称完成旧 STEP 的几何量比较。
 
@@ -951,6 +953,8 @@ Workbench indexer `r4.w4.v0` 仅在完整 W1/W2/W3 和一个严格验证的 R4 b
 ---
 
 ## R5：RF Result / Mode / Field Contract
+
+**当前状态**：`paused_or_deferred_by_user`。以下内容保留为后续单独规划的架构草案，不表示当前已授权执行 no-CST R5、live CST 或 translator generalization。
 
 ### 目标
 
@@ -1170,8 +1174,9 @@ Agent 长期目标放在：
 3. R1 已通过 PR #6 合入，canonical merge commit 为 `5ae1ba07b841d6adf6e180ec1eedfd073657987b`；
 4. R2 已通过 PR #7 合入，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`；
 5. R3 已通过 PR #8 合入，canonical merge commit 为 `585d549c7a5dac0304852a0150f0c4114fd5b6e9`；
-6. R4 implementation branch `codex/rf-cem-r4-observation-contract` 从该 R3 merge 建立；
-7. R4 只建立 representation-independent observation、engineering constraint、immutable no-CST proof 和 Workbench W4，不定义 RF result contract 或优化搜索；
-8. R4 不运行 CST、不建立 RF physical acceptance；R4 Hard Gate 及 canonical merge 完成后才从最新 canonical owner 建立 R5 分支；
-9. R5 先实现 no-CST RF result/mode/field contract，任何 live-CST 验证继续单独等待用户明确授权；
-10. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。
+6. R4 已通过 PR #9 合入，canonical merge commit 为 `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`；
+7. TD1、TD2、TD3 与 Workbench Desktop v0 已完成 no-CST 实现，现有 PR #10 负责最终 follow-up 收口；
+8. RF500 两侧 `IrisRegion ↔ NoseRegion` 使用普通 RF-wall 默认 G1 合同，不存在真实 C0 intentional-corner override；C0/G2 通用扩展仍保留；
+9. 唯一默认 Desktop profile 保持完整人类可见来源，包括 literature semantics 与 frozen review session；不增加 full/core 双 profile；
+10. R5 为 `paused_or_deferred_by_user`，live CST 与 RF result/mode/field translator generalization 均未授权，将来单独规划；
+11. canonical 架构档案仍为本文件，Agent 执行目标仍为 `.agent/goals/RF-CEM_Codex_Goal_R0B-R5.md`。

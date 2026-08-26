@@ -18,10 +18,10 @@
   ],
   "instance_graph_diff": "analysis_outputs/rf_cem_semantic_core/r1_semantic_core.28e8d6fa9efa221f/instance_graph_diff.v0.json",
   "compile_records": [
-    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.2980548dcdd5a85e/records/sls2.r149.6593e02e.compile_record.v1.json",
-    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.2980548dcdd5a85e/records/rf500.2c27faee.b1r3.compile_record.v1.json"
+    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.24bd2492658ad567/records/sls2.r149.6593e02e.compile_record.v2.json",
+    "analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.24bd2492658ad567/records/rf500.2c27faee.b1r3.compile_record.v2.json"
   ],
   "family_induction_bundle": "analysis_outputs/rf_cem_family_induction_ablation/r3_family_induction_ablation.59db0a7b5f8e158c",
-  "observation_contract_bundle": "analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.dc4d7d12fb9a8c84",
+  "observation_contract_bundle": "analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.9e722ec6c8b003cb",
   "optional_w5_bundle": null
 }

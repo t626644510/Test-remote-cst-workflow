@@ -130,7 +130,9 @@ _REPRESENTATION_CATALOG = (
         "implementation": "rf_cem.representation.SplineApproxRepresentation",
         "scope": "family-independent spline approximation boundary primitive",
         "fidelity": "Approximate",
-        "backend": "CadQuery/OCCT splineApprox",
+        "backend": "CadQuery/OCCT splineApprox source realization",
+        "constrained_backend": "cadquery.spline.tangent_constrained.v0",
+        "continuity_measurement": "kernel_realized_edge",
         "tolerance": "0.001 mm (1 micrometre)",
         "optimization_ready": True,
         "exact_nurbs": False,
@@ -226,7 +228,7 @@ _ALGORITHM_CATALOG = (
         "implementation": "rf_cem.workbench.indexer",
     },
     {
-        "id": "rf_cem_profile_compiler.v0",
+        "id": "rf_cem_profile_compiler.v2",
         "label": "Generic topology/representation profile compiler",
         "status": "implemented_r2_no_cst",
         "implementation": "rf_cem.compiler.ProfileCompiler.compile",
@@ -266,7 +268,7 @@ _ROADMAP_PHASES = (
     ("R1", "RF Boundary Semantic Core", "hard_gate_passed_merged"),
     (
         "R2",
-        "Boundary Representation Core + Compiler v1 (v0 compatible)",
+        "Boundary Representation Core + Compiler v2 (v0/v1 compatible)",
         "hard_gate_passed_merged",
     ),
     (
@@ -298,14 +300,15 @@ _R1_GATES = (
 
 _R2_GATES = (
     ("generic_representation_contract", "Line, circular arc, ellipse arc, SplineApprox, and composite contracts are generic", "passed", "SplineApproxRepresentation / boundary_representation.v1 with v0 compatibility"),
-    ("one_compiler_entry", "One ProfileCompiler entry compiles both canonical topologies", "passed", "compile_record.v1 pair in r2_boundary_compiler.2980548dcdd5a85e"),
+    ("one_compiler_entry", "One ProfileCompiler entry compiles both canonical topologies", "passed", "compile_record.v2 pair in r2_boundary_compiler.24bd2492658ad567"),
     ("region_patch_ownership", "Every semantic region owns 1..N patches and every patch has exactly one region owner", "passed", "RegionGeometry and GeometryPatch fail-closed contracts"),
-    ("landmark_and_continuity", "Landmark bindings and required C0/G1/G2 diagnostics are explicit", "passed", "boundary_continuity_policy.v0 + compile_record.v1 continuity checks"),
+    ("landmark_and_continuity", "Required C0/G1 is measured on kernel-realized edges with explicit policy provenance", "passed", "boundary_continuity_policy.v0 + compile_record.v2 kernel_realized_edge checks"),
+    ("backend_tangent_enforcement", "Compiler-planned spline endpoint directions are applied and read back from CadQuery/OCP", "passed", "cadquery.spline.tangent_constrained.v0 + realized edge diagnostics"),
     ("brep_step_valid", "Both profiles close into valid no-CST BRep/STEP outputs", "passed", "isolated CadQuery worker validation"),
-    ("baseline_comparison", "Accepted source-native/baseline comparisons pass declared tolerances", "passed", "r2_boundary_compiler.2980548dcdd5a85e baseline comparison"),
+    ("baseline_comparison", "Accepted source-native/baseline and realized spline comparisons pass declared tolerances", "passed", "r2_boundary_compiler.24bd2492658ad567 realized fidelity"),
     ("source_native_provenance", "Stage C source-native payload and artifact bindings survive compilation", "passed", "hash-bound compile inputs"),
-    ("deterministic_bundle", "Fresh R2 proof builds are byte-identical", "passed", "r2_boundary_compiler.2980548dcdd5a85e reproducibility test"),
-    ("w2_views", "W2 exposes compile, ownership, landmark, continuity, baseline, warning, and artifact traces", "implemented", "fixed /compile-records route"),
+    ("deterministic_bundle", "Fresh R2 proof builds are byte-identical", "passed", "r2_boundary_compiler.24bd2492658ad567 reproducibility test"),
+    ("w2_views", "W2 exposes policy, tangent plan, backend realization, actual continuity, fidelity, and artifacts", "implemented", "fixed /compile-records route"),
     ("no_cst_regression", "Targeted and full branch-local no-CST suites pass", "passed", "PR #10 TD1/TD2 compiler and Workbench no-CST closeout"),
     ("no_live_cst", "R2 has no live-CST or physical-acceptance claim", "passed", "live_cst_status=not_run"),
     ("phase_closeout", "One R2 closeout commit/push and canonical merge", "passed", "PR #7 merge commit e81ad20942258380cccb93d17cfdf0ca7e2d0e21"),
@@ -330,7 +333,7 @@ _R3_GATES = (
 )
 
 _R4_GATES = (
-    ("two_real_observations", "Both real instances produce observations from compiled geometry", "passed", "r4_observation_contract.dc4d7d12fb9a8c84"),
+    ("two_real_observations", "Both real instances produce observations from compiled geometry", "passed", "r4_observation_contract.9e722ec6c8b003cb"),
     ("native_parameter_independence", "Observations do not read instance-native parameter names", "passed", "semantic arc observer contract"),
     ("three_layer_separation", "Exact geometry, semantic shape, and scalar layers remain separate", "passed", "identity-bound R4 contracts"),
     ("descriptor_registry", "Descriptors have definitions, units, versions, tolerances, and provenance", "passed", "scalar_descriptor_registry.v0"),
@@ -384,7 +387,7 @@ _CAPABILITY_CATALOG = (
     ("workbench.w2", "Compiled geometry ownership and trace review", "implemented_r2", "SQLite + /compile-records"),
     ("workbench.w3", "Family induction and blind-validation review", "implemented_r3", "SQLite + /family-induction"),
     ("workbench.w4", "Observation and engineering-constraint review", "implemented_r4", "SQLite + /observations"),
-    ("technical_debt.td1_continuity", "TD1 Explicit Continuity Contract", "implemented_no_cst", "boundary_continuity_policy.v0 + compile_record.v1"),
+    ("technical_debt.td1_continuity", "TD1 Explicit Continuity Contract", "implemented_no_cst", "boundary_continuity_policy.v0 + compile_record.v2 kernel edge readback"),
     ("technical_debt.td2_spline_approx", "TD2 Spline Approximation Contract", "implemented_no_cst", "SplineApproxRepresentation / boundary_representation.v1"),
     ("technical_debt.td3_grammar_ablation", "TD3 Grammar Ablation and Structured Support", "implemented_no_cst", "family_extension_proposal.v1 + add_optional_motif"),
     ("workbench.desktop.v0", "Workbench Desktop v0", "implemented_no_cst", "fixed-action thin Windows launcher"),
@@ -418,7 +421,7 @@ _VALIDATION_CATALOG = (
     ),
     (
         "tests.boundary_compiler_r2",
-        "R2/TD1/TD2 representation v1, continuity, proof-bundle, and W2 contracts",
+        "R2/TD1/TD2 representation v1, compile v2, kernel continuity, proof-bundle, and W2 contracts",
         "available_no_cst",
         "tests/test_rf_cem_boundary_compiler.py",
     ),
@@ -655,7 +658,7 @@ def rebuild_workbench(
         ] = []
         for record_path in sorted(resolved_record_paths, key=str):
             record_source = _register_source(
-                record_path, "compile_record.v0_or_v1", root
+                record_path, "compile_record.v0_v1_or_v2", root
             )
             source_rows.append(record_source)
             try:
@@ -1891,11 +1894,58 @@ def _index_r2_compiles(
             ):
                 add_relation(relation)
 
+        for constraint in record.curve_realization_constraints:
+            constraint_entity_id = (
+                f"{record.compile_id}:{constraint.constraint_id}"
+            )
+            add_entity(
+                EntityRecord(
+                    "curve_realization_constraint",
+                    constraint_entity_id,
+                    f"{constraint.endpoint_role} tangent: {constraint.patch_id}",
+                    "planned_geometric_direction",
+                    record_source.source_id,
+                    {
+                        **constraint.to_mapping(),
+                        "compile_id": record.compile_id,
+                        "instance_id": record.instance_id,
+                    },
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "compile_has_curve_realization_constraint",
+                    "compile_record",
+                    record.compile_id,
+                    "curve_realization_constraint",
+                    constraint_entity_id,
+                )
+            )
+            add_relation(
+                RelationRecord(
+                    "curve_realization_constraint_targets_patch",
+                    "curve_realization_constraint",
+                    constraint_entity_id,
+                    "geometry_patch",
+                    constraint.patch_id,
+                )
+            )
+            if constraint.source_interface_id is not None:
+                add_relation(
+                    RelationRecord(
+                        "curve_realization_constraint_resolves_interface",
+                        "curve_realization_constraint",
+                        constraint_entity_id,
+                        "boundary_interface",
+                        constraint.source_interface_id,
+                    )
+                )
+
         for check in record.continuity_checks:
             total_continuity_checks += 1
             check_entity_id = f"{record.compile_id}:{check.check_id}"
             check_payload = {
-                **check.to_mapping(),
+                **check.to_mapping(schema_version=record.schema_version),
                 "compile_id": record.compile_id,
                 "instance_id": record.instance_id,
             }
@@ -1961,6 +2011,58 @@ def _index_r2_compiles(
                     )
                 )
 
+        kernel = record.geometry_validation.get("kernel")
+        curve_generation = (
+            kernel.get("curve_generation")
+            if isinstance(kernel, Mapping)
+            else None
+        )
+        realized_segments = (
+            curve_generation.get("realized_segments")
+            if isinstance(curve_generation, Mapping)
+            else None
+        )
+        if isinstance(realized_segments, list):
+            for realized in realized_segments:
+                if not isinstance(realized, Mapping):
+                    continue
+                patch_id = realized.get("patch_id")
+                if not isinstance(patch_id, str) or not patch_id:
+                    continue
+                realized_entity_id = f"{record.compile_id}:{patch_id}:realized"
+                constrained = realized.get("tangent_constraints_applied") is True
+                add_entity(
+                    EntityRecord(
+                        "curve_realization",
+                        realized_entity_id,
+                        f"Realized edge: {patch_id}",
+                        "constraint_applied" if constrained else "measured",
+                        record_source.source_id,
+                        {
+                            **dict(realized),
+                            "compile_id": record.compile_id,
+                            "instance_id": record.instance_id,
+                        },
+                    )
+                )
+                add_relation(
+                    RelationRecord(
+                        "compile_has_curve_realization",
+                        "compile_record",
+                        record.compile_id,
+                        "curve_realization",
+                        realized_entity_id,
+                    )
+                )
+                add_relation(
+                    RelationRecord(
+                        "curve_realization_measures_patch",
+                        "curve_realization",
+                        realized_entity_id,
+                        "geometry_patch",
+                        patch_id,
+                    )
+                )
         geometry_validation_id = f"{record.compile_id}:geometry-validation"
         add_entity(
             EntityRecord(

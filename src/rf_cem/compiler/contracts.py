@@ -24,10 +24,12 @@ from rf_cem.semantic.contracts import canonical_sha256
 
 BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION = "boundary_continuity_policy.v0"
 LEGACY_COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v0"
-COMPILE_REQUEST_SCHEMA_VERSION = "compile_request.v1"
-COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v1"
+PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v1"
+COMPILE_REQUEST_SCHEMA_VERSION = "compile_request.v2"
+COMPILE_RECORD_SCHEMA_VERSION = "compile_record.v2"
 LEGACY_COMPILER_VERSION = "rf_cem_profile_compiler.v0"
-COMPILER_VERSION = "rf_cem_profile_compiler.v1"
+PREVIOUS_COMPILER_VERSION = "rf_cem_profile_compiler.v1"
+COMPILER_VERSION = "rf_cem_profile_compiler.v2"
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -793,6 +795,152 @@ class EndpointConstraint:
 
 
 @dataclass(frozen=True)
+class CurveRealizationConstraint:
+    """One compiler-planned endpoint direction constraint for a spline patch."""
+
+    constraint_id: str
+    patch_id: str
+    endpoint_role: str
+    start_tangent_unit: tuple[float, float] | None
+    end_tangent_unit: tuple[float, float] | None
+    source_join_id: str
+    source_interface_id: str | None
+    required_continuity: str
+    source_representation_contract: str
+    constraint_kind: str = "geometric_direction"
+    scale_tangent: bool = True
+    enforcement_backend: str = "cadquery.spline.tangent_constrained.v0"
+
+    def __post_init__(self) -> None:
+        for value, path in (
+            (self.constraint_id, "curve_constraint.constraint_id"),
+            (self.patch_id, "curve_constraint.patch_id"),
+            (self.source_join_id, "curve_constraint.source_join_id"),
+            (
+                self.source_representation_contract,
+                "curve_constraint.source_representation_contract",
+            ),
+            (self.enforcement_backend, "curve_constraint.enforcement_backend"),
+        ):
+            _non_empty(value, path)
+        if self.endpoint_role not in {"start", "end"}:
+            raise CompileContractError("unsupported curve constraint endpoint role")
+        if self.required_continuity not in {"G1", "G2"}:
+            raise CompileContractError(
+                "curve tangent constraint requires G1 or G2 continuity"
+            )
+        if self.constraint_kind != "geometric_direction":
+            raise CompileContractError("unsupported curve constraint kind")
+        if self.scale_tangent is not True:
+            raise CompileContractError(
+                "curve tangent constraint must scale tangent magnitude"
+            )
+        if self.source_interface_id is not None:
+            _non_empty(
+                self.source_interface_id,
+                "curve_constraint.source_interface_id",
+            )
+        vectors = {
+            "start": self.start_tangent_unit,
+            "end": self.end_tangent_unit,
+        }
+        if vectors[self.endpoint_role] is None or vectors[
+            "end" if self.endpoint_role == "start" else "start"
+        ] is not None:
+            raise CompileContractError(
+                "curve constraint must define exactly its selected endpoint tangent"
+            )
+        tangent = vectors[self.endpoint_role]
+        assert tangent is not None
+        if len(tangent) != 2:
+            raise CompileContractError("curve constraint tangent must have two components")
+        length = math.hypot(
+            _number(tangent[0], "curve_constraint.tangent[0]"),
+            _number(tangent[1], "curve_constraint.tangent[1]"),
+        )
+        if abs(length - 1.0) > 1.0e-9:
+            raise CompileContractError("curve constraint tangent must be a unit vector")
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "constraint_id": self.constraint_id,
+            "patch_id": self.patch_id,
+            "endpoint_role": self.endpoint_role,
+            "start_tangent_unit": (
+                None
+                if self.start_tangent_unit is None
+                else list(self.start_tangent_unit)
+            ),
+            "end_tangent_unit": (
+                None if self.end_tangent_unit is None else list(self.end_tangent_unit)
+            ),
+            "source_join_id": self.source_join_id,
+            "source_interface_id": self.source_interface_id,
+            "required_continuity": self.required_continuity,
+            "source_representation_contract": self.source_representation_contract,
+            "constraint_kind": self.constraint_kind,
+            "scale_tangent": self.scale_tangent,
+            "enforcement_backend": self.enforcement_backend,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "CurveRealizationConstraint":
+        mapping = _mapping(value, "curve_constraint")
+        _exact_keys(mapping, set(cls.__dataclass_fields__), "curve_constraint")
+        start_value = mapping["start_tangent_unit"]
+        end_value = mapping["end_tangent_unit"]
+        interface_value = mapping["source_interface_id"]
+        if interface_value is not None and not isinstance(interface_value, str):
+            raise CompileContractError(
+                "curve_constraint.source_interface_id must be a string or null"
+            )
+        scale_tangent = mapping["scale_tangent"]
+        if not isinstance(scale_tangent, bool):
+            raise CompileContractError(
+                "curve_constraint.scale_tangent must be boolean"
+            )
+        return cls(
+            constraint_id=_string(
+                mapping["constraint_id"], "curve_constraint.constraint_id"
+            ),
+            patch_id=_string(mapping["patch_id"], "curve_constraint.patch_id"),
+            endpoint_role=_string(
+                mapping["endpoint_role"], "curve_constraint.endpoint_role"
+            ),
+            start_tangent_unit=(
+                None
+                if start_value is None
+                else _number_pair(start_value, "curve_constraint.start_tangent_unit")
+            ),
+            end_tangent_unit=(
+                None
+                if end_value is None
+                else _number_pair(end_value, "curve_constraint.end_tangent_unit")
+            ),
+            source_join_id=_string(
+                mapping["source_join_id"], "curve_constraint.source_join_id"
+            ),
+            source_interface_id=interface_value,
+            required_continuity=_string(
+                mapping["required_continuity"],
+                "curve_constraint.required_continuity",
+            ),
+            source_representation_contract=_string(
+                mapping["source_representation_contract"],
+                "curve_constraint.source_representation_contract",
+            ),
+            constraint_kind=_string(
+                mapping["constraint_kind"], "curve_constraint.constraint_kind"
+            ),
+            scale_tangent=scale_tangent,
+            enforcement_backend=_string(
+                mapping["enforcement_backend"],
+                "curve_constraint.enforcement_backend",
+            ),
+        )
+
+
+@dataclass(frozen=True)
 class ContinuityCheck:
     """C0/G1/G2 diagnostic at one deterministic oriented patch join."""
 
@@ -817,6 +965,12 @@ class ContinuityCheck:
     intentional_corner: bool = False
     enforcement: str = "hard"
     interface_id: str | None = None
+    requirement_basis: str = "legacy_compile_record"
+    measurement_basis: str = "representation_estimate"
+    g2_measurement_basis: str = "representation_estimate"
+    pre_kernel_c0_gap_mm: float | None = None
+    pre_kernel_tangent_angle_deg: float | None = None
+    constraint_enforcement_verified: bool = True
 
     def __post_init__(self) -> None:
         for value, path in (
@@ -842,6 +996,21 @@ class ContinuityCheck:
             raise CompileContractError("continuity.intentional_corner must be boolean")
         if self.enforcement != "hard":
             raise CompileContractError("continuity enforcement must be hard")
+        if self.requirement_basis not in {
+            "legacy_compile_record",
+            BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION,
+        }:
+            raise CompileContractError("unsupported continuity requirement basis")
+        if self.measurement_basis not in {
+            "representation_estimate",
+            "kernel_realized_edge",
+        }:
+            raise CompileContractError("unsupported continuity measurement basis")
+        if self.g2_measurement_basis not in {
+            "representation_estimate",
+            "kernel_realized_edge",
+        }:
+            raise CompileContractError("unsupported G2 measurement basis")
         if self.join_scope == "within_region" and self.interface_id is not None:
             raise CompileContractError("within-region continuity cannot reference an interface")
         if self.join_scope == "cross_region":
@@ -863,6 +1032,15 @@ class ContinuityCheck:
             if _number(value, path) < 0.0:
                 raise CompileContractError(f"{path} must be non-negative")
         for value, path in (
+            (self.pre_kernel_c0_gap_mm, "continuity.pre_kernel_c0_gap_mm"),
+            (
+                self.pre_kernel_tangent_angle_deg,
+                "continuity.pre_kernel_tangent_angle_deg",
+            ),
+        ):
+            if value is not None and _number(value, path) < 0.0:
+                raise CompileContractError(f"{path} must be non-negative")
+        for value, path in (
             (self.c0_tolerance_mm, "continuity.c0_tolerance_mm"),
             (self.g1_tolerance_deg, "continuity.g1_tolerance_deg"),
             (self.g2_tolerance_per_mm, "continuity.g2_tolerance_per_mm"),
@@ -874,11 +1052,43 @@ class ContinuityCheck:
             (self.g1_pass, "continuity.g1_pass"),
             (self.g2_pass, "continuity.g2_pass"),
             (self.required_pass, "continuity.required_pass"),
+            (
+                self.constraint_enforcement_verified,
+                "continuity.constraint_enforcement_verified",
+            ),
         ):
             if not isinstance(value, bool):
                 raise CompileContractError(f"{path} must be boolean")
+        level_pass = {
+            "C0": self.c0_pass,
+            "G1": self.g1_pass,
+            "G2": self.g2_pass,
+        }[self.required_level]
+        if self.required_pass and (
+            not level_pass or not self.constraint_enforcement_verified
+        ):
+            raise CompileContractError(
+                "required continuity pass lacks measured continuity or constraint provenance"
+            )
 
-    def to_mapping(self, *, legacy: bool = False) -> dict[str, Any]:
+    def to_mapping(
+        self,
+        *,
+        schema_version: str | None = None,
+        legacy: bool = False,
+    ) -> dict[str, Any]:
+        if schema_version is None:
+            schema_version = (
+                LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                if legacy
+                else COMPILE_RECORD_SCHEMA_VERSION
+            )
+        if schema_version not in {
+            LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+            PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION,
+            COMPILE_RECORD_SCHEMA_VERSION,
+        }:
+            raise CompileContractError("unsupported continuity mapping schema")
         mapping = {
             "check_id": self.check_id,
             "landmark_id": self.landmark_id,
@@ -897,7 +1107,7 @@ class ContinuityCheck:
             "g2_pass": self.g2_pass,
             "required_pass": self.required_pass,
         }
-        if not legacy:
+        if schema_version != LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
             mapping.update(
                 {
                     "requirement_source": self.requirement_source,
@@ -907,26 +1117,57 @@ class ContinuityCheck:
                     "interface_id": self.interface_id,
                 }
             )
+        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            mapping.update(
+                {
+                    "requirement_basis": self.requirement_basis,
+                    "measurement_basis": self.measurement_basis,
+                    "g2_measurement_basis": self.g2_measurement_basis,
+                    "pre_kernel_c0_gap_mm": self.pre_kernel_c0_gap_mm,
+                    "pre_kernel_tangent_angle_deg": (
+                        self.pre_kernel_tangent_angle_deg
+                    ),
+                    "constraint_enforcement_verified": (
+                        self.constraint_enforcement_verified
+                    ),
+                }
+            )
         return mapping
 
     @classmethod
     def from_mapping(
-        cls, value: Mapping[str, Any], *, legacy: bool = False
+        cls,
+        value: Mapping[str, Any],
+        *,
+        schema_version: str | None = None,
+        legacy: bool = False,
     ) -> "ContinuityCheck":
+        if schema_version is None:
+            schema_version = (
+                LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                if legacy
+                else COMPILE_RECORD_SCHEMA_VERSION
+            )
         mapping = _mapping(value, "continuity")
+        versioned_fields = {
+            "requirement_source",
+            "policy_ref",
+            "intentional_corner",
+            "enforcement",
+            "interface_id",
+            "requirement_basis",
+            "measurement_basis",
+            "g2_measurement_basis",
+            "pre_kernel_c0_gap_mm",
+            "pre_kernel_tangent_angle_deg",
+            "constraint_enforcement_verified",
+        }
         required = {
             field
             for field in cls.__dataclass_fields__
-            if field
-            not in {
-                "requirement_source",
-                "policy_ref",
-                "intentional_corner",
-                "enforcement",
-                "interface_id",
-            }
+            if field not in versioned_fields
         }
-        if not legacy:
+        if schema_version != LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
             required.update(
                 {
                     "requirement_source",
@@ -936,8 +1177,21 @@ class ContinuityCheck:
                     "interface_id",
                 }
             )
+        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            required.update(
+                {
+                    "requirement_basis",
+                    "measurement_basis",
+                    "g2_measurement_basis",
+                    "pre_kernel_c0_gap_mm",
+                    "pre_kernel_tangent_angle_deg",
+                    "constraint_enforcement_verified",
+                }
+            )
         _exact_keys(mapping, required, "continuity")
         boolean_fields = {"c0_pass", "g1_pass", "g2_pass", "required_pass"}
+        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            boolean_fields.add("constraint_enforcement_verified")
         for field in boolean_fields:
             if not isinstance(mapping[field], bool):
                 raise CompileContractError(f"continuity.{field} must be boolean")
@@ -970,26 +1224,76 @@ class ContinuityCheck:
             required_pass=mapping["required_pass"],
             requirement_source=(
                 "legacy_source_native_segment_rule"
-                if legacy
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
                 else _string(
                     mapping["requirement_source"], "continuity.requirement_source"
                 )
             ),
             policy_ref=(
                 "legacy.compile_record.v0"
-                if legacy
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
                 else _string(mapping["policy_ref"], "continuity.policy_ref")
             ),
-            intentional_corner=(False if legacy else mapping["intentional_corner"]),
+            intentional_corner=(
+                False
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                else mapping["intentional_corner"]
+            ),
             enforcement=(
                 "hard"
-                if legacy
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
                 else _string(mapping["enforcement"], "continuity.enforcement")
             ),
             interface_id=(
                 None
-                if legacy or mapping["interface_id"] is None
+                if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                or mapping["interface_id"] is None
                 else _string(mapping["interface_id"], "continuity.interface_id")
+            ),
+            requirement_basis=(
+                _string(mapping["requirement_basis"], "continuity.requirement_basis")
+                if schema_version == COMPILE_RECORD_SCHEMA_VERSION
+                else (
+                    "legacy_compile_record"
+                    if schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                    else BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION
+                )
+            ),
+            measurement_basis=(
+                _string(mapping["measurement_basis"], "continuity.measurement_basis")
+                if schema_version == COMPILE_RECORD_SCHEMA_VERSION
+                else "representation_estimate"
+            ),
+            g2_measurement_basis=(
+                _string(
+                    mapping["g2_measurement_basis"],
+                    "continuity.g2_measurement_basis",
+                )
+                if schema_version == COMPILE_RECORD_SCHEMA_VERSION
+                else "representation_estimate"
+            ),
+            pre_kernel_c0_gap_mm=(
+                None
+                if schema_version != COMPILE_RECORD_SCHEMA_VERSION
+                or mapping["pre_kernel_c0_gap_mm"] is None
+                else _number(
+                    mapping["pre_kernel_c0_gap_mm"],
+                    "continuity.pre_kernel_c0_gap_mm",
+                )
+            ),
+            pre_kernel_tangent_angle_deg=(
+                None
+                if schema_version != COMPILE_RECORD_SCHEMA_VERSION
+                or mapping["pre_kernel_tangent_angle_deg"] is None
+                else _number(
+                    mapping["pre_kernel_tangent_angle_deg"],
+                    "continuity.pre_kernel_tangent_angle_deg",
+                )
+            ),
+            constraint_enforcement_verified=(
+                mapping["constraint_enforcement_verified"]
+                if schema_version == COMPILE_RECORD_SCHEMA_VERSION
+                else True
             ),
         )
 
@@ -1059,6 +1363,7 @@ class CompileRecord:
     content_sha256: str = ""
     continuity_policy: BoundaryContinuityPolicy | None = None
     endpoint_constraints: tuple[EndpointConstraint, ...] = ()
+    curve_realization_constraints: tuple[CurveRealizationConstraint, ...] = ()
     schema_version: str = COMPILE_RECORD_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
@@ -1069,14 +1374,15 @@ class CompileRecord:
             _non_empty(value, path)
         if self.schema_version not in {
             LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+            PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION,
             COMPILE_RECORD_SCHEMA_VERSION,
         }:
             raise CompileContractError("unsupported compile record schema")
-        expected_compiler = (
-            LEGACY_COMPILER_VERSION
-            if self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
-            else COMPILER_VERSION
-        )
+        expected_compiler = {
+            LEGACY_COMPILE_RECORD_SCHEMA_VERSION: LEGACY_COMPILER_VERSION,
+            PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION: PREVIOUS_COMPILER_VERSION,
+            COMPILE_RECORD_SCHEMA_VERSION: COMPILER_VERSION,
+        }[self.schema_version]
         if self.compiler_version != expected_compiler:
             raise CompileContractError("unsupported compiler version in compile record")
         if self.status not in {"pass", "failed"}:
@@ -1112,9 +1418,13 @@ class CompileRecord:
             if check.left_patch_id not in patch_ids or check.right_patch_id not in patch_ids:
                 raise CompileContractError("continuity check references an unknown patch")
         if self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
-            if self.continuity_policy is not None or self.endpoint_constraints:
+            if (
+                self.continuity_policy is not None
+                or self.endpoint_constraints
+                or self.curve_realization_constraints
+            ):
                 raise CompileContractError(
-                    "legacy compile record cannot contain v1 policy or endpoint contracts"
+                    "legacy compile record cannot contain policy or constraint contracts"
                 )
             if any(
                 check.requirement_source != "legacy_source_native_segment_rule"
@@ -1123,14 +1433,16 @@ class CompileRecord:
                 raise CompileContractError("legacy continuity source marker changed")
         else:
             if self.continuity_policy is None:
-                raise CompileContractError("compile_record.v1 requires a continuity policy")
+                raise CompileContractError(
+                    "versioned compile record requires a continuity policy"
+                )
             if self.continuity_policy.family_id != self.family_id:
                 raise CompileContractError("compile record continuity policy family mismatch")
             if len(self.endpoint_constraints) != 2 or {
                 item.endpoint_role for item in self.endpoint_constraints
             } != {"profile_start", "profile_end"}:
                 raise CompileContractError(
-                    "compile_record.v1 requires classified start and end constraints"
+                    "versioned compile record requires classified start and end constraints"
                 )
             endpoint_landmarks = {item.landmark_id for item in self.endpoint_constraints}
             if endpoint_landmarks & {item.landmark_id for item in self.continuity_checks}:
@@ -1145,6 +1457,35 @@ class CompileRecord:
             for check in self.continuity_checks:
                 if check.policy_ref != self.continuity_policy.policy_id:
                     raise CompileContractError("continuity check policy reference mismatch")
+            if (
+                self.schema_version == PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION
+                and self.curve_realization_constraints
+            ):
+                raise CompileContractError(
+                    "compile_record.v1 cannot contain curve realization constraints"
+                )
+            if self.schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+                constraint_ids = [
+                    item.constraint_id for item in self.curve_realization_constraints
+                ]
+                if len(constraint_ids) != len(set(constraint_ids)):
+                    raise CompileContractError(
+                        "compile record has duplicate curve realization constraints"
+                    )
+                for constraint in self.curve_realization_constraints:
+                    if constraint.patch_id not in patch_ids:
+                        raise CompileContractError(
+                            "curve realization constraint references an unknown patch"
+                        )
+                if any(
+                    check.requirement_basis
+                    != BOUNDARY_CONTINUITY_POLICY_SCHEMA_VERSION
+                    or check.measurement_basis != "kernel_realized_edge"
+                    for check in self.continuity_checks
+                ):
+                    raise CompileContractError(
+                        "compile_record.v2 continuity must use policy requirements and kernel measurements"
+                    )
         _finite_json(self.geometry_validation, "compile_record.geometry_validation")
         _finite_json(self.baseline_comparison, "compile_record.baseline_comparison")
         if not self.output_artifacts:
@@ -1189,7 +1530,7 @@ class CompileRecord:
             "landmark_bindings": [item.to_mapping() for item in self.landmark_bindings],
             "continuity_checks": [
                 item.to_mapping(
-                    legacy=self.schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION
+                    schema_version=self.schema_version
                 )
                 for item in self.continuity_checks
             ],
@@ -1204,9 +1545,11 @@ class CompileRecord:
             "region_count": len(self.region_geometries),
             "patch_count": self.patch_count,
         }
-        if self.schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+        if self.schema_version != LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
             if self.continuity_policy is None:
-                raise CompileContractError("compile_record.v1 requires a continuity policy")
+                raise CompileContractError(
+                    "versioned compile record requires a continuity policy"
+                )
             mapping.update(
                 {
                     "continuity_policy": self.continuity_policy.to_mapping(),
@@ -1215,6 +1558,10 @@ class CompileRecord:
                     ],
                 }
             )
+        if self.schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            mapping["curve_realization_constraints"] = [
+                item.to_mapping() for item in self.curve_realization_constraints
+            ]
         return mapping
 
     def to_mapping(self) -> dict[str, Any]:
@@ -1232,6 +1579,7 @@ class CompileRecord:
         )
         if schema_version not in {
             LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+            PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION,
             COMPILE_RECORD_SCHEMA_VERSION,
         }:
             raise CompileContractError("unsupported compile record schema")
@@ -1260,8 +1608,10 @@ class CompileRecord:
             "compile_id",
             "content_sha256",
         }
-        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+        if schema_version != LEGACY_COMPILE_RECORD_SCHEMA_VERSION:
             required.update({"continuity_policy", "endpoint_constraints"})
+        if schema_version == COMPILE_RECORD_SCHEMA_VERSION:
+            required.add("curve_realization_constraints")
         _exact_keys(mapping, required, "compile_record")
         parent = mapping["parent_compile_id"]
         if parent is not None and not isinstance(parent, str):
@@ -1300,7 +1650,7 @@ class CompileRecord:
             continuity_checks=tuple(
                 ContinuityCheck.from_mapping(
                     _mapping(item, "compile_record.continuity"),
-                    legacy=schema_version == LEGACY_COMPILE_RECORD_SCHEMA_VERSION,
+                    schema_version=schema_version,
                 )
                 for item in _sequence(mapping["continuity_checks"], "compile_record.continuity_checks")
             ),
@@ -1349,6 +1699,19 @@ class CompileRecord:
                     )
                 )
             ),
+            curve_realization_constraints=(
+                ()
+                if schema_version != COMPILE_RECORD_SCHEMA_VERSION
+                else tuple(
+                    CurveRealizationConstraint.from_mapping(
+                        _mapping(item, "compile_record.curve_realization_constraint")
+                    )
+                    for item in _sequence(
+                        mapping["curve_realization_constraints"],
+                        "compile_record.curve_realization_constraints",
+                    )
+                )
+            ),
             schema_version=schema_version,
         )
         if mapping["region_count"] != len(result.region_geometries):
@@ -1359,7 +1722,7 @@ class CompileRecord:
 
 
 def load_compile_record(path: Path) -> CompileRecord:
-    """Load one strict finite ``compile_record.v0`` JSON artifact."""
+    """Load one strict finite v0, v1, or v2 compile-record artifact."""
 
     try:
         value = json.loads(
@@ -1488,10 +1851,13 @@ __all__ = [
     "ContinuityInterfaceOverride",
     "ContinuityRequirement",
     "ContractSourceRef",
+    "CurveRealizationConstraint",
     "EndpointConstraint",
     "LandmarkGeometryBinding",
     "LEGACY_COMPILE_RECORD_SCHEMA_VERSION",
     "LEGACY_COMPILER_VERSION",
+    "PREVIOUS_COMPILE_RECORD_SCHEMA_VERSION",
+    "PREVIOUS_COMPILER_VERSION",
     "load_compile_record",
     "NativeArtifactRef",
     "OutputArtifactRef",

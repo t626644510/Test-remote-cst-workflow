@@ -94,7 +94,35 @@ _HISTORICAL_SOURCE_BINDINGS: dict[str, frozenset[tuple[str, str, int]]] = {
                 31850,
             ),
         }
-    )
+    ),
+    "r4_observation_contract.a0fd43bd4bf4de2f": frozenset(
+        {
+            (
+                "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+                "1adaa1a9cf12bb51afc91353dfc4b37b3d989982221b8956080d8130ad66881a",
+                40689,
+            ),
+            (
+                "src/rf_cem/observation/artifacts.py",
+                "b6b506dea5952b1e49cda87c7486d404ca2665839c9c02c2a9b74a9d88cde79e",
+                33477,
+            ),
+        }
+    ),
+    "r4_observation_contract.dc4d7d12fb9a8c84": frozenset(
+        {
+            (
+                "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+                "d2fb4329a73c7cff80cf32ba62d9620abf60648f1eeac0db9b7fe13a7a32a37f",
+                42364,
+            ),
+            (
+                "src/rf_cem/observation/artifacts.py",
+                "b6b506dea5952b1e49cda87c7486d404ca2665839c9c02c2a9b74a9d88cde79e",
+                33477,
+            ),
+        }
+    ),
 }
 
 

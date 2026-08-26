@@ -992,12 +992,12 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
   --output-root $CompilerRoot
 ```
 
-The current TD1/TD2 bundle is `r2_boundary_compiler.8f47ca735db8ce8a`, input SHA-256 `8f47ca735db8ce8ae4f0d6bb55555e22e5aa3726a72b8f9a661f5d3a492c9610`. `build` refuses an existing target. It writes two compiled profiles, two normalized STEP files, two v1 records and a source-binding manifest. SLS-2 contains 9 regions/10 patches; RF500 contains 11 regions/12 patches. The original v0 bundle `r2_boundary_compiler.aa66a3e90125437b` remains unchanged and readable.
+The current TD1/TD2 bundle is `r2_boundary_compiler.2980548dcdd5a85e`, input SHA-256 `2980548dcdd5a85e6719700d7158db6cdfb29c90b4fd44ba9517f444bbbfc365`. `build` refuses an existing target. It writes two compiled profiles, two normalized STEP files, two v1 records and a source-binding manifest. SLS-2 contains 9 regions/10 patches with compile ID `sls2.r149.6593e02e.compile.a22fd5f932c1ffff`; RF500 contains 11 regions/12 patches with compile ID `rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6`. RF500 has zero real intentional corners, and both Iris↔Nose interfaces use the semantic default G1 contract and pass at 0° without changing the 2° tolerance. The previous v1 bundle `r2_boundary_compiler.8f47ca735db8ce8a` and original v0 bundle `r2_boundary_compiler.aa66a3e90125437b` remain unchanged and readable; synthetic C0 and explicit G2 contracts remain supported.
 
 Validate strict record identity and every output artifact size/hash:
 
 ```powershell
-$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.8f47ca735db8ce8a'
+$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.2980548dcdd5a85e'
 & $py -m rf_cem.compiler validate `
   --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v1.json') `
   --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v1.json') `
@@ -1049,7 +1049,7 @@ The output additionally contains `family_grammar.seed_ablation.v0.json`, `family
 ```powershell
 $ObservationRoot = 'analysis_outputs\rf_cem_observation_contract_td'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
-$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_compiler.8f47ca735db8ce8a'
+$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_compiler.2980548dcdd5a85e'
 
 & $py -m rf_cem.observation build `
   --root $RepoRoot `
@@ -1061,12 +1061,12 @@ $CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_
   --architecture-document 'docs\RF_CEM_ROADMAP_AND_ARCHITECTURE.md'
 ```
 
-The current TD1/TD2 regression proof is `r4_observation_contract.a0fd43bd4bf4de2f`, input SHA-256 `a0fd43bd4bf4de2f8a2ea9e6777154b541556a189ee888f4c2e895c0e0383b20`. It binds 11 sources and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two bundles with 240 values, and 12 evaluations. The original R4 proof remains unchanged/readable through an exact canonical bundle/path/hash/size compatibility allowlist for its three evolved tracked inputs; arbitrary source mismatches still fail closed.
+The current TD1/TD2 regression proof is `r4_observation_contract.dc4d7d12fb9a8c84`, input SHA-256 `dc4d7d12fb9a8c84e3bfd805402b49d1dd508330c4ea9d6695af1548455616de`. It binds 11 sources and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two bundles with 240 values, and 12 evaluations. The previous `.a0fd43bd4bf4de2f` and original R4 proofs remain unchanged/readable. The exact canonical bundle/path/hash/size historical allowlist proves known historical source identity, not current-checkout source-byte equivalence; arbitrary source mismatches still fail closed and the allowlist remains narrow.
 
 The command refuses an existing content-addressed target. Never delete or overwrite a proof to reuse its name. Strictly validate its source hashes, artifact inventory, input preimage and cross-contract identities with:
 
 ```powershell
-$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.a0fd43bd4bf4de2f'
+$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.dc4d7d12fb9a8c84'
 & $py -m rf_cem.observation validate --bundle $ObservationProof
 ```
 
@@ -1074,7 +1074,7 @@ R4 length/radius values use `mm`, curvature uses `1/mm`, area uses `mm^2`, volum
 
 ### 9.12 RF-CEM Workbench W0/W1/W2/W3/W4 (R0B/R1/R2/R3/R4)
 
-`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The tracked `config/rf_cem_workbench_profile.v0.json` is the canonical portable W0–W4 recipe: every path is repository-relative, the database remains ignored, and `optional_w5_bundle` is reserved. Profile status verifies declared-source presence, every indexed source hash, and the profile recipe hash itself. Use the profile interface for ordinary status/rebuild/serve:
+`src/rf_cem/workbench/` builds a deterministic, disposable SQLite read model. The tracked `config/rf_cem_workbench_profile.v0.json` is the single canonical portable W0–W4 recipe: every path is repository-relative, the database remains ignored, `optional_w5_bundle` is reserved, and the default sources include frozen SLS-2 literature semantics and review session alongside W1–W4 proofs. There is no core/full split or profile selector. Profile status verifies declared-source presence, every indexed source hash, and the profile recipe hash itself. Use the profile interface for ordinary status/rebuild/serve:
 
 ```powershell
 $WorkbenchProfile = 'config\rf_cem_workbench_profile.v0.json'
@@ -1138,11 +1138,11 @@ The current full W3 source set rebuilds to 29 fresh sources, 418 entities and 57
 
 The current full W4 source set rebuilds to 66 fresh sources, 779 entities and 1484 relations. Two consecutive rebuilds produced input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb`; canonical portable snapshot SHA-256 is `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. W4 adds 2 exact references, 2 shape observations, 20 region observations, 24 landmark observations, 21 descriptor definitions, 240 descriptor values, 6 constraints, 12 evaluations/findings and the passing `w4.observation-contract-hard-gate`.
 
-The tracked TD1–TD3/Desktop profile uses the v1 R2 compile pair, ablation R3 and current R4 regression proof. Two consecutive rebuilds produce 65 fresh sources, 738 entities and 1539 relations, input-set SHA-256 `6bcfd185b18fb3011aff2279c383db4984158fb7e926cce749b5834c8c06e7ad` and portable snapshot SHA-256 `56d8d9a8b63358fa8a12f02d3183bf9f78ab05477b810c895f8b631ac8fd302c`. The lower entity count than the historical full W4 recipe reflects removal of optional literature/review display sources from this portable profile, not loss of W1–W4 hard-gate entities.
+The tracked TD1–TD3/Desktop profile uses the current v1 R2 compile pair, ablation R3, current R4 regression proof, literature semantics and frozen review session. Two consecutive rebuilds produce 67 fresh sources, 795 entities and 1539 relations, input-set SHA-256 `2f9b1f41b24be06f4799be69eb4346a238fe541a34c0e508e5a328c118d6cef4` and portable snapshot SHA-256 `d286f229e20b1347d32b1da077adfc0401660454b29dcae95ce9a77aef54f8ae`. The inventory includes 30 review and 25 semantic entities, restoring literature evidence, review decisions and Helper2 frozen-review visibility while retaining the complete W1–W4 hard-gate chain. Roadmap/capability entries report R0B–R4 merged/passed, R5 paused/deferred and TD1/TD2/TD3/Desktop implemented no-CST.
 
 `status` opens SQLite in read-only mode and re-hashes every indexed source. `serve` binds only to `127.0.0.1`, chooses a random port/token and prints the authenticated URL. It exposes fixed GET pages/APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W2 shows explicit policy source/required level/endpoints and all continuity diagnostics. W3 v1 shows seed grammar, selected detector, structured support, symmetry/population, pending proposal, accepted review, `add_optional_motif`, diff, final admission, single-detector fixture and blind result. Host/Origin/token checks are fail-closed; POST is rejected and there is no shell, arbitrary file browser, CST action, filesystem mutation or write API. Stop a foreground CLI process with Ctrl+C.
 
-R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. Those remain gated by R5.
+R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. R5 is paused/deferred by the user; live work and RF result/mode/field translator generalization require a later, separate plan and explicit authorization.
 
 ### 9.13 Workbench Desktop v0
 

@@ -1,7 +1,7 @@
 # RF-CEM 第二次技术档案：TD1–TD3 技术债收敛与 Workbench 桌面化
 
-**版本**：Technical Record 2 / Roadmap Addendum 2.3
-**日期**：2026-08-24
+**版本**：Technical Record 2 / Roadmap Addendum 2.4
+**日期**：2026-08-26（PR #10 follow-up）
 **用途**：供项目负责人在本轮开发完成后进行人工复盘，记录连续性合同、样条表示合同、R3 归纳边界以及 Workbench 桌面封装的最终决策。
 **实现状态**：本档案定义的 TD1–TD3 与 Desktop v0 已在同一 no-CST closeout 分支实现；最终 proof、测试与 Git 身份见本文末尾实施记录。
 **本轮范围**：TD1 Continuity Contract、TD2 Spline Contract Rename、TD3 R3 Ablation / Score Refactor、Workbench Desktop v0。
@@ -1037,7 +1037,7 @@ MDL、CEGIS、multi-scale landmark、split/merge/relabel 以及 representation/t
 
 ---
 
-# 11. 2026-08-24 实施与 closeout 记录
+# 11. 2026-08-24 实施与 2026-08-26 follow-up closeout 记录
 
 ## 11.1 Git 与范围
 
@@ -1053,22 +1053,22 @@ execution mode: no-CST
 
 ## 11.2 TD1 最终行为
 
-过去的 required level 会受 `source_native_segment_ref` 身份影响，导致 provenance 与工程意图混合。现在 `boundary_continuity_policy.v0` 是唯一决策来源：representation 内部 join 与普通跨 semantic RF-wall interface 默认 G1 hard；两个 RF500 nose intentional corners 由显式 override 使用 C0 hard；G2 是可选扩展；profile 起止点使用独立 endpoint contract。每个 join 都记录 `c0_gap_mm`、`tangent_angle_deg`、`curvature_delta_per_mm`、C0/G1/G2 pass、requirement source、policy ref 和 intentional-corner，不因 required level 较低而省略诊断。
+过去的 required level 会受 `source_native_segment_ref` 身份影响，导致 provenance 与工程意图混合。现在 `boundary_continuity_policy.v0` 是唯一决策来源：representation 内部 join 与普通跨 semantic RF-wall interface 默认 G1 hard；C0 只用于 port cut、flange edge、入口/出口截断或未来经人工明确确认的特殊非连续设计；G2 是可选扩展；profile 起止点使用独立 endpoint contract。RF500 两侧 `IrisRegion ↔ NoseRegion` 不属于 intentional corner：当前均由 `semantic_interface_default` 要求 G1，`intentional_corner=false`，切向角 `0.0 deg` 且 `g1_pass=true`，真实 C0 override 数为 0。adapter 在近似样条 `fit_input_points` 中使用低于现有 1 μm backend tolerance 的 0.1 μm endpoint tangent anchor 修复实际端点方向；G1 tolerance 仍为 `2.0 deg`，未放宽。每个 join 都记录 `c0_gap_mm`、`tangent_angle_deg`、`curvature_delta_per_mm`、C0/G1/G2 pass、requirement source、policy ref 和 intentional-corner，不因 required level 较低而省略诊断。
 
 新 no-CST proof：
 
 ```text
 analysis_outputs/rf_cem_boundary_compiler_td1_td2/
-  r2_boundary_compiler.8f47ca735db8ce8a/
+  r2_boundary_compiler.2980548dcdd5a85e/
 input SHA-256:
-  8f47ca735db8ce8ae4f0d6bb55555e22e5aa3726a72b8f9a661f5d3a492c9610
+  2980548dcdd5a85e6719700d7158db6cdfb29c90b4fd44ba9517f444bbbfc365
 SLS-2 compile:
   sls2.r149.6593e02e.compile.a22fd5f932c1ffff
 RF500 compile:
-  rf500.2c27faee.b1r3.compile.8f1a01d4fcd31ffb
+  rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6
 ```
 
-两份 `compile_record.v1` 均 pass。原 `r2_boundary_compiler.aa66a3e90125437b` 未覆盖，v0 strict loader 回归通过。
+两份 `compile_record.v1` 均 pass。前一份 v1 `r2_boundary_compiler.8f47ca735db8ce8a` 与原 v0 `r2_boundary_compiler.aa66a3e90125437b` 均未覆盖；v0/v1 compatibility、synthetic C0、explicit G2 与 source-native identity 回归继续通过。
 
 ## 11.3 TD2 migration 与兼容性
 
@@ -1083,6 +1083,8 @@ exact_nurbs = false
 ```
 
 输入字段准确表示 fit input/control hints，不声称是最终 exact NURBS poles。历史 `SplineNurbsRepresentation` / `boundary_representation.v0` 是 deprecated compatibility path；旧 payload 可读，新旧 payload round-trip 后在现有容差内生成等价 geometry，优化-facing points 仍可变。Workbench 只把 `ExactNurbsRepresentation` 显示为 planned/not implemented。
+
+`active backend parameters`、`observation-only trace parameters` 与 `parameter_count` 的精确定义仍是未来技术债。本 follow-up 不修改 `parameter_count`，不增加 optimization parameter schema，不重构 optimizer，也不改变 spline backend behavior。
 
 ## 11.4 TD3 ablation、detector 与 support
 
@@ -1116,27 +1118,27 @@ blind result: known_optional_motif_present
 
 ```text
 analysis_outputs/rf_cem_observation_contract_td/
-  r4_observation_contract.a0fd43bd4bf4de2f/
+  r4_observation_contract.dc4d7d12fb9a8c84/
 input SHA-256:
-  a0fd43bd4bf4de2f8a2ea9e6777154b541556a189ee888f4c2e895c0e0383b20
+  dc4d7d12fb9a8c84e3bfd805402b49d1dd508330c4ea9d6695af1548455616de
 instances: SLS-2 + RF500
 descriptor definitions / values: 21 / 240
 constraints / evaluations: 6 / 12
 ```
 
-tracked `config/rf_cem_workbench_profile.v0.json` 只使用 repository-relative paths，绑定当前 W0–W4 chain 并预留 nullable W5。连续两次 rebuild 结果：
+tracked `config/rf_cem_workbench_profile.v0.json` 继续是唯一默认 profile，只使用 repository-relative paths，绑定当前 W0–W4 chain、literature semantics 与 frozen review session，并预留 nullable W5；未增加 full/core split 或 selector。连续两次 rebuild 结果：
 
 ```text
 database: analysis_outputs/rf_cem_workbench/td1_td3_desktop.v0.sqlite
 database state: fresh
-sources / entities / relations: 65 / 738 / 1539
+sources / entities / relations: 67 / 795 / 1539
 input-set SHA-256:
-  6bcfd185b18fb3011aff2279c383db4984158fb7e926cce749b5834c8c06e7ad
+  2f9b1f41b24be06f4799be69eb4346a238fe541a34c0e508e5a328c118d6cef4
 portable snapshot SHA-256:
-  56d8d9a8b63358fa8a12f02d3183bf9f78ab05477b810c895f8b631ac8fd302c
+  d286f229e20b1347d32b1da077adfc0401660454b29dcae95ce9a77aef54f8ae
 ```
 
-旧 `r4_observation_contract.d06695921d941eee` 未覆盖。它绑定的 roadmap、observer 与 loader 后续必须演进；loader 仅针对该 canonical bundle 的精确 path/旧 hash/旧 size 三元组使用历史兼容 allowlist，其余错配仍 fail closed。专门回归测试与 CLI 均确认旧 proof 可加载。
+前一份 `r4_observation_contract.a0fd43bd4bf4de2f` 与旧 `r4_observation_contract.d06695921d941eee` 均未覆盖。loader 仅针对 historical canonical bundle 的精确 path/旧 hash/旧 size 三元组使用窄兼容 allowlist，其语义是证明已知 historical source identity，而不是声明当前 checkout source-byte equivalence；其余错配仍 fail closed。本轮未扩展或重构 allowlist。
 
 W2 显示 policy/required level/endpoint/C0-G2 diagnostics；W3 显示 seed、detector、structured support、symmetry/population、pending/accepted、`add_optional_motif`、diff/final admission/single fixture；W4 继续显示 exact/shape/scalar 与非变异约束。
 
@@ -1158,12 +1160,13 @@ PyInstaller 安装仅发生在 ignored repository `.venv`，没有加入生产 d
 ## 11.7 验证结论
 
 ```text
-targeted TD1–TD3/R4/Workbench/Desktop/architecture: 54 passed in 17.53s
-full pytest -q -p no:cacheprovider -m "not cst_required": 787 passed, 11 skipped in 28.83s
-old R2/R3/R4 schema/proof compatibility: pass
-new R2/R3/R4 strict validation: pass
-deterministic Workbench rebuild: pass
-EXE build and EXE --self-test: pass
+targeted TD1–TD3/R4/Workbench/Desktop/architecture: 55 passed in 22.61s
+full pytest -q -m "not cst_required": 788 passed, 11 skipped in 34.57s
+R2 current v1 / previous v1 / historical v0 strict validation: pass
+R3 current ablation v1 / historical v0 strict validation: pass
+R4 current dc4d / historical d066 strict validation: pass
+deterministic full-profile rebuild: 67 fresh sources / 795 entities / 1539 relations
+source Desktop self-test and existing local EXE --self-test: pass
 live CST: not run
 physical acceptance: not established
 ```
@@ -1174,6 +1177,8 @@ physical acceptance: not established
 
 - R5 live 与 Translator/result/mode/field contract review；
 - exact NURBS backend 与 knot/weight optimization；
+- SplineApprox active backend parameters、observation-only trace parameters 与 `parameter_count` 语义；
+- historical R4 allowlist 的当前 checkout source-byte equivalence（现有规则只证明已知 historical identity）；
 - Semantic Graph Acquisition（raw evidence → candidate/reviewed graph）；
 - STEP 自动 segmentation、MDL/CEGIS 正式实现、多用户/云 Workbench；
 - 任何正式物理 optimization campaign。

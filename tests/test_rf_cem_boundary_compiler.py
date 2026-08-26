@@ -28,6 +28,7 @@ from rf_cem.compiler import (
     SourceNativeProvenance,
     default_boundary_continuity_policy,
     load_compile_record,
+    prepare_r2_cases,
     write_r2_bundle,
 )
 from rf_cem.compiler.cli import main as compiler_main
@@ -534,11 +535,33 @@ def test_real_r2_bundle_is_reproducible_and_loadable(tmp_path: Path) -> None:
         in {"internal_patch_policy", "semantic_interface_default"}
     )
     rf500 = next(record for record in first.records if record.instance_id.startswith("rf500"))
-    corners = [
-        check for check in rf500.continuity_checks if check.intentional_corner
+    assert not any(check.intentional_corner for check in rf500.continuity_checks)
+    rf500_request = next(
+        item.request
+        for item in prepare_r2_cases(sources)
+        if item.request.instance_id == rf500.instance_id
+    )
+    region_types = {
+        item.region_id: item.region_type for item in rf500_request.instance_graph.regions
+    }
+    nose_interface_ids = {
+        item.interface_id
+        for item in rf500_request.instance_graph.interfaces
+        if {
+            region_types[item.left_region_id],
+            region_types[item.right_region_id],
+        }
+        == {"IrisRegion", "NoseRegion"}
+    }
+    nose_checks = [
+        check
+        for check in rf500.continuity_checks
+        if check.interface_id in nose_interface_ids
     ]
-    assert len(corners) == 2
-    assert all(check.required_level == "C0" and check.required_pass for check in corners)
+    assert len(nose_interface_ids) == len(nose_checks) == 2
+    assert all(check.required_level == "G1" for check in nose_checks)
+    assert all(check.requirement_source == "semantic_interface_default" for check in nose_checks)
+    assert all(check.g1_pass and check.required_pass for check in nose_checks)
     loaded = tuple(
         load_compile_record(path)
         for path in sorted((first.path / "records").glob("*.json"))
@@ -628,6 +651,10 @@ def _assert_real_w2_integration(sources: R2SourceSet, workdir: Path) -> None:
     assert "Boundary continuity policies" in body
     assert "requirement_source" in body
     assert "semantic_interface_default" in body
+    assert "rf500.2c27faee.b1r3.interface.01" in body
+    assert "rf500.2c27faee.b1r3.interface.08" in body
+    assert "&quot;semantic_interface_overrides&quot;: []" in body
+    assert "&quot;intentional_corner&quot;: true" not in body
     assert "One-sided profile endpoint constraints" in body
     assert "No live CST" in body
     assert "RF physical acceptance" in body
@@ -666,6 +693,27 @@ def test_legacy_compile_record_v0_proof_remains_readable() -> None:
     } == {
         "rf500.2c27faee.b1r3.compile.40891d70493951aa",
         "sls2.r149.6593e02e.compile.ebe8e2827948ff96",
+    }
+
+
+def test_previous_compile_record_v1_proof_remains_readable() -> None:
+    proof = (
+        ROOT
+        / "analysis_outputs"
+        / "rf_cem_boundary_compiler_td1_td2"
+        / "r2_boundary_compiler.8f47ca735db8ce8a"
+    )
+    records = tuple(sorted((proof / "records").glob("*.compile_record.v1.json")))
+    if len(records) != 2:
+        pytest.skip("ignored previous R2 v1 proof is not materialized")
+    loaded = tuple(load_compile_record(path) for path in records)
+    assert all(record.schema_version == "compile_record.v1" for record in loaded)
+    assert all(record.continuity_policy is not None for record in loaded)
+    assert {
+        record.compile_id for record in loaded
+    } == {
+        "rf500.2c27faee.b1r3.compile.8f1a01d4fcd31ffb",
+        "sls2.r149.6593e02e.compile.a22fd5f932c1ffff",
     }
 
 

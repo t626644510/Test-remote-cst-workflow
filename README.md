@@ -12,7 +12,7 @@
 3. 用代理模型、恢复机制和评估数据库组织不同工作流；
 4. 在 RF-CEM 路线上，把论文证据、人工语义审核、参数化几何、STEP、CSTTranslator 和本征模结果连成可审计链路。
 
-当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`、R1 两种真实拓扑共用的 `family_grammar.v0`、R2 共用编译入口生成的 20 个 region / 22 个 patch 和有效 STEP/B-Rep no-CST 证明、R3 不依赖公共参数名的语义图归纳与真实 LEReC 704 MHz 盲测，以及 R4 的 exact/shape/scalar 三层观测、21 项单位化描述符和非变异工程约束。R0B/R1/R2/R3/R4 已分别通过 PR #5/#6/#7/#8/#9 合入。当前 TD1–TD3 closeout 又把连续性改为显式 G1/C0/G2 policy、把当前样条准确命名为 approximation、用真正的 seed-grammar ablation 证明 `add_optional_motif`，并增加可双击的 Windows Workbench Desktop v0。Workbench W0–W4 始终只是 no-CST 派生视图，不替代任何源数据、求解结果或物理验收。
+当前最成熟的新路线是 500 MHz 常温单腔 RF-CEM：工作站已完成 60 次连续 campaign，60/60 得到有效结果。规范分支 `workflow/rf-cem-literature-review` 还完成了常温/超导论文隔离审阅、语义候选审核、SLS-2 六参数几何即时生成、Helper2 面级 Feature/UDSG 审核、Stage C 两个真实实例的 `family_profile.v0`、R1 两种真实拓扑共用的 `family_grammar.v0`、R2 共用编译入口生成的 20 个 region / 22 个 patch 和有效 STEP/B-Rep no-CST 证明、R3 不依赖公共参数名的语义图归纳与真实 LEReC 704 MHz 盲测，以及 R4 的 exact/shape/scalar 三层观测、21 项单位化描述符和非变异工程约束。R0B/R1/R2/R3/R4 已分别通过 PR #5/#6/#7/#8/#9 合入。TD1–TD3 与可双击的 Windows Workbench Desktop v0 已完成 no-CST 实现；R5 已由用户暂停/延后，RF result/mode/field translator generalization 将来单独规划。Workbench W0–W4 始终只是 no-CST 派生视图，不替代任何源数据、求解结果或物理验收。
 
 > **RF 备注：**“几何生成成功”只说明模型能被构造，不等于频率、R/Q、Q 或峰值场已经复现。最终物理结论仍要由明确的求解器设置、材料、边界、网格和结果定义支持。
 >
@@ -193,11 +193,11 @@ R0B 新增了 `semantic`、`representation`、`compiler`、`observation` 四个�
 
 R1 在 `semantic` 层实现了独立于几何表示的 region/landmark/interface 本体、实例边界图、可选 motif、腔族语法和图差异，并已通过 PR #6 合入。SLS-2 的已评审拓扑没有 nose；RF500 由人工审核的 `NoseCone` 证据支持左右成对 nose。两者共享九区域 backbone，但没有公共几何参数向量。内容寻址证明位于被忽略的 `analysis_outputs/rf_cem_semantic_core/`；Workbench W1 的 **Semantic Graphs / W1** 页面显示语法、两条有序区域链、nose 状态、motif、本体、接口和 diff。
 
-R2 在 `representation` 层实现了与腔族无关的 Line、CircularArc、EllipseArc、SplineApprox 与 Composite 表示，并由唯一的 `ProfileCompiler.compile` 入口编译两个真实实例；已通过 PR #7 合入。TD1/TD2 closeout 明确规定 representation 内部和普通跨 semantic RF wall join 默认 G1 hard，只有显式 intentional corner 才用 C0 hard，G2 受支持但不是默认，endpoint 不伪装成双侧 join；`source_native_segment_ref` 只保留 provenance。当前样条合同准确写为 CadQuery/OCCT `splineApprox`、0.001 mm tolerance、approximate、optimization-ready、exact NURBS not implemented；历史 `SplineNurbsRepresentation`/v0 proof 继续可读。新的 v1 no-CST proof 位于被忽略的 `analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.8f47ca735db8ce8a/`，旧 `r2_boundary_compiler.aa66a3e90125437b` 未覆盖。Workbench W2 可查看 policy source、required level、endpoint、全部 C0/G1/G2 diagnostics、基线、warning 与产物哈希。
+R2 在 `representation` 层实现了与腔族无关的 Line、CircularArc、EllipseArc、SplineApprox 与 Composite 表示，并由唯一的 `ProfileCompiler.compile` 入口编译两个真实实例；已通过 PR #7 合入。TD1/TD2 closeout 明确规定 representation 内部和普通跨 semantic RF wall join 默认 G1 hard，只有人工明确的特殊非连续设计才使用 C0 intentional-corner override，G2 受支持但不是默认，endpoint 不伪装成双侧 join；`source_native_segment_ref` 只保留 provenance。RF500 两侧 `IrisRegion ↔ NoseRegion` 均为 `semantic_interface_default` G1、切向角 `0.0 deg` 且实际通过，真实 intentional-corner 数为 0；既有 2° G1 数值容差未放宽。当前样条合同准确写为 CadQuery/OCCT `splineApprox`、0.001 mm tolerance、approximate、optimization-ready、exact NURBS not implemented；历史 `SplineNurbsRepresentation`/v0 proof 继续可读。当前 v1 no-CST proof 为 `analysis_outputs/rf_cem_boundary_compiler_td1_td2/r2_boundary_compiler.2980548dcdd5a85e/`，前一份 v1 `r2_boundary_compiler.8f47ca735db8ce8a` 与旧 v0 `r2_boundary_compiler.aa66a3e90125437b` 均未覆盖。Workbench W2 可查看 policy source、required level、endpoint、全部 C0/G1/G2 diagnostics、基线、warning 与产物哈希。
 
 R3 在 `semantic/induction` 中只读取 reviewed graph 结构，并已通过 PR #8 合入。TD3 closeout 把 reviewed-graph intrinsic validity 与 family admission 分开，以删除 nose motif/cardinality/insertion adjacency 的 seed grammar 开始；RF500 仍 intrinsically valid，但 patch 前不被 seed admission 接受。`FamilyInductionEngine` 的 paired detector 从真实 SLS-2/RF500 graph difference 生成 pending nose proposal，人工 accepted review 产生 `add_optional_motif`，patch 后两图均 admitted；single detector 由非镜像 synthetic fixture 覆盖，alternative topology 是 fallback。v1 support 保存 structural/evidence/review/cross-instance support、population、symmetry 与 detector/version，score 明确是 `heuristic_support_not_probability`。新 proof 位于 `analysis_outputs/rf_cem_family_induction_ablation/r3_family_induction_ablation.59db0a7b5f8e158c/`；旧 v0 proof 未覆盖且仍可读。LEReC 704 MHz 继续是归纳完成后才构建的 held-out case。R3 不从 raw pixels/STEP 声称无监督发现，也不运行 CST、不建立 RF physical acceptance。
 
-R4 在 `observation` 层只读取两份 R2 compile record/精确几何及其匹配的 R1 semantic graph，不读取原生参数名，也不生成或修改几何；已通过 PR #9 合入。它把 exact geometry reference、每个 region 65 点弧长归一化的 semantic shape observation、以及 21 项带单位/定义/算法版本/容差/provenance 的 scalar descriptor 分开保存。TD1/TD2 回归的新 proof 位于 `analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.a0fd43bd4bf4de2f/`，旧 R4 proof 仍保留并通过精确内容寻址的历史 source-binding 兼容规则读取。六条 reviewed contract demonstration 覆盖 hard/soft/advisory/diagnostic 约束和违反位置，但不构成制造规范或物理接受。Workbench W4 的 **Observations & Constraints / W4** 页面显示三层身份、描述符、约束、评价、违反位置和来源。R4 全程 no-CST。
+R4 在 `observation` 层只读取两份 R2 compile record/精确几何及其匹配的 R1 semantic graph，不读取原生参数名，也不生成或修改几何；已通过 PR #9 合入。它把 exact geometry reference、每个 region 65 点弧长归一化的 semantic shape observation、以及 21 项带单位/定义/算法版本/容差/provenance 的 scalar descriptor 分开保存。当前 TD1/TD2 回归 proof 为 `analysis_outputs/rf_cem_observation_contract_td/r4_observation_contract.dc4d7d12fb9a8c84/`；前一份 `.a0fd43bd4bf4de2f` 和旧 R4 proof 均保留。历史 allowlist 只证明已知 historical source identity，不证明它与当前 checkout source bytes 相同。六条 reviewed contract demonstration 覆盖 hard/soft/advisory/diagnostic 约束和违反位置，但不构成制造规范或物理接受。Workbench W4 的 **Observations & Constraints / W4** 页面显示三层身份、描述符、约束、评价、违反位置和来源。R4 全程 no-CST。
 
 ## 5. 新同事如何开始
 
@@ -239,7 +239,7 @@ $env:PYTHONPATH = Join-Path $RepoRoot 'src'
 
 ### 5.3 双击启动 Workbench Desktop v0
 
-正常使用不需要输入命令：构建或取得本地 ignored `dist\RF-CEM-Workbench.exe` 后双击即可。Launcher 会按 explicit argument、EXE parents、cwd parents、已保存 local config、folder picker 的顺序定位仓库，读取 tracked `config\rf_cem_workbench_profile.v0.json`，检查 source/database freshness，必要时自动重建，启动 token-authenticated `127.0.0.1` read-only server，并打开默认浏览器。小型原生窗口只提供十个固定动作；没有任意命令框、CST/live/R5/license/cleanup 操作。
+正常使用不需要输入命令：构建或取得本地 ignored `dist\RF-CEM-Workbench.exe` 后双击即可。Launcher 会按 explicit argument、EXE parents、cwd parents、已保存 local config、folder picker 的顺序定位仓库，读取唯一 tracked `config\rf_cem_workbench_profile.v0.json`，检查 source/database freshness，必要时自动重建，启动 token-authenticated `127.0.0.1` read-only server，并打开默认浏览器。该默认 profile 包含 literature semantics、frozen review session 与完整 W0–W4 人类可见证据，不建立 full/core 双 profile。当前确定性重建为 67 个 fresh sources、795 个 entities、1539 个 relations。小型原生窗口只提供十个固定动作；没有任意命令框、CST/live/R5/license/cleanup 操作。
 
 本地构建与无 GUI 自检：
 
@@ -299,10 +299,10 @@ $SessionRoot = Join-Path $BundleRoot 'review_sessions\sls2_gui'
 
 ## 7. 建议的近期工作顺序
 
-1. R0B–R4 已完成并合入；TD1–TD3/Desktop 在 R4 canonical 上进行一次有界 closeout，不继续 R5；
-2. 保持显式 continuity policy、SplineApprox 准确命名、R3 ablation/structured support 和 portable Desktop profile 的兼容性与 no-CST gate；
+1. R0B–R4 已完成并合入；TD1–TD3/Desktop 已完成 no-CST 实现，由现有 PR #10 收口；
+2. 保持显式 continuity policy、RF500 Iris↔Nose 默认 G1、SplineApprox 准确命名、R3 ablation/structured support 和完整单一 Desktop profile 的兼容性与 no-CST gate；
 3. 不要把 R2 的有效 STEP/B-Rep、R3 的 accepted proposal/blind classification 或 R4 的 descriptor/constraint result 误写成 RF 物理接受；
-4. R5 live 暂停；未来先独立复盘 RF result/mode/field Translator contract，任何 live-CST 仍需用户明确授权；
+4. R5 状态为 paused/deferred；未来独立复盘 RF result/mode/field Translator contract，任何 live-CST 仍需用户明确授权；
 5. 下一项独立架构课题是 Semantic Graph Acquisition，不把 raw evidence acquisition 混入只消费 reviewed graph 的 R3；
 6. 原有 candidate、objective、seed 与 campaign 工作继续由 `workflow/rf-cem-500mhz` 所有，不与此路线静默混合；只有出现第二个真实消费者和稳定契约后，才讨论提级到 `main`。
 

@@ -37,6 +37,7 @@ from rf_cem.workbench.profile import (
     rebuild_workbench_profile,
     resolve_workbench_profile,
 )
+from rf_cem.workbench.registry import RegistryReader
 
 
 pytestmark = pytest.mark.no_cst
@@ -77,6 +78,14 @@ def test_profile_schema_is_strict_portable_and_w5_ready() -> None:
     assert profile.schema_version == "rf_cem_workbench_profile.v0"
     assert profile.optional_w5_bundle is None
     assert not Path(profile.database).is_absolute()
+    assert profile.literature_packages == (
+        "analysis_outputs/rf_cem_literature_pilot_20260710/frozen_baselines/"
+        "sls2.r149.6593e02e/literature_semantics.v0.json",
+    )
+    assert profile.review_sessions == (
+        "analysis_outputs/rf_cem_literature_pilot_20260710/frozen_baselines/"
+        "sls2.r149.6593e02e/review_session.v1.json",
+    )
     assert profile.family_induction_bundle
     assert profile.observation_contract_bundle
 
@@ -128,6 +137,19 @@ def test_profile_fresh_and_stale_recipe_flows(portable_context) -> None:
     rebuild_workbench_profile(resolved)
     fresh = inspect_workbench_profile(resolved)
     assert fresh.database_state == "fresh"
+    assert all(item["status"] == "fresh" for item in fresh.source_statuses)
+    reader = RegistryReader(resolved.database)
+    source_kinds = {item["source_kind"] for item in reader.list_sources()}
+    assert {"literature_semantics.v0", "review_session.v1"} <= source_kinds
+    assert any(
+        item["entity_id"].startswith("literature:")
+        for item in reader.list_entities("semantic")
+    )
+    assert any(
+        item["entity_id"].startswith("helper2:")
+        for item in reader.list_entities("semantic")
+    )
+    assert reader.list_entities("review")
 
     mapping = json.loads(portable_context.profile_path.read_text(encoding="utf-8"))
     mapping["profile_id"] = "rf-cem-desktop-test-edited"
@@ -276,6 +298,18 @@ def test_controller_opens_w0_through_w4_and_web_stays_read_only(
             connection.close()
             assert response.status == 200
             assert "RF-CEM Workbench" in body
+
+        for path, expected in (
+            ("/reviews", "sls2::evidence::gallery"),
+            ("/semantics", "paper_sls2 classification"),
+        ):
+            connection = HTTPConnection(parsed.hostname, parsed.port, timeout=5)
+            connection.request("GET", f"{path}?{parsed.query}")
+            response = connection.getresponse()
+            body = response.read().decode("utf-8")
+            connection.close()
+            assert response.status == 200
+            assert expected in body
 
         connection = HTTPConnection(parsed.hostname, parsed.port, timeout=5)
         connection.request("POST", f"/?{parsed.query}", body=b"write=forbidden")

@@ -949,7 +949,7 @@ $SemanticProof = Join-Path $SemanticRoot 'r1_semantic_core.28e8d6fa9efa221f'
 
 The grammar has a nine-region backbone and `motif.nose_pair.v0` with exact allowed counts 0 or 2. SLS-2 supplies reviewed absence evidence; RF500 supplies the reviewed paired `NoseCone` topology. The diff is semantic/topological and explicitly declines common-parameter comparison. These semantic commands do not compile geometry; the R2 compiler below consumes their contracts without moving representations into the semantic package.
 
-### 9.9 RF boundary representation and Compiler v0/v1 (R2 + TD1/TD2)
+### 9.9 RF boundary representation and Compiler v0/v1/v2 (R2 + TD1/TD2)
 
 Public contracts:
 
@@ -966,12 +966,13 @@ rf_cem.representation.RegionGeometry
 rf_cem.compiler.CompileRequest
 rf_cem.compiler.CompileRecord
 rf_cem.compiler.BoundaryContinuityPolicy
+rf_cem.compiler.CurveRealizationConstraint
 rf_cem.compiler.ProfileCompiler.compile
 ```
 
-`ProfileCompiler.compile` is the single semantic/representation composition entry. Length is in `mm`, tangent angle in `deg`, curvature in `1/mm`, area in `mm^2` and volume in `mm^3`. `boundary_continuity_policy.v0` makes internal and ordinary cross-semantic RF-wall joins G1 hard by default, allows C0 only through an explicit intentional-corner override, supports explicit G2, and classifies endpoints separately. `source_native_segment_ref` is provenance only. Every join records C0 gap, tangent angle, curvature delta and C0/G1/G2 pass regardless of the required level. It creates an oriented outer r-z profile, validates simplicity/nonnegative radius, generates STEP through the isolated CadQuery/OCP worker, validates B-Rep and writes exact hashes into `compile_record.v1`; strict v0 loading remains supported. It never calls CST.
+`ProfileCompiler.compile` is the single semantic/representation composition entry. Length is in `mm`, tangent angle in `deg`, curvature in `1/mm`, area in `mm^2` and volume in `mm^3`. `boundary_continuity_policy.v0` makes internal and ordinary cross-semantic RF-wall joins G1 hard by default, allows C0 only through an explicit intentional-corner override, supports explicit G2, and classifies endpoints separately. `source_native_segment_ref` is provenance only. Compiler v2 first derives family-independent `CurveRealizationConstraint` records from the join plan, then sends direction-only start/end tangent constraints to the geometry worker. Constrained splines use CadQuery `Workplane.spline(..., tangents=..., scale=True)` and construction contract `cadquery.spline.tangent_constrained.v0`; unconstrained splines retain `splineApprox`. The worker reads each final edge's endpoints and unit tangents through CadQuery/OCP, and authoritative C0/G1 uses `measurement_basis=kernel_realized_edge`. The representation secant remains a named pre-kernel estimate only. Every join records C0 gap, tangent angle, curvature delta and C0/G1/G2 pass regardless of required level; G2 remains a representation estimate in v2 because the current hard gate does not claim kernel-realized curvature. Missing diagnostics, ignored constraints, wrong construction provenance or source-fidelity failure all fail closed. The compiler validates the oriented profile and B-Rep, exports STEP, and writes exact hashes into `compile_record.v2`; strict v0/v1 loading remains supported. It never calls CST.
 
-`SplineApproxRepresentation` is canonical `boundary_representation.v1`: `fidelity=approximate`, `backend_contract=cadquery.splineApprox.v0`, `approximation_tolerance_mm=0.001`, `optimization_ready=true`, `exact_nurbs=false`. `SplineNurbsRepresentation` remains only as a deprecated v0 compatibility route; no exact-NURBS runtime exists.
+`SplineApproxRepresentation` is canonical `boundary_representation.v1`: `fidelity=approximate`, source representation `backend_contract=cadquery.splineApprox.v0`, `approximation_tolerance_mm=0.001`, `optimization_ready=true`, `exact_nurbs=false`. Its `fit_input_points` remain reviewed source/observation trace and are not altered to imitate G1. When a compile constraint selects the tangent-constrained backend, the worker creates a reference `splineApprox` edge from that trace, samples it by normalized arc length, realizes an explicitly constrained spline, and reports a bidirectional sampled edge-to-edge deviation plus trace-point residual. `SplineNurbsRepresentation` remains only as a deprecated v0 compatibility route; no exact-NURBS runtime exists.
 
 Build both canonical cases into one immutable content-addressed bundle:
 
@@ -992,19 +993,19 @@ $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6f
   --output-root $CompilerRoot
 ```
 
-The current TD1/TD2 bundle is `r2_boundary_compiler.2980548dcdd5a85e`, input SHA-256 `2980548dcdd5a85e6719700d7158db6cdfb29c90b4fd44ba9517f444bbbfc365`. `build` refuses an existing target. It writes two compiled profiles, two normalized STEP files, two v1 records and a source-binding manifest. SLS-2 contains 9 regions/10 patches with compile ID `sls2.r149.6593e02e.compile.a22fd5f932c1ffff`; RF500 contains 11 regions/12 patches with compile ID `rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6`. RF500 has zero real intentional corners, and both Iris↔Nose interfaces use the semantic default G1 contract and pass at 0° without changing the 2° tolerance. The previous v1 bundle `r2_boundary_compiler.8f47ca735db8ce8a` and original v0 bundle `r2_boundary_compiler.aa66a3e90125437b` remain unchanged and readable; synthetic C0 and explicit G2 contracts remain supported.
+The current TD1/TD2 bundle is `r2_boundary_compiler.24bd2492658ad567`, input SHA-256 `24bd2492658ad56743f4933c6a3b84c055c396660b9b5fccdec89047ef3a873b`. `build` refuses an existing target. It writes two compiled profiles, two normalized STEP files, two v2 records and a source-binding manifest. SLS-2 contains 9 regions/10 patches with compile ID `sls2.r149.6593e02e.compile.6a840da94a2ed989`; RF500 contains 11 regions/12 patches with compile ID `rf500.2c27faee.b1r3.compile.b46af83bb85674d5`. RF500 has zero real intentional corners. Both Iris↔Nose interfaces use the semantic-default G1 contract, have pre-kernel secant estimates near 56.1661°, prove their endpoint constraint was applied, and pass with actual kernel angles 0° without changing the 2° tolerance. Maximum realized spline deviation is `4.415657314345961e-06 mm` for RF500 and `0.0006511097926837164 mm` for SLS-2, below the declared `0.001 mm`. The anchor-era v1 bundle `.2980548dcdd5a85e`, previous v1 `.8f47ca735db8ce8a` and original v0 `.aa66a3e90125437b` remain unchanged and readable; synthetic C0, explicit G2, endpoint and source-native-reference contracts remain supported.
 
 Validate strict record identity and every output artifact size/hash:
 
 ```powershell
-$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.2980548dcdd5a85e'
+$CompilerProof = Join-Path $CompilerRoot 'r2_boundary_compiler.24bd2492658ad567'
 & $py -m rf_cem.compiler validate `
-  --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v1.json') `
-  --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v1.json') `
+  --record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v2.json') `
+  --record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v2.json') `
   --bundle-root $CompilerProof
 ```
 
-The RF500 accepted STEP is hash-bound but not locally materialized. Its passing comparison is deliberately limited to source-native profile equivalence plus new B-Rep validity and retains an explicit warning. Neither command defines RF metrics, runs CST, claims physical acceptance, induces a family or performs optimisation.
+The compile record separately names the source representation contract, realized construction contract, endpoint constraints, actual edge diagnostics and fidelity result. A fake kernel whose tangent disagrees with a G1-looking input secant, or a backend that reports the constraint was ignored, is rejected. Neither command defines RF metrics, runs CST, claims physical acceptance, induces a family or performs optimisation.
 
 ### 9.10 RF family induction/extension v0/v1 (R3 + TD3)
 
@@ -1049,24 +1050,24 @@ The output additionally contains `family_grammar.seed_ablation.v0.json`, `family
 ```powershell
 $ObservationRoot = 'analysis_outputs\rf_cem_observation_contract_td'
 $SemanticProof = 'analysis_outputs\rf_cem_semantic_core\r1_semantic_core.28e8d6fa9efa221f'
-$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_compiler.2980548dcdd5a85e'
+$CompilerProof = 'analysis_outputs\rf_cem_boundary_compiler_td1_td2\r2_boundary_compiler.24bd2492658ad567'
 
 & $py -m rf_cem.observation build `
   --root $RepoRoot `
   --output-root $ObservationRoot `
-  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v1.json') `
-  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v1.json') `
+  --compile-record (Join-Path $CompilerProof 'records\sls2.r149.6593e02e.compile_record.v2.json') `
+  --compile-record (Join-Path $CompilerProof 'records\rf500.2c27faee.b1r3.compile_record.v2.json') `
   --instance-graph (Join-Path $SemanticProof 'instances\sls2.r149.6593e02e.instance_boundary_graph.v0.json') `
   --instance-graph (Join-Path $SemanticProof 'instances\rf500.2c27faee.b1r3.instance_boundary_graph.v0.json') `
   --architecture-document 'docs\RF_CEM_ROADMAP_AND_ARCHITECTURE.md'
 ```
 
-The current TD1/TD2 regression proof is `r4_observation_contract.dc4d7d12fb9a8c84`, input SHA-256 `dc4d7d12fb9a8c84e3bfd805402b49d1dd508330c4ea9d6695af1548455616de`. It binds 11 sources and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two bundles with 240 values, and 12 evaluations. The previous `.a0fd43bd4bf4de2f` and original R4 proofs remain unchanged/readable. The exact canonical bundle/path/hash/size historical allowlist proves known historical source identity, not current-checkout source-byte equivalence; arbitrary source mismatches still fail closed and the allowlist remains narrow.
+The current TD1/TD2 regression proof is `r4_observation_contract.9e722ec6c8b003cb`, input SHA-256 `9e722ec6c8b003cb07af6cc9e8d85c1ae47dd1d0378a3961f1d349a374a2729d`. It binds 11 sources and declares 25 artifacts: one 21-definition descriptor registry, six reviewed constraint demonstrations, two exact references, two 65-sample-per-region shape observations, two bundles with 240 values, and 12 evaluations. The previous `.dc4d7d12fb9a8c84`, `.a0fd43bd4bf4de2f` and original `.d06695921d941eee` proofs remain unchanged/readable. Exact canonical bundle/path/hash/size compatibility entries prove known historical source identity, not current-checkout source-byte equivalence; arbitrary source mismatches still fail closed and the allowlist remains narrow.
 
 The command refuses an existing content-addressed target. Never delete or overwrite a proof to reuse its name. Strictly validate its source hashes, artifact inventory, input preimage and cross-contract identities with:
 
 ```powershell
-$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.dc4d7d12fb9a8c84'
+$ObservationProof = Join-Path $ObservationRoot 'r4_observation_contract.9e722ec6c8b003cb'
 & $py -m rf_cem.observation validate --bundle $ObservationProof
 ```
 
@@ -1138,9 +1139,9 @@ The current full W3 source set rebuilds to 29 fresh sources, 418 entities and 57
 
 The current full W4 source set rebuilds to 66 fresh sources, 779 entities and 1484 relations. Two consecutive rebuilds produced input-set SHA-256 `b5cffc768d13956af8426ddf99f7081a4b6bfa98b2211c8bd5d6aff2d0fae0bb`; canonical portable snapshot SHA-256 is `39eea8fbae12e90726246666057c93d18a0023c53d9357ed9a094cbde2b84b49`. W4 adds 2 exact references, 2 shape observations, 20 region observations, 24 landmark observations, 21 descriptor definitions, 240 descriptor values, 6 constraints, 12 evaluations/findings and the passing `w4.observation-contract-hard-gate`.
 
-The tracked TD1–TD3/Desktop profile uses the current v1 R2 compile pair, ablation R3, current R4 regression proof, literature semantics and frozen review session. Two consecutive rebuilds produce 67 fresh sources, 795 entities and 1539 relations, input-set SHA-256 `2f9b1f41b24be06f4799be69eb4346a238fe541a34c0e508e5a328c118d6cef4` and portable snapshot SHA-256 `d286f229e20b1347d32b1da077adfc0401660454b29dcae95ce9a77aef54f8ae`. The inventory includes 30 review and 25 semantic entities, restoring literature evidence, review decisions and Helper2 frozen-review visibility while retaining the complete W1–W4 hard-gate chain. Roadmap/capability entries report R0B–R4 merged/passed, R5 paused/deferred and TD1/TD2/TD3/Desktop implemented no-CST.
+The tracked TD1–TD3/Desktop profile uses the current v2 R2 compile pair, ablation R3, current R4 regression proof, literature semantics and frozen review session. Two consecutive rebuilds produce 67 fresh sources, 826 entities and 1605 relations, input-set SHA-256 `3e4f5fcaa9e0e6e65237b693f490f786e227a736ee8fa5374b02de1389ccd585` and portable snapshot SHA-256 `64ddfade0b6855ef17844c2ef8c61f146ca36e55751be14723405e5e80140d55`. The inventory includes 30 review and 25 semantic entities, eight endpoint realization constraints and 22 actual curve realizations, restoring literature evidence, review decisions and Helper2 frozen-review visibility while retaining the complete W1–W4 hard-gate chain. Roadmap/capability entries report R0B–R4 merged/passed, R5 paused/deferred and TD1/TD2/TD3/Desktop implemented no-CST.
 
-`status` opens SQLite in read-only mode and re-hashes every indexed source. `serve` binds only to `127.0.0.1`, chooses a random port/token and prints the authenticated URL. It exposes fixed GET pages/APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W2 shows explicit policy source/required level/endpoints and all continuity diagnostics. W3 v1 shows seed grammar, selected detector, structured support, symmetry/population, pending proposal, accepted review, `add_optional_motif`, diff, final admission, single-detector fixture and blind result. Host/Origin/token checks are fail-closed; POST is rejected and there is no shell, arbitrary file browser, CST action, filesystem mutation or write API. Stop a foreground CLI process with Ctrl+C.
+`status` opens SQLite in read-only mode and re-hashes every indexed source. `serve` binds only to `127.0.0.1`, chooses a random port/token and prints the authenticated URL. It exposes fixed GET pages/APIs for overview, families, instances, semantics, **Semantic Graphs / W1**, representations, algorithms, reviews, validation, roadmap/gates, capability coverage, **Compile Records / W2**, **Family Induction / W3** and **Observations & Constraints / W4**. W2 shows policy/requirement basis, actual measurement basis, pre-kernel estimate, endpoint constraint plan, backend construction/application, actual gap/angle, required pass and fidelity; representation-only evidence cannot satisfy v2 required continuity. W3 v1 shows seed grammar, selected detector, structured support, symmetry/population, pending proposal, accepted review, `add_optional_motif`, diff, final admission, single-detector fixture and blind result. Host/Origin/token checks are fail-closed; POST is rejected and there is no shell, arbitrary file browser, CST action, filesystem mutation or write API. Stop a foreground CLI process with Ctrl+C.
 
 R4 implements representation-independent geometry observations and non-mutating constraint evaluation, but not RF result/mode/field contracts, RF metric equivalence, live-CST validation or physical acceptance. R5 is paused/deferred by the user; live work and RF result/mode/field translator generalization require a later, separate plan and explicit authorization.
 

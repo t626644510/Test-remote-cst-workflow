@@ -68,8 +68,8 @@ R1_ROOT = (
 R2_ROOT = (
     ROOT
     / "analysis_outputs"
-    / "rf_cem_boundary_compiler"
-    / "r2_boundary_compiler.aa66a3e90125437b"
+    / "rf_cem_boundary_compiler_td1_td2"
+    / "r2_boundary_compiler.24bd2492658ad567"
 )
 R3_ROOT = (
     ROOT
@@ -77,11 +77,25 @@ R3_ROOT = (
     / "rf_cem_family_induction"
     / "r3_family_induction.2f6c02557798e606"
 )
-HISTORICAL_R4_ROOT = (
-    ROOT
-    / "analysis_outputs"
-    / "rf_cem_observation_contract"
-    / "r4_observation_contract.d06695921d941eee"
+R4_COMPATIBILITY_ROOTS = (
+    (
+        "r4_observation_contract.d06695921d941eee",
+        ROOT
+        / "analysis_outputs"
+        / "rf_cem_observation_contract"
+        / "r4_observation_contract.d06695921d941eee",
+    ),
+    *(
+        (
+            bundle_id,
+            ROOT / "analysis_outputs" / "rf_cem_observation_contract_td" / bundle_id,
+        )
+        for bundle_id in (
+            "r4_observation_contract.a0fd43bd4bf4de2f",
+            "r4_observation_contract.dc4d7d12fb9a8c84",
+            "r4_observation_contract.9e722ec6c8b003cb",
+        )
+    ),
 )
 FAMILY_PROFILE = (
     ROOT
@@ -93,11 +107,14 @@ FAMILY_PROFILE = (
 ROADMAP = ROOT / "docs" / "RF_CEM_ROADMAP_AND_ARCHITECTURE.md"
 
 
-def test_historical_canonical_r4_bundle_remains_strictly_loadable() -> None:
-    if not HISTORICAL_R4_ROOT.is_dir():
-        pytest.skip("ignored historical R4 canonical proof is not materialized")
-    loaded = load_r4_bundle(HISTORICAL_R4_ROOT, repo_root=ROOT)
-    assert loaded.bundle_id == "r4_observation_contract.d06695921d941eee"
+@pytest.mark.parametrize(("bundle_id", "bundle_root"), R4_COMPATIBILITY_ROOTS)
+def test_historical_and_current_r4_bundles_remain_strictly_loadable(
+    bundle_id: str, bundle_root: Path
+) -> None:
+    if not bundle_root.is_dir():
+        pytest.skip("ignored R4 compatibility proof is not materialized")
+    loaded = load_r4_bundle(bundle_root, repo_root=ROOT)
+    assert loaded.bundle_id == bundle_id
     assert {item.exact_geometry.instance_id for item in loaded.instances} == {
         "rf500.2c27faee.b1r3",
         "sls2.r149.6593e02e",
@@ -455,7 +472,7 @@ def test_real_r4_bundle_is_deterministic_tamper_evident_and_w4_visible() -> None
 
 
 def _real_inputs_or_skip() -> tuple[tuple[Path, Path], ...]:
-    record_paths = tuple(sorted((R2_ROOT / "records").glob("*.compile_record.v0.json")))
+    record_paths = tuple(sorted((R2_ROOT / "records").glob("*.compile_record.v2.json")))
     graph_paths = tuple(
         sorted((R1_ROOT / "instances").glob("*.instance_boundary_graph.v0.json"))
     )

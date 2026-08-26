@@ -61,6 +61,8 @@ _PAGES = {
             "landmark_geometry_binding",
             "boundary_continuity_policy",
             "profile_endpoint_constraint",
+            "curve_realization_constraint",
+            "curve_realization",
             "continuity_check",
             "geometry_validation",
             "baseline_comparison",
@@ -519,7 +521,7 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
         for item in records
         if isinstance(item.get("payload"), dict)
         and item["payload"].get("schema_version")
-        in {"compile_record.v0", "compile_record.v1"}
+        in {"compile_record.v0", "compile_record.v1", "compile_record.v2"}
     ]
     if not r2_records:
         return [
@@ -601,6 +603,14 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
     for kind, label in (
         ("boundary_continuity_policy", "Boundary continuity policies"),
         ("profile_endpoint_constraint", "One-sided profile endpoint constraints"),
+        (
+            "curve_realization_constraint",
+            "Compiler endpoint tangent realization constraints",
+        ),
+        (
+            "curve_realization",
+            "Kernel-realized edge endpoints, tangents, contracts, and fidelity",
+        ),
         ("landmark_geometry_binding", "Landmark geometry bindings"),
         (
             "continuity_check",
@@ -610,7 +620,7 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
         ("baseline_comparison", "Accepted baseline comparisons and warnings"),
         ("geometry_artifact", "Hash-verified compiled artifacts"),
         ("geometry_patch", "Geometry patch ownership details"),
-        ("compile_record", "Raw compile_record.v0/v1 contracts"),
+        ("compile_record", "Raw compile_record.v0/v1/v2 contracts"),
     ):
         values = by_kind.get(kind, [])
         if kind == "compile_record":

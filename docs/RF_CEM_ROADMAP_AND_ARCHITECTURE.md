@@ -706,9 +706,10 @@ one-way patch ownership
 BoundaryInterface / landmark resolver
 boundary_continuity_policy.v0
 profile endpoint constraints
+compiler-planned spline endpoint tangent constraints
 profile compiler
 geometry validator
-compile_record.v1 with compile_record.v0 compatibility
+compile_record.v2 with compile_record.v0/v1 compatibility
 legacy generator adapters
 Workbench W2 compiler trace
 ```
@@ -741,7 +742,7 @@ CompositeRegionRepresentation
 10. profile 无自交、可封闭并能生成合法 B-Rep/STEP。
 11. 与现有 SLS-2/RF500 generator 的基准输出在约定几何容差内一致，或差异被明确记录和人工接受。
 12. source-native payload 和 Stage C provenance 不因迁移丢失。
-13. 每次 compile 生成 `compile_record.v1`，历史 `compile_record.v0` 保持兼容读取，且 Workbench 可浏览：
+13. 每次 compile 生成 `compile_record.v2`，历史 `compile_record.v0/v1` 保持兼容读取，且 Workbench 可浏览：
     - region→representation；
     - region→patch；
     -landmarks；
@@ -764,13 +765,13 @@ CompositeRegionRepresentation
 
 R2 已通过 PR #7 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `e81ad20942258380cccb93d17cfdf0ca7e2d0e21`。TD1/TD2 在 R4 canonical 上收敛其合同：`rf_cem.representation` 的当前样条实现准确命名为 `SplineApproxRepresentation`，合同为 `boundary_representation.v1`、`fidelity=approximate`、`backend_contract=cadquery.splineApprox.v0`、`approximation_tolerance_mm=0.001`、`optimization_ready=true`、`exact_nurbs=false`。历史 `SplineNurbsRepresentation` / v0 payload 继续可读且几何等价，但只作为 deprecated compatibility path；未来 exact NURBS 仅是未实现能力，不存在伪 runtime class。
 
-原始 R2 v0 内容寻址证明 `r2_boundary_compiler.aa66a3e90125437b` 和前一份 v1 证明 `r2_boundary_compiler.8f47ca735db8ce8a` 均保持字节与身份不变。当前 v1 证明为 `r2_boundary_compiler.2980548dcdd5a85e`：同一个 `ProfileCompiler.compile` 入口生成 SLS-2 的 9 个 `RegionGeometry` / 10 个 patch（compile ID `sls2.r149.6593e02e.compile.a22fd5f932c1ffff`）和 RF500 的 11 个 `RegionGeometry` / 12 个 patch（compile ID `rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6`）。连续性不再由 `source_native_segment_ref` 决策：representation 内部 join 默认 G1 hard，普通跨 semantic RF wall interface 默认 G1 hard，只有经人工明确声明的特殊设计才允许 intentional-corner C0 override，G2 是受支持但非默认的扩展；profile 起止点使用 endpoint contract，不伪装成双侧 join。每个真实 join 无论 required level 都记录 C0 gap、tangent angle、curvature delta 以及 C0/G1/G2 pass，另记录 policy/ref、requirement source 和 intentional-corner。source-native ref 只保留 provenance 角色。
+原始 R2 v0 内容寻址证明 `r2_boundary_compiler.aa66a3e90125437b`、前一份 v1 `r2_boundary_compiler.8f47ca735db8ce8a` 和 anchor-era v1 `r2_boundary_compiler.2980548dcdd5a85e` 均保持字节与身份不变。当前 v2 证明为 `r2_boundary_compiler.24bd2492658ad567`：同一个 `ProfileCompiler.compile` 入口生成 SLS-2 的 9 个 `RegionGeometry` / 10 个 patch（compile ID `sls2.r149.6593e02e.compile.6a840da94a2ed989`）和 RF500 的 11 个 `RegionGeometry` / 12 个 patch（compile ID `rf500.2c27faee.b1r3.compile.b46af83bb85674d5`）。连续性不再由 `source_native_segment_ref` 决策：representation 内部 join 默认 G1 hard，普通跨 semantic RF wall interface 默认 G1 hard，只有经人工明确声明的特殊设计才允许 intentional-corner C0 override，G2 是受支持但非默认的扩展；profile 起止点使用 endpoint contract，不伪装成双侧 join。每个 v2 join 的 requirement 来自 `boundary_continuity_policy.v0`，C0 gap 与 G1 angle 来自 kernel-realized edge；当前无真实 G2 接口，因此 G2 curvature 仍明确标记为 representation estimate。source-native ref 只保留 provenance 角色。
 
-RF500 两侧 `IrisRegion ↔ NoseRegion` 均使用 `semantic_interface_default` 的 G1 hard 合同，`intentional_corner=false`，切向角为 `0.0 deg` 且 `g1_pass=true`；真实 RF500 的 intentional-corner 数为 0。adapter 只在 `SplineApproxRepresentation.fit_input_points` 中加入低于既有 1 μm backend tolerance 的 0.1 μm endpoint tangent anchor，使实际近似样条端点满足普通 RF-wall 相切意图；既有 G1 数值容差仍为 `2.0 deg`，未放宽。C0 override 与 synthetic intentional-corner 回归继续保留，供 port cut、flange edge、入口/出口截断或未来经人工确认的特殊非连续设计使用。
+RF500 两侧 `IrisRegion ↔ NoseRegion` 均使用 `semantic_interface_default` 的 G1 hard 合同，`intentional_corner=false`，kernel-realized 切向角为 `0.0 deg` 且 `g1_pass=true`；真实 RF500 的 intentional-corner 数为 0。adapter 不再改变 `fit_input_points`：未约束的 representation secant 仍忠实报告约 `56.1661 deg`，不能决定最终 gate。Compiler 根据相邻 patch 生成 family-independent endpoint direction constraint，isolated worker 以 CadQuery `Workplane.spline(..., tangents=..., scale=True)` 实际执行 `cadquery.spline.tangent_constrained.v0`，再通过 edge `positionAt` / `tangentAt`（OCP curve `D1`）回读实际端点与单位切向；约束未应用、实际 G1 不合格或实际几何偏差超限均 fail closed。既有 G1 数值容差仍为 `2.0 deg`，未放宽。C0 override 与 synthetic intentional-corner 回归继续保留，供 port cut、flange edge、入口/出口截断或未来经人工确认的特殊非连续设计使用。
 
-两条 profile 相对各自 source-native 曲线的最大偏差均为 `2.842170943040401e-14 mm`，声明容差为 `1e-6 mm`。SLS-2 还与已物化 frozen STEP 比较：最大 bbox 误差约 `3.37e-8 mm`，体积相对误差约 `1.95e-5`，表面积相对误差约 `3.33e-5`，均小于声明容差。RF500 已接受 STEP 只保留 raw SHA-256 `766365b6b78f3d0a6929f2500cfb49fc306e54be048a638bc813e9c8aeb9e3cd`，本地未物化，因此其 gate 明确限定为 source-native profile 等价、新 B-Rep 有效和未物化基线 warning，不声称完成旧 STEP 的几何量比较。
+显式 tangent realization 先由原 `cadquery.splineApprox.v0` / `fit_input_points` 合同构造参考 edge，再使用 257 个端点聚簇、归一化弧长样本构造受约束 edge，并以双向 513 个归一化弧长样本计算实际 edge-to-edge 偏差。RF500 最大 realized spline 偏差为 `4.415657314345961e-06 mm`，SLS-2 最大值为 `0.0006511097926837164 mm`，均小于既有 `0.001 mm` tolerance。SLS-2 还与已物化 frozen STEP 比较：最大 bbox 误差约 `3.37e-8 mm`，体积相对误差约 `1.95e-5`，表面积相对误差约 `3.33e-5`，均小于声明容差。RF500 已接受 STEP 只保留 raw SHA-256 `766365b6b78f3d0a6929f2500cfb49fc306e54be048a638bc813e9c8aeb9e3cd`，本地未物化，因此其 gate 明确限定为 source-native profile 等价、新 B-Rep 有效和未物化基线 warning，不声称完成旧 STEP 的几何量比较。
 
-Workbench W2 同时读取旧 `compile_record.v0` 和新 `compile_record.v1`，显示 region→representation→patch、landmark/endpoint binding、continuity policy source/required level、C0/G1/G2 diagnostics、B-Rep/STEP validation、baseline、warning 与 hash-verified artifacts。Representations 页面明确显示 Approximate、CadQuery/OCCT splineApprox、0.001 mm、optimization-ready 和 exact NURBS not implemented。R2/TD1/TD2 全程 `live_cst_status=not_run`、`physical_acceptance_status=not_established`。
+Workbench W2 同时读取 `compile_record.v0/v1/v2`，显示 region→representation→patch、landmark/endpoint binding、continuity policy source/required level、measurement basis、compiler tangent plan、realized backend contract、constraint-applied status、实际 C0/G1、realized fidelity、B-Rep/STEP validation、baseline、warning 与 hash-verified artifacts。Representations 页面明确显示 Approximate、CadQuery/OCCT splineApprox、0.001 mm、optimization-ready 和 exact NURBS not implemented。R2/TD1/TD2 全程 `live_cst_status=not_run`、`physical_acceptance_status=not_established`。
 
 ---
 
@@ -940,7 +941,7 @@ equator_crest_radius
 
 ### 2026-08-24 实现状态
 
-R4 已通过 PR #9 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`。`rf_cem.observation` 可读取历史 `compile_record.v0` 或当前 `compile_record.v1`、它们绑定的精确 profile/STEP/B-Rep 产物以及两份 reviewed `instance_boundary_graph.v0`；observer 不读取 source-native parameter/feature 名，不生成或修改几何，也不调用 CST。
+R4 已通过 PR #9 合入 `workflow/rf-cem-literature-review`，canonical merge commit 为 `8c6bd0be38e8b2bbf5d72c1254413ee6b552defe`。`rf_cem.observation` 可读取 `compile_record.v0/v1/v2`、它们绑定的精确 profile/STEP/B-Rep 产物以及两份 reviewed `instance_boundary_graph.v0`；observer 不读取 source-native parameter/feature 名，不生成或修改几何，也不调用 CST。
 
 三层合同保持独立身份和显式引用：`exact_geometry_reference.v0` 保存 compile record 与精确 profile/STEP/B-Rep 的 hash binding；`semantic_shape_observation.v0` 将每个 semantic region 统一为 65 个弧长归一化样本并保存 `z/r`、切向、法向、有符号曲率、极值、凸性、单调区间和 landmark；`scalar_descriptor_registry.v0` 定义 21 个带 unit、definition、algorithm version、equivalence tolerance 和 provenance 的描述符，`observation_bundle.v0` 只链接这三层而不以采样替代 exact geometry。
 

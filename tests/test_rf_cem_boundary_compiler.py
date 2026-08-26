@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from http.client import HTTPConnection
+import importlib.util
 import json
 import math
 from pathlib import Path
 import tempfile
-from typing import Any
+from typing import Any, Mapping
 
 import pytest
 
@@ -247,7 +248,12 @@ def test_one_compiler_entry_handles_two_topologies_and_records_ownership(
     )
 
 
-def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> None:
+def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        compiler_core, "validate_graph_against_grammar", lambda grammar, graph: None
+    )
     request, _ = _compile_request("fixture.continuity", 2)
     first, second = request.region_bindings
     line = LineRepresentation(
@@ -286,7 +292,7 @@ def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> Non
         for geometry in compiler_core._build_region_geometries(tangent_request)
         for patch in geometry.patches
     )
-    tangent_checks = compiler_core._continuity_checks(
+    tangent_checks = compiler_core._continuity_requirement_plan(
         tangent_request, tangent_patches
     )
     internal = tangent_checks[0]
@@ -294,11 +300,13 @@ def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> Non
     assert internal.join_scope == "within_region"
     assert internal.required_level == "G1"
     assert internal.requirement_source == "internal_patch_policy"
-    assert internal.g1_pass is True
-    assert internal.g2_pass is False
+    assert internal.pre_kernel_tangent_angle_deg == pytest.approx(0.0)
+    assert internal.pre_kernel_curvature_delta_per_mm > (
+        compiler_core.G2_TOLERANCE_PER_MM
+    )
     assert ordinary_interface.required_level == "G1"
     assert ordinary_interface.requirement_source == "semantic_interface_default"
-    assert ordinary_interface.required_pass is True
+    assert ordinary_interface.pre_kernel_tangent_angle_deg == pytest.approx(0.0)
 
     changed_refs = replace(
         first,
@@ -312,7 +320,7 @@ def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> Non
         for geometry in compiler_core._build_region_geometries(changed_request)
         for patch in geometry.patches
     )
-    assert [item.required_level for item in compiler_core._continuity_checks(
+    assert [item.required_level for item in compiler_core._continuity_requirement_plan(
         changed_request, changed_patches
     )] == [item.required_level for item in tangent_checks]
 
@@ -353,12 +361,27 @@ def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> Non
         for geometry in compiler_core._build_region_geometries(corner_request)
         for patch in geometry.patches
     )
-    corner = compiler_core._continuity_checks(corner_request, corner_patches)[0]
-    assert corner.g1_pass is False
+    corner = compiler_core._continuity_requirement_plan(
+        corner_request, corner_patches
+    )[0]
+    assert corner.pre_kernel_tangent_angle_deg > compiler_core.G1_TOLERANCE_DEG
     assert corner.required_level == "C0"
-    assert corner.required_pass is True
     assert corner.intentional_corner is True
     assert corner.requirement_source == "semantic_interface_override"
+    corner_result = ProfileCompiler(_FakeKernel()).compile(
+        corner_request,
+        bundle_root=tmp_path / "explicit-c0",
+        source_profile_points=(
+            Point2D(0.0, 1.0),
+            Point2D(1.0, 1.0),
+            Point2D(1.0, 2.0),
+        ),
+    )
+    realized_corner = corner_result.record.continuity_checks[0]
+    assert realized_corner.g1_pass is False
+    assert realized_corner.required_level == "C0"
+    assert realized_corner.required_pass is True
+    assert corner_result.record.status == "pass"
 
     g2_request, _ = _compile_request("fixture.g2", 2)
     g2_first, g2_second = g2_request.region_bindings
@@ -390,11 +413,12 @@ def test_continuity_policy_selects_g1_c0_and_g2_without_source_identity() -> Non
         for geometry in compiler_core._build_region_geometries(g2_request)
         for patch in geometry.patches
     )
-    g2 = compiler_core._continuity_checks(g2_request, g2_patches)[0]
-    assert g2.g1_pass is True
-    assert g2.g2_pass is False
+    g2 = compiler_core._continuity_requirement_plan(g2_request, g2_patches)[0]
+    assert g2.pre_kernel_tangent_angle_deg <= compiler_core.G1_TOLERANCE_DEG
+    assert g2.pre_kernel_curvature_delta_per_mm > (
+        compiler_core.G2_TOLERANCE_PER_MM
+    )
     assert g2.required_level == "G2"
-    assert g2.required_pass is False
 
 
 def test_profile_endpoints_are_explicit_and_not_two_sided_checks(
@@ -423,6 +447,98 @@ def test_profile_endpoints_are_explicit_and_not_two_sided_checks(
         item.two_sided_continuity_applicable is False
         for item in result.record.endpoint_constraints
     )
+
+
+def test_generic_spline_constraint_plan_supports_start_end_and_both() -> None:
+    start_request, _ = _line_to_spline_request("fixture.start-only")
+    start_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(start_request)
+        for patch in geometry.patches
+    )
+    start_plan = compiler_core._continuity_requirement_plan(
+        start_request, start_patches
+    )
+    start_constraints = compiler_core._curve_realization_constraints(
+        start_patches, start_plan
+    )
+    assert len(start_constraints) == 1
+    assert start_constraints[0].endpoint_role == "start"
+    assert start_constraints[0].start_tangent_unit == pytest.approx((1.0, 0.0))
+    assert start_constraints[0].end_tangent_unit is None
+
+    end_request, _ = _compile_request("fixture.end-only", 2)
+    end_first, end_second = end_request.region_bindings
+    end_first = replace(
+        end_first,
+        representation=CompositeRegionRepresentation(
+            "fixture.end-only.spline.composite",
+            (
+                SplineApproxRepresentation(
+                    "fixture.end-only.spline",
+                    max_degree=2,
+                    fit_input_points=(
+                        Point2D(0.0, 1.0),
+                        Point2D(0.5, 1.0),
+                        Point2D(1.0, 1.0),
+                    ),
+                ),
+            ),
+        ),
+    )
+    end_request = replace(
+        end_request, region_bindings=(end_first, end_second)
+    )
+    end_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(end_request)
+        for patch in geometry.patches
+    )
+    end_constraints = compiler_core._curve_realization_constraints(
+        end_patches,
+        compiler_core._continuity_requirement_plan(end_request, end_patches),
+    )
+    assert len(end_constraints) == 1
+    assert end_constraints[0].endpoint_role == "end"
+    assert end_constraints[0].start_tangent_unit is None
+    assert end_constraints[0].end_tangent_unit == pytest.approx((1.0, 0.0))
+
+    both_request, _ = _compile_request("fixture.both", 3)
+    first, middle, last = both_request.region_bindings
+    middle = replace(
+        middle,
+        representation=CompositeRegionRepresentation(
+            "fixture.both.spline.composite",
+            (
+                SplineApproxRepresentation(
+                    "fixture.both.spline",
+                    max_degree=2,
+                    fit_input_points=(
+                        Point2D(1.0, 1.0),
+                        Point2D(1.5, 1.2),
+                        Point2D(2.0, 1.0),
+                    ),
+                ),
+            ),
+        ),
+        source_native_segment_refs=("seg.1",),
+        source_parameter_intervals=((0.0, 1.0),),
+        internal_landmark_ids=(),
+    )
+    both_request = replace(
+        both_request, region_bindings=(first, middle, last)
+    )
+    both_patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(both_request)
+        for patch in geometry.patches
+    )
+    both_constraints = compiler_core._curve_realization_constraints(
+        both_patches,
+        compiler_core._continuity_requirement_plan(both_request, both_patches),
+    )
+    assert len(both_constraints) == 2
+    assert {item.endpoint_role for item in both_constraints} == {"start", "end"}
 
 
 def test_incomplete_source_partition_and_kernel_fallback_fail_closed(
@@ -458,6 +574,104 @@ def test_incomplete_source_partition_and_kernel_fallback_fail_closed(
         "curve-segment" in item
         for item in fallback_result.record.geometry_validation["blocking_errors"]
     )
+
+
+def test_kernel_realized_tangent_mismatch_defeats_pre_kernel_g1_estimate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        compiler_core, "validate_graph_against_grammar", lambda grammar, graph: None
+    )
+    request, source_points = _line_to_spline_request("fixture.kernel-mismatch")
+    patches = tuple(
+        patch
+        for geometry in compiler_core._build_region_geometries(request)
+        for patch in geometry.patches
+    )
+    plan = compiler_core._continuity_requirement_plan(request, patches)[0]
+    assert plan.pre_kernel_tangent_angle_deg == pytest.approx(0.0)
+    spline_patch = patches[1]
+    result = ProfileCompiler(
+        _FakeKernel(
+            tangent_overrides={spline_patch.patch_id: {"start": (0.0, 1.0)}}
+        )
+    ).compile(
+        request,
+        bundle_root=tmp_path,
+        source_profile_points=source_points,
+    )
+    check = result.record.continuity_checks[0]
+    assert check.measurement_basis == "kernel_realized_edge"
+    assert check.pre_kernel_tangent_angle_deg == pytest.approx(0.0)
+    assert check.tangent_angle_deg == pytest.approx(90.0)
+    assert check.g1_pass is False
+    assert check.required_pass is False
+    assert result.record.status == "failed"
+    assert result.record.geometry_validation["pass"] is False
+
+
+def test_backend_that_ignores_planned_tangent_constraint_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        compiler_core, "validate_graph_against_grammar", lambda grammar, graph: None
+    )
+    request, source_points = _line_to_spline_request("fixture.constraint-ignored")
+    result = ProfileCompiler(_FakeKernel(ignore_constraints=True)).compile(
+        request,
+        bundle_root=tmp_path,
+        source_profile_points=source_points,
+    )
+    check = result.record.continuity_checks[0]
+    assert check.g1_pass is True
+    assert check.constraint_enforcement_verified is False
+    assert check.required_pass is False
+    assert result.record.status == "failed"
+    assert any(
+        "tangent constraint" in item
+        for item in result.record.geometry_validation["blocking_errors"]
+    )
+
+
+def test_real_kernel_applies_constrained_spline_and_reports_fidelity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if importlib.util.find_spec("cadquery") is None or importlib.util.find_spec(
+        "OCP"
+    ) is None:
+        pytest.skip("CadQuery/OCP backend is not installed")
+    monkeypatch.setattr(
+        compiler_core, "validate_graph_against_grammar", lambda grammar, graph: None
+    )
+    request, source_points = _line_to_spline_request("fixture.real-kernel")
+    result = ProfileCompiler().compile(
+        request,
+        bundle_root=tmp_path,
+        source_profile_points=source_points,
+    )
+    check = result.record.continuity_checks[0]
+    assert result.record.status == "pass"
+    assert check.measurement_basis == "kernel_realized_edge"
+    assert check.g1_pass and check.required_pass
+    assert check.constraint_enforcement_verified is True
+    constraints = result.record.curve_realization_constraints
+    assert len(constraints) == 1
+    assert constraints[0].start_tangent_unit == pytest.approx((1.0, 0.0))
+    assert constraints[0].end_tangent_unit is None
+    fidelity = result.record.baseline_comparison["realized_spline_fidelity"]
+    assert fidelity["maximum_deviation_mm"] <= fidelity["tolerance_mm"] == 0.001
+    realized = result.record.geometry_validation["kernel"]["curve_generation"][
+        "realized_segments"
+    ]
+    spline = next(item for item in realized if item["patch_id"].endswith("patch.01"))
+    assert spline["construction_contract"] == (
+        "cadquery.spline.tangent_constrained.v0"
+    )
+    assert spline["tangent_constraints_applied"] is True
+    assert spline["applied_endpoint_constraints"] == {
+        "start": True,
+        "end": False,
+    }
 
 
 def test_validate_cli_detects_output_artifact_tamper(
@@ -510,9 +724,14 @@ def test_real_r2_bundle_is_reproducible_and_loadable(tmp_path: Path) -> None:
     assert all(record.status == "pass" for record in first.records)
     assert [len(record.region_geometries) for record in first.records] == [9, 11]
     assert [record.patch_count for record in first.records] == [10, 12]
-    assert all(record.schema_version == "compile_record.v1" for record in first.records)
+    assert all(record.schema_version == "compile_record.v2" for record in first.records)
     assert all(record.continuity_policy is not None for record in first.records)
     assert all(len(record.endpoint_constraints) == 2 for record in first.records)
+    assert all(
+        check.measurement_basis == "kernel_realized_edge"
+        for record in first.records
+        for check in record.continuity_checks
+    )
     compiled_primitives = tuple(
         patch.representation
         for record in first.records
@@ -562,6 +781,52 @@ def test_real_r2_bundle_is_reproducible_and_loadable(tmp_path: Path) -> None:
     assert all(check.required_level == "G1" for check in nose_checks)
     assert all(check.requirement_source == "semantic_interface_default" for check in nose_checks)
     assert all(check.g1_pass and check.required_pass for check in nose_checks)
+    assert all(check.constraint_enforcement_verified for check in nose_checks)
+    assert all(check.measurement_basis == "kernel_realized_edge" for check in nose_checks)
+    assert all(
+        check.pre_kernel_tangent_angle_deg > check.g1_tolerance_deg
+        for check in nose_checks
+    )
+    assert all(check.tangent_angle_deg <= 2.0 for check in nose_checks)
+    rf500_patches = {
+        patch.patch_id: patch
+        for geometry in rf500.region_geometries
+        for patch in geometry.patches
+    }
+    nose_spline_patch_ids = {
+        check.right_patch_id
+        if isinstance(
+            rf500_patches[check.right_patch_id].representation,
+            SplineApproxRepresentation,
+        )
+        else check.left_patch_id
+        for check in nose_checks
+    }
+    assert {
+        len(rf500_patches[patch_id].representation.fit_input_points)
+        for patch_id in nose_spline_patch_ids
+    } == {12}
+    nose_constraints = [
+        item
+        for item in rf500.curve_realization_constraints
+        if item.source_interface_id in nose_interface_ids
+    ]
+    assert len(nose_constraints) == 2
+    assert {item.endpoint_role for item in nose_constraints} == {"start", "end"}
+    realized = {
+        item["patch_id"]: item
+        for item in rf500.geometry_validation["kernel"]["curve_generation"][
+            "realized_segments"
+        ]
+    }
+    assert all(
+        realized[item.patch_id]["tangent_constraints_applied"] is True
+        and realized[item.patch_id]["construction_contract"]
+        == "cadquery.spline.tangent_constrained.v0"
+        for item in nose_constraints
+    )
+    fidelity = rf500.baseline_comparison["realized_spline_fidelity"]
+    assert fidelity["maximum_deviation_mm"] <= fidelity["tolerance_mm"] == 0.001
     loaded = tuple(
         load_compile_record(path)
         for path in sorted((first.path / "records").glob("*.json"))
@@ -650,6 +915,11 @@ def _assert_real_w2_integration(sources: R2SourceSet, workdir: Path) -> None:
     assert "BRep valid" in body
     assert "Boundary continuity policies" in body
     assert "requirement_source" in body
+    assert "measurement_basis" in body
+    assert "kernel_realized_edge" in body
+    assert "cadquery.spline.tangent_constrained.v0" in body
+    assert "constraint_enforcement_verified" in body
+    assert "Kernel-realized edge endpoints, tangents, contracts, and fidelity" in body
     assert "semantic_interface_default" in body
     assert "rf500.2c27faee.b1r3.interface.01" in body
     assert "rf500.2c27faee.b1r3.interface.08" in body
@@ -717,6 +987,25 @@ def test_previous_compile_record_v1_proof_remains_readable() -> None:
     }
 
 
+def test_anchor_workaround_compile_record_v1_proof_remains_readable() -> None:
+    proof = (
+        ROOT
+        / "analysis_outputs"
+        / "rf_cem_boundary_compiler_td1_td2"
+        / "r2_boundary_compiler.2980548dcdd5a85e"
+    )
+    records = tuple(sorted((proof / "records").glob("*.compile_record.v1.json")))
+    if len(records) != 2:
+        pytest.skip("ignored anchor-era R2 v1 proof is not materialized")
+    loaded = tuple(load_compile_record(path) for path in records)
+    assert all(record.schema_version == "compile_record.v1" for record in loaded)
+    assert all(
+        check.measurement_basis == "representation_estimate"
+        for record in loaded
+        for check in record.continuity_checks
+    )
+
+
 @dataclass(frozen=True)
 class _FakeRegion:
     region_id: str
@@ -753,8 +1042,16 @@ class _FakeGrammar:
 
 
 class _FakeKernel:
-    def __init__(self, *, fallback: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fallback: bool = False,
+        ignore_constraints: bool = False,
+        tangent_overrides: Mapping[str, Mapping[str, tuple[float, float]]] | None = None,
+    ) -> None:
         self.fallback = fallback
+        self.ignore_constraints = ignore_constraints
+        self.tangent_overrides = tangent_overrides or {}
 
     def generate(self, **kwargs: Any) -> dict[str, Any]:
         output = Path(kwargs["output_step"])
@@ -802,11 +1099,98 @@ class _FakeKernel:
                 ),
                 "fallbacks": ["fixture fallback"] if self.fallback else [],
                 "approximations": [],
+                "realized_segments": self._realized_segments(
+                    kwargs["profile_segments"]
+                ),
             },
         }
 
+    def _realized_segments(
+        self, segments: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        values = []
+        for segment in segments:
+            patch_id = str(segment["id"])
+            start = segment["start"]
+            end = segment["end"]
+            curve = segment.get("curve", {})
+            points = (
+                curve.get("fit_input_points")
+                or curve.get("sampled_points")
+                or curve.get("control_points")
+                or [start, end]
+            )
+            start_tangent = _unit_tangent(points[0], points[1])
+            end_tangent = _unit_tangent(points[-2], points[-1])
+            constraints = curve.get("endpoint_tangent_constraints") or {}
+            applied = bool(constraints) and not self.ignore_constraints
+            if applied and constraints.get("start_tangent_unit") is not None:
+                start_tangent = tuple(constraints["start_tangent_unit"])
+            if applied and constraints.get("end_tangent_unit") is not None:
+                end_tangent = tuple(constraints["end_tangent_unit"])
+            overrides = self.tangent_overrides.get(patch_id, {})
+            start_tangent = overrides.get("start", start_tangent)
+            end_tangent = overrides.get("end", end_tangent)
+            constrained_endpoints = {
+                "start": applied
+                and constraints.get("start_tangent_unit") is not None,
+                "end": applied and constraints.get("end_tangent_unit") is not None,
+            }
+            value = {
+                "patch_id": patch_id,
+                "actual_start_point": {
+                    "z_mm": float(start["z"]),
+                    "r_mm": float(start["r"]),
+                },
+                "actual_end_point": {
+                    "z_mm": float(end["z"]),
+                    "r_mm": float(end["r"]),
+                },
+                "actual_start_tangent_unit": list(start_tangent),
+                "actual_end_tangent_unit": list(end_tangent),
+                "edge_kind": str(segment.get("kind")),
+                "orientation": "left_to_right",
+                "construction_contract": curve.get(
+                    "realized_backend_contract"
+                )
+                or (
+                    "cadquery.threePointArc.v0"
+                    if segment.get("kind") == "arc"
+                    else "cadquery.lineTo.v0"
+                ),
+                "source_representation_contract": curve.get(
+                    "source_representation_contract"
+                )
+                or curve.get("backend_contract"),
+                "tangent_constraints_applied": applied,
+                "applied_endpoint_constraints": constrained_endpoints,
+            }
+            if segment.get("kind") == "nurbs":
+                value["geometry_fidelity"] = {
+                    "maximum_deviation_mm": 0.0,
+                    "sampling_policy": (
+                        "all_backend_input_trace_points_projected_to_realized_edge"
+                    ),
+                    "comparison_source": curve.get("comparison_source")
+                    or "fixture_trace",
+                    "sample_count": len(points),
+                    "tolerance_mm": float(curve.get("tolerance_mm") or 0.001),
+                    "pass": True,
+                }
+            values.append(value)
+        return values
+
     def recover(self, **kwargs: Any) -> dict[str, Any]:
         raise AssertionError("fixture requests do not use a baseline STEP")
+
+
+def _unit_tangent(
+    start: Mapping[str, Any], end: Mapping[str, Any]
+) -> tuple[float, float]:
+    dz = float(end["z"]) - float(start["z"])
+    dr = float(end["r"]) - float(start["r"])
+    length = math.hypot(dz, dr)
+    return (dz / length, dr / length)
 
 
 def _compile_request(
@@ -931,6 +1315,35 @@ def _compile_request(
         region_bindings=tuple(bindings),
     )
     return request, tuple(source_points)
+
+
+def _line_to_spline_request(
+    instance_id: str,
+) -> tuple[CompileRequest, tuple[Point2D, ...]]:
+    request, _ = _compile_request(instance_id, 2)
+    first, second = request.region_bindings
+    fit_points = (
+        Point2D(1.0, 1.0),
+        Point2D(1.5, 1.0),
+        Point2D(2.0, 1.2),
+    )
+    second = replace(
+        second,
+        representation=CompositeRegionRepresentation(
+            f"{instance_id}.spline.composite",
+            (
+                SplineApproxRepresentation(
+                    f"{instance_id}.spline",
+                    max_degree=2,
+                    fit_input_points=fit_points,
+                ),
+            ),
+        ),
+    )
+    return replace(request, region_bindings=(first, second)), (
+        Point2D(0.0, 1.0),
+        *fit_points,
+    )
 
 
 def _real_source_set() -> R2SourceSet | None:

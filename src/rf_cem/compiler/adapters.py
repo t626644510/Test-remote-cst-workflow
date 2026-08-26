@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
@@ -380,66 +380,7 @@ def _rf500_source_curves(
         source_points.extend(points)
     if not curves or len(source_points) < 2:
         raise CompileContractError("RF500 source-native profile is empty")
-    return _rf500_g1_source_curves(tuple(curves)), tuple(source_points)
-
-
-def _rf500_g1_source_curves(
-    curves: tuple[_SourceCurve, ...],
-) -> tuple[_SourceCurve, ...]:
-    """Add sub-tolerance tangent anchors at the two RF500 line/spline joins."""
-
-    values = list(curves)
-    adjusted = 0
-    for index, (left, right) in enumerate(zip(curves, curves[1:])):
-        if isinstance(left.representation, LineRepresentation) and isinstance(
-            right.representation, SplineApproxRepresentation
-        ):
-            spline = right.representation
-            tangent = left.representation.end_tangent()
-            offset = spline.approximation_tolerance_mm * 0.1
-            anchor = Point2D(
-                spline.start.z_mm + tangent[0] * offset,
-                spline.start.r_mm + tangent[1] * offset,
-            )
-            values[index + 1] = _SourceCurve(
-                right.source_segment_ref,
-                replace(
-                    spline,
-                    fit_input_points=(
-                        spline.fit_input_points[0],
-                        anchor,
-                        *spline.fit_input_points[1:],
-                    ),
-                ),
-            )
-            adjusted += 1
-        elif isinstance(left.representation, SplineApproxRepresentation) and isinstance(
-            right.representation, LineRepresentation
-        ):
-            spline = left.representation
-            tangent = right.representation.start_tangent()
-            offset = spline.approximation_tolerance_mm * 0.1
-            anchor = Point2D(
-                spline.end.z_mm - tangent[0] * offset,
-                spline.end.r_mm - tangent[1] * offset,
-            )
-            values[index] = _SourceCurve(
-                left.source_segment_ref,
-                replace(
-                    spline,
-                    fit_input_points=(
-                        *spline.fit_input_points[:-1],
-                        anchor,
-                        spline.fit_input_points[-1],
-                    ),
-                ),
-            )
-            adjusted += 1
-    if adjusted != 2:
-        raise CompileContractError(
-            "RF500 profile must contain exactly two line/spline G1 joins"
-        )
-    return tuple(values)
+    return tuple(curves), tuple(source_points)
 
 
 def _region_bindings(

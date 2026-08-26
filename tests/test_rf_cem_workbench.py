@@ -116,7 +116,8 @@ def test_rebuild_is_deterministic_and_indexes_w0_catalog(
         "payload"
     ]["evidence"]
     assert "boundary_continuity_policy.v0" in r2_evidence
-    assert "compile_record.v1" in r2_evidence
+    assert "compile_record.v2" in r2_evidence
+    assert "kernel_realized_edge" in r2_evidence
     r3_evidence = entities[("roadmap_gate", "R3.optional_nose_proposal")][
         "payload"
     ]["evidence"]

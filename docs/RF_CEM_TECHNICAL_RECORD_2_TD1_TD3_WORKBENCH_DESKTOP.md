@@ -369,11 +369,13 @@ SplineApproxRepresentation
 ```yaml
 representation_family: spline
 fidelity: approximate
-backend_contract: cadquery.splineApprox.v0
+backend_contract: cadquery.splineApprox.v0  # source representation contract
 approximation_tolerance_mm: 0.001
 optimization_ready: true
 exact_nurbs: false
 ```
+
+该字段描述无端点约束时的 source representation realization，不代表 Compiler 必须忽略 semantic continuity plan。若 Compiler 为某个 endpoint 生成方向约束，实际构造合同另记为 `cadquery.spline.tangent_constrained.v0`；两者必须在 compile record 中分开保存。
 
 ## 3.3 字段命名
 
@@ -1053,22 +1055,24 @@ execution mode: no-CST
 
 ## 11.2 TD1 最终行为
 
-过去的 required level 会受 `source_native_segment_ref` 身份影响，导致 provenance 与工程意图混合。现在 `boundary_continuity_policy.v0` 是唯一决策来源：representation 内部 join 与普通跨 semantic RF-wall interface 默认 G1 hard；C0 只用于 port cut、flange edge、入口/出口截断或未来经人工明确确认的特殊非连续设计；G2 是可选扩展；profile 起止点使用独立 endpoint contract。RF500 两侧 `IrisRegion ↔ NoseRegion` 不属于 intentional corner：当前均由 `semantic_interface_default` 要求 G1，`intentional_corner=false`，切向角 `0.0 deg` 且 `g1_pass=true`，真实 C0 override 数为 0。adapter 在近似样条 `fit_input_points` 中使用低于现有 1 μm backend tolerance 的 0.1 μm endpoint tangent anchor 修复实际端点方向；G1 tolerance 仍为 `2.0 deg`，未放宽。每个 join 都记录 `c0_gap_mm`、`tangent_angle_deg`、`curvature_delta_per_mm`、C0/G1/G2 pass、requirement source、policy ref 和 intentional-corner，不因 required level 较低而省略诊断。
+过去的 required level 会受 `source_native_segment_ref` 身份影响，导致 provenance 与工程意图混合。现在 `boundary_continuity_policy.v0` 是唯一决策来源：representation 内部 join 与普通跨 semantic RF-wall interface 默认 G1 hard；C0 只用于 port cut、flange edge、入口/出口截断或未来经人工明确确认的特殊非连续设计；G2 是可选扩展；profile 起止点使用独立 endpoint contract。RF500 两侧 `IrisRegion ↔ NoseRegion` 不属于 intentional corner：当前均由 `semantic_interface_default` 要求 G1，`intentional_corner=false`，真实 C0 override 数为 0。
+
+最终科学修复删除了 adapter 中的 0.1 μm endpoint anchor；Stage C/source-native RF500 payload、`fit_input_points` 与 `source_control_point_hints` 不再被静默修改。`fit_input_points` 的首末割线仍相对相邻 line 约有 `56.1661 deg`，并只作为 `pre_kernel_estimate`。Compiler 根据 join plan 生成通用 `CurveRealizationConstraint`，字段包括 patch/start-or-end unit tangent、source join/interface、required continuity、direction-only/scale、source representation 与 enforcement backend。CadQuery worker 通过 `Workplane.spline(..., tangents=..., scale=True)` 执行 `cadquery.spline.tangent_constrained.v0`，再从最终 edge 回读 actual endpoints/tangents；只有 `measurement_basis=kernel_realized_edge` 决定 C0/G1 `required_pass`。两处 RF500 接口的实际角度均为 `0.0 deg` 且 `g1_pass=true`；G1 tolerance 仍为 `2.0 deg`，未放宽。backend 必须同时报告 constraint applied，缺失/忽略约束即使角度偶然接近也 fail closed。每个 join 继续记录 `c0_gap_mm`、`tangent_angle_deg`、`curvature_delta_per_mm`、C0/G1/G2 pass、requirement source、policy ref 和 intentional-corner；当前 G2 curvature 明确是 representation estimate，不伪称 kernel-realized。
 
 新 no-CST proof：
 
 ```text
 analysis_outputs/rf_cem_boundary_compiler_td1_td2/
-  r2_boundary_compiler.2980548dcdd5a85e/
+  r2_boundary_compiler.24bd2492658ad567/
 input SHA-256:
-  2980548dcdd5a85e6719700d7158db6cdfb29c90b4fd44ba9517f444bbbfc365
+  24bd2492658ad56743f4933c6a3b84c055c396660b9b5fccdec89047ef3a873b
 SLS-2 compile:
-  sls2.r149.6593e02e.compile.a22fd5f932c1ffff
+  sls2.r149.6593e02e.compile.6a840da94a2ed989
 RF500 compile:
-  rf500.2c27faee.b1r3.compile.9ad6a32c86b155f6
+  rf500.2c27faee.b1r3.compile.b46af83bb85674d5
 ```
 
-两份 `compile_record.v1` 均 pass。前一份 v1 `r2_boundary_compiler.8f47ca735db8ce8a` 与原 v0 `r2_boundary_compiler.aa66a3e90125437b` 均未覆盖；v0/v1 compatibility、synthetic C0、explicit G2 与 source-native identity 回归继续通过。
+两份 `compile_record.v2` 均 pass。RF500 最大 kernel-realized spline deviation 为 `4.415657314345961e-06 mm`，SLS-2 为 `0.0006511097926837164 mm`，均小于 `0.001 mm`；比较使用 513 点 cosine-clustered normalized-arc-length 双向 edge-to-edge sampling，并保留 source trace point residual。反例测试证明 representation secant 看似 G1 但 fake kernel actual tangent 超差时 compile fail，也证明 backend 接收却未应用约束时 fail closed。anchor-era v1 `.2980548dcdd5a85e`、前一份 v1 `.8f47ca735db8ce8a` 与原 v0 `.aa66a3e90125437b` 均未覆盖；v0/v1/v2 compatibility、synthetic C0、explicit G2、endpoint 与 source-native identity 回归继续通过。
 
 ## 11.3 TD2 migration 与兼容性
 
@@ -1082,9 +1086,9 @@ optimization_ready = true
 exact_nurbs = false
 ```
 
-输入字段准确表示 fit input/control hints，不声称是最终 exact NURBS poles。历史 `SplineNurbsRepresentation` / `boundary_representation.v0` 是 deprecated compatibility path；旧 payload 可读，新旧 payload round-trip 后在现有容差内生成等价 geometry，优化-facing points 仍可变。Workbench 只把 `ExactNurbsRepresentation` 显示为 planned/not implemented。
+输入字段准确表示 fit input/control hints，不声称是最终 exact NURBS poles。`backend_contract` 是 source representation contract；带 Compiler endpoint constraint 的 patch 会以独立的 `realized_backend_contract=cadquery.spline.tangent_constrained.v0` 构造并记录 constraint/readback/fidelity。历史 `SplineNurbsRepresentation` / `boundary_representation.v0` 是 deprecated compatibility path；旧 payload 可读，新旧 payload round-trip 后在现有容差内生成等价 geometry，优化-facing points 仍可变。Workbench 只把 `ExactNurbsRepresentation` 显示为 planned/not implemented。
 
-`active backend parameters`、`observation-only trace parameters` 与 `parameter_count` 的精确定义仍是未来技术债。本 follow-up 不修改 `parameter_count`，不增加 optimization parameter schema，不重构 optimizer，也不改变 spline backend behavior。
+`active backend parameters`、`observation-only trace parameters` 与 `parameter_count` 的精确定义仍是未来技术债。本 follow-up 不修改 `parameter_count`，不增加 optimization parameter schema，不重构 optimizer，也不改变无约束 splineApprox behavior。
 
 ## 11.4 TD3 ablation、detector 与 support
 
@@ -1118,9 +1122,9 @@ blind result: known_optional_motif_present
 
 ```text
 analysis_outputs/rf_cem_observation_contract_td/
-  r4_observation_contract.dc4d7d12fb9a8c84/
+  r4_observation_contract.9e722ec6c8b003cb/
 input SHA-256:
-  dc4d7d12fb9a8c84e3bfd805402b49d1dd508330c4ea9d6695af1548455616de
+  9e722ec6c8b003cb07af6cc9e8d85c1ae47dd1d0378a3961f1d349a374a2729d
 instances: SLS-2 + RF500
 descriptor definitions / values: 21 / 240
 constraints / evaluations: 6 / 12
@@ -1131,16 +1135,16 @@ tracked `config/rf_cem_workbench_profile.v0.json` 继续是唯一默认 profile�
 ```text
 database: analysis_outputs/rf_cem_workbench/td1_td3_desktop.v0.sqlite
 database state: fresh
-sources / entities / relations: 67 / 795 / 1539
+sources / entities / relations: 67 / 826 / 1605
 input-set SHA-256:
-  2f9b1f41b24be06f4799be69eb4346a238fe541a34c0e508e5a328c118d6cef4
+  3e4f5fcaa9e0e6e65237b693f490f786e227a736ee8fa5374b02de1389ccd585
 portable snapshot SHA-256:
-  d286f229e20b1347d32b1da077adfc0401660454b29dcae95ce9a77aef54f8ae
+  64ddfade0b6855ef17844c2ef8c61f146ca36e55751be14723405e5e80140d55
 ```
 
-前一份 `r4_observation_contract.a0fd43bd4bf4de2f` 与旧 `r4_observation_contract.d06695921d941eee` 均未覆盖。loader 仅针对 historical canonical bundle 的精确 path/旧 hash/旧 size 三元组使用窄兼容 allowlist，其语义是证明已知 historical source identity，而不是声明当前 checkout source-byte equivalence；其余错配仍 fail closed。本轮未扩展或重构 allowlist。
+前一份 `.dc4d7d12fb9a8c84`、`.a0fd43bd4bf4de2f` 与旧 `.d06695921d941eee` 均未覆盖。loader 仅针对这些 historical canonical bundle 的精确 path/旧 hash/旧 size 三元组使用窄兼容 allowlist，其语义是证明已知 historical source identity，而不是声明当前 checkout source-byte equivalence；其余错配仍 fail closed。
 
-W2 显示 policy/required level/endpoint/C0-G2 diagnostics；W3 显示 seed、detector、structured support、symmetry/population、pending/accepted、`add_optional_motif`、diff/final admission/single fixture；W4 继续显示 exact/shape/scalar 与非变异约束。
+W2 显示 policy/requirement basis、kernel measurement basis、pre-kernel estimate、endpoint constraint、backend construction/application、actual gap/angle、required pass 与 fidelity；W3 显示 seed、detector、structured support、symmetry/population、pending/accepted、`add_optional_motif`、diff/final admission/single fixture；W4 继续显示 exact/shape/scalar 与非变异约束。
 
 ## 11.6 Desktop v0 交付与 QA
 
@@ -1149,7 +1153,7 @@ launcher source: src/rf_cem/workbench/desktop.py
 portable profile API: src/rf_cem/workbench/profile.py
 build script: scripts/build_rf_cem_workbench_desktop.ps1
 local ignored EXE: dist/RF-CEM-Workbench.exe
-local EXE size: 10,634,218 bytes
+local EXE size: 10,633,270 bytes
 local config: %LOCALAPPDATA%\RF-CEM\workbench_launcher_config.v0.json
 ```
 
@@ -1160,13 +1164,14 @@ PyInstaller 安装仅发生在 ignored repository `.venv`，没有加入生产 d
 ## 11.7 验证结论
 
 ```text
-targeted TD1–TD3/R4/Workbench/Desktop/architecture: 55 passed in 22.61s
-full pytest -q -m "not cst_required": 788 passed, 11 skipped in 34.57s
-R2 current v1 / previous v1 / historical v0 strict validation: pass
-R3 current ablation v1 / historical v0 strict validation: pass
-R4 current dc4d / historical d066 strict validation: pass
-deterministic full-profile rebuild: 67 fresh sources / 795 entities / 1539 relations
-source Desktop self-test and existing local EXE --self-test: pass
+targeted compiler/observation/Workbench/Desktop/architecture: 49 passed in 29.80s
+full pytest -q -m "not cst_required": 796 passed, 11 skipped in 46.99s
+R2 current v2 / anchor-era v1 / previous v1 / historical v0 strict validation: pass
+R3 current ablation v1 / two historical v0 bundles strict validation: pass
+R4 current 9e722 / previous dc4d+a0fd / historical d066 strict validation: pass
+deterministic full-profile rebuild: 67 fresh sources / 826 entities / 1605 relations
+input-set / portable snapshot: 3e4f5fcaa9e0e6e65237b693f490f786e227a736ee8fa5374b02de1389ccd585 / 64ddfade0b6855ef17844c2ef8c61f146ca36e55751be14723405e5e80140d55
+source Desktop self-test and rebuilt local EXE --self-test: pass
 live CST: not run
 physical acceptance: not established
 ```

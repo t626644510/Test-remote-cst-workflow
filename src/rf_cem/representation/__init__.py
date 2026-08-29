@@ -2,6 +2,7 @@
 
 from .core import (
     BOUNDARY_REPRESENTATION_SCHEMA_VERSION,
+    BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1,
     BoundaryRepresentation,
     CircularArcRepresentation,
     CompositeRegionRepresentation,
@@ -17,6 +18,7 @@ from .core import (
     Representation,
     RepresentationContractError,
     SplineNurbsRepresentation,
+    SplineApproxRepresentation,
     representation_from_mapping,
     trim_representation,
 )
@@ -26,6 +28,7 @@ ARCHITECTURE_LAYER = "representation"
 __all__ = [
     "ARCHITECTURE_LAYER",
     "BOUNDARY_REPRESENTATION_SCHEMA_VERSION",
+    "BOUNDARY_REPRESENTATION_SCHEMA_VERSION_V1",
     "BoundaryRepresentation",
     "CircularArcRepresentation",
     "CompositeRegionRepresentation",
@@ -41,6 +44,7 @@ __all__ = [
     "Representation",
     "RepresentationContractError",
     "SplineNurbsRepresentation",
+    "SplineApproxRepresentation",
     "representation_from_mapping",
     "trim_representation",
 ]

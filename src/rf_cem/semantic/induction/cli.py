@@ -8,7 +8,12 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
-from .artifacts import R3SourceSet, load_r3_bundle, write_r3_bundle
+from .artifacts import (
+    R3SourceSet,
+    load_r3_bundle,
+    write_r3_ablation_bundle,
+    write_r3_bundle,
+)
 from .contracts import InductionContractError
 
 
@@ -18,7 +23,20 @@ def build_parser() -> argparse.ArgumentParser:
         description="Build or validate the no-CST R3 family-induction proof.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    build = subparsers.add_parser("build", help="build one immutable accepted-review proof")
+    build = subparsers.add_parser("build", help="build one legacy-compatible v0 proof")
+    _add_build_arguments(build)
+    ablation = subparsers.add_parser(
+        "build-ablation",
+        help="build the v1 nose-ablated seed-grammar proof",
+    )
+    _add_build_arguments(ablation)
+
+    validate = subparsers.add_parser("validate", help="reload and hash-check one R3 bundle")
+    validate.add_argument("--bundle", type=Path, required=True)
+    return parser
+
+
+def _add_build_arguments(build: argparse.ArgumentParser) -> None:
     build.add_argument("--repo-root", type=Path, default=Path.cwd())
     build.add_argument("--family-grammar", type=Path, required=True)
     build.add_argument(
@@ -41,19 +59,20 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--review-rationale", required=True)
     build.add_argument("--review-revision", type=int, default=0)
 
-    validate = subparsers.add_parser("validate", help="reload and hash-check one R3 bundle")
-    validate.add_argument("--bundle", type=Path, required=True)
-    return parser
-
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "build":
+        if args.command in {"build", "build-ablation"}:
             kwargs = {}
             if args.representation_core is not None:
                 kwargs["representation_core"] = args.representation_core
-            bundle = write_r3_bundle(
+            writer = (
+                write_r3_ablation_bundle
+                if args.command == "build-ablation"
+                else write_r3_bundle
+            )
+            bundle = writer(
                 R3SourceSet(
                     repo_root=args.repo_root,
                     family_grammar=args.family_grammar,
@@ -82,6 +101,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "input_sha256": bundle.input_sha256,
                 "alignment_id": bundle.alignment.alignment_id,
                 "proposal_id": bundle.proposal.proposal_id,
+                "proposal_schema_version": bundle.proposal.schema_version,
+                "selected_detector": (
+                    bundle.proposal.support.detector_id
+                    if hasattr(bundle.proposal, "support")
+                    else "legacy_v0_embedded"
+                ),
                 "review_decision": bundle.review.decision,
                 "patch_id": bundle.patch.patch_id,
                 "patched_grammar_id": bundle.patched_grammar.grammar_id,

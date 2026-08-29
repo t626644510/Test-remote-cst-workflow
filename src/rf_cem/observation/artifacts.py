@@ -70,6 +70,61 @@ R4_BUNDLE_PREFIX = "r4_observation_contract"
 MANIFEST_FILE = "source_binding_manifest.v0.json"
 REGISTRY_FILE = "scalar_descriptor_registry.v0.json"
 
+# The canonical R4 v0 proof predates TD1/TD2 and binds the then-current roadmap
+# and observer sources.  They necessarily changed for this migration, and this
+# compatibility rule also changes the bound loader itself.  Keep the exception
+# content-addressed and source-specific: arbitrary bundles, paths, hashes, or
+# sizes continue to fail closed.
+_HISTORICAL_SOURCE_BINDINGS: dict[str, frozenset[tuple[str, str, int]]] = {
+    "r4_observation_contract.d06695921d941eee": frozenset(
+        {
+            (
+                "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+                "026c52ee387bcdddf21741274f1e5ff0e7f441c68968ec7846159a7f41bd10a6",
+                38279,
+            ),
+            (
+                "src/rf_cem/observation/observer.py",
+                "05e7414d792f4cd9f2ebc7600e96c896c2179403c84c588a552d2b842b8c76ba",
+                21758,
+            ),
+            (
+                "src/rf_cem/observation/artifacts.py",
+                "ae2437682c50dd8265bee2e1f0b7d67b3db40e11770b806176333109041dabf7",
+                31850,
+            ),
+        }
+    ),
+    "r4_observation_contract.a0fd43bd4bf4de2f": frozenset(
+        {
+            (
+                "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+                "1adaa1a9cf12bb51afc91353dfc4b37b3d989982221b8956080d8130ad66881a",
+                40689,
+            ),
+            (
+                "src/rf_cem/observation/artifacts.py",
+                "b6b506dea5952b1e49cda87c7486d404ca2665839c9c02c2a9b74a9d88cde79e",
+                33477,
+            ),
+        }
+    ),
+    "r4_observation_contract.dc4d7d12fb9a8c84": frozenset(
+        {
+            (
+                "docs/RF_CEM_ROADMAP_AND_ARCHITECTURE.md",
+                "d2fb4329a73c7cff80cf32ba62d9620abf60648f1eeac0db9b7fe13a7a32a37f",
+                42364,
+            ),
+            (
+                "src/rf_cem/observation/artifacts.py",
+                "b6b506dea5952b1e49cda87c7486d404ca2665839c9c02c2a9b74a9d88cde79e",
+                33477,
+            ),
+        }
+    ),
+}
+
 
 @dataclass(frozen=True)
 class R4SourceSet:
@@ -386,7 +441,7 @@ def load_r4_bundle(path: Path, *, repo_root: Path | None = None) -> R4Bundle:
     input_sha256 = normalized_hash(manifest.get("input_sha256"), "R4 input_sha256")
     if bundle_root.name != bundle_id or bundle_id != f"{R4_BUNDLE_PREFIX}.{input_sha256[:16]}":
         raise ObservationContractError("R4 bundle path/identity mismatch")
-    _validate_sources(root, manifest)
+    _validate_sources(root, manifest, bundle_id=bundle_id)
     artifact_paths = _validate_artifacts(bundle_root, manifest)
     registry_path = bundle_root / REGISTRY_FILE
     if registry_path.resolve() not in artifact_paths:
@@ -643,7 +698,14 @@ def _manifest_mapping(
     }
 
 
-def _validate_sources(root: Path, manifest: Mapping[str, Any]) -> None:
+def _validate_sources(
+    root: Path,
+    manifest: Mapping[str, Any],
+    *,
+    bundle_id: str,
+) -> None:
+    """Validate live sources, with exact bindings for canonical historical proofs."""
+
     sources = manifest.get("sources")
     if not isinstance(sources, list) or not sources:
         raise ObservationContractError("R4 manifest sources must be a non-empty array")
@@ -661,9 +723,18 @@ def _validate_sources(root: Path, manifest: Mapping[str, Any]) -> None:
             raise ObservationContractError("R4 source escapes repository") from exc
         if not path.is_file():
             raise ObservationContractError(f"R4 source is missing: {relative}")
-        if source.get("raw_sha256") != file_sha256(path):
-            raise ObservationContractError(f"R4 source hash mismatch: {relative}")
-        if source.get("size_bytes") != path.stat().st_size:
+        expected_hash = source.get("raw_sha256")
+        expected_size = source.get("size_bytes")
+        actual_hash = file_sha256(path)
+        actual_size = path.stat().st_size
+        if expected_hash == actual_hash and expected_size == actual_size:
+            continue
+        historical_binding = (relative, expected_hash, expected_size)
+        if historical_binding not in _HISTORICAL_SOURCE_BINDINGS.get(
+            bundle_id, frozenset()
+        ):
+            if expected_hash != actual_hash:
+                raise ObservationContractError(f"R4 source hash mismatch: {relative}")
             raise ObservationContractError(f"R4 source size mismatch: {relative}")
 
 

@@ -97,6 +97,33 @@ def test_rebuild_is_deterministic_and_indexes_w0_catalog(
     assert any(key[0] == "roadmap_gate" for key in entities)
     assert any(key[0] == "capability" for key in entities)
     assert entities[("roadmap_gate", "R0B.no_cst_regression")]["status"] == "passed"
+    assert entities[("roadmap_phase", "R4")]["status"] == (
+        "hard_gate_passed_merged"
+    )
+    assert entities[("roadmap_phase", "R5")]["status"] == (
+        "paused_or_deferred_by_user"
+    )
+    for capability_id in (
+        "technical_debt.td1_continuity",
+        "technical_debt.td2_spline_approx",
+        "technical_debt.td3_grammar_ablation",
+        "workbench.desktop.v0",
+    ):
+        assert entities[("capability", capability_id)]["status"] == (
+            "implemented_no_cst"
+        )
+    r2_evidence = entities[("roadmap_gate", "R2.landmark_and_continuity")][
+        "payload"
+    ]["evidence"]
+    assert "boundary_continuity_policy.v0" in r2_evidence
+    assert "compile_record.v2" in r2_evidence
+    assert "kernel_realized_edge" in r2_evidence
+    r3_evidence = entities[("roadmap_gate", "R3.optional_nose_proposal")][
+        "payload"
+    ]["evidence"]
+    assert "family_extension_proposal.v1" in r3_evidence
+    assert "r3_family_induction_ablation.59db0a7b5f8e158c" in r3_evidence
+    assert entities[("roadmap_gate", "R4.phase_closeout")]["status"] == "passed"
 
 
 def test_source_hash_change_is_reported_stale(

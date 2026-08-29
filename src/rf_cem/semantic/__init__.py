@@ -26,6 +26,7 @@ from .contracts import (
     load_family_grammar,
     load_instance_boundary_graph,
     load_instance_graph_diff,
+    validate_reviewed_graph_intrinsic,
     validate_graph_against_grammar,
 )
 
@@ -56,6 +57,7 @@ __all__ = [
     "load_family_grammar",
     "load_instance_boundary_graph",
     "load_instance_graph_diff",
+    "validate_reviewed_graph_intrinsic",
     "validate_graph_against_grammar",
     "write_r1_bundle",
 ]

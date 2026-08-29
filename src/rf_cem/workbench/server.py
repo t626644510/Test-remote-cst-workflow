@@ -59,6 +59,10 @@ _PAGES = {
             "region_geometry",
             "geometry_patch",
             "landmark_geometry_binding",
+            "boundary_continuity_policy",
+            "profile_endpoint_constraint",
+            "curve_realization_constraint",
+            "curve_realization",
             "continuity_check",
             "geometry_validation",
             "baseline_comparison",
@@ -70,6 +74,8 @@ _PAGES = {
         "Family Induction / W3",
         (
             "family_induction_bundle",
+            "seed_grammar_ablation",
+            "induction_detector_fixture",
             "graph_alignment",
             "common_backbone_slot",
             "alignment_residual",
@@ -514,11 +520,12 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
         item
         for item in records
         if isinstance(item.get("payload"), dict)
-        and item["payload"].get("schema_version") == "compile_record.v0"
+        and item["payload"].get("schema_version")
+        in {"compile_record.v0", "compile_record.v1", "compile_record.v2"}
     ]
     if not r2_records:
         return [
-            '<section><p class="empty">No W2 compile_record.v0 proof set was supplied at rebuild.</p></section>'
+            '<section><p class="empty">No W2 compile record proof set was supplied at rebuild.</p></section>'
         ]
 
     sections: list[str] = []
@@ -594,13 +601,26 @@ def _compile_record_sections(entities: list[dict[str, Any]]) -> list[str]:
     )
 
     for kind, label in (
+        ("boundary_continuity_policy", "Boundary continuity policies"),
+        ("profile_endpoint_constraint", "One-sided profile endpoint constraints"),
+        (
+            "curve_realization_constraint",
+            "Compiler endpoint tangent realization constraints",
+        ),
+        (
+            "curve_realization",
+            "Kernel-realized edge endpoints, tangents, contracts, and fidelity",
+        ),
         ("landmark_geometry_binding", "Landmark geometry bindings"),
-        ("continuity_check", "C0 / G1 / G2 continuity checks"),
+        (
+            "continuity_check",
+            "C0 / G1 / G2 continuity checks with requirement source",
+        ),
         ("geometry_validation", "Closed profile and BRep / STEP validation"),
         ("baseline_comparison", "Accepted baseline comparisons and warnings"),
         ("geometry_artifact", "Hash-verified compiled artifacts"),
         ("geometry_patch", "Geometry patch ownership details"),
-        ("compile_record", "Raw compile_record.v0 contracts"),
+        ("compile_record", "Raw compile_record.v0/v1/v2 contracts"),
     ):
         values = by_kind.get(kind, [])
         if kind == "compile_record":
@@ -629,6 +649,10 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
     proposal = _first_entity_payload(by_kind, "family_extension_proposal")
     review = _first_entity_payload(by_kind, "proposal_review")
     application = _first_entity_payload(by_kind, "grammar_patch_application")
+    patch = _first_entity_payload(by_kind, "grammar_patch")
+    bundle = _first_entity_payload(by_kind, "family_induction_bundle")
+    seed = _first_entity_payload(by_kind, "seed_grammar_ablation")
+    detector_fixture = _first_entity_payload(by_kind, "induction_detector_fixture")
     blind = _first_entity_payload(by_kind, "blind_validation")
     blind_graph = _first_entity_payload(by_kind, "blind_instance_graph")
 
@@ -647,6 +671,9 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
     )
     residuals = by_kind.get("alignment_residual", [])
     confidence = proposal.get("confidence", "")
+    support = proposal.get("support", {})
+    if not isinstance(support, dict):
+        support = {}
     parameter_names_read = alignment_payload.get("parameter_names_read")
     training_ids = alignment_payload.get("graph_refs", [])
     training_count = len(training_ids) if isinstance(training_ids, list) else 0
@@ -695,6 +722,23 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
         f'<p class="facts">Representation contract: <b>{escape(str(blind.get("representation_contract") or ""))}</b> · No live CST</p>'
         '</article>'
     )
+    if support:
+        cards = _v1_family_induction_cards(
+            alignment=alignment,
+            alignment_payload=alignment_payload,
+            proposal=proposal,
+            review=review,
+            application=application,
+            patch=patch,
+            bundle=bundle,
+            seed=seed,
+            detector_fixture=detector_fixture,
+            blind=blind,
+            blind_instance_id=blind_instance_id,
+            training_count=training_count,
+            slot_count=len(slots),
+            residual_count=len(residuals),
+        )
     sections = [
         '<section><h2>W3 hard-gate chain</h2>'
         f'<div class="induction-grid">{cards}</div></section>',
@@ -704,6 +748,8 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
     if residuals:
         sections.append(_entity_table("Alignment residuals / motif evidence", residuals))
     for kind, label in (
+        ("seed_grammar_ablation", "Seed grammar before patch"),
+        ("induction_detector_fixture", "Detector fixture status"),
         ("family_extension_proposal", "Evidence-bound extension proposal"),
         ("proposal_review", "Explicit proposal review"),
         ("grammar_patch", "Authorized grammar patch"),
@@ -716,6 +762,110 @@ def _family_induction_sections(entities: list[dict[str, Any]]) -> list[str]:
         if values:
             sections.append(_entity_table(label, values))
     return sections
+
+
+def _v1_family_induction_cards(
+    *,
+    alignment: dict[str, Any],
+    alignment_payload: dict[str, Any],
+    proposal: dict[str, Any],
+    review: dict[str, Any],
+    application: dict[str, Any],
+    patch: dict[str, Any],
+    bundle: dict[str, Any],
+    seed: dict[str, Any],
+    detector_fixture: dict[str, Any],
+    blind: dict[str, Any],
+    blind_instance_id: str,
+    training_count: int,
+    slot_count: int,
+    residual_count: int,
+) -> str:
+    support = proposal.get("support", {})
+    if not isinstance(support, dict):
+        support = {}
+    pre_patch = bundle.get("pre_patch_admission", {})
+    if not isinstance(pre_patch, dict):
+        pre_patch = {}
+    final_admission = bundle.get("final_admission", {})
+    if not isinstance(final_admission, dict):
+        final_admission = {}
+    operations = patch.get("operations", [])
+    if not isinstance(operations, list):
+        operations = []
+    grammar_diff = application.get("grammar_diff", [])
+    grammar_diff_count = len(grammar_diff) if isinstance(grammar_diff, list) else 0
+    review_decision = str(review.get("decision") or "missing")
+    seed_card = ""
+    if seed:
+        seed_card = (
+            '<article class="induction-card">'
+            '<h3>Seed grammar before ablation patch</h3>'
+            '<p><span class="pending-pill">nose contract removed</span></p>'
+            '<p class="facts">Motif, cardinality, and insertion adjacency removed: <b>True</b></p>'
+            f'<p class="facts">SLS-2 admitted before patch: <b>{escape(str(pre_patch.get("sls2.r149.6593e02e")))}</b> &middot; '
+            f'RF500 admitted before patch: <b>{escape(str(pre_patch.get("rf500.2c27faee.b1r3")))}</b></p>'
+            '</article>'
+        )
+    fixture_card = ""
+    if detector_fixture:
+        fixture_card = (
+            '<article class="induction-card">'
+            '<h3>Synthetic single optional detector fixture</h3>'
+            f'<p><span class="pass-pill">{escape(str(detector_fixture.get("status") or ""))}</span></p>'
+            f'<p class="facts">Detector: <code>{escape(str(detector_fixture.get("detector_id") or ""))}</code> &middot; '
+            'symmetry assumption: <b>False</b></p>'
+            '</article>'
+        )
+    operation = (
+        "add_optional_motif"
+        if "add_optional_motif" in operations
+        else ", ".join(str(value) for value in operations)
+    )
+    return (
+        '<article class="induction-card">'
+        '<h3>Reviewed semantic-graph alignment</h3>'
+        f'<p><span class="pass-pill">{escape(str(alignment.get("status") or ""))}</span></p>'
+        f'<p class="facts"><b>{training_count}</b> training graphs &middot; '
+        f'<b>{slot_count}</b> common slots &middot; <b>{residual_count}</b> residuals</p>'
+        f'<p class="facts">Algorithm: <code>{escape(str(alignment_payload.get("algorithm_version") or ""))}</code></p>'
+        f'<p class="facts">Parameter names read: <b>{escape(str(alignment_payload.get("parameter_names_read")))}</b></p>'
+        '</article>'
+        f'{seed_card}'
+        '<article class="induction-card">'
+        '<h3>Pending optional motif proposal</h3>'
+        '<p><span class="pending-pill">pending &middot; non-mutating</span></p>'
+        f'<p class="facts">Selected detector: <code>{escape(str(support.get("detector_id") or ""))}</code> '
+        f'(<code>{escape(str(support.get("detector_version") or ""))}</code>)</p>'
+        f'<p class="facts">Structured support: structural={escape(str(support.get("structural_match")))}; '
+        f'evidence={escape(str(support.get("evidence_completeness")))}; '
+        f'review={escape(str(support.get("review_coverage")))}; '
+        f'cross-instance={escape(str(support.get("cross_instance_support")))}</p>'
+        f'<p class="facts">Population size: <b>{escape(str(support.get("population_size")))}</b> &middot; '
+        f'symmetry assumption: <b>{escape(str(support.get("symmetry_assumption_used")))}</b></p>'
+        f'<p class="facts">Proposal score: <b>{escape(str(proposal.get("proposal_score")))}</b> &middot; '
+        f'score semantics: <code>{escape(str(proposal.get("score_semantics") or ""))}</code></p>'
+        '<p class="facts">Pending proposal does not mutate grammar.</p>'
+        '</article>'
+        '<article class="induction-card">'
+        '<h3>Accepted review and explicit grammar patch</h3>'
+        f'<p><span class="pass-pill">{escape(review_decision)}</span></p>'
+        f'<p class="facts">Patch operation: <code>{escape(operation)}</code></p>'
+        f'<p class="facts">Grammar before/after diff entries: <b>{grammar_diff_count}</b> &middot; '
+        f'all training instances valid: <b>{escape(str(application.get("all_instances_valid")))}</b></p>'
+        f'<p class="facts">Final admission: SLS-2=<b>{escape(str(final_admission.get("sls2.r149.6593e02e")))}</b>; '
+        f'RF500=<b>{escape(str(final_admission.get("rf500.2c27faee.b1r3")))}</b></p>'
+        '</article>'
+        f'{fixture_card}'
+        '<article class="induction-card held-out">'
+        '<h3>Held-out real instance: LEReC 704 MHz</h3>'
+        f'<p><span class="pass-pill">{escape(str(blind.get("status") or ""))}</span></p>'
+        f'<p class="facts">Instance: <code>{escape(blind_instance_id)}</code></p>'
+        f'<p class="facts">Classification: <b>{escape(str(blind.get("classification") or ""))}</b></p>'
+        f'<p class="facts">Used for induction: <b>{escape(str(blind.get("blind_instance_used_for_induction")))}</b></p>'
+        f'<p class="facts">Representation contract: <b>{escape(str(blind.get("representation_contract") or ""))}</b> &middot; No live CST</p>'
+        '</article>'
+    )
 
 
 def _observation_sections(entities: list[dict[str, Any]]) -> list[str]:

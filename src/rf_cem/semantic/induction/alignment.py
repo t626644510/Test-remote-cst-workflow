@@ -14,12 +14,14 @@ from ..contracts import (
     canonical_json_bytes,
     canonical_sha256,
     file_sha256,
+    validate_reviewed_graph_intrinsic,
 )
 from .contracts import (
     CONFIDENCE_CONTRACT,
     AlignmentResidual,
     CommonBackboneSlot,
     FamilyExtensionProposal,
+    FamilyExtensionProposalContract,
     GraphAlignment,
     GraphContractRef,
     InductionContractError,
@@ -74,6 +76,7 @@ def align_reviewed_graphs(
     if len(family_ids) != 1:
         raise InductionContractError("alignment graphs must belong to one family")
     for graph, ref in zip(ordered_graphs, ordered_refs):
+        validate_reviewed_graph_intrinsic(graph)
         if ref.instance_id != graph.instance_id or ref.graph_id != graph.graph_id:
             raise InductionContractError("alignment graph reference identity mismatch")
         if ref.contract_sha256 != canonical_sha256(graph.to_mapping()):
@@ -277,10 +280,10 @@ def propose_family_extensions(
 
 
 def select_optional_motif_proposal(
-    proposals: Iterable[FamilyExtensionProposal],
+    proposals: Iterable[FamilyExtensionProposalContract],
     *,
     region_type: str,
-) -> FamilyExtensionProposal:
+) -> FamilyExtensionProposalContract:
     """Return exactly one optional proposal for a requested ontology type."""
 
     matches = [

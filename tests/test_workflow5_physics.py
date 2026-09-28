@@ -282,3 +282,37 @@ def test_legacy_skill_archive_reads_losses_metadata_but_missing_mode_fails(tmp_p
     assert result.modes[0].quality_ok
     assert not result.quality_ok and len(result.modes) == 2
     assert result.modes[1].metrics is None
+
+
+def test_explicit_relaxed_policy_retains_low_q_score_but_not_numerical_failures():
+    xy, z, freq, ez = analytic_fields()
+    result = calculate_transverse_metrics(ez, z, xy, frequency_hz=freq, energy_j=.3,
+        q_loaded=1.7, enforce_minimum_q=False)
+    assert result.quality_ok
+    assert result.impedance_principal_ohm_per_m == pytest.approx(1.7 * result.rq_principal_ohm_per_m)
+    zero = calculate_transverse_metrics(ez * 0, z, xy, frequency_hz=freq, energy_j=.3,
+        q_loaded=1.7, enforce_minimum_q=False)
+    assert not zero.quality_ok
+
+
+def test_largest_two_policy_ranks_impedance_ignores_q_overlap_and_keeps_all_evidence(tmp_path):
+    config = pp.PostprocessConfig((-100, 100), z_samples=101, mode_policy="largest_two")
+    modes = [pp.NativeMode(8, 1.04e9, 100), pp.NativeMode(3, 1.0401e9, 1000), pp.NativeMode(9, 1.0402e9, 1.7)]
+    rows = []
+    for mode in modes:
+        raw = tmp_path / str(mode.mode_number)
+        write_raw(raw, mode, config)
+        rows.append(pp.analyze_mode_files(mode, raw, config))
+    result = pp._finalize_result(tuple(modes), rows, config)
+    assert result.quality_ok
+    assert result.objective_mode_numbers == [3, 8]
+    assert len(result.modes) == 3
+    assert result.worst_impedance_ohm_per_m == rows[1].metrics.impedance_principal_ohm_per_m
+    assert not pp._finalize_result(tuple(modes), rows, pp.PostprocessConfig((-100, 100))).quality_ok
+    missing = [*rows[:2], pp.ProcessedMode(modes[2], None)]
+    assert not pp._finalize_result(tuple(modes), missing, config).quality_ok
+
+
+def test_invalid_mode_policy_rejected():
+    with pytest.raises(ValueError, match="mode_policy"):
+        pp.PostprocessConfig((-100, 100), mode_policy="ignore_everything")

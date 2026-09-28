@@ -76,6 +76,7 @@ def postprocess_config(config: Any, info: dict[str, Any]) -> PostprocessConfig:
         geometry_unit=info["length_unit"], beta=p.beta, field_amplitude=p.field_convention,
         conductivity_layers=p.conductivity_layers, gradient_tolerance=p.gradient_tolerance,
         sampling_tolerance=p.integration_tolerance, minimum_q=p.min_q,
+        mode_policy=p.mode_policy,
         vba_timeout_s=config.solver.postprocess_timeout_s)
 
 

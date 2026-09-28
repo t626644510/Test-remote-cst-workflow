@@ -48,6 +48,9 @@ workflow_5:
     gradient_tolerance: 0.02
     integration_tolerance: 0.01
     min_q: 10
+    # strict_all retains Q/linewidth guards. User-approved largest_two disables
+    # those two guards and scores the largest two in-window Q*(R/Q) estimates.
+    mode_policy: strict_all
     # Omit material overrides to use the project's saved Model.qfi Layer data.
     # conductivity_layers:
     #   Copper: {conductivity: 5.8e7, mu: 1}

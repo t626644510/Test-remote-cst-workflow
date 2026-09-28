@@ -13,7 +13,7 @@ import csv
 import json
 import math
 import re
-from dataclasses import asdict, dataclass, field, fields as dataclass_fields
+from dataclasses import asdict, dataclass, field, fields as dataclass_fields, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -46,6 +46,7 @@ class PostprocessConfig:
     energy_match_tolerance: float = 1e-6
     minimum_separation_linewidths: float = 1.0
     vba_timeout_s: float = 180.0
+    mode_policy: str = "strict_all"
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, Any]) -> PostprocessConfig:
@@ -57,6 +58,8 @@ class PostprocessConfig:
         return cls(**kwargs)
 
     def __post_init__(self) -> None:
+        if self.mode_policy not in ("strict_all", "largest_two"):
+            raise ValueError("mode_policy must be strict_all or largest_two")
         if self.beta != 1 or self.field_amplitude != "peak":
             raise ValueError("postprocessor requires confirmed peak fields and beta=1")
         if len(self.z_range_mm) != 2 or not np.isfinite(self.z_range_mm).all() or self.z_range_mm[0] >= self.z_range_mm[1]:
@@ -122,6 +125,7 @@ class PostprocessResult:
     native_modes: tuple[NativeMode, ...]
     modes: tuple[ProcessedMode, ...]
     quality_reasons: tuple[str, ...] = ()
+    mode_policy: str = "strict_all"
 
     @property
     def quality_ok(self) -> bool:
@@ -133,11 +137,20 @@ class PostprocessResult:
             return None
         return max(m.metrics.impedance_principal_ohm_per_m for m in self.modes)  # type: ignore[union-attr,type-var]
 
+    @property
+    def objective_mode_numbers(self) -> list[int]:
+        """Rank finite, numerically validated scores, never fixed CST mode IDs."""
+        if not self.quality_ok:
+            return []
+        ranked = sorted(self.modes, key=lambda m: m.metrics.impedance_principal_ohm_per_m, reverse=True)
+        return [m.native.mode_number for m in (ranked[:2] if self.mode_policy == "largest_two" else ranked)]
+
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": 1, "convention": "peak; beta=1; circuit c*gi*gj_conjugate/(2*omega^2*U); ohm/m",
                 "native_modes": [m.to_dict() for m in self.native_modes],
                 "modes": [m.to_dict() for m in self.modes], "quality_ok": self.quality_ok,
                 "quality_reasons": list(self.quality_reasons),
+                "mode_policy": self.mode_policy, "objective_mode_numbers": self.objective_mode_numbers,
                 "worst_impedance_ohm_per_m": self.worst_impedance_ohm_per_m}
 
 
@@ -279,7 +292,8 @@ def analyze_mode_files(mode: NativeMode, raw_dir: Path, config: PostprocessConfi
     metrics = calculate_transverse_metrics(ez, np.linspace(*config.z_range_mm, config.z_samples) * 1e-3,
         trajectory_coordinates(config.offsets_mm), frequency_hz=mode.frequency_hz, energy_j=energy,
         q_loaded=mode.q_loaded, gradient_tolerance=config.gradient_tolerance,
-        sampling_tolerance=config.sampling_tolerance, minimum_q=config.minimum_q)
+        sampling_tolerance=config.sampling_tolerance, minimum_q=config.minimum_q,
+        enforce_minimum_q=config.mode_policy == "strict_all")
     return ProcessedMode(mode, metrics, energy)
 
 
@@ -292,14 +306,14 @@ def _finalize_result(native: tuple[NativeMode, ...], rows: Sequence[ProcessedMod
             abs(other.frequency_hz - mode.frequency_hz) <= config.minimum_separation_linewidths *
             0.5 * (mode.frequency_hz / mode.q_loaded + other.frequency_hz / other.q_loaded)
             for other in native)
-        if overlap:
+        if overlap and config.mode_policy == "strict_all":
             row = ProcessedMode(mode, row.metrics, row.energy_j,
                 (*row.quality_reasons, "overlapping_mode_linewidths"))
         processed.append(row)
-    return PostprocessResult(native, tuple(processed), () if processed else ("no_modes_in_objective_band",))
+    return PostprocessResult(native, tuple(processed), () if processed else ("no_modes_in_objective_band",), config.mode_policy)
 
 
-def analyze_bundle(bundle_dir: str | Path) -> PostprocessResult:
+def analyze_bundle(bundle_dir: str | Path, *, mode_policy: str | None = None) -> PostprocessResult:
     """Recompute a relocated raw bundle without CST access or filesystem writes.
 
     Modern bundles retain their objective band. Legacy skill bundles without a
@@ -312,6 +326,8 @@ def analyze_bundle(bundle_dir: str | Path) -> PostprocessResult:
     raw_config = json.loads((folder / "field_config.json").read_text(encoding="utf-8-sig"))
     config_names = {item.name for item in dataclass_fields(PostprocessConfig)}
     config = PostprocessConfig.from_mapping({k: v for k, v in raw_config.items() if k in config_names})
+    if mode_policy is not None:
+        config = replace(config, mode_policy=mode_policy)
     data = native_json["modes"]
     if isinstance(data, dict):
         native = tuple(NativeMode(int(key), float(value["frequency_Hz"]), float(value["Q_loaded"]))

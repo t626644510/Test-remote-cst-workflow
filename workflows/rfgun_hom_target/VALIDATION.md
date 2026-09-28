@@ -8,7 +8,7 @@ Using the repository `.venv\Scripts\python.exe`:
 
 ```text
 python -m pytest -m "not cst_required" -q
-790 passed, 1 skipped
+803 passed, 1 skipped
 ```
 
 This includes the complete 581-test shared-core baseline and WF5 configuration,
@@ -97,3 +97,17 @@ Saved projects, raw fields, native tables,
 diagnostic mode reports and resumable state remain in local output directories.
 Changing executable code still invalidates automatic cache reuse; this live
 campaign retains its original code identity rather than rewriting provenance.
+
+## User-approved fixed-window campaign
+
+The user subsequently requested 6 modes over 1030–1060 MHz. The new explicit
+`fixed_window` policy accepts that configured search extent without an upper
+sentinel and without automatic mode-count expansion. It still rejects empty,
+discontinuous, unordered and out-of-range result tables, missing fields and
+failed physical-quality checks. Coverage is recorded as a user acceptance,
+not an automatically verified spectral-completeness claim.
+
+Thirteen added no-CST cases validate this configuration and single-solve
+behavior, including retaining the low-Q guard. A new local campaign uses
+37 remaining solves, preserving the original aggregate budget of 40 including
+the 3 already launched. The earlier campaign's data are retained independently.

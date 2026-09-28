@@ -114,6 +114,19 @@ def coverage_complete(native: Any, mode_count: int, upper_mhz: float) -> bool:
             and max(m.frequency_hz for m in native) > upper_mhz * 1e6)
 
 
+def fixed_window_table_valid(native: Any, mode_count: int, lower_mhz: float, upper_mhz: float) -> bool:
+    """Validate returned evidence under a user-accepted finite-mode window.
+
+    Frequencies are in Hz. This checks table integrity, NOT spectral completeness.
+    Empty/missing results must never be interpreted as zero transverse impedance.
+    """
+    ordered = sorted(native, key=lambda m: m.mode_number)
+    return (0 < len(native) <= mode_count
+            and {m.mode_number for m in native} == set(range(1, len(native) + 1))
+            and all(a.frequency_hz <= b.frequency_hz for a, b in zip(ordered, ordered[1:]))
+            and all(lower_mhz * 1e6 - 1. <= m.frequency_hz <= upper_mhz * 1e6 + 1. for m in native))
+
+
 def result_fingerprint(project: Path) -> dict[str, str]:
     """Fingerprint saved native result files, not only the small .cst container."""
     root = project.with_suffix("")
@@ -346,7 +359,16 @@ class CSTEvaluator:
                 if any(m.frequency_hz < self.config.solver.target_frequency_mhz * 1e6 - 1. for m in native):
                     raise ValueError("Native modes violate the configured lower frequency limit")
                 atomic_json(directory / "native_modes.json", [m.to_dict() for m in native])
-                if not coverage_complete(native, state["mode_count"], self.config.physics.frequency_max_mhz):
+                fixed = self.config.solver.coverage_policy == "fixed_window"
+                coverage = dict(coverage_policy=self.config.solver.coverage_policy,
+                                coverage_basis="user_accepted_fixed_window" if fixed else "upper_sentinel",
+                                coverage_verified=not fixed)
+                if fixed:
+                    if not fixed_window_table_valid(native, state["mode_count"],
+                            self.config.solver.target_frequency_mhz, self.config.solver.upper_frequency_mhz):
+                        return dict(status="coverage_failed", error="Invalid or empty fixed-window mode table",
+                                    worst=None, **coverage)
+                elif not coverage_complete(native, state["mode_count"], self.config.physics.frequency_max_mhz):
                     if state["coverage_retries"] >= self.config.solver.coverage_retries or state["mode_count"] >= self.config.solver.max_mode_count:
                         return {"status": "coverage_failed", "error": "Mode table does not cover upper band boundary", "worst": None}
                     state["mode_count"] = min(self.config.solver.max_mode_count, state["mode_count"] * 2)
@@ -358,6 +380,9 @@ class CSTEvaluator:
                 band = (self.config.physics.frequency_min_mhz, self.config.physics.frequency_max_mhz)
                 selected = [m for m in native if band[0] * 1e6 <= m.frequency_hz <= band[1] * 1e6]
                 if not selected:
+                    if fixed:
+                        return dict(status="coverage_failed", error="Fixed-window results cannot establish an empty objective band",
+                                    worst=None, **coverage)
                     data = {"native_modes": [m.to_dict() for m in native], "modes": [],
                             "coverage_complete": True, "empty_band": True}
                     result = dict(status="valid", worst=0., project=str(path), modes=data)
@@ -376,9 +401,10 @@ class CSTEvaluator:
                         state.update(phase="postprocess_pending" if retryable else "invalid", error=reasons)
                         atomic_json(state_path, state)
                         return dict(status="postprocess_failed" if retryable else "quality_failed",
-                                    worst=None, error=reasons, project=str(path), modes=data)
+                                    worst=None, error=reasons, project=str(path), modes=data, **coverage)
                     result = dict(status="valid", worst=float(processed.worst_impedance_ohm_per_m),
                                   project=str(path), modes=data)
+                result.update(coverage)
                 state.update(phase="complete", result=result)
                 # Postprocessing may write native QFactor results on the owned copy.
                 evidence["result_fingerprint"] = result_fingerprint(path)

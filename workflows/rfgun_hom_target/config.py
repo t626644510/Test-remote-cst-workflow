@@ -67,6 +67,7 @@ class SolverConfig:
     mesh: str = "inherit"
     target_frequency_mhz: float = 1030.0
     upper_frequency_mhz: float = 1070.0
+    coverage_policy: str = "upper_sentinel"
     mode_count: int = 6
     max_mode_count: int = 24
     coverage_retries: int = 2
@@ -249,11 +250,15 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
 
     solver_values = _section(root, "solver", SolverConfig)
     for key, value in list(solver_values.items()):
-        if key != "mesh":
+        if key not in {"mesh", "coverage_policy"}:
             solver_values[key] = _number(value, f"solver.{key}", positive=key not in {"coverage_retries", "settle_s"}, integer=key in {"mode_count", "max_mode_count", "coverage_retries"})
     solver = SolverConfig(**solver_values)
     if solver.mesh != "inherit":
         raise ConfigurationError("solver.mesh must be inherit")
+    if solver.coverage_policy not in ("upper_sentinel", "fixed_window"):
+        raise ConfigurationError("solver.coverage_policy must be upper_sentinel or fixed_window")
+    if solver.coverage_policy == "fixed_window" and (solver.coverage_retries != 0 or solver.max_mode_count != solver.mode_count):
+        raise ConfigurationError("fixed_window requires coverage_retries=0 and max_mode_count=mode_count")
     if solver.mode_count > solver.max_mode_count or min(solver.coverage_retries, solver.settle_s) < 0:
         raise ConfigurationError("Invalid solver mode limits or negative retry/settle/guard setting")
 
@@ -303,7 +308,9 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
         raise ConfigurationError("physics relative tolerances must be below one")
     if solver.target_frequency_mhz > physics.frequency_min_mhz:
         raise ConfigurationError("solver target frequency must not exceed the target band's lower edge")
-    if solver.upper_frequency_mhz <= physics.frequency_max_mhz:
+    if solver.upper_frequency_mhz < physics.frequency_max_mhz:
+        raise ConfigurationError("solver.upper_frequency_mhz must include the objective band's upper edge")
+    if solver.coverage_policy == "upper_sentinel" and solver.upper_frequency_mhz == physics.frequency_max_mhz:
         raise ConfigurationError("solver.upper_frequency_mhz must exceed the objective band's upper edge to establish coverage")
 
     search_values = _section(root, "search", SearchConfig)

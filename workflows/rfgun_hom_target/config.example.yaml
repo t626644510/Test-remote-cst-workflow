@@ -21,6 +21,9 @@ workflow_5:
     fillet_radius_mm: 5.43
   solver:
     mesh: inherit
+    coverage_policy: upper_sentinel
+    # User-accepted fixed search: coverage_policy: fixed_window,
+    # upper_frequency_mhz: 1060, max_mode_count: 6, coverage_retries: 0.
     target_frequency_mhz: 1030
     # General (Lossy) computes only within its global frequency interval.
     # This guard permits an out-of-band sentinel; acceptance remains 1030-1060 MHz.

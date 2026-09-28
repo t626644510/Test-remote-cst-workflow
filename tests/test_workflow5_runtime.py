@@ -340,3 +340,48 @@ def test_postprocess_cleanup_failure_is_fatal_not_retryable_field_export(cfg, tm
     result = obj({"x": 1.}, tmp_path / "evaluation", lambda _: 1)
     assert result["status"] == "cleanup_failed"
     assert result["worst"] is None
+
+
+def fixed_config(cfg):
+    return replace(cfg, solver=replace(cfg.solver, coverage_policy="fixed_window",
+        upper_frequency_mhz=1060, mode_count=6, max_mode_count=6, coverage_retries=0))
+
+
+def test_fixed_window_runs_once_without_sentinel_and_records_assumption(cfg, tmp_path, monkeypatch):
+    cfg = fixed_config(cfg)
+    obj, events, _ = evaluation_harness(cfg, monkeypatch)
+    monkeypatch.setattr(rt, "read_native_modes", lambda *a: [NativeMode(i, (1030 + i * 4) * 1e6, 100) for i in range(1, 7)])
+    reservations = []
+    result = obj({"x": 1.}, tmp_path / "evaluation", lambda attempt: reservations.append(attempt))
+    assert result["status"] == "valid"
+    assert result["coverage_basis"] == "user_accepted_fixed_window"
+    assert result["coverage_verified"] is False
+    assert [value for kind, value in events if kind == "solve"] == [6]
+    assert len(reservations) == 1
+    assert 'Solver.FrequencyRange "1030", "1060"' in rt.solver_vba(cfg, "MHz", 6)
+
+
+@pytest.mark.parametrize("table", [[], [NativeMode(2, 1040e6, 100)],
+    [NativeMode(1, 1040e6, 100), NativeMode(1, 1045e6, 100)],
+    [NativeMode(1, 1050e6, 100), NativeMode(2, 1040e6, 100)],
+    [NativeMode(1, 1065e6, 100)]])
+def test_fixed_window_invalid_or_missing_table_never_passes_or_expands(cfg, tmp_path, monkeypatch, table):
+    obj, events, _ = evaluation_harness(fixed_config(cfg), monkeypatch)
+    monkeypatch.setattr(rt, "read_native_modes", lambda *a: table)
+    monkeypatch.setattr(rt, "collect_and_analyze", lambda *a, **kw: pytest.fail("Invalid table must not reach field processing"))
+    result = obj({"x": 1.}, tmp_path / "evaluation", lambda _: 1)
+    assert result["status"] == "coverage_failed"
+    assert result["worst"] is None
+    assert [value for kind, value in events if kind == "solve"] == [6]
+
+
+def test_fixed_window_does_not_bypass_physics_quality_guard(cfg, tmp_path, monkeypatch):
+    obj, events, _ = evaluation_harness(fixed_config(cfg), monkeypatch)
+    monkeypatch.setattr(rt, "read_native_modes", lambda *a: [NativeMode(1, 1040e6, 1.7)])
+    processed = SimpleNamespace(quality_ok=False, modes=[SimpleNamespace(metrics=object())],
+                                to_dict=lambda: {"quality_ok": False, "quality_reasons": ["low_q"]})
+    monkeypatch.setattr(rt, "collect_and_analyze", lambda *a, **kw: processed)
+    result = obj({"x": 1.}, tmp_path / "evaluation", lambda _: 1)
+    assert result["status"] == "quality_failed"
+    assert result["worst"] is None
+    assert [value for kind, value in events if kind == "solve"] == [6]

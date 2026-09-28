@@ -181,3 +181,33 @@ its failed observation excluded from the GP. At this launch check the global
 reservation count was 11/40, including both in-flight tasks. The first remote
 candidate's complete field extraction and central numerical replay had not yet
 finished; this launch evidence does not claim completed remote numerical validation.
+
+## Live relay completion and heartbeat repair (2026-09-28)
+
+The first remote result completed field extraction, evidence transfer and central
+numerical replay: `async_0001` was valid with worst selected impedance
+474911.119435 ohm/m. Local `async_0003` also passed at 481192.806264 ohm/m.
+Total evaluation times were approximately 19.7 and 16.7 minutes respectively.
+Two local mesh failures were charged normally and excluded from GP training.
+
+A Windows reader briefly prevented replacing `heartbeat.json`. The unhandled
+PermissionError terminated the local heartbeat thread; both workers' stale
+heartbeats then prevented further dispatch after their results were collected.
+Atomic JSON publication now retries PermissionError for at most one second,
+preserving the previous complete document. Periodic heartbeat publication also
+survives I/O failures and logs failure/recovery. Persistent failure still leaves
+the heartbeat stale and blocks dispatch; it never starts another CST solve.
+Three regression tests cover transient sharing violations, bounded permanent
+failure and recovery to the current ready state. Full no-CST suite:
+**851 passed, 1 skipped**.
+
+Both workers and the coordinator exited normally at a completed-job boundary.
+The local audit backed up all state, verified inactive owned CST sessions, and
+verified that only the two I/O/liveness source files changed. Template, numerical
+configuration, SDK and numerical-library fingerprints remained identical.
+All 17 records, the RNG state and 12 consumed solves were preserved; completed
+task contracts remain historical evidence. No general fingerprint bypass was
+introduced. After deploying identical code to both machines, live continuation
+dispatched distinct `async_0004` and `async_0005`; both entered CST solving with
+fresh heartbeats and a combined reservation count of 14/40. Their final numerical
+results were still pending at this verification point.

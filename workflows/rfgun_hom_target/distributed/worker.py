@@ -102,6 +102,28 @@ def execute_task(job: Path, config: Any, contract: str, evaluator_factory: Calla
     LOG.info("%s completed: %s", task["id"], result["status"])
 
 
+def write_heartbeats(root: Path, info: dict[str, Any], stopped: threading.Event,
+                     interval_s: float = 2.) -> None:
+    """Keep liveness publication alive after I/O failures; stale data stays stale.
+
+    A persistent filesystem failure still prevents coordinator dispatch. Log
+    the first failure and eventual recovery without flooding every poll.
+    """
+    failed = False
+    while not stopped.is_set():
+        try:
+            atomic_json(root / "heartbeat.json", {**info, "timestamp": time.time()})
+        except OSError:
+            if not failed:
+                LOG.exception("Heartbeat publication failed; retrying without restarting CST")
+            failed = True
+        else:
+            if failed:
+                LOG.info("Heartbeat publication recovered")
+            failed = False
+        stopped.wait(interval_s)
+
+
 def run_worker(config_path: Path, root: Path) -> int:
     """Stay alive independently of SSH; exactly one evaluator per workstation."""
     config = load_config(config_path, live=True)
@@ -112,11 +134,7 @@ def run_worker(config_path: Path, root: Path) -> int:
         contract = fingerprint(execution_identity(config))
         info: dict[str, Any] = dict(pid=os.getpid(), contract=contract, active=None, status="ready")
         stopped = threading.Event()
-        def heartbeat() -> None:
-            while not stopped.is_set():
-                atomic_json(root / "heartbeat.json", {**info, "timestamp": time.time()})
-                stopped.wait(2.)
-        thread = threading.Thread(target=heartbeat, daemon=True)
+        thread = threading.Thread(target=write_heartbeats, args=(root, info, stopped), daemon=True)
         thread.start()
         try:
             while not (root / "STOP").exists():

@@ -18,6 +18,59 @@ from workflows.rfgun_hom_target.distributed.worker import execute_task, PermitCl
 pytestmark = pytest.mark.no_cst
 
 
+def test_atomic_publish_retries_sharing_violation_preserving_previous_json(tmp_path, monkeypatch):
+    from workflows.rfgun_hom_target import storage
+    path = tmp_path / 'heartbeat.json'
+    atomic_json(path, {'status': 'evaluating'})
+    original = storage.os.replace
+    calls = []
+    def replace(source, destination):
+        calls.append(1)
+        if len(calls) < 3:
+            assert json.loads(path.read_text()) == {'status': 'evaluating'}
+            raise PermissionError('Windows sharing violation')
+        original(source, destination)
+    monkeypatch.setattr(storage.os, 'replace', replace)
+    monkeypatch.setattr(storage.time, 'sleep', lambda _: None)
+    atomic_json(path, {'status': 'ready'})
+    assert len(calls) == 3
+    assert json.loads(path.read_text()) == {'status': 'ready'}
+
+
+def test_atomic_publish_persistent_failure_is_bounded(tmp_path, monkeypatch):
+    from workflows.rfgun_hom_target import storage
+    calls = []
+    def denied(*args):
+        calls.append(1)
+        raise PermissionError('denied')
+    monkeypatch.setattr(storage.os, 'replace', denied)
+    monkeypatch.setattr(storage.time, 'sleep', lambda _: None)
+    with pytest.raises(PermissionError):
+        atomic_json(tmp_path / 'state.json', {'solve_count': 12})
+    assert len(calls) == 11
+
+
+def test_heartbeat_survives_io_failure_and_reports_current_ready_state(tmp_path, monkeypatch, caplog):
+    import threading
+    from workflows.rfgun_hom_target.distributed import worker
+    stopped = threading.Event()
+    info = dict(active='candidate', status='evaluating')
+    calls = []
+    def publish(path, value):
+        calls.append(value)
+        if len(calls) == 1:
+            info.update(active=None, status='ready')
+            raise PermissionError('sharing violation')
+        atomic_json(path, value)
+        stopped.set()
+    monkeypatch.setattr(worker, 'atomic_json', publish)
+    with caplog.at_level('INFO'):
+        worker.write_heartbeats(tmp_path, info, stopped, interval_s=0.)
+    assert len(calls) == 2
+    assert json.loads((tmp_path / 'heartbeat.json').read_text())['status'] == 'ready'
+    assert 'Heartbeat publication recovered' in caplog.text
+
+
 @pytest.fixture
 def setup(tmp_path):
     config = WorkflowConfig(paths=PathsConfig(tmp_path/'template.cst',tmp_path/'campaign'),

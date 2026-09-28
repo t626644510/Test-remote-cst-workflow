@@ -134,3 +134,21 @@ are 36 further solves available, preserving 40 total including 4 already used.
 Sixteen new no-CST tests cover policy selection/ranking, retained numerical
 checks, report selection, offline seed import, source locking, incompatible
 settings, tampered/missing evidence and budget reset refusal.
+
+## JSON persistence recovery (2026-09-28)
+
+A live candidate completed CST solving and field extraction, then the campaign
+journal rejected a NumPy boolean in supplemental mode-assignment evidence.
+Mode matching now returns native Python booleans for both tie and ambiguity
+comparisons. Numerical scores, matching decisions and solver settings are unchanged.
+Four regression cases persist unique, rotated, unmatched and no-baseline
+assignments through strict JSON and the campaign store. Full branch-local
+no-CST validation: **823 passed, 1 skipped**.
+
+The completed native result was fingerprint-verified and recovered without
+reserving another solve. The local recovery audit preserves the old state and
+full contract components, verifies that only the two boolean conversions changed
+executable code, and records the old/new contracts before continuing. No general
+fingerprint bypass was added. The recovered candidate's largest selected score
+is 474016.830765 ohm/m; it is valid under the requested policy but above target.
+Live continuation committed that result and proceeded to the next candidate.

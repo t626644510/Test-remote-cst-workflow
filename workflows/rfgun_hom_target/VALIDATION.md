@@ -152,3 +152,32 @@ executable code, and records the old/new contracts before continuing. No general
 fingerprint bypass was added. The recovered candidate's largest selected score
 is 474016.830765 ohm/m; it is valid under the requested policy but above target.
 Live continuation committed that result and proceeded to the next candidate.
+
+## Two-workstation asynchronous launch (2026-09-28)
+
+Full branch-local no-CST validation after adding the asynchronous workflow:
+**848 passed, 1 skipped**. Twenty-five new tests cover different candidates,
+in-flight deduplication without GP contamination, an aggregate 40-call budget,
+lost permit replies, disconnected workers, immutable messages, result identity,
+artifact traversal/corruption, central raw-field replay and changed conventions,
+saved postprocessing recovery, active-worker exclusion and serial migration.
+
+The serial controller was stopped only after its owned CST sessions had exited;
+its immutable source state remains available. Thirteen records were imported
+and valid field bundles replayed. Eight total historical solves were preserved,
+leaving 32 of the original 40 for both nodes combined. No baseline was rerun.
+
+Both Windows workers report the same complete execution fingerprint, including
+workflow/shared code, template, CST Python SDK source and numerical versions.
+The remote process runs in the logged-in desktop via a workflow-owned scheduled
+task, independently of SSH lifetime. The local worker and coordinator likewise
+run independently of the read-only terminal monitor. SFTP and SSH use a pinned
+host key and a dedicated login key.
+
+Live launch: different candidates `async_0001` (remote) and `async_0002` (local)
+entered CST solving. The first local candidate `async_0000` returned a native
+mesh failure through the worker/relay/journal path; its solve was charged and
+its failed observation excluded from the GP. At this launch check the global
+reservation count was 11/40, including both in-flight tasks. The first remote
+candidate's complete field extraction and central numerical replay had not yet
+finished; this launch evidence does not claim completed remote numerical validation.

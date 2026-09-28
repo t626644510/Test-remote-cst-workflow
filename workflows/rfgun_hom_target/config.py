@@ -95,6 +95,7 @@ class PhysicsConfig:
     gradient_tolerance: float = 0.02
     integration_tolerance: float = 0.01
     min_q: float = 10.0
+    mode_policy: str = "strict_all"
     conductivity_layers: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -276,7 +277,7 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
     if list(physics_values["offsets_mm"]) != sorted(set(physics_values["offsets_mm"])):
         raise ConfigurationError("physics.offsets_mm must be strictly increasing")
     for key, value in list(physics_values.items()):
-        if key not in {"z_range_mm", "offsets_mm", "field_convention", "conductivity_layers"}:
+        if key not in {"z_range_mm", "offsets_mm", "field_convention", "conductivity_layers", "mode_policy"}:
             physics_values[key] = _number(value, f"physics.{key}", positive=True, integer=key == "z_samples")
     layers = physics_values.get("conductivity_layers", {})
     if not isinstance(layers, dict):
@@ -298,6 +299,8 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
         normalized_layers[material] = {"conductivity": conductivity, "mu": _number(layer.get("mu", 1.0), f"{material}.mu", positive=True)}
     physics_values["conductivity_layers"] = normalized_layers
     physics = PhysicsConfig(**physics_values)
+    if physics.mode_policy not in ("strict_all", "largest_two"):
+        raise ConfigurationError("physics.mode_policy must be strict_all or largest_two")
     if physics.frequency_min_mhz >= physics.frequency_max_mhz:
         raise ConfigurationError("physics frequency band must be increasing")
     if physics.z_samples < 5 or physics.z_samples % 2 != 1:

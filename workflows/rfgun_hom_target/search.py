@@ -248,6 +248,7 @@ class Campaign:
                       max_solves=self.config.search.max_solves, evaluations=len(state["records"]),
                       threshold_ohm_per_m=self.config.physics.threshold_ohm_per_m,
                       coverage_policy=self.config.solver.coverage_policy,
+                      mode_policy=self.config.physics.mode_policy,
                       best=best, error=state.get("error"),
                       numerical_policy="User-tested template mesh; no extra confirmation solve",
                       model="isolated eigenmode circuit transverse impedance, beta=1, peak fields")
@@ -260,6 +261,8 @@ class Campaign:
                  "Mesh: inherited from the user-tested template; no additional verification solve."]
         if self.config.solver.coverage_policy == "fixed_window":
             lines += ["Coverage: user-accepted fixed frequency window and mode count; no automatic mode-count expansion or upper-sentinel proof."]
+        if self.config.physics.mode_policy == "largest_two":
+            lines += ["Objective: the two largest in-window single-mode Q*(R/Q) scores. Low-Q and linewidth-overlap guards are disabled by user choice; numerical extraction checks remain enabled."]
         if best:
             lines += ["", f"Best worst-mode impedance: {best['worst']/1000:.6g} kΩ/m",
                       f"Saved project: {best.get('project', '')}", "", "Parameters:", ""]

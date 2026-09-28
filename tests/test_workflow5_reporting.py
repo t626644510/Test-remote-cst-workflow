@@ -172,3 +172,11 @@ def test_campaign_report_calls_helper_and_displays_configured_threshold(tmp_path
         assert store.state["solve_count"] == 0
     finally:
         store.close()
+
+
+def test_largest_two_report_lists_selected_modes_and_keeps_raw_record(tmp_path):
+    best = record(tmp_path,[mode(1,impedance=90000),mode(4,impedance=150000),mode(9,impedance=3)])
+    best["modes"].update(mode_policy="largest_two",objective_mode_numbers=[4,1])
+    _, rows = render(tmp_path,[best],best)
+    assert {row["mode"] for row in rows} == {"1","4"}
+    assert len(best["modes"]["modes"]) == 3

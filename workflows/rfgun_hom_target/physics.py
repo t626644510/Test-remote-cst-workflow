@@ -57,6 +57,7 @@ def calculate_transverse_metrics(
     gradient_tolerance: float = 0.02,
     sampling_tolerance: float = 0.01,
     minimum_q: float = 10.0,
+    enforce_minimum_q: bool = True,
 ) -> TransverseMetrics:
     """Integrate peak Ez exp(+i omega z/c), beta=1, on 13 trajectories.
 
@@ -64,7 +65,9 @@ def calculate_transverse_metrics(
     gradient crosschecks. The largest eigenvalue of the *real* impedance
     tensor represents a real beam displacement; its trace would overestimate
     elliptically polarized modes. R/Q = c gi gj*/(2 omega² U), in ohm/m.
-    A low-Q mode has no quantitative isolated-mode peak estimate.
+    By default low-Q isolated-mode estimates are withheld. With the explicit
+    user-selected relaxed policy, Q*(R/Q) is a single-mode optimization score;
+    it is not a reconstruction of an overlapping broadband impedance spectrum.
     """
     ez = np.asarray(ez_v_per_m, dtype=np.complex128)
     z = np.asarray(z_m, dtype=float)
@@ -109,9 +112,11 @@ def calculate_transverse_metrics(
         reasons.append("gradient_crosscheck_failed")
     if sample_error is None or sample_error > sampling_tolerance:
         reasons.append("sampling_crosscheck_failed")
-    if q_loaded < minimum_q:
+    if not isinstance(enforce_minimum_q, bool):
+        raise ValueError("enforce_minimum_q must be boolean")
+    if enforce_minimum_q and q_loaded < minimum_q:
         reasons.append("low_q_isolated_mode_estimate_withheld")
-    high_q = q_loaded >= minimum_q
+    high_q = not enforce_minimum_q or q_loaded >= minimum_q
     principal = max(0.0, float(values[-1]))
     return TransverseMetrics(
         float(matrix[0, 0].real), float(matrix[1, 1].real), principal,

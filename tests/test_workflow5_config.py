@@ -167,3 +167,16 @@ def test_fixed_window_rejects_inconsistent_or_unknown_policy(tmp_path, document,
     document["workflow_5"]["solver"].update(change)
     with pytest.raises(ConfigurationError):
         load_config(save(tmp_path, document))
+
+
+@pytest.mark.parametrize("policy", ["largest_two", "strict_all"])
+def test_mode_policy_is_explicit_and_part_of_contract(tmp_path, document, policy):
+    document["workflow_5"]["physics"]["mode_policy"] = policy
+    cfg = load_config(save(tmp_path, document))
+    assert cfg.as_dict()["physics"]["mode_policy"] == policy
+
+
+def test_unknown_mode_policy_is_not_silently_relaxed(tmp_path, document):
+    document["workflow_5"]["physics"]["mode_policy"] = "ignore_all"
+    with pytest.raises(ConfigurationError, match="mode_policy"):
+        load_config(save(tmp_path, document))

@@ -113,6 +113,8 @@ def mode_report_lines(
     threshold = float(report["threshold_ohm_per_m"]) / 1000
     rows: list[dict[str, Any]] = []
     for mode in (data or {}).get("modes", []):
+        if best is not None and (data or {}).get("mode_policy") == "largest_two" and mode.get("mode_number") not in data.get("objective_mode_numbers", []):
+            continue
         frequency = _finite(mode.get("frequency_hz"))
         if frequency is not None and not band_mhz[0] * 1e6 <= frequency <= band_mhz[1] * 1e6:
             continue

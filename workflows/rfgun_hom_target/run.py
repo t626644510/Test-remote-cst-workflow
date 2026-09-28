@@ -24,6 +24,7 @@ def parser() -> argparse.ArgumentParser:
     modes.add_argument("--resume", action="store_true", help="Resume this output directory, including field-only recovery")
     modes.add_argument("--analyze-only", type=Path, metavar="BUNDLE", help="Recompute a saved field bundle without CST")
     result.add_argument("--max-solves", type=int, help="Override total solve budget for a NEW campaign")
+    result.add_argument("--seed-campaign", type=Path, help="Recompute a stopped campaign's baseline fields under a new mode policy; new campaigns only")
     return result
 
 
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parser().parse_args(argv)
+    if args.seed_campaign and not (args.optimize or args.baseline_only):
+        parser().error("--seed-campaign requires a new --optimize or --baseline-only campaign")
     if args.analyze_only:
         from .postprocess import analyze_bundle
         result = analyze_bundle(args.analyze_only)
@@ -77,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
         baseline = read_baseline(template, config)
         atomic_json(store.root / "baseline_parameters.json", baseline)
         campaign = Campaign(config, store, CSTEvaluator(config, template))
+        if args.seed_campaign:
+            from .seeding import import_baseline
+            import_baseline(config, store, template, args.seed_campaign)
+            logging.info("Imported and recomputed baseline; no CST solve consumed")
+            campaign.report()
         report = campaign.run(baseline, baseline_only=args.baseline_only)
         unchanged = project_manifest(source) == manifest
         atomic_json(store.root / "source_verification.json", {"source_unchanged": unchanged,

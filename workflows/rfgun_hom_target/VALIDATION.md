@@ -8,7 +8,7 @@ Using the repository `.venv\Scripts\python.exe`:
 
 ```text
 python -m pytest -m "not cst_required" -q
-803 passed, 1 skipped
+819 passed, 1 skipped
 ```
 
 This includes the complete 581-test shared-core baseline and WF5 configuration,
@@ -111,3 +111,26 @@ Thirteen added no-CST cases validate this configuration and single-solve
 behavior, including retaining the low-Q guard. A new local campaign uses
 37 remaining solves, preserving the original aggregate budget of 40 including
 the 3 already launched. The earlier campaign's data are retained independently.
+
+## User-approved two-largest single-mode policy
+
+The fixed-window baseline completed one solve and full field extraction, then
+stopped under the original strict Q/linewidth guards. The user subsequently
+requested removing the low-Q check and considering only the two largest
+single-mode impedances. Explicit `physics.mode_policy: largest_two` disables
+both isolated-mode applicability guards, retains all numerical extraction
+checks, and ranks current in-window Q*(R/Q) scores rather than fixed mode IDs.
+
+The previous six-mode field bundle was imported into a new campaign using
+`--seed-campaign`, with no new CST solve. Template/native result evidence,
+configuration compatibility, previous-score reproducibility, and remaining
+budget were checked. The old archive stayed unchanged. All six modes pass
+the remaining numerical checks; the two selected scores are 372030.861707 and
+476001.270510 ohm/m (current IDs 1 and 4). These are the agreed single-mode
+optimization scores; no overlapping broadband spectrum was reconstructed.
+
+The imported baseline is valid under the new policy but above target. There
+are 36 further solves available, preserving 40 total including 4 already used.
+Sixteen new no-CST tests cover policy selection/ranking, retained numerical
+checks, report selection, offline seed import, source locking, incompatible
+settings, tampered/missing evidence and budget reset refusal.

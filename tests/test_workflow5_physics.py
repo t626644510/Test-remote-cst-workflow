@@ -247,6 +247,35 @@ def test_signature_from_saved_voltages_normalizes_and_validates():
     with pytest.raises(ValueError): signature("short", np.zeros(2))
 
 
+@pytest.mark.parametrize("kind", ["unique", "rotated", "unmatched", "no_baseline"])
+def test_mode_matching_evidence_is_strict_json_serializable(tmp_path, kind):
+    """Real campaign journals must persist NumPy-derived identity evidence."""
+    from workflows.rfgun_hom_target.storage import CampaignStore
+    basis = np.eye(13, dtype=complex)
+    baseline = [signature("a", basis[0]), signature("b", basis[1])]
+    current = [signature("c", basis[0]), signature("d", basis[1])]
+    if kind in {"rotated", "unmatched"}:
+        current = [signature("c", basis[0] + basis[1]),
+                   signature("d", basis[0] - basis[1])]
+    if kind == "no_baseline":
+        baseline = []
+    matches = match_mode_signatures(baseline, current,
+        minimum_overlap=0.6 if kind == "rotated" else 0.8)
+    assert all(type(row.ambiguous) is bool for row in matches)
+    evidence = [row.to_dict() for row in matches]
+    assert json.loads(json.dumps(evidence, allow_nan=False)) == evidence
+    store = CampaignStore(tmp_path / "run", "test", 1)
+    try:
+        store.state["pending"] = {"id": "candidate"}
+        store.finish(dict(id="candidate", status="valid", worst=200000.,
+                          objective=1.0, parameters={"angle": 45.}, mode_matches=evidence))
+        saved = json.loads(store.path.read_text(encoding="utf-8"))
+        assert saved["pending"] is None
+        assert saved["records"][0]["mode_matches"] == evidence
+    finally:
+        store.close()
+
+
 @pytest.mark.parametrize("overlap", [False, True])
 def test_offline_relocated_bundle_never_imports_cst_or_reads_original(tmp_path, monkeypatch, overlap):
     config = pp.PostprocessConfig((-100, 100), z_samples=101)

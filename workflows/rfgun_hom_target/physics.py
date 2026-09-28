@@ -225,7 +225,7 @@ def match_mode_signatures(
 
     def tied(values: np.ndarray) -> bool:
         ordered = np.sort(values)
-        return len(ordered) > 1 and ordered[-1] > 0 and ordered[-1] - ordered[-2] <= ambiguity_margin
+        return bool(len(ordered) > 1 and ordered[-1] > 0 and ordered[-1] - ordered[-2] <= ambiguity_margin)
 
     matches = []
     for i, candidate in enumerate(current):
@@ -237,7 +237,8 @@ def match_mode_signatures(
             continue
         # A globally optimal match may assign this row away from its strongest
         # candidate. Such an assignment is evidence, not confident identity.
-        ambiguous = row_tie or tied(overlap[gated[:, j], j]) or overlap[i, j] < np.max(overlap[i])
+        # NumPy comparisons yield np.bool_, which strict JSON cannot serialize.
+        ambiguous = bool(row_tie or tied(overlap[gated[:, j], j]) or overlap[i, j] < np.max(overlap[i]))
         matches.append(ModeMatch(candidate.mode_id, baseline[j].mode_id, float(overlap[i, j]),
             candidate.frequency_hz - baseline[j].frequency_hz, ambiguous,
             "ambiguous_signature_assignment" if ambiguous else "unique_signature_match"))

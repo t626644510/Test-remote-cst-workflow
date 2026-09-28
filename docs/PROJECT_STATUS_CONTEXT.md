@@ -36,6 +36,11 @@
 
 ## 3. 分支使用规则
 
+WF5 入口为 `run_workflow_5.py`，包为 `workflows/rfgun_hom_target/`。
+默认 1030–1060 MHz、最强实极化方向100 kΩ/m、40次含重试求解预算，
+沿用模板网格，达标即停。配置/运行/恢复/离线重算见该包 README.md。
+新增包、入口和测试仅属于 WF5 分支；没有把 workflow 实现放入 main。
+
 1. 共享代码只在 `main` 开发和验证。
 2. workflow 分支定期 rebase 到最新 `main`，但不得把其他 workflow 包带入。
 3. workflow-specific 代码先留在自己的 `workflows/<package>/`。
@@ -440,3 +445,7 @@ git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-a
    非明确要求不要重跑全 campaign。
 5. 所有 workflow：逐步把 tracked 本机路径拆成 portable example 与
    gitignored local config，但不得破坏已验证 CST 路径。
+
+## 整理前完整记录
+
+[WF5 整理前状态文档原件](history/WF5_CONTEXT_BEFORE_GIT_REORG_20261024.md)保留全部旧内容；当前分支登记以 WORKFLOW_BRANCHES.md 为准。

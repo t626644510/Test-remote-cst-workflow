@@ -37,6 +37,10 @@
 ## 3. 分支使用规则
 
 WF5 入口为 `run_workflow_5.py`，包为 `workflows/rfgun_hom_target/`。
+
+WF5 双机异步入口为 `run_workflow_5_async.py`，协议、worker 和单写者调度器位于
+`workflows/rfgun_hom_target/distributed/`，部署与恢复说明见 `DISTRIBUTED.md`。
+每台计算不同候选，统一 GP、预算凭证与原始场重算；本实现仍仅在 WF5 canonical 分支。
 默认 1030–1060 MHz、最强实极化方向100 kΩ/m、40次含重试求解预算，
 沿用模板网格，达标即停。配置/运行/恢复/离线重算见该包 README.md。
 新增包、入口和测试仅属于 WF5 分支；没有把 workflow 实现放入 main。

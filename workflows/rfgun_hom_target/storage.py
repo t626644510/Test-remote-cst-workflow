@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
 from typing import Any
 
 from cst_optimization.checkpoint import CheckpointManager, EvalRecord
@@ -26,7 +27,16 @@ def atomic_json(path: Path, value: Any) -> None:
         json.dump(value, stream, indent=2, ensure_ascii=False, allow_nan=False)
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(temporary, path)
+    # Windows readers can temporarily deny replacement. Keep the old complete
+    # document visible and retry only this atomic publication, never the solve.
+    for attempt in range(11):
+        try:
+            os.replace(temporary, path)
+            break
+        except PermissionError:
+            if attempt == 10:
+                raise
+            time.sleep(0.1)
 
 
 def digest(path: Path) -> str:

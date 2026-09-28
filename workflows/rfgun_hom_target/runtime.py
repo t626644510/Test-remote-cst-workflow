@@ -15,10 +15,12 @@ import math
 from pathlib import Path
 import re
 import time
+from uuid import uuid4
 from typing import Any, Callable, Iterator
 
 from .storage import atomic_json, copy_verified_project, digest, BudgetExhausted
 from .postprocess import PostprocessConfig, read_native_modes, collect_and_analyze
+from .session_recovery import ensure_sessions_inactive, query_pid
 
 LOG = logging.getLogger(__name__)
 FREQUENCY_FACTORS = {"Hz": 1., "kHz": 1e3, "MHz": 1e6, "GHz": 1e9}
@@ -143,26 +145,79 @@ class CSTEvaluator:
     def _project(self, path: Path, directory: Path, phase: str) -> Iterator[Any]:
         # Lazy imports: config, offline analysis and all pure numerical code need no CST.
         from cst_optimization.core.connection import CSTConnection
-        connection = CSTConnection(library_path=self.config.paths.cst_library_path, mode="new")
-        project, pid = None, None
+        project, pid, connection = None, None, None
+        connect_started = False
+        session = {"session_id": str(uuid4()), "pid": None,
+                   "project": str(path.resolve()), "phase": "opening"}
+        session_path = directory / f"{phase}_session.json"
+        # Persist BEFORE any operation that can create a DesignEnvironment.
+        atomic_json(session_path, session)
         try:
+            connection = CSTConnection(library_path=self.config.paths.cst_library_path, mode="new")
+            connect_started = True
             connection.connect()
             pid = connection.pid
-            atomic_json(directory / f"{phase}_session.json", {"pid": pid, "project": str(path)})
+            session.update(pid=pid, phase="active")
+            atomic_json(session_path, session)
+            if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+                raise EvaluationFailure("Owned CST PID could not be recorded", "cleanup_failed")
             project = connection.open_project(str(path))
             project.activate()
             if Path(project.filename).resolve() != path.resolve():
                 raise EvaluationFailure("CST opened an unexpected project", "ownership_failed")
             yield project
         finally:
-            if project is not None:
-                project.close(save=False)
-            # Never call generic connection.close(): it can fall back to global cleanup.
-            if pid:
-                result = connection.close_targeted(pid_override=pid)
+            # A failed connect may nevertheless have created its own DE and PID.
+            # Recover only this connection's PID; never infer one from other processes.
+            if (isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0) and connection is not None and connect_started:
+                try:
+                    recovered_pid = connection.pid
+                except Exception:
+                    recovered_pid = None
+                if isinstance(recovered_pid, int) and not isinstance(recovered_pid, bool) and recovered_pid > 0:
+                    pid = recovered_pid
+                    session.update(pid=pid, phase="cleanup")
+                    try:
+                        atomic_json(session_path, session)
+                    except Exception:
+                        LOG.exception("Could not persist recovered owned PID; still attempting targeted cleanup")
+            close_error = None
+            try:
+                if project is not None:
+                    project.close(save=False)
+            except BaseException as exc:
+                close_error = exc
+            finally:
+                # This runs even if project.close raises. Never use generic close.
+                result = {"success": False, "exit_verified": False}
+                if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 and connection is not None:
+                    try:
+                        result = connection.close_targeted(pid_override=pid)
+                    except Exception as exc:
+                        result["error"] = f"{type(exc).__name__}: {exc}"
+                    # Shared close_targeted uses tasklist. Independently verify exact
+                    # PID absence before issuing a trustworthy cleanup certificate.
+                    try:
+                        pid_state = query_pid(pid)
+                    except Exception:
+                        pid_state = "unknown"
+                    result["pid_state"] = pid_state
+                    result["exit_verified"] = pid_state == "absent"
+                    result["success"] = bool(result.get("success")) and pid_state == "absent"
+                elif not connect_started:
+                    result.update(success=True, no_session_started=True)
+                else:
+                    result["error"] = "Connection started without a recorded owned PID"
+                result.update(session_id=session["session_id"], pid=pid, project=session["project"])
+                if close_error is not None:
+                    result["project_close_error"] = f"{type(close_error).__name__}: {close_error}"
                 atomic_json(directory / f"{phase}_cleanup.json", result)
-                if not result.get("success"):
-                    raise EvaluationFailure(f"Owned session cleanup failed: {result}", "cleanup_failed")
+            if not result.get("success"):
+                raise EvaluationFailure(f"Owned session cleanup failed: {result}", "cleanup_failed")
+            if close_error is not None:
+                if isinstance(close_error, (KeyboardInterrupt, SystemExit)):
+                    raise close_error
+                raise EvaluationFailure(f"Project close failed; owned process cleanup completed: {close_error}", "project_close_failed") from close_error
 
     def _prepare(self, parameters: dict[str, float], directory: Path) -> Path:
         path, _ = copy_verified_project(self.template, directory / "project")
@@ -240,6 +295,9 @@ class CSTEvaluator:
             attempts=0, current=None, phase="new", parameters=parameters)
         if state["parameters"] != parameters:
             raise EvaluationFailure("Evaluation identity differs from saved geometry")
+        # The campaign's Python lock does not cover a CST child surviving a crash.
+        # Gate before reusing a result, overwriting session markers, or launching CST.
+        ensure_sessions_inactive(evaluation_dir)
         if state["phase"] == "complete":
             if state.get("project"):
                 verify_solved(Path(state["project"]), Path(state["current"]))

@@ -8,7 +8,7 @@ Using the repository `.venv\Scripts\python.exe`:
 
 ```text
 python -m pytest -m "not cst_required" -q
-756 passed, 1 skipped
+790 passed, 1 skipped
 ```
 
 This includes the complete 581-test shared-core baseline and WF5 configuration,
@@ -22,6 +22,8 @@ immediate target stopping; solver-budget reservations before launch; fresh-copy
 retry limits; interrupted saved-result recovery; archive tamper refusal; and
 source project/lock preservation. CLI help and local configuration validation
 also passed. `git diff --check` passed.
+Final additions cover exact-PID orphan-session recovery, cleanup after close
+exceptions, UUID-linked cleanup evidence, and diagnostic CSV/Markdown tables.
 
 ## Saved real-field regression (no new CST solve)
 
@@ -55,8 +57,43 @@ the global frequency maximum. The implementation therefore separates the
 covered by regression tests; no JDM-only full-window switch is used. A sentinel
 mode above 1060 MHz and a contiguous ascending table establish coverage.
 
-The corrected live baseline is running. CST reports a saved-template warning
-that port 1 omits at least one propagating mode. Its settings are retained as
-requested; this warning must accompany any numerical target result.
-No extra convergence or confirmation solve is part of this workflow. The final
-live outcome will be appended after the campaign stops.
+The corrected baseline completed on implementation commit `9708630` at 11:32
+local time. Six requested modes did not establish coverage, so the workflow
+requested twelve on a fresh copy. CST returned seven modes, including sentinels
+at 1065.227827 and 1066.074762 MHz. Both solves reported success; frequency/Q
+reading and all five in-window complex-field/energy extractions completed.
+The final recovery/report additions were validated without another CST solve.
+Offline replay of the complete new field bundle produced exactly the same
+JSON-normalized result as live postprocessing and did not import `cst`.
+
+The startup stage stopped with `baseline_failed` / `quality_failed`; parameter
+search did not start. A Q=1.736269 mode fails the configured isolated-mode
+applicability guard. Its broad linewidth also triggers the overlap guard for
+the other modes. The following values are diagnostics from the specified
+single-mode formula, **not accepted full-window impedances or a target pass**:
+
+| Mode | Frequency / MHz | Total-Q | Diagnostic strongest-direction Z / kΩ/m |
+|---|---:|---:|---:|
+| 1 | 1036.994819 | 1397.598775 | 338.825830 |
+| 2 | 1043.459145 | 4131.481116 | 3.921932 |
+| 3 | 1048.493076 | 398.863353 | 54.088894 |
+| 4 | 1055.277150 | 1175.977884 | 490.499058 |
+| 5 | 1057.545131 | 1.736269 | withheld: low Q |
+
+All field extraction checks passed their numerical tolerances: largest gradient
+disagreement 1.86556%; largest half-density integration difference 0.00166056%.
+The low-Q mode's R/Q is 0.00008019723 Ω/m, but small coupling alone is not used
+to bypass the applicability guard. Resolving that mode's treatment requires a
+physical interpretation/acceptance policy; no guard was weakened automatically.
+
+The total launched solve count is **3 / 40**: one initial aborted solve plus
+two corrected-baseline solves. No optimization candidates or extra mesh
+confirmation solves were run. Source manifest verification is unchanged.
+CST warned that port 1 omits at least one propagating mode and that fewer modes
+exist in the search area than requested; original port settings were retained.
+Owned cleanup records report success; an independent exact-PID query confirmed
+all five recorded corrected-campaign sessions were absent after completion.
+Saved projects, raw fields, native tables,
+diagnostic mode reports and resumable state remain in local output directories.
+Changing executable code still invalidates automatic cache reuse; this live
+campaign retains its original code identity rather than rewriting provenance.

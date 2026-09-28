@@ -21,6 +21,8 @@ from cst_optimization.evaluation.evaluation_database_schema import ParameterIden
 from .geometry import GeometryConstraints
 from .storage import BudgetExhausted, CampaignStore, atomic_json
 from .physics import ModeSignature, match_mode_signatures
+from .session_recovery import SessionRecoveryBlocked
+from .reporting import diagnostic_summary, mode_report_lines
 
 LOG = logging.getLogger(__name__)
 
@@ -190,6 +192,9 @@ class Campaign:
                      state["solve_count"], self.config.search.max_solves, pending["parameters"])
             try:
                 result = self.evaluator(pending["parameters"], Path(pending["attempt_dir"]), self.store.reserve_solve)
+            except SessionRecoveryBlocked as exc:
+                state.update(status="orphan_session_pending", error=str(exc))
+                break
             except BudgetExhausted:
                 state["status"] = "budget_exhausted"
                 break
@@ -250,7 +255,7 @@ class Campaign:
             atomic_json(self.store.root / "best.json", best)
         lines = ["# WF5 transverse HOM search", "", f"Status: **{report['status']}**",
                  f"CST solves: {report['solve_count']} / {report['max_solves']}",
-                 "", "Threshold: 100 kΩ/m unless overridden in configuration.",
+                 "", f"Threshold: {report['threshold_ohm_per_m']/1000:g} kΩ/m.",
                  "Mesh: inherited from the user-tested template; no additional verification solve."]
         if best:
             lines += ["", f"Best worst-mode impedance: {best['worst']/1000:.6g} kΩ/m",
@@ -258,6 +263,9 @@ class Campaign:
             lines += [f"- {k}: {v:.12g}" for k, v in best["parameters"].items()]
             lines += ["", f"Mode details and raw evidence: {best['attempt_dir']}"]
         if report.get("error"):
-            lines += ["", f"Detail: {report['error']}"]
+            lines += ["", f"Detail: {diagnostic_summary(report['error'])}"]
+        lines += mode_report_lines(self.store.root, report, state,
+                                  (self.config.physics.frequency_min_mhz,
+                                   self.config.physics.frequency_max_mhz))
         (self.store.root / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         return report

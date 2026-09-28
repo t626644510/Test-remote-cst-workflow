@@ -117,6 +117,7 @@ def test_session_only_closes_owned_project_and_recorded_pid(cfg, tmp_path, monke
         def close_targeted(self, **kwargs): calls.append(("targeted", kwargs)); return {"success": True}
 
     monkeypatch.setattr(connection_module, "CSTConnection", Connection)
+    monkeypatch.setattr(rt, "query_pid", lambda _: "absent")
     obj = evaluator(cfg)
     if wrong_project:
         with pytest.raises(rt.EvaluationFailure, match="unexpected"):

@@ -1,0 +1,66 @@
+# Copy to a gitignored config.local.yaml and fill in the template and beam-axis
+# integration interval. Relative paths resolve against this YAML file.
+# Offline validation does not load CST; live modes additionally require paths.
+workflow_5:
+  paths:
+    template_path: template.cst
+    output_dir: runs/workflow_5
+    # Empty uses CST_PYTHON_LIB; no machine-specific fallback is inferred.
+    cst_library_path: ""
+  parameters:
+    - {name: selfangle2, cst_name: selfangle2, lower: 0, upper: 180, unit: deg}
+    - {name: UpperHeight2, cst_name: UpperHeight2, lower: 0, upper: 50, unit: mm}
+    - {name: DownHeight2, cst_name: DownHeight2, lower: 0, upper: 50, unit: mm}
+    - {name: Lin2, cst_name: Lin2, lower: 1, upper: 50, unit: mm}
+    - {name: inner_angle3, cst_name: inner_angle3, lower: 5, upper: 175, unit: deg}
+    - {name: inner_r2, cst_name: inner_r2, lower: 5.44, upper: 25, unit: mm}
+  geometry:
+    conductor_radius_mm: 5.43
+    flange_radius_mm: 25.0
+    clearance_mm: 0.01
+    fillet_radius_mm: 5.43
+  solver:
+    mesh: inherit
+    target_frequency_mhz: 1030
+    # General (Lossy) computes only within its global frequency interval.
+    # This guard permits an out-of-band sentinel; acceptance remains 1030-1060 MHz.
+    upper_frequency_mhz: 1070
+    mode_count: 6
+    max_mode_count: 24
+    coverage_retries: 2
+    timeout_s: 10800
+    settle_s: 2
+    postprocess_timeout_s: 180
+  physics:
+    frequency_min_mhz: 1030
+    frequency_max_mhz: 1060
+    threshold_ohm_per_m: 100000
+    # REQUIRED: replace null with [start_mm, end_mm] in the template frame.
+    # No cavity length or local project coordinate is silently assumed.
+    z_range_mm: null
+    z_samples: 1883
+    offsets_mm: [2, 4, 6]
+    beta: 1.0
+    field_convention: peak
+    gradient_tolerance: 0.02
+    integration_tolerance: 0.01
+    min_q: 10
+    # Omit material overrides to use the project's saved Model.qfi Layer data.
+    # conductivity_layers:
+    #   Copper: {conductivity: 5.8e7, mu: 1}
+  search:
+    max_solves: 40
+    initial_points: 12
+    seed: 42
+    candidate_pool: 512
+    local_fraction: 0.8
+    initial_radius: 0.25
+    min_radius: 0.05
+    max_radius: 0.5
+    max_candidate_attempts: 120
+    candidate_draws: 100000
+  results:
+    frequency: '1D Results\Mode Frequencies\Mode {mode}'
+    q_loaded: '1D Results\Q Factors\Total-Q\Mode {mode}'
+    efield: '2D/3D Results\Modes\Mode {mode}\e'
+    frequency_unit: MHz

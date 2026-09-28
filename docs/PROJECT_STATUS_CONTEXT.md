@@ -1,6 +1,6 @@
 # CST 自动化与优化项目总状态上下文
 
-更新时间：2026-07-10（严格 workflow 分支隔离重构后）
+更新时间：2026-09-28（本分支新增 WF5；main 保持共享核心基线）
 
 本文是当前仓库的总入口，供人类维护者和后续 agent 快速恢复上下文。
 代码、测试、当前 Git diff 和分支本身优先于历史报告。除非用户明确要求，
@@ -30,6 +30,7 @@ worktree。2026-07-10 已按“严格隔离式 main”重构：
 | `workflow/2-rfgun-hom-antenna` | `C:\Users\lau\cst_ver3_wf2_major_refactor` | WF2 双工程 HOM 天线优化、wake PSO | 724 passed, 1 skipped |
 | `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | WF3 recovery 与 tolerance 工具链 | 692 passed, 1 skipped |
 | `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | WF4 HOM 本征模批量 campaign | 615 passed, 2 skipped |
+| `workflow/5-rfgun-hom-target` | Codex managed worktree，使用 `git worktree list` 查询 | WF5 横向 HOM 频窗阈值快速优化 | 见 workflow 的 VALIDATION.md |
 | `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | RF-CEM 500 MHz 逆向参数化几何与优化 | 606 passed, 1 skipped |
 
 `codex/S01-known-mode-pso-closure` 是 WF2 的收口兼容 ref，应与
@@ -46,6 +47,11 @@ git worktree list
 ```
 
 ## 3. 分支使用规则
+
+WF5 入口为 `run_workflow_5.py`，包为 `workflows/rfgun_hom_target/`。
+默认 1030–1060 MHz、最强实极化方向100 kΩ/m、40次含重试求解预算，
+沿用模板网格，达标即停。配置/运行/恢复/离线重算见该包 README.md。
+新增包、入口和测试仅属于 WF5 分支；没有把 workflow 实现放入 main。
 
 1. 共享代码只在 `main` 开发和验证。
 2. workflow 分支定期 rebase 到最新 `main`，但不得把其他 workflow 包带入。

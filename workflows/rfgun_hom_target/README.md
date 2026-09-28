@@ -27,6 +27,12 @@ WF1/WF2/WF4 仅作为已验证控制次序的参考，没有跨分支运行时�
 模板、代码或配置发生变化时拒绝复用，请新建输出目录。输出目录有操作系统独占锁，
 同一 campaign 不能同时运行两份；进程退出后锁自动释放，锁文件本身保留。
 
+Python 崩溃后，其 CST 会话可能继续运行。恢复会先只读检查已有 session：
+新记录使用 UUID 关联 cleanup，旧记录始终查询精确 PID。仍存活或无法确认时返回
+`orphan_session_pending`，保留 pending 与已消耗预算，不创建新 CST、不自动清理。
+确认旧会话退出后可再次恢复；PID 被复用也保守阻止恢复，不操作该进程。
+此门禁不替代代码指纹校验：旧 campaign 的代码身份不匹配时仍拒绝自动复用。
+
 离线重算已保存的 `postprocess_NNN` 数据包：
 
 ```powershell
@@ -80,6 +86,7 @@ General (Lossy) 只返回全局求解频率上限以内的模式，因此求解�
 ## 输出与验证
 
 - `report.md`、`summary.json`、`best.json`：状态、预算、最佳参数与候选工程位置。
+- `modes.csv`：最佳有效点的窗内模态阻抗表；没有有效点时仅输出明确标注的诊断表，缺值不填零。
 - `state.json`、`campaign.ckpt`、`evaluations.sqlite`：权威恢复状态和共享持久化格式。
 - `template/`：验证过的完整模板快照；`evaluations/`：每次几何、求解和后处理证据。
 - `native.json`、`fields/`、`analysis.json`：可离线重算的场、储能与各方向阻抗。

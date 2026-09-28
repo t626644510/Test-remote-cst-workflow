@@ -148,3 +148,22 @@ def test_example_requires_explicit_integration_interval(tmp_path):
     example = yaml.safe_load(source.read_text(encoding="utf-8"))
     example["workflow_5"]["physics"]["z_range_mm"] = [-100, 100]
     assert load_config(save(tmp_path, example)).physics.z_samples == 1883
+
+
+def test_explicit_fixed_window_allows_exact_objective_upper_edge(tmp_path, document):
+    document["workflow_5"]["solver"] = dict(coverage_policy="fixed_window",
+        upper_frequency_mhz=1060, mode_count=6, max_mode_count=6, coverage_retries=0)
+    cfg = load_config(save(tmp_path, document))
+    assert cfg.solver.coverage_policy == "fixed_window"
+    assert cfg.solver.upper_frequency_mhz == cfg.physics.frequency_max_mhz
+    assert cfg.as_dict()["solver"]["coverage_policy"] == "fixed_window"
+
+
+@pytest.mark.parametrize("change", [dict(coverage_retries=1), dict(max_mode_count=12),
+    dict(upper_frequency_mhz=1059), dict(coverage_policy="typo"), dict(coverage_policy=True)])
+def test_fixed_window_rejects_inconsistent_or_unknown_policy(tmp_path, document, change):
+    document["workflow_5"]["solver"] = dict(coverage_policy="fixed_window",
+        upper_frequency_mhz=1060, mode_count=6, max_mode_count=6, coverage_retries=0)
+    document["workflow_5"]["solver"].update(change)
+    with pytest.raises(ConfigurationError):
+        load_config(save(tmp_path, document))

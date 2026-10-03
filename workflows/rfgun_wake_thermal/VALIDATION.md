@@ -50,3 +50,32 @@ Live acceptance remains **pending**, and optimization has not started.
 Machine-specific launch audits, state, raw data, logs and final reports remain
 in the configured local directories, not Git. A half-hour heartbeat checks
 progress. Search may start only after the full live baseline acceptance passes.
+
+## Saved-result correction, 2026-10-03
+
+- Complete branch no-CST suite: **621 passed, 1 skipped, 4 warnings** using the
+  prescribed `.venv`. Includes fixed-tail success, stale/aborted/incomplete/zero
+  steps, typed errors, secondary-only false success, and recovery identity tests.
+- The Port2=20/Port3=22 axial solve finished all **132966/132966** time steps.
+  The old completion phrase matcher rejected CST's normal fixed-tail stop.
+- The explicit recovery entry exported the saved XYZ wake and complex impedance
+  curves without opening CST or performing another solve. Saved charge RMS was
+  **0.050000 m** and the tail reached **35.000110 m**. Native hashes remained
+  unchanged; warnings and original failed worker output were preserved.
+- This establishes saved axial extraction, not yet four-template live acceptance
+  or reliable reconstructed HOM values. Six-fit reconstruction is checked
+  separately and cannot be replaced by successful extraction.
+- Untapered initial peak detection counted 227 peaks, including the strong
+  working-mode truncation sidelobes, and exhausted the 24-pole capacity. A
+  Blackman-Harris spectrum now seeds frequencies only (14 live seeds). Direct
+  spectra and time-domain fit data remain untapered; quality limits are unchanged.
+  A regression verifies retention of a 100x weaker HOM next to a strong working
+  mode without counting its rectangular-tail sidelobes as independent modes.
+- Live six-fit reanalysis took 78.95 seconds. Native direct HOM-band maximum was
+  1167.97 ohm; independent finite-tail spectrum maximum was 1176.35 ohm. All six
+  fits were rejected: errors 1.056--3.108 percent and correlations above 0.9995
+  do not compensate for boundary-controlled, unstable resonator peaks. The lower
+  band edge also requires review. These large fitted peaks are not accepted
+  physical impedance measurements. No reliable longitudinal GP value is stored.
+- Baseline remains paused for reconstruction review, before X/Y/thermal solves.
+  Completed raw data, all six fits, prior failures and elapsed costs are retained.

@@ -159,3 +159,29 @@ Run the complete branch-local suite with:
 No-CST tests do not establish live API acceptance. The separate baseline must
 demonstrate actual result paths, units, mesh-error classification, full-band
 curves and component-loss normalization before optimization is enabled.
+
+### Saved wake recovery
+
+CST 2026 normally ends a fixed-length wake with `Maximum number of pulse widths
+simulated, solver stopped.` This is accepted only with wrapper success, a fresh
+WakefieldSolver completion log, matching positive simulated/planned time-step
+counts, no error/abort, and complete saved curves. Secondary-quantity success
+alone is insufficient. Charge extraction uses `Charge distribution (distance)`
+and validates its distance unit and measured RMS bunch length.
+
+For an already finished wake rejected by an older completion matcher, use
+`--config <config> recover-saved --task <attempt/task.json>`. This command never
+opens a CST session or launches a solve. It verifies inactive owned processes,
+task/parameter/port/settings identity, native log agreement, full-tail evidence,
+and unchanged native hashes. It writes numerical bundles and a separate recovery
+receipt; original failure records are retained. It does not silently migrate
+campaign fingerprints or restart optimization. Integrate the recovered stage
+through an audited compatibility migration, retaining prior runtime charges,
+then perform offline reconstruction before continuing the baseline.
+
+Pole initialization uses a Blackman-Harris tapered spectrum to reduce finite-tail
+sidelobes around the working mode. Only frequency seeds use this taper: reported
+direct spectra, signed fit data, residual checks, and acceptance thresholds are
+unchanged. The saved reconstruction bundle includes both spectra and all six
+fits. A low wake residual alone does not validate boundary-controlled or unstable
+resonator impedances.

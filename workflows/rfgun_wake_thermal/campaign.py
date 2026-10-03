@@ -12,6 +12,7 @@ from .search import Controller,METRICS,axis_observed
 from .repair import bad_ports,next_ports
 from .reconstruction import read_bundle,align_transverse,reconstruct,transverse_norm
 from .supervision import launch_worker,check_recovery
+from .screening import search_metrics,search_view,screening_admission
 
 LOG=logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ class Campaign:
 
     def gated(self,c: dict,stage: str) -> bool:
         if stage=='axis':return False
-        m=c['metrics']
+        m=search_metrics(self.config,c)
         if m.get('longitudinal',float('inf'))>self.config.physics.longitudinal_limit:return True
         return stage=='thermal' and m.get('transverse',float('inf'))>self.config.physics.transverse_limit
 
@@ -150,21 +151,21 @@ class Campaign:
             group=('near' if exposure['near']<=exposure['global'] else 'global') if gated else None
             x=self.controller.encode(c['parameters'])[None,:]
             remaining=sum(self.estimate(s) for s in STAGES if s not in c['stages'])
-            score=float(self.controller.score(x,remaining,c['metrics'])[0])
+            score=float(self.controller.score(x,remaining,search_metrics(self.config,c))[0])
             if group=='global':
                 # Randomized global partial points compete independently of predicted merit.
                 score=float(self.controller.rng.random())/self.estimate(stage)
             # Bootstrap targets are priorities, not fabricated observations or quota exemptions.
-            ntrans=sum('transverse' in p['metrics'] for p in self.state['candidates'])
+            ntrans=sum('transverse' in p['metrics'] for p in self.controller.candidates)
             nheat=sum('power5' in p['metrics'] for p in self.state['candidates'])
-            initial=sum(axis_observed(p) for p in self.state['candidates'])<=self.config.search.initial_points
+            initial=sum(axis_observed(p) for p in self.controller.candidates)<=self.config.search.initial_points
             if initial and (stage in ('x','y') and ntrans<4 or stage=='thermal' and nheat<2):score*=3
             eligible.append((score,c,stage,group))
         parameters,source=self.controller.propose()
         x=self.controller.encode(parameters)[None,:]
         newscore=float(self.controller.score(x,sum(self.estimate(s) for s in STAGES))[0])
         # Initial coverage keeps its promised global coordinates, interleaved with promotions.
-        if sum(axis_observed(p) for p in self.state['candidates'])<=self.config.search.initial_points:newscore*=2
+        if sum(axis_observed(p) for p in self.controller.candidates)<=self.config.search.initial_points:newscore*=2
         if eligible and max(eligible,key=lambda x:x[0])[0]>=newscore:
             _,c,stage,group=max(eligible,key=lambda x:x[0]);return c,stage,group
         return self.new_candidate(parameters,source),'axis',None
@@ -205,11 +206,14 @@ class Campaign:
         c.update(analysis)
         c['complete']=all(s in c['stages'] for s in STAGES)
         m=c['metrics'];c['feasible']=m.get('longitudinal',float('inf'))<=self.config.physics.longitudinal_limit and m.get('transverse',float('inf'))<=self.config.physics.transverse_limit
-        previous=self.state.get('best_comparable',{})
-        self.controller.update_radius(previous,m)
-        if all(k in m for k in METRICS[:2]):
-            if not previous or max(m[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))<max(previous[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2])):
-                self.state['best_comparable']=dict(m)
+        ranking=search_metrics(self.config,c)
+        c['screening_metrics']=ranking if self.config.search.observation_mode=='finite_tail_screening' else {}
+        comparable_key='best_screening_comparable' if self.config.search.observation_mode=='finite_tail_screening' else 'best_comparable'
+        previous=self.state.get(comparable_key,{})
+        self.controller.update_radius(previous,ranking)
+        if all(k in ranking for k in METRICS[:2]):
+            if not previous or max(ranking[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))<max(previous[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2])):
+                self.state[comparable_key]=dict(ranking)
         self.state['rng']=self.controller.rng.bit_generator.state
         j['metrics']={k:v for k,v in m.items() if k not in old or old[k]!=v}
         j['applied']=True;self.store.save();self.store.mirror();LOG.info('%s %s returned: %s',c['id'],j['stage'],m)
@@ -280,6 +284,13 @@ class Campaign:
             cost_basis='measured stages' if benchmark else 'provisional scheduling estimates; no candidate-count forecast',
             estimated_remaining_full_candidates=max(0,(self.config.search.hours*3600-self.state['active_seconds']))/sum(self.estimate(s) for s in STAGES) if benchmark else None,
             validity='Fixed 35 m wake reconstruction stability only; no unique modal inversion or thermal temperature prediction')
+        report['observation_mode']=self.config.search.observation_mode
+        if self.config.search.observation_mode=='finite_tail_screening':
+            ranked=[search_view(self.config,c) for c in self.state['candidates'] if all(k in search_metrics(self.config,c) for k in METRICS[:2])]
+            ranked.sort(key=lambda c:(max(1.,max(c['metrics'][k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))),
+                max(c['metrics'].get('power5',float('inf')),c['metrics'].get('power6',float('inf')))))
+            report['screening_best']=dict(id=ranked[0]['id'],proxy_metrics=ranked[0]['metrics'],qualified_feasibility=False) if ranked else None
+            report['screening_limit']='Finite-tail Fourier proxies rank directions; fitted uncertainty remains and no proxy establishes HOM feasibility'
         atomic_json(self.store.root/'report.json',report)
         with (self.store.root/'candidates.csv').open('w',newline='',encoding='utf-8-sig') as stream:
             writer=csv.DictWriter(stream,fieldnames=['id','source',*NAMES,*METRICS,'ports','complete','feasible','failed','projects'])
@@ -303,7 +314,8 @@ class Campaign:
                     self.state['status']='budget_exhausted';return
             self.state['baseline_admission']=baseline_admission(baseline)
             self.state['accepted']=self.state['baseline_admission']['ready']
-            if not self.state['accepted']:
+            self.state['screening_admission']=screening_admission(baseline) if self.config.search.observation_mode=='finite_tail_screening' else {'ready':False}
+            if not self.state['accepted'] and not self.state['screening_admission']['ready']:
                 self.state['status']='baseline_needs_review';return
             if mode=='baseline':self.state['status']='baseline_complete';return
             while True:

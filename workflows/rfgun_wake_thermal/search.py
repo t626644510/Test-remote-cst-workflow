@@ -7,6 +7,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel,Matern,WhiteKernel
 from .config import Config,NAMES
 from .geometry import Geometry
+from .screening import search_view
 
 METRICS=('longitudinal','transverse','power5','power6')
 
@@ -29,6 +30,10 @@ class Controller:
         self.limits=np.array([config.physics.longitudinal_limit,config.physics.transverse_limit,*([config.physics.power_reference_w]*2)])
         self.models={}
 
+    @property
+    def candidates(self):
+        return [search_view(self.config,c) for c in self.state['candidates']]
+
     def encode(self,p):return (np.array([p[n] for n in NAMES])-self.lower)/self.width
     def decode(self,x):return dict(zip(NAMES,map(float,self.lower+self.width*np.asarray(x))))
 
@@ -47,7 +52,7 @@ class Controller:
     def fit(self):
         self.models={}
         for k,limit in zip(METRICS,self.limits):
-            rows=[c for c in self.state['candidates'] if k in c.get('metrics',{})]
+            rows=[c for c in self.candidates if k in c.get('metrics',{})]
             if len(rows)<self.config.search.gp_min_samples:continue
             x=np.array([self.encode(c['parameters']) for c in rows]);y=np.log1p([c['metrics'][k]/limit for c in rows])
             try:
@@ -69,7 +74,7 @@ class Controller:
         pred=self.predictions(x)
         if observed:
             for k,v in observed.items():pred[k]=(np.full(len(x),np.log1p(v/self.limits[METRICS.index(k)])),np.zeros(len(x)))
-        feasible=[c for c in self.state['candidates'] if c.get('feasible') and all(k in c['metrics'] for k in METRICS)]
+        feasible=[c for c in self.candidates if c.get('feasible') and all(k in c['metrics'] for k in METRICS)]
         probability=np.ones(len(x))
         for k in METRICS[:2]:
             mean,std=pred[k];probability*=ndtr((np.log(2.)-mean)/np.maximum(std,1e-9))
@@ -85,7 +90,7 @@ class Controller:
         return np.exp(-np.clip(lower,-10,20))/max(cost,1.)
 
     def propose(self):
-        existing=self.state['candidates'];ranked=sorted(existing,key=lambda c:max(c.get('metrics',{}).get(k,float('inf'))/self.limits[i] for i,k in enumerate(METRICS[:2])))
+        existing=self.candidates;ranked=sorted(existing,key=lambda c:max(c.get('metrics',{}).get(k,float('inf'))/self.limits[i] for i,k in enumerate(METRICS[:2])))
         hot=sorted((c for c in existing if c.get('feasible') and all(k in c['metrics'] for k in METRICS)),
                    key=lambda c:(max(c['metrics']['power5'],c['metrics']['power6']),c['metrics']['power5']+c['metrics']['power6']))
         if hot:ranked=hot+[c for c in ranked if c not in hot]

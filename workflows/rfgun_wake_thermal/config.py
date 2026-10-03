@@ -73,6 +73,7 @@ class Reconstruction:
 
 @dataclass(frozen=True)
 class Search:
+    observation_mode: str = 'qualified'
     hours: float = 96.
     exploration_fraction: float = .20
     initial_points: int = 12
@@ -163,6 +164,8 @@ class Config:
             raise ValueError('Confirmed beta=1 and nonzero source offset required')
         if not 0 < self.search.exploration_fraction < 1:
             raise ValueError('Exploration fraction must be between zero and one')
+        if self.search.observation_mode not in ('qualified','finite_tail_screening'):
+            raise ValueError('Unknown search observation mode')
         if self.search.fixed_radius_mm<=5.43 or self.search.fixed_radius_mm*2 < max(self.bounds[n][1] for n in ('projection1','projection2')):
             raise ValueError('Fixed bend radius incompatible with projection bounds')
         if not self.search.min_radius<=self.search.radius<=self.search.max_radius<=1:

@@ -181,6 +181,53 @@ class CSTWorker:
         atomic_json(directory/'worker_result_recovered.json',outcome)
         return outcome
 
+    def recover_saved_thermal(self,task:dict)->dict:
+        """Recover metal losses from a completed eigenmode on an isolated copy.
+
+        The native source is immutable. QFactor/field export may create derived
+        results in the copy, but this method never invokes an eigenmode solver.
+        """
+        from .supervision import check_recovery
+        source_dir=Path(task['directory']);check_recovery(source_dir)
+        archived=json.loads((source_dir/'task.json').read_text())
+        for key in ('identity','directory','template','parameters','ports','stage'):
+            if archived[key]!=task[key]:raise ValueError('Archived task identity mismatch: '+key)
+        if task['stage']!='thermal':raise ValueError('Thermal task required')
+        source=source_dir/'project'/Path(task['template']).name
+        actual=effective_settings(source,'thermal',self.config)
+        expected=Geometry(self.config).expand(task['parameters'])
+        if any(not math.isclose(actual['parameters'][k],v,rel_tol=1e-10,abs_tol=1e-8) for k,v in expected.items()):
+            raise ValueError('Saved thermal parameter mismatch')
+        if actual!=json.loads((source_dir/'effective_settings.json').read_text()):raise ValueError('Saved thermal settings changed')
+        start=json.loads((source_dir/'solve_started.json').read_text())
+        if start['identity']!=task['identity']:raise ValueError('Thermal solve identity mismatch')
+        log=(source_dir/'Model.log').read_text(errors='replace')
+        if not (source.with_suffix('')/'Result/Model.log').read_text(errors='replace').endswith(log):
+            raise ValueError('Thermal native log changed')
+        proof=validate_completion('thermal',json.loads((source_dir/'solver_result.json').read_text()),log,
+            json.loads((source_dir/'messages.json').read_text()),start['started_ns'])
+        before=result_fingerprint(source)
+        target=source_dir/'thermal_recovery'
+        marker=target/'recovery_source.json'
+        if target.exists():
+            if not marker.exists() or json.loads(marker.read_text())!=dict(identity=task['identity'],files=before):
+                raise ValueError('Recovery copy belongs to different source')
+            ensure_sessions_inactive(source_dir)
+            for session in target.glob('*_session.json'):
+                pid=json.loads(session.read_text()).get('pid')
+                if pid and query_pid(pid)!='absent':raise ValueError('Prior thermal extraction still active')
+        else:
+            target.mkdir();atomic_json(marker,dict(identity=task['identity'],files=before))
+            copy_verified_project(source,target/'project')
+        (target/'raw').mkdir(exist_ok=True)
+        copy=target/'project'/source.name
+        result=self._extract(copy,target,'thermal',task)
+        if before!=result_fingerprint(source):raise ValueError('Original thermal result changed during recovery')
+        outcome=dict(status='complete',stage='thermal',project=str(copy),raw=str(target/'raw'),identity=task['identity'],result=result)
+        atomic_json(target/'recovered_completion.json',dict(proof,identity=task['identity'],source_files=before,new_solver_calls=0))
+        atomic_json(target/'worker_result_recovered.json',outcome)
+        return outcome
+
     def _extract(self,path: Path,directory: Path,stage: str,task: dict) -> dict:
         from cst_optimization.core import init_cst_path
         from cst_optimization.core.results import ResultReader

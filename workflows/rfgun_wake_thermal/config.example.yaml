@@ -22,6 +22,7 @@ workflow_6:
     wake_length_m: 35
     offset_m: 0.002
   search:
+    observation_mode: qualified # finite_tail_screening requires explicit review
     hours: 96
     exploration_fraction: 0.20
     initial_points: 12

@@ -53,7 +53,7 @@ class Reconstruction:
     starts_m: tuple[float, ...] = (1., 3.)
     max_error: float = .10
     min_correlation: float = .95
-    peak_spread: float = .20
+    peak_spread: float = .10
     q_bounds: tuple[float, float] = (1., 1e6)
     max_modes: int = 24
     fit_points: int = 4096
@@ -61,6 +61,14 @@ class Reconstruction:
     max_nfev: int = 400
     min_bunch_spectrum: float = .05
     peak_prominence_fraction: float = .001
+    pencil_ranks: tuple[int, ...] = (24,32,48)
+    pencil_spacing_m: float = .02
+    pencil_rows: int = 500
+    pole_min_hz: float = 100e6
+    frequency_width_hz: float = 10e6
+    decay_bounds_per_m: tuple[float,float] = (1e-9,4.)
+    holdout_fraction: float = .8
+    bound_tail_fraction: float = .05
 
 
 @dataclass(frozen=True)
@@ -174,6 +182,15 @@ class Config:
         if not 0<self.reconstruction.max_error<1 or not 0<self.reconstruction.min_correlation<=1 or not 0<self.reconstruction.peak_spread<1:
             raise ValueError('Invalid reconstruction quality thresholds')
         if self.reconstruction.q_bounds[0]<=.5:raise ValueError('Underdamped resonator requires Q>0.5')
+        r=self.reconstruction
+        if not r.pencil_ranks or any(k<2 for k in r.pencil_ranks) or r.pencil_rows<3:
+            raise ValueError('Invalid pencil ranks or rows')
+        if len(r.decay_bounds_per_m)!=2 or not 0<r.decay_bounds_per_m[0]<r.decay_bounds_per_m[1] or not all(map(math.isfinite,r.decay_bounds_per_m)):
+            raise ValueError('Invalid decay bounds')
+        if not .5<=r.holdout_fraction<1 or not 0<r.bound_tail_fraction<1:
+            raise ValueError('Invalid holdout or local boundary-tail tolerance')
+        if r.pencil_spacing_m>=299792458./(2*(self.physics.band_hz[1]+r.frequency_width_hz)):
+            raise ValueError('Pencil samples would alias the configured pole band')
         destinations=[Path(p).resolve() for p in (self.paths.output_dir,self.paths.artifact_dir)]
         sources=[Path(p).resolve() for p in self.paths.templates.values()]
         for dst in destinations:

@@ -16,6 +16,7 @@ from .geometry import Geometry
 from .io import atomic_json, copy_verified_project, digest, fingerprint
 from .session_recovery import query_pid, ensure_sessions_inactive
 from .thermal import losses_vba, voltage_vba, analyze_thermal
+from .completion import validate_completion, legacy_messages
 
 LOG=logging.getLogger(__name__)
 
@@ -113,21 +114,24 @@ class CSTWorker:
                 atomic_json(directory/'effective_settings.json',effective_settings(path,stage,self.config))
                 log=path.with_suffix('')/'Result/Model.log'
                 before=log.read_text(errors='replace') if log.exists() else ''
-                messages_before=str(project.get_messages())
+                messages_before=project.get_messages()
                 from cst_optimization.core.solver import SolverRunner
                 atomic_json(directory/'solve_started.json',dict(identity=task['identity'],started_ns=time.time_ns()))
                 result=SolverRunner(timeout_s=self.config.runtime.stage_timeout_s,settle_s=2.).run(project)
                 atomic_json(directory/'solver_result.json',asdict(result))
-                messages=str(project.get_messages())
+                records=project.get_messages()
                 fresh=log.read_text(errors='replace') if log.exists() else ''
                 if before and fresh.startswith(before):fresh=fresh[len(before):]
-                messages=messages[len(messages_before):] if messages.startswith(messages_before) else messages
+                if messages_before and records[:len(messages_before)]==messages_before:records=records[len(messages_before):]
+                atomic_json(directory/'messages.json',records)
+                messages=str(records)
                 (directory/'messages.txt').write_text(messages,encoding='utf-8')
                 (directory/'Model.log').write_text(fresh,encoding='utf-8')
                 if not result.success: raise EvaluationFailure((result.error_message or '')+'\n'+messages+'\n'+fresh)
-                evidence=(fresh+'\n'+messages).lower()
-                pattern=r'eigenmode solver successful' if stage=='thermal' else r'(?:wakefield|transient|time domain) solver (?:run )?(?:finished successfully|successful)'
-                if not re.search(pattern,evidence):raise EvaluationFailure('Missing explicit fresh solver success evidence\n'+evidence)
+                start=json.loads((directory/'solve_started.json').read_text())
+                try:proof=validate_completion(stage,asdict(result),fresh,records,start['started_ns'])
+                except ValueError as exc:raise EvaluationFailure(str(exc)+'\n'+messages+'\n'+fresh) from exc
+                atomic_json(directory/'completion.json',proof)
                 if not project.save(include_results=True):raise EvaluationFailure('Result save failed','save_failed')
             atomic_json(solved,dict(identity=task['identity'],files=result_fingerprint(path)))
         try:
@@ -136,11 +140,52 @@ class CSTWorker:
             raise EvaluationFailure(str(exc),'postprocess_failed') from exc
         return dict(status='complete',stage=stage,project=str(path),raw=str(raw),identity=task['identity'],result=result)
 
+    def recover_saved_wake(self, task: dict) -> dict:
+        """Export a completed archived wake without opening CST or repeating a solve.
+
+        Explicit operator entry point for legacy completion-recognition failures.
+        Validate ownership, identity, settings, fresh full-tail log and raw curves
+        before certifying. Original failure files and native results stay intact.
+        """
+        from .supervision import check_recovery
+        directory=Path(task['directory']);check_recovery(directory)
+        if task['stage'] not in ('axis','x','y'):raise ValueError('Saved recovery supports wake stages only')
+        archived=json.loads((directory/'task.json').read_text())
+        for key in ('identity','directory','template','parameters','ports','stage'):
+            if archived[key]!=task[key]:raise ValueError('Archived task identity mismatch: '+key)
+        start=json.loads((directory/'solve_started.json').read_text())
+        if start['identity']!=task['identity']:raise ValueError('Solve-start identity mismatch')
+        path=directory/'project'/Path(task['template']).name
+        actual=effective_settings(path,task['stage'],self.config)
+        expected=Geometry(self.config).expand(task['parameters'])
+        expected.update(zip(self.config.runtime.port_parameters,task['ports']))
+        if any(k not in actual['parameters'] or not math.isclose(actual['parameters'][k],v,rel_tol=1e-10,abs_tol=1e-8) for k,v in expected.items()):
+            raise ValueError('Saved physical parameters or port lengths mismatch')
+        if actual!=json.loads((directory/'effective_settings.json').read_text()):raise ValueError('Saved effective settings changed')
+        log=(directory/'Model.log').read_text(errors='replace')
+        native_log=(path.with_suffix('')/'Result/Model.log').read_text(errors='replace')
+        if not native_log.endswith(log):raise ValueError('Archived log no longer matches native results')
+        records=legacy_messages((directory/'messages.txt').read_text(encoding='utf-8'))
+        proof=validate_completion(task['stage'],json.loads((directory/'solver_result.json').read_text()),log,records,start['started_ns'])
+        files=result_fingerprint(path)
+        if (directory/'solved.json').exists():
+            prior=json.loads((directory/'solved.json').read_text())
+            if prior['identity']!=task['identity'] or prior['files']!=files:raise ValueError('Saved certificate changed')
+        (directory/'raw').mkdir(exist_ok=True)
+        result=self._extract(path,directory,task['stage'],task)
+        if files!=result_fingerprint(path):raise ValueError('Native results changed during read-only extraction')
+        atomic_json(directory/'recovered_completion.json',dict(proof,identity=task['identity'],files=files,
+            recovered_at_ns=time.time_ns(),new_solver_calls=0))
+        atomic_json(directory/'solved.json',dict(identity=task['identity'],files=files,recovered=True))
+        outcome=dict(status='complete',stage=task['stage'],project=str(path),raw=str(directory/'raw'),identity=task['identity'],result=result)
+        atomic_json(directory/'worker_result_recovered.json',outcome)
+        return outcome
+
     def _extract(self,path: Path,directory: Path,stage: str,task: dict) -> dict:
         from cst_optimization.core import init_cst_path
         from cst_optimization.core.results import ResultReader
         init_cst_path(self.config.paths.cst_library_path)
-        reader=ResultReader(str(path),allow_interactive=True,cache_project_file=False)
+        reader=ResultReader(str(path),allow_interactive=False,cache_project_file=False)
         raw=directory/'raw'; tree=reader.list_tree_items()
         atomic_json(raw/'tree.json',tree)
         if stage=='thermal':
@@ -183,8 +228,13 @@ class CSTWorker:
                 arrays['frequency_'+axis]=f;arrays['impedance_'+axis]=z
             if any(not np.array_equal(axes[0],s) for s in axes[1:]):raise ValueError('Wake components use different sample axes')
             arrays.update(s_m=axes[0],wake=np.column_stack(waves))
+            if len(axes[0])<2 or np.any(np.diff(axes[0])<=0) or axes[0][-1]<self.config.physics.wake_length_m-1e-5:
+                raise ValueError('Saved wake does not cover the full configured tail')
             charge=reader.get_result_item(self.config.results.charge.format(beam=self.config.results.beam))
-            arrays['charge_s_m']=np.asarray(charge.get_xdata(),float)*factor
+            charge_label=str(charge.xlabel).replace(' ','').lower()
+            charge_factor={'mm':.001,'m':1.}.get(charge_label.rsplit('/',1)[-1])
+            if charge_factor is None:raise ValueError('Charge distribution must have an explicit distance axis, mm or m')
+            arrays['charge_s_m']=np.asarray(charge.get_xdata(),float)*charge_factor
             arrays['charge_density']=np.asarray(charge.get_ydata(),float)
             cs=arrays['charge_s_m'];rho=np.abs(arrays['charge_density'])
             area=np.trapz(rho,cs)

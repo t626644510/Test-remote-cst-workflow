@@ -9,12 +9,14 @@ physical modal decomposition. No CST APIs are imported by this module.
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
+import logging
 import numpy as np
 from scipy.optimize import least_squares, lsq_linear
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, windows
 from .config import Physics, Reconstruction
 
 C = 299792458.
+LOG=logging.getLogger(__name__)
 
 
 def transverse_norm(z: np.ndarray) -> np.ndarray:
@@ -80,6 +82,19 @@ def direct_spectrum(s:np.ndarray,wake:np.ndarray,grid:np.ndarray,sigma_m:float,d
     return z*(-1 if direction=='longitudinal' else 1j)
 
 
+def seed_spectrum(s: np.ndarray,wake: np.ndarray,grid: np.ndarray,sigma_m: float,direction: str) -> np.ndarray:
+    """Suppress finite-tail sidelobes only when locating initial pole frequencies.
+
+    Four-term Blackman-Harris taper; s is metres, f Hz, wake V/pC or V/pC/m.
+    This tapered spectrum is NEVER a reported impedance or threshold bound.
+    Fits still use untapered signed wakes; direct evidence remains untapered.
+    Closely spaced poles unresolved by this seed must pass the original residual,
+    correlation and multi-fit stability tests; a seed is not mode identification.
+    """
+    w=np.asarray(wake).reshape(len(s),-1)
+    return direct_spectrum(s,w*windows.blackmanharris(len(s))[:,None],grid,sigma_m,direction)
+
+
 @dataclass
 class FitResult:
     """Reliable scalar observations or explicit uncertainty, never a fabricated zero."""
@@ -118,12 +133,20 @@ def reconstruct(s:np.ndarray,wake:np.ndarray,physics:Physics,settings:Reconstruc
     ww=np.column_stack([np.interp(ss,s,w[:,i]) for i in range(expected)])
     z=direct_spectrum(ss,ww,coarse,physics.sigma_m,direction)
     score=transverse_norm(z.reshape(-1,2,2)) if expected==4 else abs(z[:,0])
-    peaks,_=find_peaks(score,prominence=max(float(score.max())*settings.peak_prominence_fraction,1e-15),distance=2)
+    # A rectangular 35 m tail creates large sidelobes around the working mode.
+    # Counting those as independent poles can exhaust capacity before any HOM.
+    seed_s=np.linspace(min(settings.starts_m),s[-1],max(settings.fit_points,8192))
+    seed_w=np.column_stack([np.interp(seed_s,s,w[:,i]) for i in range(expected)])
+    seed_z=seed_spectrum(seed_s,seed_w,coarse,physics.sigma_m,direction)
+    seed_score=transverse_norm(seed_z.reshape(-1,2,2)) if expected==4 else abs(seed_z[:,0])
+    peaks,_=find_peaks(seed_score,prominence=max(float(seed_score.max())*settings.peak_prominence_fraction,1e-15),distance=2)
+    seed_count=len(peaks)
+    LOG.info('%s pole seeds: %s; capacity %s',direction,seed_count,settings.max_modes)
     reasons=[]
     if len(peaks)==0:return FitResult('uncertain',None,['no_resolvable_poles'],{}, {'frequency_hz':coarse,'direct':z})
     if len(peaks)>settings.max_modes:
         reasons.append('pole_capacity_exceeded')
-        peaks=np.sort(peaks[np.argsort(score[peaks])[-settings.max_modes:]])
+        peaks=np.sort(peaks[np.argsort(seed_score[peaks])[-settings.max_modes:]])
     centers=coarse[peaks];df=C/(s[-1]-s[0]);half=df*.65
     low=np.maximum(coarse[0],centers-half);high=np.minimum(hi,centers+half)
     if len(centers)>1:
@@ -165,6 +188,7 @@ def reconstruct(s:np.ndarray,wake:np.ndarray,physics:Physics,settings:Reconstruc
             valid=bool(opt.success and err<=settings.max_error and correlation>=settings.min_correlation and not boundary and not inseparable)
             row=dict(start_m=start,seed=seed,error=err,correlation=correlation,boundary=boundary,inseparable_poles=inseparable,optimizer_success=bool(opt.success),valid=valid,peak=peak,frequency_hz=f.tolist(),q=q.tolist(),amplitudes=amp.tolist())
             fits.append(row);index=len(fits)-1
+            LOG.info('%s fit %s/%s: error=%.6g correlation=%.6g boundary=%s valid=%s peak=%.6g',direction,len(fits),len(settings.starts_m)*len(settings.seeds),err,correlation,boundary,valid,peak)
             fit_arrays.update({f'fit_{index}_s_m':ts,f'fit_{index}_wake':prediction,f'fit_{index}_frequency_hz':grid,f'fit_{index}_impedance':rz})
     valid=[x for x in fits if x['valid']]
     band=(coarse>=lo)&(coarse<=hi);direct_peak=float(score[band].max())
@@ -180,10 +204,10 @@ def reconstruct(s:np.ndarray,wake:np.ndarray,physics:Physics,settings:Reconstruc
     if score[edge]>score[edge+1] and score[edge]>.1*threshold:reasons.append('lower_band_edge_peak')
     value=max(direct_peak,max(x['peak'] for x in valid)) if valid and not reasons else None
     return FitResult('valid' if value is not None else 'uncertain',value,reasons,
-                     dict(fits=fits,direct_peak=direct_peak,peak_spread=spread,base_resolution_hz=df,
+                     dict(fits=fits,direct_peak=direct_peak,peak_spread=spread,base_resolution_hz=df,seed_count=seed_count,seed_window='blackmanharris_frequency_initialization_only',
                           lower_evidence_exceeds=direct_peak>threshold,
                           identifiability='ensemble-compatible, not unique'),
-                     dict(frequency_hz=coarse,direct=z,**fit_arrays))
+                     dict(frequency_hz=coarse,direct=z,seed_spectrum=seed_z,**fit_arrays))
 
 
 def read_bundle(path:Path)->dict:

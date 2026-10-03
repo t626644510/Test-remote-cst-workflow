@@ -99,7 +99,7 @@ class Results:
     beam: str = 'ParticleBeam1'
     wake: str = r'1D Results\Particle Beams\{beam}\Wake potential\{axis}'
     impedance: str = r'1D Results\Particle Beams\{beam}\Wake impedance\{axis}'
-    charge: str = r'1D Results\Particle Beams\{beam}\Charge distribution'
+    charge: str = r'1D Results\Particle Beams\{beam}\Charge distribution (distance)'
     wake_x_unit: str = 'mm'
     wake_y_unit: str = 'V/pC'
     frequency_unit: str = 'MHz'

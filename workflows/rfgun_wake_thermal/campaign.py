@@ -8,12 +8,30 @@ from .geometry import Geometry
 from .io import atomic_json,copy_verified_project,digest,fingerprint,project_manifest
 from .runtime import metadata,effective_settings
 from .storage import Store,prune_native
-from .search import Controller,METRICS
+from .search import Controller,METRICS,axis_observed
 from .repair import bad_ports,next_ports
 from .reconstruction import read_bundle,align_transverse,reconstruct,transverse_norm
 from .supervision import launch_worker,check_recovery
 
 LOG=logging.getLogger(__name__)
+
+
+def baseline_admission(candidate:dict)->dict:
+    """Accept a tested pipeline, never confuse it with a feasible cavity.
+
+    A trustworthy exceedance is useful even if a global peak has no precise
+    scalar value. Such observations remain absent from GP regression. Entirely
+    unresolved wakes, bad holdouts, and missing thermal results block admission.
+    """
+    evidence={}
+    for metric in ('longitudinal','transverse'):
+        detail=candidate.get('details',{}).get(metric,{})
+        diag=detail.get('diagnostics',{});fits=diag.get('fits',[])
+        scalar=metric in candidate.get('metrics',{}) and detail.get('status')=='valid'
+        exceeded=diag.get('decision')=='exceeds' and bool(fits) and all(f.get('valid') for f in fits)
+        evidence[metric]='scalar' if scalar else 'exceeds_without_scalar' if exceeded else 'unresolved'
+    evidence['thermal']='scalar' if all(k in candidate.get('metrics',{}) for k in ('power5','power6')) and candidate.get('details',{}).get('thermal',{}).get('status')=='valid' else 'unresolved'
+    return dict(ready=bool(candidate.get('complete') and all(v!='unresolved' for v in evidence.values())),evidence=evidence)
 
 
 def initialize(config: Config) -> tuple[str,dict]:
@@ -46,7 +64,8 @@ def offline_candidate(config: Config,candidate: dict,destination: Path) -> dict:
     destination.mkdir(parents=True,exist_ok=True);metrics={};details={};stages=candidate['stages']
     previous=json.loads((destination/'analysis.json').read_text()) if (destination/'analysis.json').exists() else {}
     identities={s:r['identity'] for s,r in stages.items()}
-    calculation=fingerprint(dict(physics=config.as_dict()['physics'],reconstruction=config.as_dict()['reconstruction'],code=digest(Path(__file__).with_name('reconstruction.py'))))
+    calculation=fingerprint(dict(physics=config.as_dict()['physics'],reconstruction=config.as_dict()['reconstruction'],
+        code={name:digest(Path(__file__).with_name(name)) for name in ('reconstruction.py','measured_tail.py','tail_ensemble.py')}))
     def cached(metric,required):
         return (previous.get('calculation')==calculation and metric in previous.get('details',{})
                 and all(previous.get('identities',{}).get(s)==identities.get(s) for s in required)
@@ -57,7 +76,15 @@ def offline_candidate(config: Config,candidate: dict,destination: Path) -> dict:
             if metric in previous['metrics']:metrics[metric]=previous['metrics'][metric]
     if 'axis' in stages and 'longitudinal' not in details:
         axis=read_bundle(Path(stages['axis']['raw']))
+        from .measured_tail import raw_transform
+        native=axis['impedance_Z'];native_f=axis['frequency_Z']
+        calculated=raw_transform(axis['s_m'],axis['wake'][:,2],native_f,config.physics.sigma_m,'longitudinal')[:,0]
+        mask=(native_f>=config.physics.band_hz[0])&(native_f<=config.physics.band_hz[1]+1)
+        discrepancy=float(np.max(abs(calculated[mask]-native[mask]))/max(float(np.max(abs(native[mask]))),1e-30))
+        if discrepancy>config.reconstruction.max_error:
+            raise ValueError('Measured Fourier reconstruction disagrees with native complex impedance')
         fit=reconstruct(axis['s_m'],axis['wake'][:,2],config.physics,config.reconstruction,'longitudinal',config.physics.longitudinal_limit)
+        fit.diagnostics['native_complex_relative_discrepancy']=discrepancy
         # Keep native spectrum evidence in addition to the independently computed FT.
         band=(axis['frequency_Z']>=config.physics.band_hz[0])&(axis['frequency_Z']<=config.physics.band_hz[1]+1)
         lower=float(np.max(abs(axis['impedance_Z'][band])))
@@ -130,14 +157,14 @@ class Campaign:
             # Bootstrap targets are priorities, not fabricated observations or quota exemptions.
             ntrans=sum('transverse' in p['metrics'] for p in self.state['candidates'])
             nheat=sum('power5' in p['metrics'] for p in self.state['candidates'])
-            initial=sum('longitudinal' in p['metrics'] for p in self.state['candidates'])<=self.config.search.initial_points
+            initial=sum(axis_observed(p) for p in self.state['candidates'])<=self.config.search.initial_points
             if initial and (stage in ('x','y') and ntrans<4 or stage=='thermal' and nheat<2):score*=3
             eligible.append((score,c,stage,group))
         parameters,source=self.controller.propose()
         x=self.controller.encode(parameters)[None,:]
         newscore=float(self.controller.score(x,sum(self.estimate(s) for s in STAGES))[0])
         # Initial coverage keeps its promised global coordinates, interleaved with promotions.
-        if sum('longitudinal' in p['metrics'] for p in self.state['candidates'])<=self.config.search.initial_points:newscore*=2
+        if sum(axis_observed(p) for p in self.state['candidates'])<=self.config.search.initial_points:newscore*=2
         if eligible and max(eligible,key=lambda x:x[0])[0]>=newscore:
             _,c,stage,group=max(eligible,key=lambda x:x[0]);return c,stage,group
         return self.new_candidate(parameters,source),'axis',None
@@ -158,12 +185,14 @@ class Campaign:
             ports=next_ports(c['ports'],bad,c['tried_ports'],c['repair_attempts'],c['repair_seconds'],self.config.runtime) if bad else None
             if ports is not None:
                 c['repair_attempts']+=1;c['ports']=list(ports);c['tried_ports'].append(list(ports));c['revision']+=1
+                c['repair_stage']=j['stage']
                 # Original records remain in the journal. A new consistent trio must be evaluated.
                 c['stages']={};c['metrics']={};c['details']={}
                 LOG.warning('%s port repair %s; invalidating prior combination for subtraction',c['id'],ports)
             else:c['failed']=True;c['failure']=result
             j['applied']=True;self.store.save();return
         c['stages'][j['stage']]=result
+        if c.get('repair_stage')==j['stage']:c['repair_stage']=None
         old=dict(c['metrics'])
         try:
             analysis=offline_candidate(self.config,c,self.artifacts/'evidence'/c['id']/f"revision_{c['revision']:03d}")
@@ -219,16 +248,17 @@ class Campaign:
         for drive in (self.store.root,self.artifacts):
             if shutil.disk_usage(drive).free<self.config.runtime.minimum_free_gib*2**30:raise RuntimeError('Disk free space below configured reserve')
         if not self.store.can_start(self.estimate(stage)):return False
-        if c['repair_attempts'] and c['repair_seconds']>=self.config.runtime.repair_timeout_s:
+        repairing=bool(c.get('repair_stage'))
+        if repairing and c['repair_seconds']>=self.config.runtime.repair_timeout_s:
             c.update(failed=True,failure={'category':'repair_time_exhausted'});self.store.save();return True
         task=self.task(c,stage);j=self.store.reserve(c,stage,task,exploration)
         self.store.tick();self.store.exploration=exploration;start=time.monotonic()
         LOG.info('Dispatch %s %s ports=%s exploration=%s',c['id'],stage,c['ports'],exploration)
         timeout=self.config.runtime.stage_timeout_s+self.config.runtime.postprocess_timeout_s+600.
-        if c['repair_attempts']:timeout=min(timeout,max(1.,self.config.runtime.repair_timeout_s-c['repair_seconds']))
+        if repairing:timeout=min(timeout,max(1.,self.config.runtime.repair_timeout_s-c['repair_seconds']))
         result=self.backend(self.config_path,j,self.store,timeout)
         elapsed=time.monotonic()-start;j['elapsed_s']=elapsed
-        if c['repair_attempts']:c['repair_seconds']+=elapsed
+        if repairing:c['repair_seconds']+=elapsed
         self.receive(c,j,result)
         j['elapsed_s']=time.monotonic()-start
         self.store.tick();self.store.exploration=None
@@ -267,10 +297,12 @@ class Campaign:
                 if diagnostic_stage not in baseline['stages']:self.action(baseline,diagnostic_stage,None)
                 self.state['status']='diagnostic_complete';return
             while not baseline['complete'] and not baseline['failed']:
+                if (self.store.root/'STOP').exists():self.state['status']='paused';return
                 stage=self.next_stage(baseline)
                 if not self.action(baseline,stage,'near' if self.gated(baseline,stage) else None):
                     self.state['status']='budget_exhausted';return
-            self.state['accepted']=baseline['complete'] and len(baseline['metrics'])==4
+            self.state['baseline_admission']=baseline_admission(baseline)
+            self.state['accepted']=self.state['baseline_admission']['ready']
             if not self.state['accepted']:
                 self.state['status']='baseline_needs_review';return
             if mode=='baseline':self.state['status']='baseline_complete';return

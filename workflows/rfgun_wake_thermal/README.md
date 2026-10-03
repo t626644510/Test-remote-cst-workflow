@@ -22,7 +22,10 @@ $wf6Python = 'C:\Users\lau\cst_ver3\.venv\Scripts\python.exe'
 ```
 
 `optimize` starts a new campaign, first running its complete baseline. Search
-is enabled only if all four reliable metrics were obtained. `baseline` stops
+is enabled after all four templates pass pipeline admission: each impedance
+needs a reliable scalar or a validated exceedance decision, and both thermal
+powers must be reliable. An exceedance without a stable scalar is never a GP
+observation or a feasible design. Fully unresolved wakes block admission. `baseline` stops
 after the four-template baseline. `stage --stage axis|x|y|thermal` diagnoses one
 stage in a new directory. `resume` never ignores an occupied worker/CST PID.
 `offline --candidate candidate_0000 --destination <new-directory>` reconstructs
@@ -51,15 +54,15 @@ For complex `Z`, the worst real-direction transverse response is
 ohm. Default limits are 2000 ohm and 150000 ohm/m. This transverse definition
 is distinct from WF5's individual eigenmode dissipative-polarization metric.
 
-Variable-projection least squares jointly fits common frequency/Q poles and
-four signed residues, with three seeds and two tail windows. Longitudinal
-fits include the working mode below the HOM gate. The default quality limits
-are 10% residual, 0.95 correlation and 20% ensemble peak variation. Boundary
-solutions, clipped/overlapping unresolved peaks, missing curves, insufficient
-band/tail coverage and threshold-straddling fits remain **uncertain**. Direct
-Fourier/native evidence of an excess cannot be cancelled by fitting. Raw
-curves, each fit, residual diagnostics and complex spectra are retained.
-Passing these checks is not proof of unique modal identification from 35 m.
+Reconstruction now preserves the full measured wake and adds only its missing
+infinite tail, following the later validated reference analysis. Three pencil
+ranks and two starting positions produce six joint free-phase fits. Independent
+prefix fits predict the withheld tail. Defaults: 10% residual/holdout error,
+0.95 correlation, 10% local peak spread. Bound-controlled tail contributions
+and unresolved peak windows are retained explicitly, never filled with zero.
+Longitudinal fits include the working mode; transverse fits share poles across
+all four signed components. Full complex native spectra verify units and phase.
+See [RECONSTRUCTION.md](RECONSTRUCTION.md) for provenance and limitations.
 
 The thermal stage identifies exactly one returned working mode in 498–502 MHz.
 QFactor exports all solids and component5/6 are summed dynamically. The same

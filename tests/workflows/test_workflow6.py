@@ -349,3 +349,20 @@ def test_windows_watchdog_kills_owned_worker_tree_not_just_venv_launcher(cfg,tmp
     task=dict(id='owned',identity='identity',directory=str(tmp_path/'candidate'/'attempt_0'))
     result=launch_worker(Path('local.yaml'),task,store,1)
     assert killed==[42] and result['category']=='watchdog_timeout'
+
+
+def test_successful_port_repair_does_not_time_limit_normal_downstream(cfg,point,monkeypatch):
+    # Once the repaired axis succeeded, normal X/Y/thermal stages must not share
+    # the nearly exhausted repair watchdog. Actual active time remains charged.
+    seen=[]
+    def backend(config_path,job,store,timeout):
+        seen.append(timeout)
+        return dict(status='complete',identity=job['identity'],raw='unused',result={})
+    campaign=Campaign(cfg,Path('local.yaml'),'repair-test',{'baseline':point,'templates':cfg.paths.templates},backend=backend)
+    Path(cfg.paths.artifact_dir).mkdir(parents=True,exist_ok=True)
+    c=campaign.state['candidates'][0];c.update(repair_attempts=1,repair_seconds=7199.,repair_stage=None)
+    monkeypatch.setattr('workflows.rfgun_wake_thermal.campaign.offline_candidate',lambda *a:dict(metrics={},details={}))
+    assert campaign.action(c,'x',None)
+    assert seen==[cfg.runtime.stage_timeout_s+cfg.runtime.postprocess_timeout_s+600.]
+    assert c['repair_seconds']==7199.
+    campaign.store.close()

@@ -11,6 +11,14 @@ from .geometry import Geometry
 METRICS=('longitudinal','transverse','power5','power6')
 
 
+def axis_observed(candidate:dict)->bool:
+    """Count trustworthy categorical exceedances toward initial coverage, not GP data."""
+    if 'longitudinal' in candidate.get('metrics',{}):return True
+    d=candidate.get('details',{}).get('longitudinal',{}).get('diagnostics',{})
+    fits=d.get('fits',[])
+    return bool('axis' in candidate.get('stages',{}) and d.get('decision')=='exceeds' and fits and all(f.get('valid') for f in fits))
+
+
 class Controller:
     """Four independent GPs; numerical failures and unobserved metrics never become penalties."""
     def __init__(self,config: Config,state: dict):
@@ -84,7 +92,7 @@ class Controller:
         # Valuable partial transverse results remain centers despite a poor L gate.
         centers=[c for c in existing if c.get('metrics')]
         center=self.encode((centers[int(self.rng.integers(len(centers)))] if centers and self.rng.random()<.35 else ranked[0])['parameters']) if ranked else None
-        initial=sum('longitudinal' in c.get('metrics',{}) for c in existing)<=self.config.search.initial_points
+        initial=sum(axis_observed(c) for c in existing)<=self.config.search.initial_points
         pool=self.pool(center if not initial else None)
         if existing:
             old=np.array([self.encode(c['parameters']) for c in existing]);dist=np.min(np.linalg.norm(pool[:,None,:]-old[None,:,:],axis=2),axis=1)

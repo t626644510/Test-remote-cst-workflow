@@ -79,3 +79,25 @@ progress. Search may start only after the full live baseline acceptance passes.
   physical impedance measurements. No reliable longitudinal GP value is stored.
 - Baseline remains paused for reconstruction review, before X/Y/thermal solves.
   Completed raw data, all six fits, prior failures and elapsed costs are retained.
+
+
+## Later validated reconstruction migration, 2026-10-03
+
+- Full branch no-CST suite: **629 passed, 1 skipped, 4 warnings** with the
+  prescribed venv. Added analytic joint Jacobian, native/direct/CZT phase and
+  units, free-phase prefix prediction, missing-tail normalization, bound-pole
+  uncertainty, categorical baseline admission and downstream repair-clock tests.
+- Reused the existing 35 m axis wake; no repeat CST solve. All six rank/start
+  fits passed time-domain checks: relative errors 0.536--0.862%, independent
+  held-out prediction errors 1.150--2.164%. Complex Fourier/native disagreement
+  in the HOM band was 1.1231e-7 relative to the native band maximum.
+- The global axial peak remains unresolved: a consistent approximately
+  1.78 GHz exceedance is retained as a categorical rejection, not a GP scalar.
+  Bound-controlled narrow poles remain visible as unresolved windows. No
+  below-threshold design or 10%-accurate global peak is claimed.
+- Four-template live admission still requires X/Y and thermal evidence.
+  Continuation reuses the completed axis stage and its port pair. Only after
+  baseline admission passes may the same coordinator enter search.
+- Local migration provenance records previous/new contracts, preserved failures,
+  raw identity and accumulated runtime. No source geometry, solver precision,
+  mesh, threshold, wake length or total runtime budget is changed.

@@ -15,13 +15,23 @@ def main(argv=None) -> int:
     stage=sub.add_parser('stage');stage.add_argument('--stage',required=True,choices=STAGES)
     worker=sub.add_parser('worker');worker.add_argument('--task',type=Path,required=True)
     recovery=sub.add_parser('recover-saved');recovery.add_argument('--task',type=Path,required=True)
+    thermal_recovery=sub.add_parser('recover-thermal');thermal_recovery.add_argument('--task',type=Path,required=True)
+    tail=sub.add_parser('verify-tail');tail.add_argument('--length-m',type=float,required=True)
+    tail.add_argument('--output',type=Path,required=True);tail.add_argument('--artifacts',type=Path,required=True)
+    tail.add_argument('--resume',action='store_true')
     offline=sub.add_parser('offline');offline.add_argument('--candidate',required=True);offline.add_argument('--destination',type=Path,required=True)
     args=parser.parse_args(argv);config=load_config(args.config)
-    if args.command=='recover-saved':
+    if args.command=='verify-tail':
+        from .tail_validation import run_validation
+        result=run_validation(config,args.output,args.artifacts,args.length_m,args.resume)
+        print(json.dumps({k:result[k] for k in ('status','solver_starts','validation_seconds')},indent=2));return 0
+    if args.command in ('recover-saved','recover-thermal'):
         from .runtime import CSTWorker
         from .storage import campaign_lock
         with campaign_lock(Path(config.paths.output_dir)):
-            result=CSTWorker(config).recover_saved_wake(json.loads(args.task.read_text()))
+            worker=CSTWorker(config)
+            recover=worker.recover_saved_thermal if args.command=='recover-thermal' else worker.recover_saved_wake
+            result=recover(json.loads(args.task.read_text()))
         print(json.dumps(result,indent=2));return 0
     if args.command=='worker':
         from .runtime import CSTWorker

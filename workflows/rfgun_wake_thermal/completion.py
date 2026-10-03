@@ -26,7 +26,9 @@ def validate_completion(stage: str, solver: dict, log: str, messages: list,
         raise ValueError('Solver log is stale or has no timestamps')
     proof={'kind':stage,'warnings':[m for m in messages if str(m.get('type','')).upper()=='WARNING']}
     if stage=='thermal':
-        if not re.search(r'eigenmode solver successful',log,re.I):
+        # CST 2026 puts explicit success in structured messages, while Model.log
+        # carries the dated result table and solver statistics (observed live).
+        if not re.search(r'eigenmode solver successful',text,re.I) or not re.search(r'Eigenmode solver results:',log,re.I):
             raise ValueError('Missing explicit eigenmode success')
         return proof
     calculated=re.findall(r'Simulated number of time steps:\s*(\d+)',log,re.I)

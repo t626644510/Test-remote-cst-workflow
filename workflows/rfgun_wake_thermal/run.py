@@ -14,8 +14,15 @@ def main(argv=None) -> int:
     resume=sub.add_parser('resume');resume.add_argument('--baseline-only',action='store_true')
     stage=sub.add_parser('stage');stage.add_argument('--stage',required=True,choices=STAGES)
     worker=sub.add_parser('worker');worker.add_argument('--task',type=Path,required=True)
+    recovery=sub.add_parser('recover-saved');recovery.add_argument('--task',type=Path,required=True)
     offline=sub.add_parser('offline');offline.add_argument('--candidate',required=True);offline.add_argument('--destination',type=Path,required=True)
     args=parser.parse_args(argv);config=load_config(args.config)
+    if args.command=='recover-saved':
+        from .runtime import CSTWorker
+        from .storage import campaign_lock
+        with campaign_lock(Path(config.paths.output_dir)):
+            result=CSTWorker(config).recover_saved_wake(json.loads(args.task.read_text()))
+        print(json.dumps(result,indent=2));return 0
     if args.command=='worker':
         from .runtime import CSTWorker
         task=json.loads(args.task.read_text());folder=Path(task['directory'])

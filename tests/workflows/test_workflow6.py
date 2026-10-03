@@ -16,6 +16,82 @@ from workflows.rfgun_wake_thermal.campaign import Campaign
 
 pytestmark=pytest.mark.no_cst
 
+
+def fixed_tail_log():
+    return ('2026-10-03 21:13:17 Maximum number of pulse widths simulated, solver stopped.\n'
+            'Simulated number of time steps: 132966\nMaximum number of time steps: 132966\n'
+            '2026-10-03 21:13:17 Time Domain: WakefieldSolver finished at: 2026-10-03 21:13:17 +0800')
+
+
+def test_fixed_tail_completion_is_success_without_successful_phrase():
+    from datetime import datetime
+    from workflows.rfgun_wake_thermal.completion import validate_completion
+    proof=validate_completion('axis',{'success':True},fixed_tail_log(),[],int(datetime(2026,10,3,20,14,10).timestamp()*1e9))
+    assert proof['calculated_steps']==proof['planned_steps']==132966
+
+
+@pytest.mark.parametrize('change',['incomplete','zero','no_counts','error','abort','wrapper','stale','secondary_only'])
+def test_completion_rejects_false_success(change):
+    from datetime import datetime
+    from workflows.rfgun_wake_thermal.completion import validate_completion
+    log=fixed_tail_log();messages=[];solver={'success':True};start=datetime(2026,10,3,20,14,10)
+    if change=='incomplete':log=log.replace('Simulated number of time steps: 132966','Simulated number of time steps: 123')
+    if change=='zero':log=log.replace('132966','0')
+    if change=='no_counts':log='\n'.join(s for s in log.splitlines() if 'steps:' not in s)
+    if change=='error':messages=[{'type':'ERROR','text':'Port 3 mesh failure'}]
+    if change=='abort':log+='\nAborted by user'
+    if change=='wrapper':solver={'success':False}
+    if change=='stale':start=datetime(2026,10,4)
+    if change=='secondary_only':log='2026-10-03 21:13:17 Successfully finished Secondary Quantity Evaluation.'
+    with pytest.raises(ValueError):validate_completion('axis',solver,log,messages,int(start.timestamp()*1e9))
+
+
+def test_saved_wake_recovery_never_solves(cfg,point,tmp_path,monkeypatch):
+    from datetime import datetime
+    from workflows.rfgun_wake_thermal import runtime,supervision
+    folder=tmp_path/'attempt';folder.mkdir()
+    task=dict(directory=str(folder),template='axis.cst',stage='axis',ports=[20,22],parameters=point,identity='same-solve')
+    path=folder/'project/axis.cst';path.parent.mkdir();path.write_text('native result')
+    log=path.with_suffix('')/'Result/Model.log';log.parent.mkdir(parents=True);log.write_text(fixed_tail_log())
+    (folder/'Model.log').write_text(fixed_tail_log());(folder/'messages.txt').write_text('[]')
+    actual=dict(parameters=dict(Geometry(cfg).expand(point),**dict(zip(cfg.runtime.port_parameters,task['ports']))))
+    for name,value in [('task',task),('solve_started',dict(identity=task['identity'],started_ns=int(datetime(2026,10,3,20).timestamp()*1e9))),('solver_result',{'success':True}),('effective_settings',actual),('worker_result',{'status':'failed','error':'old recognition error'})]:
+        atomic_json(folder/(name+'.json'),value)
+    monkeypatch.setattr(supervision,'check_recovery',lambda p:None)
+    monkeypatch.setattr(runtime,'effective_settings',lambda *a:actual)
+    worker=runtime.CSTWorker(cfg)
+    monkeypatch.setattr(worker,'_project',lambda *a:pytest.fail('Recovery must not open CST'))
+    monkeypatch.setattr(worker,'_extract',lambda *a:dict(status='valid'))
+    old=digest(folder/'worker_result.json');native=digest(path)
+    assert worker.recover_saved_wake(task)['status']=='complete'
+    assert digest(path)==native and digest(folder/'worker_result.json')==old
+    assert json.loads((folder/'recovered_completion.json').read_text())['new_solver_calls']==0
+    wrong=dict(task,ports=[20,24])
+    with pytest.raises(ValueError,match='task identity'):worker.recover_saved_wake(wrong)
+    actual['parameters'][cfg.runtime.port_parameters[0]]=30
+    with pytest.raises(ValueError,match='parameters or port'):worker.recover_saved_wake(task)
+
+
+def test_charge_default_is_distance(cfg):
+    assert cfg.results.charge.endswith('Charge distribution (distance)')
+
+
+def test_pole_seeding_does_not_count_strong_workmode_sidelobes_as_homs():
+    from scipy.signal import find_peaks
+    from workflows.rfgun_wake_thermal.reconstruction import seed_spectrum
+    # Strong, unresolved 500 MHz working pole plus a 100x weaker 1.3 GHz HOM.
+    # Seed taper must preserve the HOM without inventing rectangular-tail poles.
+    s=np.linspace(1,35,8192);f=np.linspace(55e6,2048e6,4096)
+    wake=basis(s,np.array([500e6,1300e6]),np.array([50000.,300.]),'longitudinal')@np.array([[1.],[.01]])
+    original=wake.copy()
+    direct=abs(direct_spectrum(s,wake,f,.05,'longitudinal')[:,0])
+    seeded=abs(seed_spectrum(s,wake,f,.05,'longitudinal')[:,0])
+    p,_=find_peaks(seeded,prominence=seeded.max()*.001,distance=2)
+    rectangular,_=find_peaks(direct,prominence=direct.max()*.001,distance=2)
+    assert len(rectangular)>24 and len(p)==2
+    assert f[p]/1e6==pytest.approx([500,1300],abs=1)
+    assert np.array_equal(wake,original)
+
 @pytest.fixture
 def cfg(tmp_path):
     return Config(Paths({s:str(tmp_path/'sources'/(s+'.cst')) for s in ('axis','x','y','thermal')},str(tmp_path/'state'),str(tmp_path/'bulk')))

@@ -101,3 +101,17 @@ progress. Search may start only after the full live baseline acceptance passes.
 - Local migration provenance records previous/new contracts, preserved failures,
   raw identity and accumulated runtime. No source geometry, solver precision,
   mesh, threshold, wake length or total runtime budget is changed.
+
+## Port repair scheduling, 2026-10-04
+
+- Live diagnosis found seven queued port3 repairs starved by the initial new
+  candidate score bonus. The coordinator stopped gracefully before modification.
+- Pending numerical repairs now precede new geometry proposals, in saved FIFO
+  order. Missing upstream stages replay at the new common port pair. Exploration
+  gates, retry limits and repair elapsed-time limits remain enforced.
+- Full branch no-CST suite: **637 passed, 1 skipped, 4 warnings**. Regression
+  tests cover seven repairs across resume without new coordinates or RNG draws,
+  upstream replay, exploration accounting and terminal retry/time limits.
+- Existing observations, failure records and runtime budget are preserved through
+  an audited contract migration. Passing offline tests does not establish a
+  successful repaired live CST solve; that is checked by the resumed monitor.

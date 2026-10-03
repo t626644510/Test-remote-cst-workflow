@@ -76,6 +76,115 @@ def test_charge_default_is_distance(cfg):
     assert cfg.results.charge.endswith('Charge distribution (distance)')
 
 
+def test_saved_thermal_recovery_copies_native_without_solver(cfg,point,tmp_path,monkeypatch):
+    from datetime import datetime
+    from workflows.rfgun_wake_thermal import runtime,supervision
+    folder=tmp_path/'thermal_attempt';folder.mkdir()
+    task=dict(directory=str(folder),template='thermal.cst',stage='thermal',ports=[20,22],parameters=point,identity='saved-thermal')
+    native=folder/'project/thermal.cst';native.parent.mkdir();native.write_text('native result')
+    log='2026-10-04 00:59:00 Eigenmode solver results:\n1 499.659 MHz 1.076e4 4.062e-16'
+    log_path=native.with_suffix('')/'Result/Model.log';log_path.parent.mkdir(parents=True);log_path.write_text(log)
+    (folder/'Model.log').write_text(log)
+    actual=dict(parameters=Geometry(cfg).expand(point))
+    for name,value in [('task',task),('solve_started',dict(identity=task['identity'],started_ns=int(datetime(2026,10,4,0,53).timestamp()*1e9))),
+            ('solver_result',{'success':True}),('effective_settings',actual),('messages',[dict(type='INFO',text='Eigenmode solver successful')])]:
+        atomic_json(folder/(name+'.json'),value)
+    monkeypatch.setattr(supervision,'check_recovery',lambda _:None)
+    monkeypatch.setattr(runtime,'effective_settings',lambda *a:actual)
+    def copy(source,dest):
+        import shutil
+        dest.mkdir();shutil.copy2(source,dest/source.name)
+        shutil.copytree(source.with_suffix(''),dest/source.stem)
+    monkeypatch.setattr(runtime,'copy_verified_project',copy)
+    worker=runtime.CSTWorker(cfg)
+    monkeypatch.setattr(worker,'_project',lambda *a:pytest.fail('Only isolated extraction is allowed'))
+    def extract(path,directory,stage,passed):
+        assert path!=native and path.read_text()==native.read_text() and stage=='thermal'
+        path.write_text('derived data in copy only')
+        return dict(status='valid',power5=388.,power6=519.)
+    monkeypatch.setattr(worker,'_extract',extract)
+    before=digest(native)
+    assert worker.recover_saved_thermal(task)['result']['power6']==519
+    assert digest(native)==before
+    assert json.loads((folder/'thermal_recovery/recovered_completion.json').read_text())['new_solver_calls']==0
+
+
+def test_screening_uses_consistent_finite_tail_proxy_without_qualifying(cfg,point):
+    from workflows.rfgun_wake_thermal.screening import search_metrics,screening_admission
+    from workflows.rfgun_wake_thermal.campaign import baseline_admission
+    c=dict(parameters=point,complete=True,failed=False,metrics={'power5':388.,'power6':519.},details={
+        'longitudinal':dict(status='uncertain',diagnostics={'direct_peak':1177.}),
+        'transverse':dict(status='uncertain',diagnostics={'direct_peak':157655.}),
+        'thermal':dict(status='valid')})
+    screening=replace(cfg,search=replace(cfg.search,observation_mode='finite_tail_screening'))
+    assert 'longitudinal' not in search_metrics(cfg,c)
+    assert search_metrics(screening,c)['longitudinal']==1177
+    assert screening_admission(c)['ready'] and not baseline_admission(c)['ready']
+    # Even a reliable reconstructed peak must use the same proxy in this GP.
+    c['metrics']['longitudinal']=9000
+    assert search_metrics(screening,c)['longitudinal']==1177
+    c['details']['transverse']['diagnostics']['direct_peak']=float('nan')
+    assert not screening_admission(c)['ready']
+    assert 'transverse' not in search_metrics(screening,c)
+
+
+@pytest.mark.parametrize('failed',[False,True])
+def test_tail_validation_three_stages_budget_exemption_and_no_replay(cfg,point,tmp_path,monkeypatch,failed):
+    from workflows.rfgun_wake_thermal import tail_validation as tv
+    from workflows.rfgun_wake_thermal.config import Config
+    original=Store(cfg,'original');original.state.update(status='paused',active_seconds=1234.)
+    original.state['candidates']=[dict(id='base',parameters=point,ports=[20,22],revision=1,stages={},metrics={},details={})]
+    original.save();original.close()
+    state_path=Path(cfg.paths.output_dir)/'state.json';before=state_path.read_bytes()
+    output=tmp_path/'validation_state';bulk=tmp_path/'validation_bulk'
+    derived=tv.validation_config(cfg,output,bulk,50)
+    assert derived.physics.wake_length_m==50 and cfg.physics.wake_length_m==35
+    assert derived.physics.band_hz==cfg.physics.band_hz and derived.physics.sigma_m==cfg.physics.sigma_m
+    with pytest.raises(ValueError):tv.validation_config(cfg,Path(cfg.paths.output_dir)/'nested',bulk,50)
+    monkeypatch.setattr(Config,'validate',lambda *a,**k:None)
+    monkeypatch.setattr(tv,'project_manifest',lambda _:dict(source='immutable'))
+    monkeypatch.setattr(tv,'check_recovery',lambda _:None)
+    monkeypatch.setattr(tv,'offline_candidate',lambda *a:dict(metrics={},details={'transverse':{'status':'uncertain'}}))
+    calls=[]
+    def backend(config,job,store,timeout):
+        calls.append(job['stage']);assert job['ports']==[20,22]
+        raw=Path(job['directory'])/'raw';raw.mkdir(parents=True)
+        (raw/'curve').write_text('data');atomic_json(raw/'manifest.json',{'curve':digest(raw/'curve')})
+        result=dict(status='failed' if failed and job['stage']=='x' else 'complete',raw=str(raw),identity=job['identity'])
+        atomic_json(raw.parent/'worker_result.json',result)
+        return result
+    report=tv.run_validation(cfg,output,bulk,50,backend=backend)
+    assert calls==(['axis','x'] if failed else ['axis','x','y'])
+    assert report['excluded_from_campaign_budget'] and state_path.read_bytes()==before
+    assert report['status']==('validation_failed' if failed else 'validation_complete')
+    assert report['solver_starts']==len(calls)
+    resumed=tv.run_validation(cfg,output,bulk,50,resume=True,backend=lambda *a:pytest.fail('Duplicate solve'))
+    assert resumed['solver_starts']==len(calls) and state_path.read_bytes()==before
+
+
+def test_screening_gp_leaves_qualified_observations_empty(cfg,point):
+    cfg=replace(cfg,search=replace(cfg.search,observation_mode='finite_tail_screening'))
+    st=state(cfg)
+    for i in range(7):
+        st['candidates'].append(dict(parameters=dict(point,selfangle1=10+i),metrics={},details={
+            'longitudinal':{'diagnostics':{'direct_peak':1000.+i}}}))
+    model=Controller(cfg,st);model.fit()
+    assert 'longitudinal' in model.models
+    assert all(c['metrics']=={} for c in st['candidates'])
+
+
+def test_eigenmode_success_in_structured_messages_still_requires_fresh_result_log():
+    from datetime import datetime
+    from workflows.rfgun_wake_thermal.completion import validate_completion
+    log='2026-10-04 00:59:00 Eigenmode solver results:\nMode Frequency Total Q Accuracy\n1 499.659 MHz 1.076e4 4.062e-16'
+    messages=[dict(type='INFO',text='Eigenmode solver successful')]
+    start=int(datetime(2026,10,4,0,53).timestamp()*1e9)
+    assert validate_completion('thermal',{'success':True},log,messages,start)['kind']=='thermal'
+    with pytest.raises(ValueError):validate_completion('thermal',{'success':True},log,[],start)
+    with pytest.raises(ValueError):validate_completion('thermal',{'success':True},log.replace('Eigenmode solver results:','Meshing successful'),messages,start)
+    with pytest.raises(ValueError):validate_completion('thermal',{'success':True},log,messages,start+3600*10**9)
+
+
 def test_pole_seeding_does_not_count_strong_workmode_sidelobes_as_homs():
     from scipy.signal import find_peaks
     from workflows.rfgun_wake_thermal.reconstruction import seed_spectrum

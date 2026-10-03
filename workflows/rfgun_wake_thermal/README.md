@@ -188,3 +188,39 @@ direct spectra, signed fit data, residual checks, and acceptance thresholds are
 unchanged. The saved reconstruction bundle includes both spectra and all six
 fits. A low wake residual alone does not validate boundary-controlled or unstable
 resonator impedances.
+
+### Longer-tail comparison and preliminary screening
+
+An explicitly authorized one-off comparison can run outside the campaign clock:
+`--config <config> verify-tail --length-m 50 --output <separate-state> --artifacts <separate-bulk>`.
+It copies the original immutable snapshots and baseline coordinates/port pair,
+runs axis/X/Y once each, verifies the effective tail setting, and reconstructs
+the complete matrix. It never solves thermal, repairs ports, retries a failed
+solve, alters meshes, changes the original state, or starts search. `--resume`
+only recovers already dispatched work; a failed solve is not replayed. The
+comparison records its own elapsed time, source-state hash, and three-start cap.
+
+After reviewing the comparison, an audited config migration can enable
+`search.observation_mode: finite_tail_screening`. This explicitly uses the
+fixed-length measured Fourier peaks for both impedance GP observations and
+stage priorities. It consistently uses those proxies even for candidates with
+reliable reconstructions; thermal observations remain validated metal power.
+All six reconstructed fits and qualified metrics remain separate and unchanged.
+Screening admission does not set qualified baseline acceptance or physical
+feasibility. Reports distinguish `screening_best` from a qualified best design,
+and retention protects the top proxy-ranked native projects. Narrow resonances
+can be underestimated; these rankings select directions for later validation.
+Do not mix 35 m and 50 m proxies in one campaign or silently change observation
+mode, code fingerprint, or the existing runtime budget.
+
+`recover-thermal --task <saved-task>` accepts fresh structured eigenmode success
+messages together with the native result table. It verifies saved identity and
+settings, extracts QFactor losses/voltage on an isolated native copy, and checks
+that the original result hashes are unchanged. It performs no eigenmode solve;
+the original failure remains available for an audited state migration.
+
+Validation on 2026-10-04: full branch-local no-CST suite, 635 passed, 1 skipped
+(4 existing NumPy integration deprecation warnings). Separately, live saved
+thermal recovery succeeded without solving: mode 499.659176738 MHz; at 500 kV
+peak CW, component5 388.457 W and component6 519.070 W. The longer-tail run is
+a separate live validation; unit tests do not establish its completion.

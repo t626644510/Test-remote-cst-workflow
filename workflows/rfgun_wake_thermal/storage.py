@@ -117,6 +117,14 @@ def prune_native(config: Config,state: dict) -> list[str]:
     if not marker.exists() or json.loads(marker.read_text()).get('contract')!=state['contract']:
         raise ValueError('Artifact root ownership is not established')
     keep=retained_candidates(state['candidates'],config.runtime.retain_recent,config.runtime.retain_pareto)
+    if config.search.observation_mode=='finite_tail_screening':
+        from .screening import search_metrics
+        ranked=[c for c in state['candidates'] if all(k in search_metrics(config,c) for k in ('longitudinal','transverse'))]
+        def screen_order(c):
+            m=search_metrics(config,c)
+            return (max(1.,m['longitudinal']/config.physics.longitudinal_limit,m['transverse']/config.physics.transverse_limit),
+                    max(m.get('power5',float('inf')),m.get('power6',float('inf'))))
+        keep.update(c['id'] for c in sorted(ranked,key=screen_order)[:max(1,config.runtime.retain_pareto)])
     keep.update(j['candidate'] for j in state['jobs'] if j['status']=='reserved')
     removed=[]
     for j in state['jobs']:

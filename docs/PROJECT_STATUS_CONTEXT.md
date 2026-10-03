@@ -440,3 +440,10 @@ git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-a
    非明确要求不要重跑全 campaign。
 5. 所有 workflow：逐步把 tracked 本机路径拆成 portable example 与
    gitignored local config，但不得破坏已验证 CST 路径。
+
+
+## WF6?2026-10-03?
+
+Canonical ???`workflow/6-rfgun-wake-thermal`?? main `dedc5fcabfa1bde0be49726d14488baea6f7cea0` ???
+????`C:\Users\lau\.codex\worktrees\wf6-wake-thermal\cst_ver3`?
+????????????????????? `run_workflow_6.py`???? `workflows/rfgun_wake_thermal/README.md`?

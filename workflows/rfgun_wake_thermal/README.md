@@ -1,0 +1,161 @@
+# WF6 — staged wake impedance and antenna metal losses
+
+Canonical branch: `workflow/6-rfgun-wake-thermal`, based on main
+`dedc5fcabfa1bde0be49726d14488baea6f7cea0`. The shared core is unchanged.
+No runtime dependency on WF2, WF5, another worktree or a user skill installation.
+
+## Invocation
+
+Copy `config.example.yaml` to the git-ignored `config.local.yaml` and supply all
+four complete CST projects (container plus same-name companion directory).
+Supply `cst_library_path` or `CST_PYTHON_LIB`. Use the repository's `.venv`
+Python, with this worktree as the working directory:
+
+```powershell
+$wf6Python = 'C:\Users\lau\cst_ver3\.venv\Scripts\python.exe'
+& $wf6Python run_workflow_6.py --config workflows/rfgun_wake_thermal/config.local.yaml validate
+& $wf6Python run_workflow_6.py --config workflows/rfgun_wake_thermal/config.local.yaml baseline
+# Explicit continuation of an existing campaign, preserving its accumulated budget:
+& $wf6Python run_workflow_6.py --config workflows/rfgun_wake_thermal/config.local.yaml resume
+# Continue a baseline while retaining its stop-after-baseline boundary:
+& $wf6Python run_workflow_6.py --config workflows/rfgun_wake_thermal/config.local.yaml resume --baseline-only
+```
+
+`optimize` starts a new campaign, first running its complete baseline. Search
+is enabled only if all four reliable metrics were obtained. `baseline` stops
+after the four-template baseline. `stage --stage axis|x|y|thermal` diagnoses one
+stage in a new directory. `resume` never ignores an occupied worker/CST PID.
+`offline --candidate candidate_0000 --destination <new-directory>` reconstructs
+retained numerical evidence; it neither imports CST nor changes campaign state.
+Creating `STOP` in the metadata directory pauses after the current action.
+Remove that file before explicitly resuming. No remote execution is supported.
+
+## Scientific contract
+
+The physical coordinates are twelve values, in degrees and mm. Each antenna
+has selfangle, UpperHeight, DownHeight, Lin, projection and fork length. The
+projection is the double-bend displacement `P=2R(1-cos(theta))`, bounded
+5.43–19.57 mm, with fixed radius magnitude 25 mm. Antenna 1 stores negative
+radius and angle; `Lin1` maps to CST `Lin`. Negative DownHeight is supported:
+`abs(DownHeight) <= UpperHeight - 0.01` and `Lin - DownHeight >= 0.01`.
+The baseline is collapsed from the templates and rebuilt at the fixed radius.
+
+Axis/X/Y wakes must cover the same full 550–2047.8288539789505 MHz band,
+with Gaussian sigma=50 mm, beta=1 and the fixed 35 m wake. Both offset beams
+are +2 mm; both integration witnesses remain on the global beam axis.
+Signed axis subtraction gives the full transverse matrix in V/pC/m. No
+diagonal-only approximation or missing-result zero is used.
+
+For complex `Z`, the worst real-direction transverse response is
+`sqrt(lambda_max(Re(Z.conj().T @ Z)))` in ohm/m. Longitudinal magnitude is in
+ohm. Default limits are 2000 ohm and 150000 ohm/m. This transverse definition
+is distinct from WF5's individual eigenmode dissipative-polarization metric.
+
+Variable-projection least squares jointly fits common frequency/Q poles and
+four signed residues, with three seeds and two tail windows. Longitudinal
+fits include the working mode below the HOM gate. The default quality limits
+are 10% residual, 0.95 correlation and 20% ensemble peak variation. Boundary
+solutions, clipped/overlapping unresolved peaks, missing curves, insufficient
+band/tail coverage and threshold-straddling fits remain **uncertain**. Direct
+Fourier/native evidence of an excess cannot be cancelled by fitting. Raw
+curves, each fit, residual diagnostics and complex spectra are retained.
+Passing these checks is not proof of unique modal identification from 35 m.
+
+The thermal stage identifies exactly one returned working mode in 498–502 MHz.
+QFactor exports all solids and component5/6 are summed dynamically. The same
+mode's complex axial voltage integral normalizes the losses to peak 500 kV,
+CW, beta=1: `P_i=sum(P_solid)*abs(500000/Vacc)**2`. Power units are W. No
+temperature, port output power or beam-driven HOM heat is included. The
+default 150 W per antenna is a soft aspiration; search continues after it is
+met. Eigenmode accuracy 1e-6 and external-Q accuracy 1e-4 are separate values.
+The template's mesh strategy is preserved; no extra mesh convergence solves.
+
+## Partial evaluations, numerical faults and search
+
+Each stage uses an independent owned copy. Parameters are rebuilt, saved
+without old results and reopened before solver settings are applied and
+checked. Solver success requires fresh explicit log/message evidence and
+complete newly read results. A solved task with failed extraction is retained;
+explicit resume retries only extraction. An interrupted solve without success
+evidence is recorded as interrupted, never silently rerun.
+
+Only explicit port 2/3 nonuniform/inhomogeneous mesh diagnostics activate
+repair. Defaults: 20,22,18,24,16,26,14,28,12,30,10 mm; only diagnosed ports
+change. There are at most ten repair retries and two cumulative repair hours
+per candidate. Changing the combination invalidates all active wake stages;
+new axis/X/Y results must use the same combination. Old evidence stays in the
+journal and is not used as mixed-geometry observations. Other failures do not
+become artificial impedance penalties or shrink the trust region.
+
+Four independent Matérn GPs use only each metric's reliable observations,
+with normalized coordinates and `log1p(metric/threshold)` outputs. Fewer than
+six observations, or GP failure, falls back to feasible coverage. The initial
+baseline plus twelve valid longitudinal coordinates use maximin coverage;
+partial-stage promotions are interleaved. Four transverse and two thermal
+observations are bootstrap priorities subject to actual time availability.
+Later pools are half global, half local; valuable transverse partial points
+remain eligible centers even when their longitudinal gate fails.
+
+The controller compares partially evaluated and new points using predicted
+remaining cost. Before impedance feasibility it rewards lower worst normalized
+violation and uncertainty. Afterwards it uses Monte Carlo expected worst-antenna
+power improvement multiplied by impedance feasibility probability and divided
+by remaining cost. Radius starts at 0.25, expands after three comparable valid
+improvements, and contracts after six comparable valid non-improvements down
+to 0.05. Failed or missing observations do not affect these counters.
+
+About 20% of measured runtime is reserved for gate-crossing exploration,
+balanced between near/uncertain and broadly distributed candidates. A full
+baseline can initially exceed that fraction; subsequent dispatches repay that
+exploration debt. Gates remain mandatory for final accepted designs.
+
+## Runtime, recovery and data ownership
+
+Default budget is 96 hours of active coordinator/worker/reconstruction time.
+Paused downtime is excluded. Expensive tasks are reserved durably before launch;
+expected stage cost plus a five-minute finishing reserve prevents late dispatch.
+In-flight work finishes, subject to its watchdog limit. Count forecasts are
+reported only after all four baseline stage costs have been measured.
+
+The parent supervises an independent Python worker. Session UUID, PID and
+Windows process creation time protect targeted cleanup from PID reuse. Only
+owned processes are stopped; no global CST cleanup or project lock deletion.
+Recovery refuses occupied or unverifiable worker/session identities. Immutable
+template, parameter, port, solver, configuration and code fingerprints prevent
+cache reuse across different contracts. Editing code during a campaign is
+unsupported; use a separate, reviewed campaign contract for a changed workflow.
+
+Put `output_dir` on the metadata drive (D in the local configuration), and
+`artifact_dir` on the large-data drive (E locally). The former contains state,
+the shared evaluation SQLite database, checkpoint, heartbeat, campaign log,
+`report.json` and `candidates.csv`. The latter contains immutable templates,
+candidate projects, raw numerical bundles, per-fit spectra and loss tables.
+
+Native project retention keeps the baseline, best feasible result, up to five
+Pareto alternatives and two recent completed candidates. Reserved tasks and
+failed-extraction projects are protected. Other completed stage project copies
+can be removed only after their permanent numerical evidence manifest verifies.
+The cleanup checks resolved ownership and never traverses into source templates
+or another campaign. Disk reserve exhaustion pauses with an explicit error.
+
+## Provenance and verification
+
+- WF2 `pso_wake_fit.py`, branch commit `6a6c99d`: damped wake basis, Gaussian
+  bunch factor, amplitude-to-R/Q normalization and resonator impedance formula.
+  The joint shared-pole fit and ensemble uncertainty checks are WF6 additions.
+  The legacy missing-result zero and fallback-success paths were not migrated.
+- WF5: owned CST lifecycle, exact-PID recovery gate, verified copying and
+  VectorPlot3D extraction macro. These reuse shared connection/project/solver
+  classes; no shared module has been copied into this workflow.
+- User-validated `loss_field_probe_20260923`: QFactor per-solid ASCII loss export
+  and peak-voltage scaling. Solid names are discovered from each new export.
+
+Run the complete branch-local suite with:
+
+```powershell
+& $wf6Python -m pytest -m 'not cst_required' -q
+```
+
+No-CST tests do not establish live API acceptance. The separate baseline must
+demonstrate actual result paths, units, mesh-error classification, full-band
+curves and component-loss normalization before optimization is enabled.

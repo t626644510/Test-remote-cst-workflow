@@ -392,6 +392,51 @@ def test_failed_ordinary_solver_does_not_repair_or_shrink(cfg,point):
     campaign.store.close()
 
 
+def test_repair_queue_survives_resume_without_new_candidates(cfg,point,monkeypatch):
+    campaign=Campaign(cfg,Path('local.yaml'),'repair-queue',{'baseline':point,'templates':cfg.paths.templates})
+    campaign.state['candidates'][0]['complete']=True
+    for i in range(1,8):
+        c=campaign.new_candidate(dict(point,selfangle1=float(i)),'global_maximin')
+        j=campaign.store.reserve(c,'axis',campaign.task(c,'axis'),None)
+        campaign.receive(c,j,dict(status='failed',error='Non-uniform mesh at port 3'))
+    before=json.dumps(campaign.state,sort_keys=True)
+    campaign.store.close()
+    campaign=Campaign(cfg,Path('local.yaml'),'repair-queue',{'baseline':point,'templates':cfg.paths.templates})
+    monkeypatch.setattr(campaign.controller,'fit',lambda:pytest.fail('Repair must precede GP fitting'))
+    monkeypatch.setattr(campaign.controller,'propose',lambda:pytest.fail('Repair must not draw a new coordinate'))
+    c,stage,group=campaign.select()
+    assert (c['id'],stage,group)==('candidate_0001','axis',None)
+    assert c['ports']==[20,22] and json.dumps(campaign.state,sort_keys=True)==before
+    # Retry exhaustion remains terminal and lets the next queued repair run.
+    c['repair_attempts']=cfg.runtime.repair_retries
+    j=campaign.store.reserve(c,stage,campaign.task(c,stage),None)
+    campaign.receive(c,j,dict(status='failed',error='Non-uniform mesh at port 3'))
+    assert c['failed'] and campaign.select()[0]['id']=='candidate_0002'
+    campaign.store.close()
+
+
+def test_downstream_repair_replays_upstream_and_honors_exploration(cfg,point,monkeypatch):
+    campaign=Campaign(cfg,Path('local.yaml'),'repair-gate',{'baseline':point,'templates':cfg.paths.templates})
+    c=campaign.state['candidates'][0]
+    c.update(repair_stage='y',ports=[20,22],repair_attempts=1)
+    assert campaign.select()==(c,'axis',None)
+    c['stages']={'axis':{}}
+    c['metrics']={'longitudinal':3000.}  # Ohm: above 2000 Ohm gate.
+    # No exploration allowance: pending repair must not bypass the physics gate.
+    monkeypatch.setattr(campaign.controller,'fit',lambda:None)
+    monkeypatch.setattr(campaign.controller,'propose',lambda:(dict(point,selfangle1=17.),'global_maximin'))
+    assert campaign.select()[0] is not c
+    campaign.state['active_seconds']=100000.
+    assert campaign.select()==(c,'x','near')
+    # Exhausted repair wall time is rejected before any worker launch.
+    Path(cfg.paths.artifact_dir).mkdir(parents=True,exist_ok=True)
+    c['repair_seconds']=cfg.runtime.repair_timeout_s
+    campaign.backend=lambda *a:pytest.fail('Exhausted repair must not solve')
+    assert campaign.action(c,'x','near')
+    assert c['failure']['category']=='repair_time_exhausted'
+    campaign.store.close()
+
+
 def test_crash_recovery_ingests_completed_stage_without_resolving(cfg,point,monkeypatch):
     campaign=Campaign(cfg,Path('local.yaml'),'contract',{'baseline':point,'templates':cfg.paths.templates})
     c=campaign.state['candidates'][0];task=campaign.task(c,'axis');j=campaign.store.reserve(c,'axis',task,None)

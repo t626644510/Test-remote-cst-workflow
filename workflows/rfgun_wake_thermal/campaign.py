@@ -138,8 +138,24 @@ class Campaign:
         return stage=='thermal' and m.get('transverse',float('inf'))>self.config.physics.transverse_limit
 
     def select(self) -> tuple[dict,str,str|None]:
-        self.controller.fit();eligible=[];total=self.state['active_seconds']
+        eligible=[];total=self.state['active_seconds']
         exposure=self.state['exploration_seconds'];fraction=self.config.search.exploration_fraction
+        # Complete already-authorized numerical repairs before proposing another
+        # geometry. Otherwise the initial-coverage bonus starves every repair
+        # while failures leave the number of valid initial observations unchanged.
+        # FIFO is bounded by receive()/action() retry and elapsed-time limits.
+        for c in self.state['candidates']:
+            if c['failed'] or c['complete'] or not c.get('repair_stage'):continue
+            stage=self.next_stage(c)
+            if stage is None:continue
+            # A downstream port change invalidates the entire wake trio: replay
+            # missing upstream stages first, at the same new port combination.
+            gated=self.gated(c,stage)
+            allow=sum(exposure.values())+self.estimate(stage)<=fraction*(total+self.estimate(stage))
+            if gated and not allow:continue
+            group=('near' if exposure['near']<=exposure['global'] else 'global') if gated else None
+            return c,stage,group
+        self.controller.fit()
         for c in self.state['candidates']:
             if c['failed'] or c['complete']:continue
             stage=self.next_stage(c)

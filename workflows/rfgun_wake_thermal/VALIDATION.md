@@ -115,3 +115,14 @@ progress. Search may start only after the full live baseline acceptance passes.
 - Existing observations, failure records and runtime budget are preserved through
   an audited contract migration. Passing offline tests does not establish a
   successful repaired live CST solve; that is checked by the resumed monitor.
+
+## Saved wake endpoint sampling, 2026-10-04
+
+- Sigma70 axis solve completed 149612/149612 steps, with its last saved sample
+  at 34.9999151047 m (0.0849 mm below 35 m; sample spacing 0.2411 mm).
+  The fixed 0.01 mm endpoint tolerance incorrectly rejected this saved result.
+- Endpoint validation now permits a bounded single-sample shortfall without
+  padding, rescaling, changing the requested tail or repeating the solver.
+  The limit uses the smaller typical/final cell, capped at 0.01% of tail length.
+- Full branch no-CST suite: **643 passed, 1 skipped, 4 warnings**; tests cover
+  the observed endpoint, real truncation, sparse/expanded gaps and invalid axes.

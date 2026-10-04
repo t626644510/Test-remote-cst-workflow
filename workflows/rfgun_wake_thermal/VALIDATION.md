@@ -131,3 +131,17 @@ progress. Search may start only after the full live baseline acceptance passes.
 2026-10-04 common-band history support: isolated full branch no-CST suite: 659 passed, 1 skipped. Tests cover metric-wise native precedence, normalized heteroscedastic GP variance, contract/geometry/nonfinite rejection, duplicate sample count, qualified-mode exclusion, checkpoint recovery and idempotent database persistence without budget charge. Live application waits for the running sigma70 stage to finish; existing CST results are not recomputed.
 
 Live migration completed 2026-10-04: sigma70 X returned before the stage-boundary pause. Common-band sigma50 observations were imported with metric-wise sigma70 precedence. Full active-checkout no-CST validation: 659 passed, 1 skipped. An expected-hash mismatch from archive/working-tree line endings was audited and corrected without changing untouched source bytes or repeating CST solves; migration downtime was excluded from the time budget.
+
+
+2026-10-04 reconstructed-peak uncertainty migration: full isolated branch no-CST
+suite **676 passed, 1 skipped**. Coverage includes whole-band unresolved windows,
+local boundary outliers and rank/start diversity, missing window exclusion,
+upper endpoints, threshold straddles, FT contradictions, full transverse matrix,
+reconstructed-only GP targets and historical/native precedence, heteroscedastic
+uncertainty, stage gates, overlapping-envelope radius behavior, persistence and
+idempotent DB mirroring. Existing 20% exploration/recovery/port-repair tests pass.
+Saved sigma70 and sigma50 curves were reprocessed offline under each source's
+own sigma and identical common band. No new CST solve was used for validation.
+Formal uncertainties remain; no mock or offline test is claimed as a new live
+solver or qualified-HOM acceptance. Active-checkout tests and resume provenance
+are recorded separately in the campaign migration audit.

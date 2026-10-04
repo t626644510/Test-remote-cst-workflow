@@ -3,7 +3,8 @@
 The old validated analysis used manually reviewed peak windows. Here windows
 are discovered from this record, never copied from an earlier geometry.
 Unstable or bound-controlled tails remain explicitly unresolved. Their values
-cannot enter a GP or authorize a below-threshold claim.
+cannot authorize a qualified below-threshold claim. Search-only reconstructed
+estimates retain their uncertainty separately from qualified values.
 """
 from __future__ import annotations
 import logging
@@ -110,7 +111,7 @@ def reconstruct_measured(s,wake,physics,settings,direction,threshold):
         stable=all_reliable and uncontaminated and spread<=settings.peak_spread and not straddles
         decision='exceeds' if observed>threshold or (all_reliable and uncontaminated and min(values)>threshold) else 'below' if stable and max(values)<=threshold else 'unresolved'
         windows.append(dict(band_hz=[float(left),float(right)],peaks=values,direct_peak=observed,
-            boundary_tail_peaks=contamination,spread=spread,stable=bool(stable),decision=decision))
+            boundary_tail_peaks=contamination,fit_indices=[i for i,a in enumerate(scores) if a is not None],spread=spread,stable=bool(stable),decision=decision))
         if stable:stable_peaks.append(max(observed,max(values)))
     # Finite-band endpoints need explicit treatment even when fits look stable.
     # Report the in-band endpoints; an out-of-band working mode's smooth
@@ -122,7 +123,11 @@ def reconstruct_measured(s,wake,physics,settings,direction,threshold):
     if edge_rise:reasons.append('band_edge_peak')
     value=max(stable_peaks) if stable_peaks and not reasons else None
     decision='exceeds' if any(x['decision']=='exceeds' for x in windows) else 'below' if value is not None and value<=threshold else 'unresolved'
-    return FitResult('valid' if value is not None else 'uncertain',value,reasons,
+    legacy=FitResult('valid' if value is not None else 'uncertain',value,reasons,
         dict(method=VERSION,fits=fits,windows=windows,decision=decision,direct_peak=float(direct.max()),
              lower_evidence_exceeds=decision=='exceeds',base_resolution_hz=resolution,
              identifiability='Measured segment retained; local tail stability does not prove unique modes'),arrays)
+
+    from .peak_consensus import summarize
+    revised=summarize(legacy.summary(),physics,settings,direction,arrays,threshold)
+    return FitResult(revised['status'],revised['value'],revised['reasons'],revised['diagnostics'],arrays)

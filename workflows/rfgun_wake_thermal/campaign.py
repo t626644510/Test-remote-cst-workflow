@@ -12,7 +12,7 @@ from .search import Controller,METRICS,axis_observed
 from .repair import bad_ports,next_ports
 from .reconstruction import read_bundle,align_transverse,reconstruct,transverse_norm
 from .supervision import launch_worker,check_recovery
-from .screening import search_metrics,search_view,screening_admission
+from .screening import search_metrics,search_view,screening_admission,stage_below,ranking_metrics,reconstruction_uncertainty
 
 LOG=logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def offline_candidate(config: Config,candidate: dict,destination: Path) -> dict:
     previous=json.loads((destination/'analysis.json').read_text()) if (destination/'analysis.json').exists() else {}
     identities={s:r['identity'] for s,r in stages.items()}
     calculation=fingerprint(dict(physics=config.as_dict()['physics'],reconstruction=config.as_dict()['reconstruction'],
-        code={name:digest(Path(__file__).with_name(name)) for name in ('reconstruction.py','measured_tail.py','tail_ensemble.py')}))
+        code={name:digest(Path(__file__).with_name(name)) for name in ('reconstruction.py','measured_tail.py','tail_ensemble.py','peak_consensus.py')}))
     def cached(metric,required):
         return (previous.get('calculation')==calculation and metric in previous.get('details',{})
                 and all(previous.get('identities',{}).get(s)==identities.get(s) for s in required)
@@ -134,8 +134,8 @@ class Campaign:
     def gated(self,c: dict,stage: str) -> bool:
         if stage=='axis':return False
         m=search_metrics(self.config,c)
-        if m.get('longitudinal',float('inf'))>self.config.physics.longitudinal_limit:return True
-        return stage=='thermal' and m.get('transverse',float('inf'))>self.config.physics.transverse_limit
+        if not stage_below(self.config,c,'longitudinal'):return True
+        return stage=='thermal' and not stage_below(self.config,c,'transverse')
 
     def select(self) -> tuple[dict,str,str|None]:
         eligible=[];total=self.state['active_seconds']
@@ -167,7 +167,7 @@ class Campaign:
             group=('near' if exposure['near']<=exposure['global'] else 'global') if gated else None
             x=self.controller.encode(c['parameters'])[None,:]
             remaining=sum(self.estimate(s) for s in STAGES if s not in c['stages'])
-            score=float(self.controller.score(x,remaining,search_metrics(self.config,c))[0])
+            score=float(self.controller.score(x,remaining,search_metrics(self.config,c),reconstruction_uncertainty(c) if self.config.search.observation_mode=='reconstructed_peak_screening' else None)[0])
             if group=='global':
                 # Randomized global partial points compete independently of predicted merit.
                 score=float(self.controller.rng.random())/self.estimate(stage)
@@ -223,13 +223,15 @@ class Campaign:
         c['complete']=all(s in c['stages'] for s in STAGES)
         m=c['metrics'];c['feasible']=m.get('longitudinal',float('inf'))<=self.config.physics.longitudinal_limit and m.get('transverse',float('inf'))<=self.config.physics.transverse_limit
         ranking=search_metrics(self.config,c)
-        c['screening_metrics']=ranking if self.config.search.observation_mode=='finite_tail_screening' else {}
-        comparable_key='best_screening_comparable' if self.config.search.observation_mode=='finite_tail_screening' else 'best_comparable'
+        c['screening_metrics']=ranking if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening') else {}
+        comparable_key='best_screening_comparable' if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening') else 'best_comparable'
         previous=self.state.get(comparable_key,{})
-        self.controller.update_radius(previous,ranking)
+        self.controller.update_radius(previous,ranking,self.state.get(comparable_key+'_uncertainty'),reconstruction_uncertainty(c))
         if all(k in ranking for k in METRICS[:2]):
-            if not previous or max(ranking[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))<max(previous[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2])):
+            if not previous or max(ranking_metrics(self.config,c)[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))<max(self.state.get(comparable_key+'_ranking',previous)[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2])):
                 self.state[comparable_key]=dict(ranking)
+                self.state[comparable_key+'_uncertainty']=reconstruction_uncertainty(c)
+                self.state[comparable_key+'_ranking']=ranking_metrics(self.config,c)
         self.state['rng']=self.controller.rng.bit_generator.state
         j['metrics']={k:v for k,v in m.items() if k not in old or old[k]!=v}
         j['applied']=True;self.store.save();self.store.mirror();LOG.info('%s %s returned: %s',c['id'],j['stage'],m)
@@ -301,12 +303,12 @@ class Campaign:
             estimated_remaining_full_candidates=max(0,(self.config.search.hours*3600-self.state['active_seconds']))/sum(self.estimate(s) for s in STAGES) if benchmark else None,
             validity='Fixed 35 m wake reconstruction stability only; no unique modal inversion or thermal temperature prediction')
         report['observation_mode']=self.config.search.observation_mode
-        if self.config.search.observation_mode=='finite_tail_screening':
+        if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
             ranked=[search_view(self.config,c) for c in self.state['candidates'] if all(k in search_metrics(self.config,c) for k in METRICS[:2])]
-            ranked.sort(key=lambda c:(max(1.,max(c['metrics'][k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))),
+            ranked.sort(key=lambda c:(max(1.,max(ranking_metrics(self.config,c)[k]/self.controller.limits[i] for i,k in enumerate(METRICS[:2]))),
                 max(c['metrics'].get('power5',float('inf')),c['metrics'].get('power6',float('inf')))))
-            report['screening_best']=dict(id=ranked[0]['id'],proxy_metrics=ranked[0]['metrics'],qualified_feasibility=False) if ranked else None
-            report['screening_limit']='Finite-tail Fourier proxies rank directions; fitted uncertainty remains and no proxy establishes HOM feasibility'
+            report['screening_best']=dict(id=ranked[0]['id'],estimated_metrics=ranked[0]['metrics'],uncertainty=ranked[0].get('metric_uncertainty',{}),qualified_feasibility=False) if ranked else None
+            report['screening_limit']='Reconstructed peak estimates and uncertainty guide search; unresolved full-band windows cannot establish formal feasibility' if self.config.search.observation_mode=='reconstructed_peak_screening' else 'Finite-tail proxies do not establish HOM feasibility'
         atomic_json(self.store.root/'report.json',report)
         with (self.store.root/'candidates.csv').open('w',newline='',encoding='utf-8-sig') as stream:
             writer=csv.DictWriter(stream,fieldnames=['id','source',*NAMES,*METRICS,'ports','complete','feasible','failed','projects'])
@@ -330,7 +332,7 @@ class Campaign:
                     self.state['status']='budget_exhausted';return
             self.state['baseline_admission']=baseline_admission(baseline)
             self.state['accepted']=self.state['baseline_admission']['ready']
-            self.state['screening_admission']=screening_admission(baseline) if self.config.search.observation_mode=='finite_tail_screening' else {'ready':False}
+            self.state['screening_admission']=screening_admission(baseline,self.config) if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening') else {'ready':False}
             if not self.state['accepted'] and not self.state['screening_admission']['ready']:
                 self.state['status']='baseline_needs_review';return
             if mode=='baseline':self.state['status']='baseline_complete';return

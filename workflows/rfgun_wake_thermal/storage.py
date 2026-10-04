@@ -29,7 +29,9 @@ class Store:
         atomic_json(self.file,self.state)
         self.checkpoint.rng_state={'random':self.state['rng'],'budget':self.state['active_seconds'],
             'observations':[(c['id'],c.get('metrics',{})) for c in self.state['candidates']],
-            'historical_observations':[(c['id'],c.get('metrics',{}),c.get('evidence_manifest_sha256')) for c in self.state.get('historical_observations',[])]}
+            'search_observations':[(c['id'],c.get('screening_metrics',{}),c.get('details',{})) for c in self.state['candidates']],
+            'observation_mode':self.config.search.observation_mode,
+            'historical_observations':[(c['id'],c.get('metrics',{}),c.get('evidence_manifest_sha256'),c.get('details',{})) for c in self.state.get('historical_observations',[])]}
         self.checkpoint.records=[EvalRecord(x=[c['parameters'][n] for n in NAMES],status='completed' if c.get('complete') else 'pending',
             phases_done=list(c['stages']),raw_values=c.get('metrics',{})) for c in self.state['candidates']]
         self.checkpoint.save()
@@ -46,6 +48,18 @@ class Store:
                 raw_payload=RawEvaluationPayload(raw_metrics=c['metrics'],diagnostics=c,artifact_refs={'evidence':c.get('evidence','')}),
                 provenance={'job':key,'contract':self.state['contract'],'source_contract':c.get('source_contract'),
                             'qualification':'GP-only; not current stage completion or feasibility'}))
+        if self.config.search.observation_mode=='reconstructed_peak_screening':
+            from .screening import reconstructed_metrics,reconstruction_uncertainty
+            for c in self.state['candidates']:
+                metrics=reconstructed_metrics(c)
+                if not metrics:continue
+                uncertainty=reconstruction_uncertainty(c)
+                key='reconstructed:'+c['id']+':'+fingerprint(dict(metrics=metrics,uncertainty=uncertainty,contract=self.state['contract']))
+                if key in seen:continue
+                self.db.insert_final_record(EvaluationDatabaseRecord(
+                    parameter_identity=ParameterIdentity(list(NAMES),[c['parameters'][n] for n in NAMES]),status='success',
+                    source='wf6.reconstructed_screening',raw_payload=RawEvaluationPayload(raw_metrics=metrics,diagnostics={'uncertainty':uncertainty,'formal_feasible':c.get('feasible',False)}),
+                    provenance={'job':key,'contract':self.state['contract'],'qualification':'Reconstructed estimate; uncertainty retained; not formal acceptance'}))
         for j in self.state['jobs']:
             if j['status']=='reserved' or j['id'] in seen:continue
             c=next(c for c in self.state['candidates'] if c['id']==j['candidate'])
@@ -127,11 +141,11 @@ def prune_native(config: Config,state: dict) -> list[str]:
     if not marker.exists() or json.loads(marker.read_text()).get('contract')!=state['contract']:
         raise ValueError('Artifact root ownership is not established')
     keep=retained_candidates(state['candidates'],config.runtime.retain_recent,config.runtime.retain_pareto)
-    if config.search.observation_mode=='finite_tail_screening':
-        from .screening import search_metrics
+    if config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
+        from .screening import search_metrics,ranking_metrics
         ranked=[c for c in state['candidates'] if all(k in search_metrics(config,c) for k in ('longitudinal','transverse'))]
         def screen_order(c):
-            m=search_metrics(config,c)
+            m=ranking_metrics(config,c)
             return (max(1.,m['longitudinal']/config.physics.longitudinal_limit,m['transverse']/config.physics.transverse_limit),
                     max(m.get('power5',float('inf')),m.get('power6',float('inf'))))
         keep.update(c['id'] for c in sorted(ranked,key=screen_order)[:max(1,config.runtime.retain_pareto)])

@@ -166,7 +166,7 @@ class Config:
             raise ValueError('Confirmed beta=1 and nonzero source offset required')
         if not 0 < self.search.exploration_fraction < 1:
             raise ValueError('Exploration fraction must be between zero and one')
-        if self.search.observation_mode not in ('qualified','finite_tail_screening'):
+        if self.search.observation_mode not in ('qualified','finite_tail_screening','reconstructed_peak_screening'):
             raise ValueError('Unknown search observation mode')
         if not 0 < self.search.native_relative_noise <= self.search.history_relative_noise < 1:
             raise ValueError('Historical relative noise must be at least native noise and below one')

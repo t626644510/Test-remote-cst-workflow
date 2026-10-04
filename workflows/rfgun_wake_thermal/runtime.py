@@ -24,6 +24,25 @@ class EvaluationFailure(RuntimeError):
     def __init__(self, message: str, category: str='solver_failed'):
         super().__init__(message); self.category=category
 
+
+def validate_wake_tail(s_m: np.ndarray, requested_m: float) -> dict:
+    """Allow one sampling cell at a completed wake endpoint, without padding.
+
+    Distances are metres. CST may place its last sample just below the requested
+    length despite completing every planned time step (checked separately).
+    Bound the allowance by both the typical and final cell, capped at 0.01%
+    of the requested tail; a sparse or enlarged final gap cannot hide truncation.
+    """
+    s=np.asarray(s_m,float)
+    if s.ndim!=1 or len(s)<2 or not np.isfinite(s).all() or np.any(np.diff(s)<=0):
+        raise ValueError('Invalid saved wake sample axis')
+    steps=np.diff(s)
+    tolerance=max(1e-5,min(float(np.median(steps)),float(steps[-1]),requested_m*1e-4)+1e-9)
+    if s[-1]<requested_m-tolerance:
+        raise ValueError('Saved wake does not cover the full configured tail')
+    return dict(requested_m=requested_m,last_sample_m=float(s[-1]),endpoint_tolerance_m=tolerance,
+                sample_count=len(s),endpoint_shortfall_m=max(0.,float(requested_m-s[-1])))
+
 def metadata(path: Path) -> dict:
     root=path.with_suffix('')
     h=json.loads((root/'Model/3D/ModelHistory.json').read_text(encoding='utf-8-sig'))
@@ -275,8 +294,7 @@ class CSTWorker:
                 arrays['frequency_'+axis]=f;arrays['impedance_'+axis]=z
             if any(not np.array_equal(axes[0],s) for s in axes[1:]):raise ValueError('Wake components use different sample axes')
             arrays.update(s_m=axes[0],wake=np.column_stack(waves))
-            if len(axes[0])<2 or np.any(np.diff(axes[0])<=0) or axes[0][-1]<self.config.physics.wake_length_m-1e-5:
-                raise ValueError('Saved wake does not cover the full configured tail')
+            tail_coverage=validate_wake_tail(axes[0],self.config.physics.wake_length_m)
             charge=reader.get_result_item(self.config.results.charge.format(beam=self.config.results.beam))
             charge_label=str(charge.xlabel).replace(' ','').lower()
             charge_factor={'mm':.001,'m':1.}.get(charge_label.rsplit('/',1)[-1])
@@ -292,7 +310,7 @@ class CSTWorker:
             if any(not np.isfinite(v).all() for v in arrays.values()):raise ValueError('Nonfinite raw result')
             np.savez_compressed(raw/'curves.npz',**arrays)
             result=dict(status='valid',ports=task['ports'],parameters=task['parameters'],stage=stage,
-                units={'s_m':'m','wake':'V/pC','frequency':'Hz','impedance':'ohm'},paths=labels,identity=task['identity'],sigma_m=float(sigma))
+                units={'s_m':'m','wake':'V/pC','frequency':'Hz','impedance':'ohm'},paths=labels,identity=task['identity'],sigma_m=float(sigma),tail_coverage=tail_coverage)
         atomic_json(raw/'bundle.json',result)
         atomic_json(raw/'manifest.json',{p.name:digest(p) for p in raw.iterdir() if p.is_file() and p.name!='manifest.json'})
         return result

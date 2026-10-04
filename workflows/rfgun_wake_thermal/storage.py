@@ -28,7 +28,8 @@ class Store:
         from cst_optimization.checkpoint import EvalRecord
         atomic_json(self.file,self.state)
         self.checkpoint.rng_state={'random':self.state['rng'],'budget':self.state['active_seconds'],
-            'observations':[(c['id'],c.get('metrics',{})) for c in self.state['candidates']]}
+            'observations':[(c['id'],c.get('metrics',{})) for c in self.state['candidates']],
+            'historical_observations':[(c['id'],c.get('metrics',{}),c.get('evidence_manifest_sha256')) for c in self.state.get('historical_observations',[])]}
         self.checkpoint.records=[EvalRecord(x=[c['parameters'][n] for n in NAMES],status='completed' if c.get('complete') else 'pending',
             phases_done=list(c['stages']),raw_values=c.get('metrics',{})) for c in self.state['candidates']]
         self.checkpoint.save()
@@ -36,6 +37,15 @@ class Store:
     def mirror(self):
         from cst_optimization.evaluation.evaluation_database_schema import EvaluationDatabaseRecord,ParameterIdentity,RawEvaluationPayload
         seen={r['provenance'].get('job') for r in self.db.get_all_records() if r.get('provenance')}
+        for c in self.state.get('historical_observations',[]):
+            key='history:'+c['id']+':'+fingerprint(c)
+            if key in seen:continue
+            self.db.insert_final_record(EvaluationDatabaseRecord(
+                parameter_identity=ParameterIdentity(list(NAMES),[c['parameters'][n] for n in NAMES]),
+                status='success',source='wf6.historical_screening_only',
+                raw_payload=RawEvaluationPayload(raw_metrics=c['metrics'],diagnostics=c,artifact_refs={'evidence':c.get('evidence','')}),
+                provenance={'job':key,'contract':self.state['contract'],'source_contract':c.get('source_contract'),
+                            'qualification':'GP-only; not current stage completion or feasibility'}))
         for j in self.state['jobs']:
             if j['status']=='reserved' or j['id'] in seen:continue
             c=next(c for c in self.state['candidates'] if c['id']==j['candidate'])

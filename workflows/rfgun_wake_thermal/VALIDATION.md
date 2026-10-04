@@ -126,3 +126,8 @@ progress. Search may start only after the full live baseline acceptance passes.
   The limit uses the smaller typical/final cell, capped at 0.01% of tail length.
 - Full branch no-CST suite: **643 passed, 1 skipped, 4 warnings**; tests cover
   the observed endpoint, real truncation, sparse/expanded gaps and invalid axes.
+
+
+2026-10-04 common-band history support: isolated full branch no-CST suite: 659 passed, 1 skipped. Tests cover metric-wise native precedence, normalized heteroscedastic GP variance, contract/geometry/nonfinite rejection, duplicate sample count, qualified-mode exclusion, checkpoint recovery and idempotent database persistence without budget charge. Live application waits for the running sigma70 stage to finish; existing CST results are not recomputed.
+
+Live migration completed 2026-10-04: sigma70 X returned before the stage-boundary pause. Common-band sigma50 observations were imported with metric-wise sigma70 precedence. Full active-checkout no-CST validation: 659 passed, 1 skipped. An expected-hash mismatch from archive/working-tree line endings was audited and corrected without changing untouched source bytes or repeating CST solves; migration downtime was excluded from the time budget.

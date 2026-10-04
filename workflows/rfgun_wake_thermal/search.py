@@ -34,6 +34,30 @@ class Controller:
     def candidates(self):
         return [search_view(self.config,c) for c in self.state['candidates']]
 
+    def training_rows(self,metric):
+        """Metric-wise native replacement of audited common-band historical proxies.
+
+        Historical wakes (ohm or ohm/m) inform regression only, never current
+        feasibility, stage quotas, budget, or radius changes. Thermal watts
+        use native noise because the validated CW working-mode physics is shared.
+        """
+        rows={}
+        def add(candidate,historical):
+            value=candidate.get('metrics',{}).get(metric)
+            if not isinstance(value,(int,float)) or not np.isfinite(value) or value<0:return
+            if self.geometry.violations(candidate['parameters']):return
+            key=tuple(np.round(self.encode(candidate['parameters']),10))
+            noise=self.config.search.history_relative_noise if historical and metric in METRICS[:2] else self.config.search.native_relative_noise
+            rows[key]=(candidate,float(value),noise,historical)
+        if self.config.search.observation_mode=='finite_tail_screening':
+            for c in self.state.get('historical_observations',[]):
+                if (c.get('source_kind')!='common_band_history' or not c.get('evidence_verified')
+                    or list(c.get('band_hz',[]))!=list(self.config.physics.band_hz)
+                    or c.get('wake_length_m')!=self.config.physics.wake_length_m):continue
+                add(c,True)
+        for c in self.candidates:add(c,False)
+        return list(rows.values())
+
     def encode(self,p):return (np.array([p[n] for n in NAMES])-self.lower)/self.width
     def decode(self,x):return dict(zip(NAMES,map(float,self.lower+self.width*np.asarray(x))))
 
@@ -52,12 +76,18 @@ class Controller:
     def fit(self):
         self.models={}
         for k,limit in zip(METRICS,self.limits):
-            rows=[c for c in self.candidates if k in c.get('metrics',{})]
+            rows=self.training_rows(k)
             if len(rows)<self.config.search.gp_min_samples:continue
-            x=np.array([self.encode(c['parameters']) for c in rows]);y=np.log1p([c['metrics'][k]/limit for c in rows])
+            x=np.array([self.encode(c['parameters']) for c,_,_,_ in rows]);ratio=np.array([v/limit for _,v,_,_ in rows]);y=np.log1p(ratio)
+            # alpha is variance in normalized log1p units, not ohm^2 or W^2.
+            # Convert configured relative uncertainty before sklearn normalizes y.
+            relative=np.array([noise for _,_,noise,_ in rows])
+            uncertainty=np.maximum(np.log1p(ratio*(1+relative))-y,1e-6)
+            scale=float(np.std(y));scale=scale if scale>1e-15 else 1.
+            alpha=(uncertainty/scale)**2
             try:
                 kernel=ConstantKernel(1.,(.01,100.))*Matern(np.ones(12),(.03,5.),nu=2.5)+WhiteKernel(1e-5,(1e-8,.05))
-                model=GaussianProcessRegressor(kernel=kernel,normalize_y=True,random_state=self.config.search.seed,n_restarts_optimizer=0)
+                model=GaussianProcessRegressor(kernel=kernel,alpha=alpha,normalize_y=True,random_state=self.config.search.seed,n_restarts_optimizer=0)
                 with warnings.catch_warnings():warnings.simplefilter('ignore');model.fit(x,y)
                 self.models[k]=model
             except (ValueError,np.linalg.LinAlgError):continue

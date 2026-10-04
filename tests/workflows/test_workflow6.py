@@ -17,6 +17,21 @@ from workflows.rfgun_wake_thermal.campaign import Campaign
 pytestmark=pytest.mark.no_cst
 
 
+def test_completed_wake_endpoint_accepts_subcell_shortfall_without_padding():
+    from workflows.rfgun_wake_thermal.runtime import validate_wake_tail
+    s=np.linspace(-.5984244923668903,34.999915104711896,147663)
+    original=s.copy();proof=validate_wake_tail(s,35.)
+    assert 0<proof['endpoint_shortfall_m']<proof['endpoint_tolerance_m']<.000242
+    assert np.array_equal(s,original)
+
+
+@pytest.mark.parametrize('axis',[np.linspace(0,34.99,147000),np.array([0.,34.99]),
+    np.array([0.,.001,.002,34.99]),np.array([0.,35.,34.]),np.array([0.,np.nan])])
+def test_wake_endpoint_rejects_truncation_and_invalid_axes(axis):
+    from workflows.rfgun_wake_thermal.runtime import validate_wake_tail
+    with pytest.raises(ValueError):validate_wake_tail(axis,35.)
+
+
 def fixed_tail_log():
     return ('2026-10-03 21:13:17 Maximum number of pulse widths simulated, solver stopped.\n'
             'Simulated number of time steps: 132966\nMaximum number of time steps: 132966\n'

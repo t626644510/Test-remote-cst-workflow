@@ -231,3 +231,48 @@ a separate live validation; unit tests do not establish its completion.
 Audited `state.historical_observations` may supply GP-only finite-tail proxies from another bunch length after raw curves are recomputed on the current full band using their own Gaussian sigma. The wake length and physical coordinates must agree; full transverse matrices must be formed within a consistent source trio. These records do not count as new stage completions, initial-coverage quota, budget, incumbent feasibility, or trust-radius comparisons. A current observation supersedes a historical observation at the same coordinates separately for each metric.
 
 `search.history_relative_noise` defaults to 0.20 for historical impedance; `native_relative_noise` defaults to 0.02. These are search-model uncertainty assumptions, not proven numerical error bars. CW working-mode metal powers with verified identical geometry and thermal settings use native noise. Noise is converted to log1p output units and divided by the actual output normalization before becoming the GP diagonal variance. Raw histories, common-band fits and provenance remain available; the state, checkpoint and evaluation database preserve their GP-only identity. Formal acceptance still requires current campaign evidence.
+
+
+### Reconstructed-peak screening (current WF6 contract)
+
+Use `search.observation_mode: reconstructed_peak_screening`. The 2000 ohm and
+150000 ohm/m gates refer to **reconstructed** impedances. Direct measured FT
+spectra remain evidence and contradiction checks only. They are not GP targets,
+stage gate values, sorting values, or trust-radius observations in this mode.
+
+`peak_consensus.py` assesses a partition of the entire configured band. Local
+peak agreement requires at least four of six quality-passing fits, covering both
+start positions and at least two pencil ranks. Boundary-tail contamination is
+assessed locally; rejected fit values remain in evidence. Unsupported windows
+remain in the global peak estimate and mark it unresolved. A missing finite
+window or missing band coverage excludes the scalar from the GP. Rising upper
+band endpoints prevent qualified acceptance.
+
+Search uses the maximum of local reconstructed median estimates; its relative
+uncertainty includes fit/holdout error and ensemble spread (minimum 25% for an
+unresolved local peak, at least 100% when no bounded envelope is supported).
+These are sensitivity/model assumptions, not calibrated confidence limits.
+Formal `metrics`/`feasible` require every window to qualify, no unresolved band
+edge, and no threshold-straddling envelope. `screening_metrics` and
+`screening_best.estimated_metrics` are expressly preliminary and include the
+full uncertainty record. A supported finite upper envelope controls ordinary
+stage promotion; unresolved/unbounded points can still use the unchanged 20%
+actual-time cross-gate exploration allocation. Sorting uses the upper estimate
+or an uncertainty penalty for unbounded windows, without treating that penalty
+as a physical upper bound.
+
+The GP targets reconstructed estimates, with ensemble uncertainty combined
+conservatively with the native/history noise floor before the existing log1p
+normalization. Historical common-band records require reconstructed evidence;
+legacy direct-FT history is excluded until reprocessed. Current sigma70 values
+replace same-coordinate sigma50 observations metric by metric. Observed partial
+results keep their uncertainty in cost-aware acquisition. Trust-radius streaks
+change only for non-overlapping, comparable reconstructed envelopes; uncertain
+comparisons and numerical failures cannot shrink the radius.
+
+Migration retains original raw curves, old fit evidence, all stage identities,
+CST start counts, and budget history. Offline reanalysis creates a new evidence
+revision, checkpoint and database observations record the new definition, and
+an explicit config/code/template fingerprint migration is required before resume.
+No CST replay is needed for this change. The sigma70 band and 35 m tail remain
+unchanged; uncovered high frequencies cannot be declared suppressed.

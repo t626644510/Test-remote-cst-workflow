@@ -7,7 +7,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel,Matern,WhiteKernel
 from .config import Config,NAMES
 from .geometry import Geometry
-from .screening import search_view
+from .screening import search_view,ranking_metrics,reconstruction_uncertainty
 
 METRICS=('longitudinal','transverse','power5','power6')
 
@@ -48,12 +48,16 @@ class Controller:
             if self.geometry.violations(candidate['parameters']):return
             key=tuple(np.round(self.encode(candidate['parameters']),10))
             noise=self.config.search.history_relative_noise if historical and metric in METRICS[:2] else self.config.search.native_relative_noise
+            u=candidate.get('metric_uncertainty',{}).get(metric,{})
+            noise=max(noise,float(u.get('relative_uncertainty',0)))
             rows[key]=(candidate,float(value),noise,historical)
-        if self.config.search.observation_mode=='finite_tail_screening':
+        if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
             for c in self.state.get('historical_observations',[]):
                 if (c.get('source_kind')!='common_band_history' or not c.get('evidence_verified')
                     or list(c.get('band_hz',[]))!=list(self.config.physics.band_hz)
                     or c.get('wake_length_m')!=self.config.physics.wake_length_m):continue
+                if self.config.search.observation_mode=='reconstructed_peak_screening':
+                    c=search_view(self.config,c)
                 add(c,True)
         for c in self.candidates:add(c,False)
         return list(rows.values())
@@ -99,11 +103,15 @@ class Controller:
             else:result[k]=(np.full(len(x),np.log(2.)),np.ones(len(x)))
         return result
 
-    def score(self,x,cost,observed=None):
+    def score(self,x,cost,observed=None,observed_uncertainty=None):
         """MC heat EI × impedance feasibility / remaining seconds, else worst violation."""
         pred=self.predictions(x)
         if observed:
-            for k,v in observed.items():pred[k]=(np.full(len(x),np.log1p(v/self.limits[METRICS.index(k)])),np.zeros(len(x)))
+            for k,v in observed.items():
+                ratio=v/self.limits[METRICS.index(k)]
+                rel=(observed_uncertainty or {}).get(k,{}).get('relative_uncertainty',0.)
+                std=np.log1p(ratio*(1+rel))-np.log1p(ratio)
+                pred[k]=(np.full(len(x),np.log1p(ratio)),np.full(len(x),std))
         feasible=[c for c in self.candidates if c.get('feasible') and all(k in c['metrics'] for k in METRICS)]
         probability=np.ones(len(x))
         for k in METRICS[:2]:
@@ -120,7 +128,7 @@ class Controller:
         return np.exp(-np.clip(lower,-10,20))/max(cost,1.)
 
     def propose(self):
-        existing=self.candidates;ranked=sorted(existing,key=lambda c:max(c.get('metrics',{}).get(k,float('inf'))/self.limits[i] for i,k in enumerate(METRICS[:2])))
+        existing=self.candidates;ranked=sorted(existing,key=lambda c:max(ranking_metrics(self.config,c).get(k,float('inf'))/self.limits[i] for i,k in enumerate(METRICS[:2])))
         hot=sorted((c for c in existing if c.get('feasible') and all(k in c['metrics'] for k in METRICS)),
                    key=lambda c:(max(c['metrics']['power5'],c['metrics']['power6']),c['metrics']['power5']+c['metrics']['power6']))
         if hot:ranked=hot+[c for c in ranked if c not in hot]
@@ -139,14 +147,25 @@ class Controller:
         self.state['rng']=self.rng.bit_generator.state
         return self.decode(pool[index]),source
 
-    def update_radius(self,old: dict,new: dict):
+    def update_radius(self,old: dict,new: dict,old_uncertainty=None,new_uncertainty=None):
         """Only compare fully observed same-level objectives, never failure/missing data."""
         keys=METRICS if all(k in old and k in new for k in METRICS) else METRICS[:2]
         if not all(k in old and k in new for k in keys):return
         def objective(m):
             violation=max(m[k]/self.limits[i] for i,k in enumerate(METRICS[:2]))
             return (max(1.,violation),max(m['power5'],m['power6'])) if len(keys)==4 else (violation,)
-        improve=objective(new)<objective(old)
+        if self.config.search.observation_mode=='reconstructed_peak_screening':
+            if not old_uncertainty or not new_uncertainty:return
+            if any(u.get('unbounded',True) or u.get('upper') is None for d in (old_uncertainty,new_uncertainty) for k,u in d.items() if k in METRICS[:2]):return
+            if not all(k in old_uncertainty and k in new_uncertainty for k in METRICS[:2]):return
+            oldlo=dict(old);oldhi=dict(old);newlo=dict(new);newhi=dict(new)
+            for k in METRICS[:2]:
+                oldlo[k]=old_uncertainty[k]['lower'];oldhi[k]=old_uncertainty[k]['upper']
+                newlo[k]=new_uncertainty[k]['lower'];newhi[k]=new_uncertainty[k]['upper']
+            if objective(newhi)<objective(oldlo):improve=True
+            elif objective(newlo)>objective(oldhi):improve=False
+            else:return  # overlapping envelopes are scientifically incomparable
+        else:improve=objective(new)<objective(old)
         self.state['improving']=self.state['improving']+1 if improve else 0
         self.state['not_improving']=0 if improve else self.state['not_improving']+1
         if self.state['improving']>=3:self.state['radius']=min(self.config.search.max_radius,self.state['radius']*1.3);self.state['improving']=0

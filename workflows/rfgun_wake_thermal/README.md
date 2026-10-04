@@ -224,3 +224,10 @@ Validation on 2026-10-04: full branch-local no-CST suite, 635 passed, 1 skipped
 thermal recovery succeeded without solving: mode 499.659176738 MHz; at 500 kV
 peak CW, component5 388.457 W and component6 519.070 W. The longer-tail run is
 a separate live validation; unit tests do not establish its completion.
+
+
+### Common-band historical observations (2026-10-04)
+
+Audited `state.historical_observations` may supply GP-only finite-tail proxies from another bunch length after raw curves are recomputed on the current full band using their own Gaussian sigma. The wake length and physical coordinates must agree; full transverse matrices must be formed within a consistent source trio. These records do not count as new stage completions, initial-coverage quota, budget, incumbent feasibility, or trust-radius comparisons. A current observation supersedes a historical observation at the same coordinates separately for each metric.
+
+`search.history_relative_noise` defaults to 0.20 for historical impedance; `native_relative_noise` defaults to 0.02. These are search-model uncertainty assumptions, not proven numerical error bars. CW working-mode metal powers with verified identical geometry and thermal settings use native noise. Noise is converted to log1p output units and divided by the actual output normalization before becoming the GP diagonal variance. Raw histories, common-band fits and provenance remain available; the state, checkpoint and evaluation database preserve their GP-only identity. Formal acceptance still requires current campaign evidence.

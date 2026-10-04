@@ -85,6 +85,8 @@ class Search:
     max_radius: float = .5
     bound_clearance_mm: float = .01
     fixed_radius_mm: float = 25.
+    native_relative_noise: float = .02
+    history_relative_noise: float = .20
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,8 @@ class Config:
             raise ValueError('Exploration fraction must be between zero and one')
         if self.search.observation_mode not in ('qualified','finite_tail_screening'):
             raise ValueError('Unknown search observation mode')
+        if not 0 < self.search.native_relative_noise <= self.search.history_relative_noise < 1:
+            raise ValueError('Historical relative noise must be at least native noise and below one')
         if self.search.fixed_radius_mm<=5.43 or self.search.fixed_radius_mm*2 < max(self.bounds[n][1] for n in ('projection1','projection2')):
             raise ValueError('Fixed bend radius incompatible with projection bounds')
         if not self.search.min_radius<=self.search.radius<=self.search.max_radius<=1:

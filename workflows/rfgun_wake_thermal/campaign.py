@@ -198,7 +198,8 @@ class Campaign:
     def receive(self,c: dict,j: dict,result: dict):
         self.store.complete_job(j,result)
         if result['status']!='complete':
-            bad=bad_ports(result.get('error','')) if j['stage']!='thermal' else ()
+            unsafe_session=result.get('category') in ('cleanup_failed','ownership_failed')
+            bad=bad_ports(result.get('error','')) if j['stage']!='thermal' and not unsafe_session else ()
             ports=next_ports(c['ports'],bad,c['tried_ports'],c['repair_attempts'],c['repair_seconds'],self.config.runtime) if bad else None
             if ports is not None:
                 c['repair_attempts']+=1;c['ports']=list(ports);c['tried_ports'].append(list(ports));c['revision']+=1
@@ -207,7 +208,12 @@ class Campaign:
                 c['stages']={};c['metrics']={};c['details']={}
                 LOG.warning('%s port repair %s; invalidating prior combination for subtraction',c['id'],ports)
             else:c['failed']=True;c['failure']=result
-            j['applied']=True;self.store.save();return
+            j['applied']=True;self.store.save()
+            if unsafe_session:
+                # Persist before stopping, including replay after a coordinator
+                # interruption. An unverified session cannot admit another task.
+                raise RuntimeError(f"CST session safety failure in {j['id']}: {result.get('error','')}")
+            return
         c['stages'][j['stage']]=result
         if c.get('repair_stage')==j['stage']:c['repair_stage']=None
         old=dict(c['metrics'])

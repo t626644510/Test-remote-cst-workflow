@@ -321,6 +321,7 @@ class CSTWorker:
         from cst_optimization.core.connection import CSTConnection
         project, pid, connection = None, None, None
         connect_started = False
+        primary_error = None
         session = {"session_id": str(uuid4()), "pid": None,
                    "project": str(path.resolve()), "phase": "opening"}
         session_path = directory / f"{phase}_session.json"
@@ -341,6 +342,9 @@ class CSTWorker:
             if Path(project.filename).resolve() != path.resolve():
                 raise EvaluationFailure("CST opened an unexpected project", "ownership_failed")
             yield project
+        except BaseException as exc:
+            primary_error = f"{type(exc).__name__}: {exc}"
+            raise
         finally:
             # A failed connect may nevertheless have created its own DE and PID.
             # Recover only this connection's PID; never infer one from other processes.
@@ -384,6 +388,8 @@ class CSTWorker:
                 else:
                     result["error"] = "Connection started without a recorded owned PID"
                 result.update(session_id=session["session_id"], pid=pid, project=session["project"])
+                if primary_error is not None:
+                    result["primary_error"] = primary_error
                 if close_error is not None:
                     result["project_close_error"] = f"{type(close_error).__name__}: {close_error}"
                 atomic_json(directory / f"{phase}_cleanup.json", result)

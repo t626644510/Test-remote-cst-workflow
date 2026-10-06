@@ -423,6 +423,57 @@ def test_failed_ordinary_solver_does_not_repair_or_shrink(cfg,point):
     campaign.store.close()
 
 
+@pytest.mark.parametrize('category',['cleanup_failed','ownership_failed'])
+def test_session_safety_failure_stops_dispatch_after_persisting(cfg,point,category):
+    calls=[]
+    def backend(config_path,job,store,timeout):
+        calls.append(job['id'])
+        return dict(status='failed',category=category,error='CST startup failed; Non-uniform mesh at port 3')
+    campaign=Campaign(cfg,Path('local.yaml'),'session-safety',
+        {'baseline':point,'templates':cfg.paths.templates},backend=backend)
+    Path(cfg.paths.artifact_dir).mkdir(parents=True,exist_ok=True)
+    with pytest.raises(RuntimeError,match='CST session safety failure'):
+        campaign.run('optimize')
+    saved=json.loads((Path(cfg.paths.output_dir)/'state.json').read_text())
+    assert len(calls)==1 and len(saved['jobs'])==1
+    assert saved['status']=='needs_attention' and saved['pending'] is None
+    assert saved['jobs'][0]['applied'] and saved['jobs'][0]['outcome']['category']==category
+    assert saved['candidates'][0]['failed'] and saved['candidates'][0]['metrics']=={}
+    assert saved['candidates'][0]['ports']==[20,20] and saved['candidates'][0]['repair_attempts']==0
+    assert saved['radius']==.25
+
+
+def test_replayed_session_failure_stops_before_next_dispatch(cfg,point):
+    def backend(*args):pytest.fail('Recovery must stop before any new worker')
+    campaign=Campaign(cfg,Path('local.yaml'),'session-replay',
+        {'baseline':point,'templates':cfg.paths.templates},backend=backend)
+    c=campaign.state['candidates'][0]
+    job=campaign.store.reserve(c,'axis',campaign.task(c,'axis'),None)
+    campaign.store.complete_job(job,dict(status='failed',category='cleanup_failed',error='unverified PID'))
+    with pytest.raises(RuntimeError,match='CST session safety failure'):
+        campaign.run('resume')
+    saved=json.loads((Path(cfg.paths.output_dir)/'state.json').read_text())
+    assert saved['status']=='needs_attention' and saved['pending'] is None
+    assert len(saved['jobs'])==1 and saved['jobs'][0]['applied']
+
+
+def test_startup_error_is_preserved_when_cleanup_has_no_owned_pid(cfg,tmp_path,monkeypatch):
+    from workflows.rfgun_wake_thermal.runtime import CSTWorker,EvaluationFailure
+    import cst_optimization.core.connection as connection
+    class FailedConnection:
+        pid=None
+        def __init__(self,**kwargs):pass
+        def connect(self):raise RuntimeError('native startup process exited')
+        def close_targeted(self,**kwargs):pytest.fail('Cannot clean an unidentified process')
+    monkeypatch.setattr(connection,'CSTConnection',FailedConnection)
+    with pytest.raises(EvaluationFailure,match='native startup process exited'):
+        with CSTWorker(cfg)._project(tmp_path/'model.cst',tmp_path,'prepare'):
+            pytest.fail('No project may be opened after failed startup')
+    proof=json.loads((tmp_path/'prepare_cleanup.json').read_text())
+    assert not proof['success'] and not proof['exit_verified'] and proof['pid'] is None
+    assert proof['primary_error']=='RuntimeError: native startup process exited'
+
+
 def test_repair_queue_survives_resume_without_new_candidates(cfg,point,monkeypatch):
     campaign=Campaign(cfg,Path('local.yaml'),'repair-queue',{'baseline':point,'templates':cfg.paths.templates})
     campaign.state['candidates'][0]['complete']=True

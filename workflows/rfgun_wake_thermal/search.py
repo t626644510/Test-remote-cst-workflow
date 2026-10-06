@@ -70,7 +70,15 @@ class Controller:
         for _ in range(100):
             x=self.rng.random((self.config.search.pool,12))
             if center is not None:
-                n=len(x)//2;x[:n]=np.clip(center+self.rng.uniform(-self.state['radius'],self.state['radius'],(n,12)),0,1)
+                # Sample the intersection directly. Clipping creates point mass
+                # on bounds (including WF6's rebuild-failing 50 mm height),
+                # repeatedly spending preparation time on boundary geometries.
+                # Coordinates/radius here are dimensionless; physical bounds
+                # and the global half of the pool remain unchanged.
+                n=len(x)//2
+                low=np.maximum(0.,center-self.state['radius'])
+                high=np.minimum(1.,center+self.state['radius'])
+                x[:n]=self.rng.uniform(low,high,(n,12))
             for row in x:
                 if not self.geometry.violations(self.decode(row)):result.append(row)
             if len(result)>=self.config.search.pool:break

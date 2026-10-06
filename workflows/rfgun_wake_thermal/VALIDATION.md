@@ -145,3 +145,26 @@ own sigma and identical common band. No new CST solve was used for validation.
 Formal uncertainties remain; no mock or offline test is claimed as a new live
 solver or qualified-HOM acceptance. Active-checkout tests and resume provenance
 are recorded separately in the campaign migration audit.
+
+2026-10-06 local proposal boundary correction:
+- Six saved campaign failures (candidate42 and candidate46-50) all occurred
+  before solver start with both UpperHeight values exactly 50 mm. On owned
+  copies, either height at 50 mm gave native full_history_rebuild return 0
+  and save failure; candidate46 with both heights 49.9 mm and unchanged
+  other parameters returned 1 and saved. Candidate51 also changed from
+  success to failure when its heights were set to 50 mm. Empty message lists
+  did not establish successful rebuild. Waiting and alternate save options
+  did not repair the failed geometry. These are preparation-only checks,
+  with zero new electromagnetic solves; the internal CST geometry error
+  beyond this reproducible boundary trigger was not exposed by its messages.
+- Local proposals now sample the intersection of the trust region and the
+  configured domain directly. This removes clipping-induced probability mass
+  at exact bounds without changing physical bounds, radius, global sampling,
+  scientific thresholds, GP observations, or failed-candidate accounting.
+- Full branch no-CST validation: 677 passed, 1 skipped, 4 known trapz warnings.
+  The new regression test fails with the previous clipped sampler and passes
+  with the correction. Existing deterministic resume and failure-accounting
+  tests also pass. Preparation checks do not constitute live solver acceptance.
+- Existing jobs, failures and numerical evidence remain unchanged. A local
+  provenance audit records old/new contracts and charges active maintenance
+  once; no old solve is repeated or charged again.

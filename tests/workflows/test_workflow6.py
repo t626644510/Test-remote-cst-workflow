@@ -348,6 +348,22 @@ def test_global_pool_and_rng_resume(cfg,point):
     bad=replace(cfg,bounds={**cfg.bounds,'DownHeight1':(45.,50.),'UpperHeight1':(5.01,6.)})
     with pytest.raises(ValueError):Controller(bad,state(bad)).pool()
 
+def test_local_pool_samples_bounded_interval_without_boundary_pileup(cfg,monkeypatch):
+    """A local center near 50 mm must not clip half its height draws to 50 mm."""
+    cfg=replace(cfg,search=replace(cfg.search,pool=256))
+    model=Controller(cfg,state(cfg))
+    # Isolate the sampler from independent physical-clearance rejection.
+    monkeypatch.setattr(model.geometry,'violations',lambda _:[])
+    center=np.array([.01,.99]*6)
+    pool=model.pool(center);local=pool[:128]
+    low=np.maximum(0.,center-.25);high=np.minimum(1.,center+.25)
+    assert np.all(local>=low) and np.all(local<high)
+    assert not np.any((local==0.)|(local==1.))
+    # The untouched global half still explores beyond the local interval.
+    assert np.any((pool[128:]<low)|(pool[128:]>high))
+    assert model.state['radius']==.25
+
+
 def test_journal_budget_shared_db_and_no_duplicate_worker(cfg,point,monkeypatch):
     store=Store(cfg,'contract');candidate=dict(id='c',parameters=point,stages={},metrics={})
     store.state['candidates'].append(candidate)

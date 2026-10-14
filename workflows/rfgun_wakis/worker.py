@@ -1,9 +1,11 @@
 """One isolated phase per process; complete field traces survive fit failures."""
 from __future__ import annotations
+from dataclasses import asdict
 from pathlib import Path
 import argparse,os,sys,time,traceback
 from .config import load_config
 from .io import atomic_json,read_json
+from .failures import classify_failure
 
 def execute(request: dict) -> dict:
     """Execute an explicit phase without selecting candidates or dispatching work."""
@@ -37,8 +39,10 @@ def main() -> int:
                                result=value,started=started,finished=time.time(),pid=os.getpid()))
         return 0
     except BaseException:
+        trace=traceback.format_exc()
         atomic_json(reply,dict(request_id=request['request_id'],contract=request['contract'],status='failed',
-                               traceback=traceback.format_exc(),started=started,finished=time.time(),pid=os.getpid()))
+                               traceback=trace,failure_policy=asdict(classify_failure(request['phase'],trace)),
+                               started=started,finished=time.time(),pid=os.getpid()))
         return 1
 
 if __name__=='__main__':raise SystemExit(main())

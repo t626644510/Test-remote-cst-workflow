@@ -440,3 +440,7 @@ git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-a
    非明确要求不要重跑全 campaign。
 5. 所有 workflow：逐步把 tracked 本机路径拆成 portable example 与
    gitignored local config，但不得破坏已验证 CST 路径。
+
+## WF7 (2026-10-15)
+
+Canonical branch `workflow/7-wakis-hom`, managed worktree `C:\Users\lau\.codex\worktrees\wf7-wakis\cst_ver3`. Local-only 16-dimensional Wakis search with two wakes, same-wake solid1 heating and port2/3 leakage. Runtime, recovery and scientific contracts are in `workflows/rfgun_wakis/README.md`; source templates and local campaign data remain untracked. Live acceptance is recorded separately from no-CST tests.

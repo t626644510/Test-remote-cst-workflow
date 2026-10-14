@@ -11,9 +11,15 @@ from .search import Proposer,Sample
 from .state import RoundStore,WriterLock
 from .processes import Supervisor,OwnershipError
 from .cst_prepare import ProcessIdentity
+from .failures import classify_failure
 
 class StageFailure(RuntimeError):
     """A bounded stage failed; its previous successful objectives remain valid."""
+
+    def __init__(self,result: dict):
+        self.result=result
+        self.retry_identical=result['failure_policy']['retry_identical']
+        super().__init__(json.dumps(result,ensure_ascii=False))
 
 def code_manifest() -> dict:
     root=Path(__file__).parent
@@ -104,8 +110,12 @@ class Campaign:
         path=Path(paths[name]);job['phase']=name;self.store.save()
         result=self.supervisor.run(path,timeout)
         if result['status']!='completed':
+            # Classify the saved request/reply as well as new worker responses.
+            # Preserve the original reply file and traceback for the audit trail.
+            policy=classify_failure(read_json(path)['phase'],result.get('traceback',''))
+            result=dict(result,failure_policy=asdict(policy))
             job.setdefault('phase_failures',{})[name]=result;self.store.save()
-            raise StageFailure(json.dumps(result,ensure_ascii=False))
+            raise StageFailure(result)
         return result['result']
 
     def execute_stage(self):
@@ -133,11 +143,11 @@ class Campaign:
                 self.phase(f'{stage}_solve_{attempt:02}',dict(phase='solve',stage=stage,prepared=str(prepared),
                          output=str(directory)),self.config.runtime.solve_timeout_s+240)
                 field=directory;break
-            except StageFailure:
+            except StageFailure as exc:
                 if (directory/'field_complete.json').exists():field=directory;break
                 # A detected numerical instability is deterministic evidence,
                 # not a reason to spend identical repeat solves.
-                if (directory/'stability_failure.json').exists():raise
+                if not exc.retry_identical or (directory/'stability_failure.json').exists():raise
                 if attempt==self.config.runtime.retries or self.store.data['status']=='draining':raise
         for attempt in range(self.config.runtime.retries+1):
             try:

@@ -1,6 +1,6 @@
 """Bounded local workers with PID/birth/command ownership and no global cleanup."""
 from __future__ import annotations
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import os,subprocess,time
 from .cst_prepare import ProcessIdentity,valid_child
@@ -43,26 +43,48 @@ def cleanup(known: list[ProcessIdentity],path: Path) -> None:
     atomic_json(path,dict(killed=killed,errors=errors,remaining=remaining,success=not remaining))
     if remaining:raise OwnershipError('Owned worker cleanup failed')
 
+@dataclass
+class RunningPhase:
+    """One owned process tree, polled on the coordinator's single writer thread."""
+    request: Path
+    timeout: float
+    spec: dict
+    proc: object = None
+    root: ProcessIdentity | None = None
+    known: dict = field(default_factory=dict)
+    started: float = field(default_factory=time.monotonic)
+    low_since: float | None = None
+    result: dict | None = None
+    memory_floor_gib: float | None = None
+    memory_grace_s: float = 8.
+
 class Supervisor:
-    """All phase waits tick the shared wall clock; the round cap never kills work."""
+    """Nonblocking phase handles allow one CPU preparation beside one GPU job.
+
+    Only the coordinator calls tick; polling never bills a second clock. Exact
+    process ownership and cleanup apply independently to the two process trees.
+    """
     def __init__(self,config,tick):self.config=config;self.tick=tick
 
-    def run(self,request: Path,timeout: float) -> dict:
+    def start(self,request: Path,timeout: float) -> RunningPhase:
+        """Replay terminal evidence or start exactly one hidden phase process."""
         import psutil
         reply=request.with_suffix('.reply.json');owner=request.with_suffix('.owner.json')
         spec=read_json(request)
-        if reply.exists():
-            result=read_json(reply)
+        terminal=request.with_suffix('.supervision_result.json')
+        if terminal.exists() or reply.exists():
+            result=read_json(terminal if terminal.exists() else reply)
             if result['request_id']!=spec['request_id'] or result['contract']!=spec['contract']:
                 raise OwnershipError('Foreign phase reply')
             if owner.exists():
                 identities=[ProcessIdentity(**dict(v,command=tuple(v['command']))) for v in read_json(owner)['processes']]
                 if any(v.alive() for v in identities):raise OwnershipError('Previous phase process remains alive')
-            return result
+            return RunningPhase(request,timeout,spec,result=result)
         if owner.exists():
             identities=[ProcessIdentity(**dict(v,command=tuple(v['command']))) for v in read_json(owner)['processes']]
             if any(v.alive() for v in identities):raise OwnershipError('Previous phase is still running; no duplicate launch')
-            return dict(status='failed',error='Previous worker exited without a reply',interrupted=True)
+            return RunningPhase(request,timeout,spec,result=dict(status='failed',
+                error='Previous worker exited without a reply',interrupted=True))
         for process in psutil.process_iter(['cmdline']):
             command=process.info['cmdline'] or []
             if matches_worker(command,request):
@@ -74,28 +96,55 @@ class Supervisor:
         with out.open('xb') as stdout,err.open('xb') as stderr:
             proc=subprocess.Popen([self.config.paths.gpu_python,'-m','workflows.rfgun_wakis.worker',str(request)],
                   cwd=checkout,env=env,stdout=stdout,stderr=stderr,creationflags=subprocess.CREATE_NO_WINDOW)
-            root=ProcessIdentity.read(proc.pid);parent=ProcessIdentity.read(os.getpid())
-            if not valid_child(parent,root):raise OwnershipError('Launched worker identity mismatch')
-            known={(root.pid,root.created):root};start=time.monotonic();low_since=None;problem=None
-            try:
-                while True:
-                    for v in descendants(root):known[(v.pid,v.created)]=v
-                    atomic_json(owner,dict(root=asdict(root),processes=[asdict(v) for v in known.values()],at=time.time()))
-                    self.tick()
-                    if proc.poll() is not None:break
-                    free=psutil.virtual_memory().available/2**30
-                    if free<self.config.runtime.running_free_ram_gib:
-                        if low_since is None:low_since=time.monotonic()
-                    else:low_since=None
-                    if low_since is not None and time.monotonic()-low_since>=8:problem='Host memory protection'
-                    if time.monotonic()-start>timeout:problem='Phase timeout'
-                    if problem:break
-                    time.sleep(2)
-            finally:
-                cleanup(list(known.values()),request.with_suffix('.cleanup.json'))
-            if problem:return dict(status='failed',error=problem)
-        if not reply.exists():return dict(status='failed',error='Worker exited without complete reply',returncode=proc.returncode)
-        result=read_json(reply)
-        if result['request_id']!=spec['request_id'] or result['contract']!=spec['contract']:
+        root=ProcessIdentity.read(proc.pid);parent=ProcessIdentity.read(os.getpid())
+        if not valid_child(parent,root):raise OwnershipError('Launched worker identity mismatch')
+        handle=RunningPhase(request,timeout,spec,proc,root,{(root.pid,root.created):root})
+        self._record_owner(handle)
+        return handle
+
+    def _record_owner(self,handle:RunningPhase) -> None:
+        for v in descendants(handle.root):handle.known[(v.pid,v.created)]=v
+        atomic_json(handle.request.with_suffix('.owner.json'),dict(root=asdict(handle.root),
+            processes=[asdict(v) for v in handle.known.values()],at=time.time()))
+
+    def poll(self,handle:RunningPhase) -> dict | None:
+        """Return None while running; guard/cleanup only this handle's own tree."""
+        import psutil
+        if handle.result is not None:return handle.result
+        self._record_owner(handle)
+        problem=None;now=time.monotonic();returncode=handle.proc.poll()
+        if returncode is None:
+            free=psutil.virtual_memory().available/2**30
+            if free<(handle.memory_floor_gib or self.config.runtime.running_free_ram_gib):
+                if handle.low_since is None:handle.low_since=now
+            else:handle.low_since=None
+            if handle.low_since is not None and now-handle.low_since>=handle.memory_grace_s:problem='Host memory protection'
+            if now-handle.started>handle.timeout:problem='Phase timeout'
+            if problem is None:return None
+        cleanup(list(handle.known.values()),handle.request.with_suffix('.cleanup.json'))
+        reply=handle.request.with_suffix('.reply.json')
+        if problem:result=dict(status='failed',error=problem)
+        elif reply.exists():result=read_json(reply)
+        else:result=dict(status='failed',error='Worker exited without complete reply',returncode=returncode)
+        spec=handle.spec
+        if 'request_id' in result and (result['request_id']!=spec['request_id'] or result['contract']!=spec['contract']):
             raise OwnershipError('Phase reply identity mismatch')
+        result=dict(result,request_id=spec['request_id'],contract=spec['contract'])
+        atomic_json(handle.request.with_suffix('.supervision_result.json'),result)
+        handle.result=result
         return result
+
+    def run(self,request: Path,timeout: float) -> dict:
+        """Blocking foreground compatibility, while tick services CPU prefetch."""
+        handle=self.start(request,timeout)
+        try:
+            while True:
+                self.tick()
+                result=self.poll(handle)
+                if result is not None:return result
+                time.sleep(2)
+        except BaseException:
+            if handle.result is None:
+                self._record_owner(handle)
+                cleanup(list(handle.known.values()),request.with_suffix('.cleanup.json'))
+            raise

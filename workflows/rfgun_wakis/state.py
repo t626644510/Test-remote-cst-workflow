@@ -46,7 +46,7 @@ class RoundStore:
             self.data=dict(version=self.VERSION,contract=contract,status='prepared',
                 active_seconds=0.,exploration_seconds=0.,cap_seconds=self.cap,
                 candidates=[],pending=None,completed_stage_keys=[],failures=[],
-                radius=.25,round=1,last_update_utc_s=time.time())
+                radius=.25,round=1,prefetch=None,preparations=[],last_update_utc_s=time.time())
             self.save()
         if self.data['cap_seconds']!=self.cap:raise RuntimeError('Cannot reset or enlarge round cap')
         self._last=None
@@ -76,11 +76,12 @@ class RoundStore:
                 and self.data['active_seconds']<self.cap)
 
     def drain(self,reason:str):
-        if reason not in ('budget','user'):raise ValueError('Unknown drain reason')
+        if reason not in ('budget','user','safety'):raise ValueError('Unknown drain reason')
         self.data['status']='draining';self.data['drain_reason']=reason;self.save()
 
     def pause(self,*,now:float|None=None):
-        if self.data['pending'] is not None:raise RuntimeError('Running stage must finish before pause')
+        if self.data['pending'] is not None or self.data.get('prefetch') is not None:
+            raise RuntimeError('Running stage/preparation must finish before pause')
         self.tick(now)
         self._last=None
         self.data['status']='budget_exhausted' if self.data['active_seconds']>=self.cap else 'paused'
@@ -106,5 +107,6 @@ class RoundStore:
     def fail(self,key:str,error:dict):
         pending=self.data['pending']
         if pending is None or pending['key']!=key:raise RuntimeError('Failure/pending identity mismatch')
-        self.data['failures'].append(dict(job=pending,error=error,utc_s=time.time()))
+        if not any(v['job']['key']==key for v in self.data['failures']):
+            self.data['failures'].append(dict(job=pending,error=error,utc_s=time.time()))
         self.data['pending']=None;self.save()

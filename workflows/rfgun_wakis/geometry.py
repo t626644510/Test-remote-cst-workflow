@@ -1,4 +1,4 @@
-"""Sixteen-dimensional WF7 geometry and exact CST parameter expansion."""
+"""Fifteen-dimensional WF7 geometry and exact CST parameter expansion."""
 from __future__ import annotations
 import math
 from typing import Mapping
@@ -14,13 +14,13 @@ class Geometry:
 
     def violations(self, p: Mapping[str,float]) -> list[str]:
         errors=[]
-        if set(p)!=set(NAMES):return ['Coordinate names do not match sixteen-dimensional contract']
+        if set(p)!=set(NAMES):return ['Coordinate names do not match fifteen-dimensional contract']
         for n in NAMES:
             v=p[n];lo,hi=self.config.bounds[n]
             if isinstance(v,bool) or not math.isfinite(v) or not lo<=v<=hi:errors.append(f'{n}: bounds')
         if errors:return errors
         gap=self.config.search.bound_clearance_mm
-        if abs(p['DownHeight2'])>=p['DownHeight']-10:errors.append('DownHeight2 clearance')
+        if abs(self.config.fixed_parameters['DownHeight2'])>=p['DownHeight']-10:errors.append('DownHeight2 clearance')
         if not 2<p['SPortR2']<p['SPortR1']<p['PortR1']<22:errors.append('Nested conductor radii')
         if not 5.43<p['coaxr2']<22 or p['coaxr2']<p['PortR1']+self.config.port_wall_mm:
             errors.append('Thick conductor radius must cover PortR2 and remain below 22 mm')

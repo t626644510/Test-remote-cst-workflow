@@ -11,9 +11,10 @@ derivatives stay on axis; source differencing produces only the X column
 
 ## Search contract
 
-Sixteen independent parameters: the previous fifteen plus `coaxr2`, mapped
-to the template's actual `coax_r2` parameter. All lengths are mm; angles
-are degrees. Both UpperHeight values remain 100 mm. `PortR2 = PortR1 + 2`;
+Fifteen independent parameters in the 2026-10-15 geometry revision: fix
+`UpperHeight1=UpperHeight2=170` and `DownHeight2=-30`; search `DownHeight`
+over 50–180 mm. `coaxr2` maps to the template's actual `coax_r2` parameter.
+All lengths are mm; angles are degrees. `PortR2 = PortR1 + 2`;
 `5.43 < coaxr2 < 22` and `coaxr2 >= PortR2`. The derived constraint also
 requires `PortR1 < 20`. Samples are drawn inside the feasible domain,
 without clipping invalid values onto boundaries.
@@ -26,6 +27,29 @@ upper envelope <=3000 ohm admits X; about 20% of measured active time is
 reserved for cross-gate exploration. Independent partial-observation GPs
 use reconstructed estimates and heteroscedastic uncertainty, never direct
 FT proxies. Earlier geometries are reference-only, not native training data.
+
+GPs quarantine contradictory evidence and unbounded peaks whose lower
+envelope does not establish their scale: lower <=0/missing, center/lower >4,
+or relative uncertainty >3. The original observations and failure reasons
+remain unchanged. Supported unbounded estimates may guide trends with a
+log-space noise floor ln(3); bounded unqualified estimates use ln(1.5).
+All metrics also carry a 5%-of-threshold absolute noise floor (150 W is the
+heat reference), preventing tiny unresolved leakage values from dominating.
+These are engineering regularization assumptions, not calibrated probabilities.
+At least six independent accepted points are needed per GP. A smooth
+confidence-bound utility uses upper predictive values for L/leak constraints
+and lower values for X/heat exploration (beta=0.75); it never certifies a limit.
+
+Axis-only candidates can now seed local search. Half the proposal pool is
+local and half global. A local proposal captures the center's bounded L,
+heat and available leakage envelopes at selection time; unknown X is omitted
+equally from both sides of this radius comparison. Two disjoint improvements
+expand radius by 1.5; three disjoint worsenings shrink it by 0.7, bounded to
+0.05–0.5 in normalized coordinates. Overlap, unbounded evidence, contradictory
+fits, global proposals and solver failures do not change these counters.
+Each axis result updates once; radius-generation changes invalidate already
+prefetched proposals for further counter updates. GP fitting still uses their
+accepted observations. Proposal/result journals retain the comparison details.
 
 Sigma=70 mm; wake length=35 m; HOM band=550–1462.7348957 MHz. Working-mode
 power uses 500 kV peak transit-time voltage, CW, beta=1 and copper
@@ -41,7 +65,8 @@ suppression claim is made.
 Use an explicit untracked `config.local.json`. The GPU environment must have
 CuPy, Wakis dependencies, h5py, psutil, scipy and scikit-learn. Pin the Wakis
 checkout to `e0d8f2f1e0e2b58e0f675ded71b32917a18dadfe`; tracked upstream
-modifications are refused. Use the repository `.venv` for no-CST tests.
+modifications are refused. Use the repository `.venv` for no-CST tests;
+process ownership tests additionally require psutil (validated with 7.2.2).
 
 ```powershell
 python -m workflows.rfgun_wakis.campaign init --config config.local.json --baseline baseline.json
@@ -77,6 +102,62 @@ GPU work, fitting and retries; paused idle time is excluded. At the cap or
 on `STOP`, the current logical stage drains and no new stage dispatches.
 Overrun is recorded. A subsequent round requires manual audit and start.
 There is no automatic deletion of projects, raw traces or permanent evidence.
+
+CPU preparation is depth-one pipelined with the current GPU time stepping.
+The overlap follows this schedule (time flows to the right):
+
+```mermaid
+flowchart LR
+  A[Prepare candidate N] --> B[GPU: axis wake N]
+  B --> C[Reconstruct L + heat + leakage N]
+  C --> D{X admitted?}
+  D -->|yes| E[GPU: offset wake N, same mesh]
+  E --> F[Reconstruct X column N]
+  D -->|no| G[Next dispatch boundary]
+  F --> G
+  B -. live time steps start .-> P[CPU: prepare candidate N+1]
+  P --> Q[Persist ready mesh N+1]
+  Q --> G
+  G --> S{STOP / budget?}
+  S -->|yes| H[Drain admitted work; retain ready mesh]
+  S -->|no| I[GPU: axis wake N+1]
+```
+
+The coordinator remains the only state writer: it polls one foreground
+worker and one preparation worker, each with independent exact identities.
+After a live GPU status reports non-final time steps, the next geometry is
+selected from currently completed observations and prepared in a separate
+CST copy. Its request records that observation snapshot. No second GPU runs.
+Prepared meshes are reused by axis and X; X pending work retains priority.
+With <24 GiB host RAM free, preparation waits. A running prefetch releases
+its owned tree at <12 GiB free, ahead of the foreground 6 GiB guard. Guards
+reduce overlap risk; extremely abrupt memory exhaustion can still affect both.
+
+STOP/budget expiry drains the admitted foreground logical stage and any
+already-started preparation. Preparation alone does not admit its next GPU
+solve. A ready mesh remains journalled for explicit resumption. Worker
+supervision replies and preparation completion replay without duplicate
+launches. An ownership/cleanup fault in the auxiliary lane stops admission
+and lets foreground physics finish before surfacing the fault. A single
+candidate preparation failure retains bounded retries and then skips that
+candidate; it does not stop the whole round.
+
+Geometry changes use `python -m workflows.rfgun_wakis.revision --config
+<new-config> --parent <paused-round>`. Use separate lightweight/bulk roots.
+The parent must be paused, STOP-marked, fully drained, and have no live owned
+processes. Its active seconds carry into the same 48-hour cap exactly once;
+old objective values are not imported. Exploration's time fraction restarts
+within the new geometry domain, while the total budget does not. The new
+revision is prepared with STOP and awaits explicit launch.
+
+The monitor inspects both lanes and their raw/analysis evidence. Two distinct
+diagnostic rounds with the same issue and unchanged stage/time-step/matrix
+progress set `handoff_required`. Heartbeat and CPU increments alone do not
+reset this signal. The monitoring chat transfers evidence once to the source
+chat for Debug, waits for its reviewed return handoff, and never auto-resumes
+a user pause. Scientific uncertainty and a handled single candidate failure
+are not escalation issues. The monitor module itself is read-only apart from
+its own audit files.
 
 ## Evidence and limitations
 

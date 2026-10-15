@@ -1,4 +1,4 @@
-"""Local sequential WF7 round with replayable phases and a 48-hour drain cap."""
+"""One local GPU with depth-one CPU preparation and a shared 48-hour drain cap."""
 from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
@@ -12,6 +12,8 @@ from .state import RoundStore,WriterLock
 from .processes import Supervisor,OwnershipError
 from .cst_prepare import ProcessIdentity
 from .failures import classify_failure
+from .pipeline import PreparationPipeline
+from .trust import update_trust
 
 class StageFailure(RuntimeError):
     """A bounded stage failed; its previous successful objectives remain valid."""
@@ -33,15 +35,18 @@ class Campaign:
         self.root.mkdir(parents=True,exist_ok=True);self.bulk.mkdir(parents=True,exist_ok=True)
         self.store=RoundStore(self.root/'state.json',self.config.digest(),hours=self.config.search.hours)
         self.supervisor=Supervisor(self.config,self.tick)
+        self.pipeline=PreparationPipeline(self)
 
     def tick(self):
-        pending=self.store.data['pending'] or {}
+        pending=self.store.data['pending'] or self.store.data.get('prefetch') or {}
         self.store.tick(exploration=bool(pending.get('forced_transverse')))
         if self.store.data['status']=='running':
             if self.store.data['active_seconds']>=self.store.cap:self.store.drain('budget')
             elif (self.root/'STOP').exists():self.store.drain('user')
+        self.pipeline.service()
         atomic_json(self.root/'heartbeat.json',dict(at=time.time(),pid=os.getpid(),status=self.store.data['status'],
-                    active_seconds=self.store.data['active_seconds'],pending=self.store.data['pending']))
+                    active_seconds=self.store.data['active_seconds'],pending=self.store.data['pending'],
+                    prefetch=self.store.data.get('prefetch'),pipeline_error=self.store.data.get('pipeline_error')))
 
     def initialize(self,baseline: dict):
         self.config.validate(live=True)
@@ -50,8 +55,10 @@ class Campaign:
         if errors:raise ValueError(errors)
         if self.store.data['candidates'] or self.store.data['active_seconds']:raise RuntimeError('Nonempty round')
         from .cad import parameters
-        actual=Geometry.from_template(parameters(Path(self.config.paths.template)))
+        saved=parameters(Path(self.config.paths.template));actual=Geometry.from_template(saved)
         if any(abs(actual[k]-baseline[k])>1e-7 for k in actual):raise ValueError('Baseline differs from current source')
+        if any(abs(saved[k]-v)>1e-7 for k,v in self.config.fixed_parameters.items()):
+            raise ValueError('Fixed geometry differs from saved source template')
         atomic_json(self.root/'config.snapshot.json',self.config.as_dict())
         source=Path(self.config.paths.template)
         atomic_json(self.root/'provenance.json',dict(template=str(source),template_sha256=digest(source),
@@ -123,14 +130,17 @@ class Campaign:
         key=job['key'];stage=job['stage'];folder=self.bulk/candidate['id'];folder.mkdir(exist_ok=True)
         stage_result=self.root/'jobs'/key/'stage_result.json'
         if stage_result.exists():self.store.register(key,stage_result);self.apply_results();return
+        if self.pipeline.job and self.pipeline.job['candidate_index']==job['candidate_index']:
+            self.pipeline.wait()
+        if candidate.get('prefetch_failure'):raise StageFailure(candidate['prefetch_failure'])
         if not candidate.get('prepared'):
             for attempt in range(self.config.runtime.retries+1):
                 try:
                     value=self.phase(f'prepare_{attempt:02}',dict(phase='prepare',parameters=candidate['parameters'],
                          output=str(folder/f'preparation_{attempt:02}')),self.config.runtime.mesh_timeout_s+900)
                     candidate['prepared']=value['prepared'];candidate['cst']=value['cst'];self.store.save();break
-                except StageFailure:
-                    if attempt==self.config.runtime.retries or self.store.data['status']=='draining':raise
+                except StageFailure as exc:
+                    if not exc.retry_identical or attempt==self.config.runtime.retries or self.store.data['status']=='draining':raise
         prepared=Path(candidate['prepared']);validate_manifest(prepared,read_json(prepared/'manifest.json'))
         field=None
         for attempt in range(self.config.runtime.retries+1):
@@ -177,6 +187,7 @@ class Campaign:
                 candidate['status']='x_pending' if transverse_admission(obs.get('longitudinal'),self.config,
                                   forced=candidate['forced_transverse']) else 'axis_only'
             candidate['feasibility']=feasibility(obs,self.config)
+            update_trust(self.store.data,candidate,self.config)
         self.store.save();self.report()
 
     def report(self):
@@ -196,26 +207,37 @@ class Campaign:
             candidates=self.store.data['candidates'],formal_scope='X source column only',
             assumptions='sigma 70 mm; 35 m tail; HOM 550–1462.7348957 MHz; 500 kV peak CW; heuristic power uncertainty >=20%'))
 
+    def propose_candidate(self):
+        """Persist a proposal once, also when selected before current GPU results."""
+        data=self.store.data
+        samples=[Sample(c['parameters'],{k:Observation(**v) for k,v in c['observations'].items()}) for c in data['candidates']]
+        local_seconds=data['active_seconds']-data.get('search_active_offset',0.)
+        forced=data['exploration_seconds']<self.config.search.exploration_fraction*max(1,local_seconds)
+        index=len(data['candidates'])
+        parameters,audit=Proposer(self.config).choose(samples,sequence=index,radius=data['radius'],explore=forced,
+                    excluded=[c['parameters'] for c in data['candidates']],
+                    trust_generation=data.get('trust',{}).get('generation',0))
+        audit['observed_stage_keys']=list(data['completed_stage_keys'])
+        data['candidates'].append(dict(id=f'candidate_{index:04}',parameters=parameters,observations={},
+                         status='axis_pending',forced_transverse=forced,proposal=audit));self.store.save()
+        return index
+
     def next_job(self):
         data=self.store.data
         index=next((i for i,c in enumerate(data['candidates']) if c['status']=='x_pending'),None)
         if index is None:index=next((i for i,c in enumerate(data['candidates']) if c['status']=='axis_pending'),None)
         if index is None:
-            samples=[Sample(c['parameters'],{k:Observation(**v) for k,v in c['observations'].items()}) for c in data['candidates']]
-            forced=data['exploration_seconds']<self.config.search.exploration_fraction*max(1,data['active_seconds'])
-            index=len(data['candidates'])
-            parameters,audit=Proposer(self.config).choose(samples,sequence=index,radius=data['radius'],explore=forced,
-                              excluded=[c['parameters'] for c in data['candidates']])
-            data['candidates'].append(dict(id=f'candidate_{index:04}',parameters=parameters,observations={},
-                         status='axis_pending',forced_transverse=forced,proposal=audit));self.store.save()
+            index=self.propose_candidate()
         candidate=data['candidates'][index];stage='x' if candidate['status']=='x_pending' else 'axis'
         return dict(key=candidate['id']+'_'+stage,candidate_index=index,stage=stage,
+                    phase_requests=dict(candidate.get('preparation_phase_requests',{})) if stage=='axis' else {},
                     forced_transverse=candidate['forced_transverse'],started=time.time())
 
     def run(self):
         with WriterLock(self.root/'coordinator.lock'):
             self.config.validate(live=True);self.check_provenance()
             if (self.root/'STOP').exists():raise RuntimeError('STOP is present; explicit resume must remove it')
+            if self.store.data.get('pipeline_error'):raise OwnershipError('Unreviewed preparation pipeline fault')
             owner_path=self.root/'owner.json'
             if owner_path.exists():
                 old=read_json(owner_path);identity=ProcessIdentity(**dict(old,command=tuple(old['command'])))
@@ -226,8 +248,16 @@ class Campaign:
                 while True:
                     self.tick()
                     if self.store.data['pending'] is None:
-                        if not self.store.may_dispatch:break
-                        self.check_provenance();self.store.begin(self.next_job())
+                        if not self.store.may_dispatch:
+                            self.pipeline.wait();break
+                        self.check_provenance();next_job=self.next_job()
+                        if self.pipeline.job and self.pipeline.job['candidate_index']==next_job['candidate_index']:
+                            self.pipeline.wait();self.tick()
+                            # Prefetch alone does not admit a GPU stage. STOP or
+                            # budget expiry during this wait preserves the mesh.
+                            if not self.store.may_dispatch:continue
+                            next_job=self.next_job()
+                        self.store.begin(next_job)
                     job=dict(self.store.data['pending'])
                     try:self.execute_stage()
                     except StageFailure as exc:
@@ -240,6 +270,9 @@ class Campaign:
                     self.tick()
                 self.store.pause();self.report()
             except BaseException:
+                self.store.drain('safety')
+                try:self.pipeline.wait()
+                except Exception:pass  # Persist original fatal cause; lane evidence remains intact.
                 self.tick();self.store.data['status']='error';self.store.save()
                 atomic_json(self.root/'coordinator_failure.json',dict(at=time.time(),traceback=traceback.format_exc()))
                 raise

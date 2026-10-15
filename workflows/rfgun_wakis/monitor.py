@@ -7,6 +7,21 @@ from .config import load_config
 from .io import read_json,atomic_json,digest,validate_manifest
 from .cst_prepare import ProcessIdentity
 
+def escalation(previous:dict,issue:str|None,progress:dict,now:float) -> dict:
+    """Two separated diagnostics with the same fault AND no physical progress.
+
+    Heartbeat/CPU counters are liveness only, not numerical progress. Repeated
+    CLI reads within one minute do not manufacture a second diagnostic round.
+    The monitoring chat consumes handoff_required and sends the evidence once;
+    this read-only function never starts/stops a solver or messages a thread.
+    """
+    same=issue is not None and previous.get('issue_key')==issue and previous.get('progress')==progress
+    counted=now-previous.get('counted_at',0)>=60
+    count=(previous.get('consecutive_count',0)+int(counted) if same else 1) if issue else 0
+    return dict(consecutive_count=count,counted_at=now if counted or not same else previous['counted_at'],
+                handoff_required=bool(issue and count>=2),
+                handoff_reason='same_fault_without_progress_twice' if issue and count>=2 else None)
+
 def inspect(config_path: Path) -> dict:
     """Check persisted identity/progress/evidence without opening CST or resuming."""
     import psutil
@@ -27,9 +42,14 @@ def inspect(config_path: Path) -> dict:
     except (ValueError,OSError):issues.append('code_fingerprint_changed')
     if config.digest()!=state['contract']:issues.append('configuration_drift')
     if digest(config.paths.template)!=provenance['template_sha256']:issues.append('source_template_changed')
+    if state.get('pipeline_error'):issues.append('preparation_pipeline_error')
     process_rows=[];pending=state.get('pending');phase_detail={}
-    if pending:
-        phase=pending.get('phase');path=pending.get('phase_requests',{}).get(phase)
+    progress=dict(completed=list(state.get('completed_stage_keys',[])),preparations=len(state.get('preparations',[])),lanes={})
+    for lane,job in (('foreground',pending),('prefetch',state.get('prefetch'))):
+        if not job:continue
+        phase=job.get('phase');path=job.get('phase_requests',{}).get(phase)
+        detail={};phase_detail[lane]=detail
+        progress['lanes'][lane]=dict(job=job['key'],phase=phase)
         if path:
             request=Path(path);owner_file=request.with_suffix('.owner.json')
             if owner_file.exists():
@@ -37,10 +57,13 @@ def inspect(config_path: Path) -> dict:
                     identity=ProcessIdentity(**dict(v,command=tuple(v['command'])))
                     if identity.alive():
                         p=psutil.Process(identity.pid);cpu=p.cpu_times()
-                        process_rows.append(dict(**asdict(identity),cpu_seconds=cpu.user+cpu.system,rss_bytes=p.memory_info().rss))
+                        process_rows.append(dict(**asdict(identity),lane=lane,cpu_seconds=cpu.user+cpu.system,rss_bytes=p.memory_info().rss))
             spec=read_json(request);output=Path(spec['output'])
             for path in (output/'status.json',output/'cst/heartbeat.json',output/'cst/assembly_stop.json'):
-                if path.exists():phase_detail[path.name]=read_json(path)
+                if path.exists():detail[path.name]=read_json(path)
+            gpu=detail.get('status.json',{});mesh=detail.get('heartbeat.json',{})
+            progress['lanes'][lane].update(gpu_phase=gpu.get('phase'),step=gpu.get('step'),
+                mesh_phase=mesh.get('phase'),matrix_files=mesh.get('files'),assembly_stopped='assembly_stop.json' in detail)
             if request.with_suffix('.cleanup.json').exists():
                 if not read_json(request.with_suffix('.cleanup.json'))['success']:issues.append('worker_cleanup_failed')
     disks={str(Path(p).anchor):shutil.disk_usage(p).free/2**30 for p in (config.paths.output_dir,config.paths.artifact_dir)}
@@ -70,11 +93,12 @@ def inspect(config_path: Path) -> dict:
         before=old.get((p['pid'],p['created']))
         p['cpu_delta_seconds']=p['cpu_seconds']-before['cpu_seconds'] if before else None
     issue=';'.join(sorted(set(issues))) or None
-    count=(previous.get('consecutive_count',0)+1 if previous.get('issue_key')==issue else 1) if issue else 0
+    decision=escalation(previous,issue,progress,now)
     audit=dict(at=now,status=state['status'],pending=pending,heartbeat_age_s=age,owner_alive=live,
         active_hours=state['active_seconds']/3600,remaining_hours=max(0,state['cap_seconds']-state['active_seconds'])/3600,
         processes=process_rows,phase_detail=phase_detail,host_free_gib=free_ram,disk_free_gib=disks,evidence=evidence,
-        issue_key=issue,consecutive_count=count,user_action_required=False,action='read_only_diagnostic',
+        issue_key=issue,progress=progress,**decision,prefetch=state.get('prefetch'),
+        user_action_required=False,action='handoff_to_source_debug' if decision['handoff_required'] else 'read_only_diagnostic',
         candidates=len(state['candidates']),qualified_X_screening=sum(c.get('feasibility',{}).get('qualified_X_screening',False) for c in state['candidates']))
     name=time.strftime('monitor_%Y%m%dT%H%M%SZ.json',time.gmtime(now))
     atomic_json(root/'audits'/name,audit);atomic_json(root/'monitor_state.json',audit);return audit

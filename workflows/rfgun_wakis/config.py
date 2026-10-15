@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 NAMES = ('selfangle1', 'Lin1', 'projection1', 'FolkHeight', 'DownHeight',
-         'selfangle2', 'Lin2', 'projection2', 'FolkHeight2', 'DownHeight2',
+         'selfangle2', 'Lin2', 'projection2', 'FolkHeight2',
          'PortR1', 'SPortR1', 'SPortR2', 'TopGap', 'TopGap2', 'coaxr2')
-BOUNDS = dict(zip(NAMES, ((0.,180.),(1.,50.),(5.43,19.57),(5.43,30.),(50.,110.),
-                         (0.,180.),(1.,50.),(5.43,19.57),(5.43,30.),(-70.,-26.),
+BOUNDS = dict(zip(NAMES, ((0.,180.),(1.,50.),(5.43,19.57),(5.43,30.),(50.,180.),
+                         (0.,180.),(1.,50.),(5.43,19.57),(5.43,30.),
                          (2.03,19.99),(2.02,19.98),(2.01,19.97),(5.,45.),(5.,45.),(5.430001,21.99))))
 
 @dataclass(frozen=True)
@@ -85,10 +85,20 @@ class Search:
     fixed_radius_mm: float = 25.
     native_relative_noise: float = .02
     history_relative_noise: float = .20
+    uncertain_log_noise: float = math.log(1.5)
+    unbounded_log_noise: float = math.log(3.)
+    absolute_noise_fraction: float = .05
+    unbounded_max_scale_ratio: float = 4.
+    unbounded_max_relative: float = 3.
+    acquisition_beta: float = .75
+    radius_successes: int = 2
+    radius_failures: int = 3
+    radius_expand: float = 1.5
+    radius_contract: float = .7
 
 @dataclass(frozen=True)
 class Runtime:
-    """Local sequential work, bounded retries and memory guards; seconds/GiB."""
+    """One GPU plus at most one CPU preparation; seconds/GiB, wall-time budget."""
     heartbeat_s: float = 15.
     mesh_timeout_s: float = 900.
     solve_timeout_s: float = 2700.
@@ -101,17 +111,20 @@ class Runtime:
     precision: str = 'float32'
     copper_terms: int = 96
     upstream_revision: str = 'e0d8f2f1e0e2b58e0f675ded71b32917a18dadfe'
+    prefetch: bool = True
+    prefetch_free_ram_gib: float = 24.
+    prefetch_running_free_ram_gib: float = 12.
 
 @dataclass(frozen=True)
 class Config:
-    """Sixteen independent coordinates; old results are reference-only evidence."""
+    """Fifteen coordinates; the revised fixed geometry has a distinct contract."""
     paths: Paths
     physics: Physics = field(default_factory=Physics)
     reconstruction: Reconstruction = field(default_factory=Reconstruction)
     search: Search = field(default_factory=Search)
     runtime: Runtime = field(default_factory=Runtime)
     bounds: dict[str, tuple[float, float]] = field(default_factory=lambda: BOUNDS.copy())
-    fixed_parameters: dict[str, float] = field(default_factory=lambda: dict(UpperHeight1=100., UpperHeight2=100.))
+    fixed_parameters: dict[str, float] = field(default_factory=lambda: dict(UpperHeight1=170., UpperHeight2=170., DownHeight2=-30.))
     port_outer_policy: str = 'follow_wall'
     port_wall_mm: float = 2.
     fixed_port_outer_mm: float = 31./3.
@@ -128,10 +141,12 @@ class Config:
 
     def validate(self, *, live: bool = False) -> None:
         """Fail before process launch on ambiguity, unsafe ownership or drift."""
-        if set(self.bounds)!=set(NAMES) or len(NAMES)!=16:
-            raise ValueError('WF7 requires exactly sixteen active coordinates')
-        if self.fixed_parameters!=dict(UpperHeight1=100.,UpperHeight2=100.):
-            raise ValueError('Both UpperHeight values must remain 100 mm')
+        if set(self.bounds)!=set(NAMES) or len(NAMES)!=15:
+            raise ValueError('WF7 requires exactly fifteen active coordinates')
+        if self.fixed_parameters!=dict(UpperHeight1=170.,UpperHeight2=170.,DownHeight2=-30.):
+            raise ValueError('Revised geometry fixes UpperHeight=170 mm and DownHeight2=-30 mm')
+        if tuple(self.bounds['DownHeight'])!=(50.,180.):
+            raise ValueError('DownHeight range must be 50 to 180 mm')
         for n,(lo,hi) in self.bounds.items():
             if not all(map(math.isfinite,(lo,hi))) or not lo<hi:
                 raise ValueError(f'Invalid bounds: {n}')
@@ -150,6 +165,15 @@ class Config:
             raise ValueError('Invalid budget/admission contract')
         if not 0<s.exploration_fraction<1 or not 0<s.min_radius<=s.radius<=s.max_radius<=1:
             raise ValueError('Invalid exploration policy')
+        if not (0<s.uncertain_log_noise<=s.unbounded_log_noise and 0<s.absolute_noise_fraction<1
+                and s.unbounded_max_scale_ratio>1 and s.unbounded_max_relative>=1
+                and 0<=s.acquisition_beta<=3 and s.radius_successes>=1 and s.radius_failures>=1
+                and s.radius_expand>1 and 0<s.radius_contract<1):
+            raise ValueError('Invalid robust search/trust-region policy')
+        if self.runtime.prefetch_free_ram_gib<self.runtime.start_free_ram_gib:
+            raise ValueError('Overlapped preparation needs at least the ordinary RAM reserve')
+        if not self.runtime.running_free_ram_gib<self.runtime.prefetch_running_free_ram_gib<self.runtime.prefetch_free_ram_gib:
+            raise ValueError('Prefetch must release memory before the foreground guard')
         if not (0<r.max_error<1 and 0<r.min_correlation<=1 and 0<r.peak_spread<1):
             raise ValueError('Invalid quality thresholds')
         if max(r.starts_m)>=p.wake_length_m or r.pencil_spacing_m>=299792458./(2*(p.band_hz[1]+r.frequency_width_hz)):

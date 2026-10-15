@@ -13,15 +13,15 @@ def config(tmp_path):
     return Config(Paths(str(tmp_path/'template.cst'),str(tmp_path/'light'),str(tmp_path/'bulk'),
                         str(tmp_path/'python.exe'),str(tmp_path/'wakis'),str(tmp_path/'cst')))
 
-def test_sixteen_dimensions_and_derived_wall(config):
+def test_fifteen_dimensions_and_derived_wall(config):
     g=Geometry(config);points=g.sample(np.random.default_rng(4),500)
-    assert len(NAMES)==16
+    assert len(NAMES)==15 and 'DownHeight2' not in NAMES
     for p in points:
         expanded=g.expand(p)
-        assert expanded['UpperHeight1']==expanded['UpperHeight2']==100
+        assert expanded['UpperHeight1']==expanded['UpperHeight2']==170
         assert expanded['PortR2']-expanded['PortR1']==pytest.approx(2)
         assert 5.43<p['coaxr2']<22 and p['coaxr2']>=expanded['PortR2']
-        assert abs(p['DownHeight2'])<p['DownHeight']-10
+        assert expanded['DownHeight2']==-30 and 50<p['DownHeight']<180
         assert 2<p['SPortR2']<p['SPortR1']<p['PortR1']<22
         assert expanded['inner_angle']<0<expanded['inner_angle3']
         assert g.from_template(expanded)==pytest.approx(p)
@@ -59,11 +59,11 @@ def test_broad_gate_and_strict_leakage(config):
 
 def test_duplicate_metric_coordinates_and_noise(config):
     p=Geometry(config).sample(np.random.default_rng(1),1)[0]
-    a=Sample(p,{'longitudinal':Observation(1000,.02)})
-    b=Sample(p,{'longitudinal':Observation(1200,1.)})
+    a=Sample(p,{'longitudinal':Observation(1000,.02,lower=980,upper=1020,qualified=True)})
+    b=Sample(p,{'longitudinal':Observation(1200,1.,lower=900)})
     x,y,n=Proposer(config).training([a,b],'longitudinal')
     assert len(y)==1 and np.expm1(y[0])==pytest.approx(1200)
-    assert n[0]==pytest.approx(np.log1p(2400)-np.log1p(1200))
+    assert n[0]==pytest.approx(config.search.unbounded_log_noise)
     assert len(Proposer(config).training([a,b],'transverse_x')[1])==0
 
 def test_budget_drains_running_stage_and_never_resets(tmp_path):

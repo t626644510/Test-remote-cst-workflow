@@ -211,3 +211,22 @@ def test_affinity_guard_rejects_reused_root_pid(tmp_path, monkeypatch):
     sampler = hardware.Sampler(123, None, [0])
     monkeypatch.setattr(hardware.psutil, "Process", lambda _: Process(2))
     sampler._run()
+
+
+def test_session_cleanup_refuses_foreign_identity(monkeypatch):
+    import os
+    from workflows.pic_multipacting import hardware
+    class Process:
+        def create_time(self):
+            return 2.
+        def ppid(self):
+            return os.getpid()
+        def children(self):
+            return []
+    class Connection:
+        def close_targeted(self, **kwargs):
+            return {"success": True, **kwargs}
+    monkeypatch.setattr(hardware.psutil, "Process", lambda _: Process())
+    with pytest.raises(RuntimeError, match="ownership"):
+        hardware.close_owned_session(Connection(), 123, 1.)
+    assert hardware.close_owned_session(Connection(), 123, 2.)["success"]

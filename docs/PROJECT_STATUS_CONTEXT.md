@@ -31,7 +31,7 @@ worktree。2026-07-10 已按“严格隔离式 main”重构：
 | `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | WF3 recovery 与 tolerance 工具链 | 692 passed, 1 skipped |
 | `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | WF4 HOM 本征模批量 campaign | 615 passed, 2 skipped |
 | `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | RF-CEM 500 MHz 逆向参数化几何与优化 | 606 passed, 1 skipped |
-| `workflow/8-pic-multipacting` | `C:\Users\lau\.codex\worktrees\wf8-pic-multipacting\cst_ver3` | WF8 本机 PIC 面源、场强与相位扫描；独立 CST 实例并行，保留 MP 1D 与 SEY | 594 passed, 1 skipped |
+| `workflow/8-pic-multipacting` | `C:\Users\lau\.codex\worktrees\wf8-pic-multipacting\cst_ver3` | WF8 本机 PIC 面源、场强与相位扫描；独立 CST 实例并行，保留 MP 1D 与 SEY | 595 passed, 1 skipped |
 
 `codex/S01-known-mode-pso-closure` 是 WF2 的收口兼容 ref，应与
 `workflow/2-rfgun-hom-antenna` 指向同一状态。历史 phase/codex 分支不是

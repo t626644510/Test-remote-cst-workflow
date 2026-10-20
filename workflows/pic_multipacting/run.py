@@ -242,6 +242,7 @@ def run(config: dict[str, Any], root: Path, selected: set[str], limit: int | Non
         json.dump(dict(pid=os.getpid(), started=utc()), f)
     conn = None
     sampler = None
+    session_identity = None
     state: dict[str, Any] = dict(pid=os.getpid(), status="preparing", updated=utc())
     try:
         if (root / "config.json").exists():
@@ -266,8 +267,13 @@ def run(config: dict[str, Any], root: Path, selected: set[str], limit: int | Non
             return
         conn = CSTConnection(config["cst_library"], mode="new")
         conn.connect()
+        import psutil
+        if not conn.pid:
+            raise RuntimeError("Private CST session PID unavailable")
+        session_identity = (conn.pid, psutil.Process(conn.pid).create_time())
         conn.set_quiet_mode(True)
         state["cst_pid"] = conn.pid
+        state["cst_created"] = session_identity[1]
         if conn.pid and (config.get("sample_hardware", False) or config.get("cpu_affinity")):
             from .hardware import Sampler
             output = root / "hardware.jsonl" if config.get("sample_hardware", False) else None
@@ -369,20 +375,25 @@ def run(config: dict[str, Any], root: Path, selected: set[str], limit: int | Non
         state.update(status="stopped_error", error=str(exc))
         raise
     finally:
-        # Deliberately do not use connection.close(): its legacy fallback sweeps globally.
+        # Never use connection.close(): its legacy fallback can sweep globally.
+        cleanup_error = None
         if sampler is not None:
             sampler.close()
-        if conn is not None and conn.design_environment is not None:
+        if conn is not None and session_identity is not None:
             try:
-                conn.design_environment.close()
+                from .hardware import close_owned_session
+                state["close_result"] = close_owned_session(conn, *session_identity)
             except Exception as exc:
                 state.update(status="stopped_error", close_error=str(exc))
+                cleanup_error = exc
         summarize(root)
         if config.get("plot_on_exit", True) and (root / "cases").exists():
             plot_summary(root)
         state["updated"] = utc()
         write_json(root / "state.json", state)
         lock.unlink()
+        if cleanup_error is not None:
+            raise RuntimeError("WF8 private CST session could not be closed") from cleanup_error
 
 
 def main() -> None:

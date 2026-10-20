@@ -73,5 +73,7 @@ API evidence: CST 2026 installed VBA documentation for `PICSolver`
 `PredefinedField.SetExternalField`, `PICPositionMonitor.Delete`,
 `Solver.MaximumNumberOfThreads` and application `DeleteResults`.
 Python interaction uses the shared `CSTConnection`, `CSTProject`,
-`SolverRunner` and `ResultReader` wrappers. Session shutdown calls only the
-private DesignEnvironment's `close`, avoiding the legacy global cleanup fallback.
+`SolverRunner` and `ResultReader` wrappers. Once projects are closed, verify the
+private session's PID, creation time and parent-child birth ordering, then use
+shared `close_targeted`. This avoids the observed GUI exit Crash Report and
+never falls back to a machine-wide sweep. Cleanup failure stops new dispatch.

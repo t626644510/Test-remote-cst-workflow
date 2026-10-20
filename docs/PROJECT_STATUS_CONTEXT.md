@@ -440,3 +440,7 @@ git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-a
    非明确要求不要重跑全 campaign。
 5. 所有 workflow：逐步把 tracked 本机路径拆成 portable example 与
    gitignored local config，但不得破坏已验证 CST 路径。
+
+## 整理前完整记录
+
+[WF8 整理前状态文档原件](history/WF8_CONTEXT_BEFORE_GIT_REORG_20261024.md)保留全部旧内容；当前分支登记以 WORKFLOW_BRANCHES.md 为准。

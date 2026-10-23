@@ -61,7 +61,7 @@ class ProjectCloser:
 def verify_process_cleanup(pid: int, timeout_s: float = 10.0) -> bool:
     """Wait for a CST process to exit; return ``True`` if it exited cleanly.
 
-    Polls ``tasklist /PID <pid>`` on Windows.  Returns ``False`` if the
+    Polls the Windows process wait state. Returns ``False`` if the
     process is still alive after *timeout_s* seconds.
 
     Parameters
@@ -269,6 +269,22 @@ def kill_all_cst_processes(extra_names: list[str] | None = None) -> int:
 
 def _process_exists(pid: int) -> bool:
     """Return ``True`` if a process with *pid* is running on Windows."""
+    if os.name == "nt":
+        # Tasklist can retain an exited process while another owner still holds
+        # its handle. Kernel wait state is independent of names/localized text.
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+            kernel.WaitForSingleObject.restype = wintypes.DWORD
+            kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel.CloseHandle.restype = wintypes.BOOL
+            return _windows_process_exists(pid, kernel, ctypes.get_last_error)
+        except Exception:
+            return True  # Unknown/access failure must never certify an exit.
     try:
         result = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
@@ -280,3 +296,14 @@ def _process_exists(pid: int) -> bool:
     except Exception:
         # On any error, assume the process might still be alive
         return True
+
+
+def _windows_process_exists(pid: int, kernel: object, last_error) -> bool:
+    """Read-only exact-PID wait probe; unknown state conservatively means alive."""
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE only.
+    if not handle:
+        return last_error() != 87  # ERROR_INVALID_PARAMETER: PID absent.
+    try:
+        return kernel.WaitForSingleObject(handle, 0) != 0  # WAIT_OBJECT_0: exited.
+    finally:
+        kernel.CloseHandle(handle)

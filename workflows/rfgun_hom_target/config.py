@@ -17,13 +17,23 @@ import yaml
 
 PARAMETER_DEFAULTS = (
     ("selfangle2", 0.0, 180.0, "deg"),
-    ("UpperHeight2", 0.0, 50.0, "mm"),
-    ("DownHeight2", 0.0, 50.0, "mm"),
+    ("UpperHeight2", 5.01, 50.0, "mm"),
+    ("DownHeight2", 2.01, 50.0, "mm"),
     ("Lin2", 1.0, 50.0, "mm"),
-    ("inner_angle3", 5.0, 175.0, "deg"),
+    ("inner_angle3", 5.0, 90.0, "deg"),
     ("inner_r2", 5.44, 25.0, "mm"),
 )
 PARAMETER_NAMES = tuple(item[0] for item in PARAMETER_DEFAULTS)
+DUAL_PARAMETER_DEFAULTS = PARAMETER_DEFAULTS + (
+    ("selfangle1", 0.0, 180.0, "deg"),
+    ("UpperHeight1", 5.01, 50.0, "mm"),
+    ("DownHeight1", 2.01, 50.0, "mm"),
+    ("Lin1", 1.0, 50.0, "mm"),
+    ("inner_angle", -90.0, -5.0, "deg"),
+    ("inner_r", -25.0, -5.44, "mm"),
+    ("FolkHeight", 5.43, 30.0, "mm"),
+    ("FolkHeight2", 5.43, 30.0, "mm"),
+)
 
 
 class ConfigurationError(ValueError):
@@ -52,12 +62,19 @@ class ParameterConfig:
 
 @dataclass(frozen=True)
 class GeometryConfig:
-    """Circular conductor and flange dimensions, all in millimetres."""
+    """Conductor, flange and topology limits in mm, except bend angle in degrees."""
 
     conductor_radius_mm: float = 5.43
     flange_radius_mm: float = 25.0
     clearance_mm: float = 0.01
     fillet_radius_mm: float = 5.43
+    minimum_down_height_mm: float = 2.0
+    minimum_upper_height_mm: float = 5.0
+    minimum_centerline_projection_mm: float = 5.43
+    maximum_bend_angle_deg: float = 90.0
+    antenna_count: int = 1
+    minimum_fork_length_mm: float = 5.43
+    bend_segments: int = 1
 
 
 @dataclass(frozen=True)
@@ -113,6 +130,7 @@ class SearchConfig:
     max_radius: float = 0.5
     max_candidate_attempts: int = 120
     candidate_draws: int = 100000
+    coverage_points: int = 0
 
 
 @dataclass(frozen=True)
@@ -218,13 +236,22 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
     if output == template or output in template.parents or output == companion or companion in output.parents:
         raise ConfigurationError("paths.output_dir must not contain the source template")
 
+    geometry_values = _section(root, "geometry", GeometryConfig)
+    geometry = GeometryConfig(**{key: _number(value, f"geometry.{key}", positive=True,
+        integer=key in {"antenna_count", "bend_segments"}) for key, value in geometry_values.items()})
+    if geometry.bend_segments not in (1, 2):
+        raise ConfigurationError("geometry.bend_segments must be 1 or 2")
+    if geometry.antenna_count not in (1, 2):
+        raise ConfigurationError("geometry.antenna_count must be 1 (antenna 2 only) or 2")
+    defaults = DUAL_PARAMETER_DEFAULTS if geometry.antenna_count == 2 else PARAMETER_DEFAULTS
+    names = tuple(item[0] for item in defaults)
     raw_parameters = root.get("parameters")
     if raw_parameters is None:
-        raw_parameters = [dict(name=name, lower=low, upper=high, unit=unit) for name, low, high, unit in PARAMETER_DEFAULTS]
-    if not isinstance(raw_parameters, list) or len(raw_parameters) != 6:
-        raise ConfigurationError("parameters must contain exactly the six canonical coordinates")
+        raw_parameters = [dict(name=name, lower=low, upper=high, unit=unit) for name, low, high, unit in defaults]
+    if not isinstance(raw_parameters, list) or len(raw_parameters) != len(names):
+        raise ConfigurationError(f"parameters must contain exactly {len(names)} canonical coordinates")
     parameters: dict[str, ParameterConfig] = {}
-    units = {item[0]: item[3] for item in PARAMETER_DEFAULTS}
+    units = {item[0]: item[3] for item in defaults}
     for raw in raw_parameters:
         entry = _mapping(raw, "parameter", set(ParameterConfig.__dataclass_fields__))
         name = entry.get("name")
@@ -234,6 +261,8 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
         upper = _number(entry.get("upper"), f"{name}.upper")
         if lower >= upper:
             raise ConfigurationError(f"{name}.lower must be smaller than upper")
+        if name in {"inner_angle", "inner_r"} and upper >= 0:
+            raise ConfigurationError(f"{name} search bounds must both be negative")
         unit = entry.get("unit", units[name])
         if unit != units[name]:
             raise ConfigurationError(f"{name}.unit must be {units[name]}")
@@ -241,13 +270,15 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
         if not isinstance(cst_name, str) or not cst_name.strip() or any(char in cst_name for char in '\"\r\n'):
             raise ConfigurationError(f"{name}.cst_name must be a nonempty CST parameter name")
         parameters[name] = ParameterConfig(name, lower, upper, unit, cst_name)
-    if len({p.cst_name for p in parameters.values()}) != 6:
+    if len({p.cst_name for p in parameters.values()}) != len(names):
         raise ConfigurationError("CST parameter names must be unique")
 
-    geometry_values = _section(root, "geometry", GeometryConfig)
-    geometry = GeometryConfig(**{key: _number(value, f"geometry.{key}", positive=True) for key, value in geometry_values.items()})
     if geometry.conductor_radius_mm + geometry.clearance_mm >= geometry.flange_radius_mm:
         raise ConfigurationError("Conductor radius plus clearance must fit inside flange radius")
+    if geometry.minimum_centerline_projection_mm + 2 * geometry.clearance_mm >= geometry.flange_radius_mm:
+        raise ConfigurationError("Minimum centerline projection leaves no flange clearance")
+    if not 0 < geometry.maximum_bend_angle_deg < 180:
+        raise ConfigurationError("Maximum bend angle must lie strictly between 0 and 180 degrees")
 
     solver_values = _section(root, "solver", SolverConfig)
     for key, value in list(solver_values.items()):
@@ -317,12 +348,14 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
         raise ConfigurationError("solver.upper_frequency_mhz must exceed the objective band's upper edge to establish coverage")
 
     search_values = _section(root, "search", SearchConfig)
-    integer_fields = {"max_solves", "initial_points", "seed", "candidate_pool", "max_candidate_attempts", "candidate_draws"}
+    integer_fields = {"max_solves", "initial_points", "seed", "candidate_pool", "max_candidate_attempts", "candidate_draws", "coverage_points"}
     for key, value in list(search_values.items()):
-        search_values[key] = _number(value, f"search.{key}", positive=key != "seed", integer=key in integer_fields)
+        search_values[key] = _number(value, f"search.{key}", positive=key not in {"seed", "coverage_points"}, integer=key in integer_fields)
     search = SearchConfig(**search_values)
     if search.seed < 0 or search.initial_points < 1:
         raise ConfigurationError("search seed must be nonnegative and initial_points must be positive")
+    if search.coverage_points < 0:
+        raise ConfigurationError("coverage_points must be nonnegative")
     if not 0 < search.local_fraction <= 1 or not 0 < search.min_radius <= search.initial_radius <= search.max_radius <= 1:
         raise ConfigurationError("Invalid normalized local search fraction or radius ordering")
     if search.candidate_draws < search.candidate_pool or search.max_candidate_attempts < search.max_solves:
@@ -343,7 +376,7 @@ def load_config(path: str | Path, *, live: bool = False) -> WorkflowConfig:
             raise ConfigurationError(f"results.{key} must contain only the {{mode}} placeholder") from exc
     if results.frequency_unit not in {"Hz", "kHz", "MHz", "GHz"}:
         raise ConfigurationError("results.frequency_unit must be Hz, kHz, MHz, or GHz")
-    config = WorkflowConfig(PathsConfig(template, output, library_path), tuple(parameters[name] for name in PARAMETER_NAMES), physics, geometry, solver, search, results)
+    config = WorkflowConfig(PathsConfig(template, output, library_path), tuple(parameters[name] for name in names), physics, geometry, solver, search, results)
     if live:
         config.validate_live()
     return config

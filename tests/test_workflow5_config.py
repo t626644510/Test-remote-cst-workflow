@@ -32,6 +32,7 @@ def test_offline_defaults_paths_and_units(tmp_path, document, monkeypatch):
     assert cfg.paths.cst_library_path == ""
     assert tuple(p.name for p in cfg.parameters) == PARAMETER_NAMES
     assert cfg.parameters[-1].upper == 25
+    assert cfg.parameters[-2].upper == cfg.geometry.maximum_bend_angle_deg == 90
     assert cfg.physics.threshold_ohm_per_m == 100000
     assert cfg.physics.z_range_mm == (-100., 100.)
     assert cfg.search.max_solves == 40
@@ -62,11 +63,18 @@ def test_unknown_keys_rejected_every_section(tmp_path, document, section):
     ("solver", "mode_count", 25), ("solver", "coverage_retries", -1),
     ("search", "max_solves", True), ("search", "initial_points", 0),
     ("search", "min_radius", .3), ("search", "candidate_draws", 10),
+    ("search", "coverage_points", -1), ("search", "coverage_points", 1.5),
     ("search", "max_candidate_attempts", 39),
     ("results", "frequency", "Mode {bogus}"), ("results", "q_loaded", "fixed mode 1"),
     ("results", "frequency", "Mode {mode:02d}"),
     ("results", "frequency_unit", "mhz"),
     ("geometry", "flange_radius_mm", 5),
+    ("geometry", "minimum_down_height_mm", -1),
+    ("geometry", "minimum_upper_height_mm", float("nan")),
+    ("geometry", "minimum_centerline_projection_mm", 25),
+    ("geometry", "maximum_bend_angle_deg", 0),
+    ("geometry", "maximum_bend_angle_deg", 180),
+    ("geometry", "maximum_bend_angle_deg", float("inf")),
 ])
 def test_invalid_values_fail_closed(tmp_path, document, section, key, value):
     document["workflow_5"].setdefault(section, {})[key] = value

@@ -1,0 +1,135 @@
+# Dual antenna example: Lin1 is a canonical coordinate mapped to CST Lin.
+# Antenna 1 bend angle/radius stay negative; fork floors are inclusive.
+# Fork upper bounds of 30 mm are search choices, not proven physical limits.
+# Supply paths and z_range_mm before live use.
+workflow_5:
+  paths:
+    template_path: dual_antenna_template.cst
+    output_dir: runs/workflow_5_dual
+    cst_library_path: ''
+  parameters:
+  - name: selfangle2
+    cst_name: selfangle2
+    lower: 0.0
+    upper: 180.0
+    unit: deg
+  - name: UpperHeight2
+    cst_name: UpperHeight2
+    lower: 5.01
+    upper: 50.0
+    unit: mm
+  - name: DownHeight2
+    cst_name: DownHeight2
+    lower: 2.01
+    upper: 50.0
+    unit: mm
+  - name: Lin2
+    cst_name: Lin2
+    lower: 1.0
+    upper: 50.0
+    unit: mm
+  - name: inner_angle3
+    cst_name: inner_angle3
+    lower: 5.0
+    upper: 90.0
+    unit: deg
+  - name: inner_r2
+    cst_name: inner_r2
+    lower: 5.44
+    upper: 25.0
+    unit: mm
+  - name: selfangle1
+    cst_name: selfangle1
+    lower: 0.0
+    upper: 180.0
+    unit: deg
+  - name: UpperHeight1
+    cst_name: UpperHeight1
+    lower: 5.01
+    upper: 50.0
+    unit: mm
+  - name: DownHeight1
+    cst_name: DownHeight1
+    lower: 2.01
+    upper: 50.0
+    unit: mm
+  - name: Lin1
+    cst_name: Lin
+    lower: 1.0
+    upper: 50.0
+    unit: mm
+  - name: inner_angle
+    cst_name: inner_angle
+    lower: -90.0
+    upper: -5.0
+    unit: deg
+  - name: inner_r
+    cst_name: inner_r
+    lower: -25.0
+    upper: -5.44
+    unit: mm
+  - name: FolkHeight
+    cst_name: FolkHeight
+    lower: 5.43
+    upper: 30.0
+    unit: mm
+  - name: FolkHeight2
+    cst_name: FolkHeight2
+    lower: 5.43
+    upper: 30.0
+    unit: mm
+  geometry:
+    conductor_radius_mm: 5.43
+    flange_radius_mm: 25.0
+    clearance_mm: 0.01
+    fillet_radius_mm: 5.43
+    minimum_down_height_mm: 2.0
+    minimum_upper_height_mm: 5.0
+    minimum_centerline_projection_mm: 5.43
+    maximum_bend_angle_deg: 90.0
+    antenna_count: 2
+    minimum_fork_length_mm: 5.43
+  solver:
+    mesh: inherit
+    coverage_policy: fixed_window
+    target_frequency_mhz: 1030
+    upper_frequency_mhz: 1060
+    mode_count: 6
+    max_mode_count: 6
+    coverage_retries: 0
+    timeout_s: 10800
+    settle_s: 2
+    postprocess_timeout_s: 180
+  physics:
+    frequency_min_mhz: 1030
+    frequency_max_mhz: 1060
+    threshold_ohm_per_m: 100000
+    z_range_mm: null
+    z_samples: 1883
+    offsets_mm:
+    - 2
+    - 4
+    - 6
+    beta: 1.0
+    field_convention: peak
+    gradient_tolerance: 0.02
+    integration_tolerance: 0.01
+    min_q: 10
+    mode_policy: largest_two
+  search:
+    coverage_points: 20
+    max_solves: 40
+    initial_points: 20
+    seed: 42
+    candidate_pool: 2048
+    local_fraction: 0.5
+    initial_radius: 0.25
+    min_radius: 0.05
+    max_radius: 0.5
+    max_candidate_attempts: 160
+    candidate_draws: 100000
+  results:
+    frequency: 1D Results\Mode Frequencies\Mode {mode}
+    q_loaded: 1D Results\Q Factors\Total-Q\Mode {mode}
+    efield: 2D/3D Results\Modes\Mode {mode}\e
+    frequency_unit: MHz

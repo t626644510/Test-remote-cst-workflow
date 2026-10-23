@@ -211,3 +211,101 @@ introduced. After deploying identical code to both machines, live continuation
 dispatched distinct `async_0004` and `async_0005`; both entered CST solving with
 fresh heartbeats and a combined reservation count of 14/40. Their final numerical
 results were still pending at this verification point.
+
+## Strongest-two quality selection (2026-09-29)
+
+Under the user-selected `largest_two` policy, finite transverse impedances in
+ohm/m are ranked before quality acceptance. Gradient and sampling cross-check
+failures on weaker modes remain recorded but no longer reject the candidate.
+Either selected mode failing those checks still rejects it; missing or nonfinite
+mode data cannot be classified as weak. `strict_all` is unchanged.
+
+Eleven regression cases cover weak-mode failures, invalid selected modes,
+unrankable data, and a previously weak mode becoming the strongest. Full
+branch-local no-CST suite: **862 passed, 1 skipped**.
+
+Offline replay of 29 locally available campaign field bundles preserved all
+25 previously valid worst impedances exactly. Four candidates previously rejected
+only for a weak-mode gradient check now pass extraction quality, with worst
+impedances 476816.236282, 470875.471942, 488703.097522 and 468777.784738 ohm/m.
+None meets the 100000 ohm/m target or improves the existing campaign best.
+Replay did not import CST or alter historical campaign state. No new live-CST
+validation, remote deployment, search change or failure-isolation change was made.
+
+## Model topology floors (2026-09-29)
+
+Following the user's CST modeling diagnosis, configurable floors were added for
+DownHeight2 (2 mm), UpperHeight2 (5 mm), and the single-bend centerline displacement
+`r * (1 - cos(angle_deg * pi / 180))` (5.43 mm). The existing positive clearance
+is added to each floor. Default height search bounds are now 2.01 and 5.01 mm.
+The full swept-conductor envelope still enforces the 25 mm flange limit; a
+centerline lower limit is not a replacement for that surface upper limit.
+The 1-cos convention was verified against the WF2 and WF3 configurations and
+the shared constraint implementation. Their old 2.75/9.785 mm limits were not copied.
+
+Boundary, configuration, small-bend regression and existing dense-surface tests
+passed. Full branch-local no-CST suite: **877 passed, 1 skipped**.
+Offline prescreen of 101 historical records rejects 50 of 64 save failures,
+including all five supplied modeling-debug examples. Fourteen save failures still
+pass the prescreen, so these constraints do not establish a complete failure cure.
+Fourteen of the 25 previously valid points also fail the new floors; historical
+simulation evidence is preserved rather than relabeled or deleted. The old best
+violates the DownHeight2 floor. The best previously valid point passing the new
+rules is async_0081, with worst transverse impedance 457537.511662 ohm/m.
+No CST solve, remote deployment, historical config/state rewrite, search algorithm
+change or failure-isolation change was performed.
+
+## Confirmed 90-degree model limit (2026-09-29)
+
+The user confirmed that this model cannot rebuild bends above 90 degrees.
+The default inner_angle3 search upper bound and configurable
+`maximum_bend_angle_deg` preflight limit are now both 90 degrees, inclusive.
+Mathematical swept-envelope tests above 90 degrees remain independent of this
+model-specific limit. Tests cover the exact boundary, observed returning bends,
+configurability and invalid settings. Full no-CST suite: **888 passed, 1 skipped**.
+With the previously added floors, offline screening now rejects all 64 historical
+save-failed points, including the remaining 14. This does not constitute a live
+rebuild or proof that all possible modeling failures have been eliminated.
+
+Search behavior was inspected, documented and left unchanged: preflight rejects
+do not reach `observe`; completed failed evaluations do count as non-improvements,
+so they can halve the shared six-dimensional local radius every four observations.
+They remain excluded from GP fitting. Global bounds and exploration remain intact.
+No CST process was started and historical campaign state was not modified.
+
+## Additional coverage budget and valid-only adaptation (2026-09-29)
+
+Completed failures now preserve the local radius and valid-result improvement
+counters. Optional maximin coverage selects feasible global candidates farthest
+from previous feasible attempts in normalized six-dimensional coordinates;
+historical imports and failed evaluations do not count toward the valid-new-point
+quota. After that quota, the existing GP/EI controller resumes.
+
+A separate extension can replay completed distributed campaign evidence after
+checking its execution identity, immutable template, parameter mapping, solver
+settings and field contract. Admissible fields are copied and recomputed; excluded
+coordinates remain only for deduplication. Prior solver consumption is recorded
+separately and the additional hard budget starts at zero. Historical state is not
+rewritten. Changed templates, numerical settings, active campaigns and corrupted
+field evidence are rejected. Tests include 15-call budget exhaustion and preserved
+historical files, failure counters, maximin selection and deterministic recovery.
+Full no-CST suite: **905 passed, 1 skipped**.
+
+## Signed dual-antenna and fork coordinates (2026-09-29)
+
+Added a configurable fourteen-coordinate model while preserving the six-coordinate
+default. Antenna 1 keeps negative bend angle and radius in CST and uses their
+reflected positive physical dimensions for the same preflight geometry. The
+canonical Lin1 coordinate can map to the template's Lin parameter without a
+runtime model-name constant. Each fork has an inclusive configurable 5.43 mm
+floor; the example 30 mm upper bound is a search choice only.
+
+Tests cover both signs, angle/radius and topology limits, independent antenna
+validation, fork boundaries, missing parameters, wrong configuration types,
+normalization and fourteen-dimensional coverage search, empty feasible regions,
+and signed writes through the existing wrapper with length-unit conversion.
+Full branch-local no-CST suite: **926 passed, 1 skipped**. No live CST validation
+or new campaign was started. Saved template metadata passed an offline baseline
+geometry/bounds check; this does not certify rebuild or solve success.
+
+2026-10-01 composite pilot: full no-live-CST branch suite via .venv Python and pytest -m 'not cst_required': 936 passed, 1 skipped. Historical 23 raw-field bundles replayed and imported with zero new solves; 8 feasible references and 15 outside-domain training observations. Live two-node validation is recorded in the local campaign launch audit, separately from these tests.

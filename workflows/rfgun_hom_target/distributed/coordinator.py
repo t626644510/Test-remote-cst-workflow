@@ -119,12 +119,12 @@ def validate_return(config: Any, task: dict[str, Any], outcome: dict[str, Any], 
 
 class Coordinator:
     """At most one distinct candidate per worker; completed results enter a single GP."""
-    def __init__(self, config: Any, store: Any, nodes: list[Node]):
+    def __init__(self, config: Any, store: Any, nodes: list[Node], *, planner: Any = None):
         if not nodes or len({node.name for node in nodes}) != len(nodes):
             raise ValueError("Need uniquely named workers")
         self.config, self.store = config, store
         self.nodes = {n.name: Transport(n) for n in nodes}
-        self.planner = AsyncPlanner(config, store.state)
+        self.planner = planner if planner is not None else AsyncPlanner(config, store.state)
         self.baseline = read_baseline(config.paths.template_path, config)
         store.state.setdefault("jobs", {})
         store.state.setdefault("permits", {})
@@ -217,6 +217,8 @@ class Coordinator:
                 break
             if any(j["node"] == name for j in self.active()):
                 continue
+            if hasattr(self.planner, "can_dispatch") and not self.planner.can_dispatch():
+                continue
             unreserved = sum(not any(v.get("task_id") == j["id"] and "number" in v for v in state["permits"].values()) for j in self.active())
             if state["solve_count"] + unreserved >= self.store.max_solves:
                 break
@@ -251,6 +253,9 @@ class Coordinator:
                     break
                 if state["solve_count"] >= self.store.max_solves:
                     state["status"] = "budget_exhausted"
+                    break
+                if hasattr(self.planner, "complete") and self.planner.complete():
+                    state["status"] = "search_plan_complete"
                     break
                 if (self.store.root / "PAUSE").exists():
                     state["status"] = "paused"

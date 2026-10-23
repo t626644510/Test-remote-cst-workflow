@@ -127,9 +127,29 @@ class PostprocessResult:
     quality_reasons: tuple[str, ...] = ()
     mode_policy: str = "strict_all"
 
+    def _ranked_modes(self) -> tuple[ProcessedMode, ...]:
+        """Rank finite transverse impedances (ohm/m) before applying quality gates.
+
+        An unreadable mode cannot be classified as weak. Missing fields/energy
+        or a nonfinite score therefore still prevent a successful selection.
+        """
+        for mode in self.modes:
+            score = mode.metrics.impedance_principal_ohm_per_m if mode.metrics else None
+            if score is None or not math.isfinite(score) or score < 0:
+                return ()
+        return tuple(sorted(self.modes,
+            key=lambda m: m.metrics.impedance_principal_ohm_per_m, reverse=True))
+
     @property
     def quality_ok(self) -> bool:
-        return bool(self.modes) and not self.quality_reasons and all(m.quality_ok for m in self.modes)
+        if not self.modes or self.quality_reasons:
+            return False
+        if self.mode_policy == "largest_two":
+            ranked = self._ranked_modes()
+            # User-selected objective: weaker modes retain diagnostics but no
+            # longer veto the two strongest in-band single-mode responses.
+            return bool(ranked) and all(m.quality_ok for m in ranked[:2])
+        return all(m.quality_ok for m in self.modes)
 
     @property
     def worst_impedance_ohm_per_m(self) -> float | None:
@@ -139,10 +159,10 @@ class PostprocessResult:
 
     @property
     def objective_mode_numbers(self) -> list[int]:
-        """Rank finite, numerically validated scores, never fixed CST mode IDs."""
+        """Select by impedance rank, never by CST ID or by discarding bad leaders."""
         if not self.quality_ok:
             return []
-        ranked = sorted(self.modes, key=lambda m: m.metrics.impedance_principal_ohm_per_m, reverse=True)
+        ranked = self._ranked_modes()
         return [m.native.mode_number for m in (ranked[:2] if self.mode_policy == "largest_two" else ranked)]
 
     def to_dict(self) -> dict[str, Any]:

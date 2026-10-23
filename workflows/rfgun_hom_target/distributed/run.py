@@ -85,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     coordinator.add_argument("--original-identity", type=Path)
     coordinator.add_argument("--prior-solves", type=int, default=0)
     coordinator.add_argument("--import-only", action="store_true")
+    coordinator.add_argument("--composite-plan", type=Path)
+    coordinator.add_argument("--composite-history", type=Path)
     args = parser.parse_args(argv)
     if args.command == "worker":
         from .worker import run_worker
@@ -131,12 +133,28 @@ def main(argv: list[str] | None = None) -> int:
             if args.resume or not args.original_identity:
                 raise ValueError("Import requires a fresh campaign and verified original identity")
             import_serial(config, store, args.import_serial, args.original_identity, args.prior_solves)
+        planner = None
+        if args.composite_plan:
+            from ..composite import CompositePlanner, import_history
+            plan = read_json(args.composite_plan)
+            plan_path = store.root / 'composite_plan.json'
+            if args.resume:
+                if read_json(plan_path) != plan:
+                    raise ValueError('Composite plan changed during resume')
+            else:
+                atomic_json(plan_path, plan)
+                if not args.composite_history or args.import_serial:
+                    raise ValueError('Fresh composite campaign requires only composite history import')
+                import_history(config, store, args.composite_history, plan)
+            planner = CompositePlanner(config, store.state, plan)
+        elif args.composite_history or (store.root / 'composite_plan.json').exists():
+            raise ValueError('Composite campaign must specify its immutable composite plan')
         if args.import_only:
             print(json.dumps(dict(imported=len(store.state["records"]), solve_count=store.state["solve_count"])))
             return 0
         if not store.state["records"] or store.state["records"][0]["status"] != "valid":
             raise ValueError("Async campaign needs a verified valid baseline import")
-        result = Coordinator(config, store, nodes).run()
+        result = Coordinator(config, store, nodes, planner=planner).run()
         print(json.dumps(dict(status=result["status"], solve_count=result["solve_count"])))
         return 0
     finally:

@@ -25,6 +25,7 @@ def parser() -> argparse.ArgumentParser:
     modes.add_argument("--analyze-only", type=Path, metavar="BUNDLE", help="Recompute a saved field bundle without CST")
     result.add_argument("--max-solves", type=int, help="Override total solve budget for a NEW campaign")
     result.add_argument("--seed-campaign", type=Path, help="Recompute a stopped campaign's baseline fields under a new mode policy; new campaigns only")
+    result.add_argument("--extend-campaign", type=Path, help="Replay a completed distributed campaign into a new campaign with an additional solve budget")
     return result
 
 
@@ -36,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.seed_campaign and not (args.optimize or args.baseline_only):
         parser().error("--seed-campaign requires a new --optimize or --baseline-only campaign")
+    if args.extend_campaign and (args.seed_campaign or not args.optimize):
+        parser().error("--extend-campaign requires new --optimize and cannot be combined with --seed-campaign")
     if args.analyze_only:
         from .postprocess import analyze_bundle
         result = analyze_bundle(args.analyze_only)
@@ -80,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
         baseline = read_baseline(template, config)
         atomic_json(store.root / "baseline_parameters.json", baseline)
         campaign = Campaign(config, store, CSTEvaluator(config, template))
+        if args.extend_campaign:
+            from .extension import import_completed
+            import_completed(config, store, template, args.extend_campaign)
+            logging.info("Imported completed historical evidence; additional solve budget starts at zero")
         if args.seed_campaign:
             from .seeding import import_baseline
             import_baseline(config, store, template, args.seed_campaign)

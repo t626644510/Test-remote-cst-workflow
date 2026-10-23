@@ -9,16 +9,22 @@ workflow_5:
     cst_library_path: ""
   parameters:
     - {name: selfangle2, cst_name: selfangle2, lower: 0, upper: 180, unit: deg}
-    - {name: UpperHeight2, cst_name: UpperHeight2, lower: 0, upper: 50, unit: mm}
-    - {name: DownHeight2, cst_name: DownHeight2, lower: 0, upper: 50, unit: mm}
+    - {name: UpperHeight2, cst_name: UpperHeight2, lower: 5.01, upper: 50, unit: mm}
+    - {name: DownHeight2, cst_name: DownHeight2, lower: 2.01, upper: 50, unit: mm}
     - {name: Lin2, cst_name: Lin2, lower: 1, upper: 50, unit: mm}
-    - {name: inner_angle3, cst_name: inner_angle3, lower: 5, upper: 175, unit: deg}
+    - {name: inner_angle3, cst_name: inner_angle3, lower: 5, upper: 90, unit: deg}
     - {name: inner_r2, cst_name: inner_r2, lower: 5.44, upper: 25, unit: mm}
   geometry:
     conductor_radius_mm: 5.43
     flange_radius_mm: 25.0
     clearance_mm: 0.01
     fillet_radius_mm: 5.43
+    # Model-specific floors; clearance_mm is added to each minimum.
+    minimum_down_height_mm: 2.0
+    minimum_upper_height_mm: 5.0
+    # r * (1 - cos(angle)); centerline displacement, not tube envelope.
+    minimum_centerline_projection_mm: 5.43
+    maximum_bend_angle_deg: 90.0
   solver:
     mesh: inherit
     coverage_policy: upper_sentinel
@@ -55,6 +61,8 @@ workflow_5:
     # conductivity_layers:
     #   Copper: {conductivity: 5.8e7, mu: 1}
   search:
+    # Optional maximin global coverage before GP/EI; historical imports do not count.
+    coverage_points: 0
     max_solves: 40
     initial_points: 12
     seed: 42

@@ -70,7 +70,9 @@ class CandidatePlanner:
         best = min(valid, key=lambda r: r["objective"])["parameters"] if valid else baseline
         center = self.space.normalize(np.array([best[n] for n in self.space.names]))
         initial = len(records) < self.config.search.initial_points
-        local_fraction = .5 if initial else self.config.search.local_fraction
+        coverage = sum(r["status"] == "valid" and not r.get("history_import")
+                       for r in records) < self.config.search.coverage_points
+        local_fraction = 0. if coverage else (.5 if initial else self.config.search.local_fraction)
         radius = self.state["radius"]
         candidates, sources = [], []
         draws = 0
@@ -97,7 +99,19 @@ class CandidatePlanner:
         pool = np.asarray(candidates)
         x, y = self.valid_training_data()
         index = 0
-        if not initial and len(y) >= 3:
+        if coverage:
+            # Unitless maximin distance spreads additional evaluations across
+            # the configured feasible parameter box, including gaps in old campaigns.
+            from scipy.spatial.distance import cdist
+            attempted = [r["parameters"] for r in records
+                         if self.geometry.feasible(r["parameters"])
+                         and all(p.lower <= r["parameters"][p.name] <= p.upper for p in self.config.parameters)]
+            if attempted:
+                reference = np.asarray([self.space.normalize(np.array([r[n] for n in self.space.names]))
+                                        for r in attempted])
+                index = int(np.argmax(cdist(pool, reference).min(axis=1)))
+            sources[index] = "coverage_maximin"
+        elif not initial and len(y) >= 3:
             try:
                 scaled_y = StandardScaler().fit_transform(y[:, None]).ravel()
                 gp = GaussianProcessRegressor(kernel=ConstantKernel(1., (1e-3, 1e3))
@@ -119,7 +133,11 @@ class CandidatePlanner:
 
     def observe(self, record: dict[str, Any], previous_best: float) -> None:
         """Adapt local radius while retaining global candidates at every step."""
-        improved = record["status"] == "valid" and record["objective"] < previous_best - 1e-6
+        # Build/save/solver failures do not measure impedance improvement. They
+        # neither shrink the parameter box nor reset valid-result streaks.
+        if record["status"] != "valid":
+            return
+        improved = record["objective"] < previous_best - 1e-6
         if improved:
             self.state["improvements"] += 1
             self.state["no_improvement"] = 0

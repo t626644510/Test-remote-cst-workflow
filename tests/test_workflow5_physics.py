@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import builtins
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -345,3 +345,54 @@ def test_largest_two_policy_ranks_impedance_ignores_q_overlap_and_keeps_all_evid
 def test_invalid_mode_policy_rejected():
     with pytest.raises(ValueError, match="mode_policy"):
         pp.PostprocessConfig((-100, 100), mode_policy="ignore_everything")
+
+
+def ranked_mode_fixture():
+    """Synthetic finite impedances in ohm/m, independent of CST mode numbering."""
+    return tuple(pp.ProcessedMode(pp.NativeMode(number, frequency, 1000),
+        replace(metrics(), impedance_principal_ohm_per_m=score), energy_j=.3)
+        for number, frequency, score in [(7, 1.055e9, 450000.),
+                                         (2, 1.038e9, 380000.),
+                                         (9, 1.049e9, 0.0001)])
+
+
+@pytest.mark.parametrize("reason", ["gradient_crosscheck_failed", "sampling_crosscheck_failed"])
+def test_weak_mode_numerical_checks_do_not_veto_two_strongest(reason):
+    rows = ranked_mode_fixture()
+    weak = replace(rows[2], metrics=replace(rows[2].metrics, quality_reasons=(reason,)))
+    result = pp.PostprocessResult(tuple(m.native for m in rows), (weak, rows[1], rows[0]),
+                                  mode_policy="largest_two")
+    assert result.quality_ok and result.objective_mode_numbers == [7, 2]
+    assert result.worst_impedance_ohm_per_m == 450000.
+    assert not result.to_dict()["modes"][0]["quality_ok"]  # Keep raw diagnostics honest.
+    assert not replace(result, mode_policy="strict_all").quality_ok
+
+
+@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize("reason", ["gradient_crosscheck_failed", "sampling_crosscheck_failed"])
+def test_invalid_strong_mode_is_not_discarded_to_choose_a_weaker_one(index, reason):
+    rows = list(ranked_mode_fixture())
+    rows[index] = replace(rows[index], metrics=replace(rows[index].metrics, quality_reasons=(reason,)))
+    result = pp.PostprocessResult(tuple(m.native for m in rows), tuple(rows), mode_policy="largest_two")
+    assert not result.quality_ok
+    assert result.objective_mode_numbers == [] and result.worst_impedance_ohm_per_m is None
+
+
+@pytest.mark.parametrize("score", [None, float('nan'), float('inf'), -1.])
+def test_unrankable_mode_cannot_be_assumed_weak(score):
+    rows = list(ranked_mode_fixture())
+    rows[2] = replace(rows[2], metrics=replace(rows[2].metrics, impedance_principal_ohm_per_m=score))
+    result = pp.PostprocessResult(tuple(m.native for m in rows), tuple(rows), mode_policy="largest_two")
+    assert not result.quality_ok and result.worst_impedance_ohm_per_m is None
+
+
+def test_new_strong_mode_reenters_quality_gate_regardless_of_mode_id():
+    rows = list(ranked_mode_fixture())
+    rows[2] = replace(rows[2], metrics=replace(rows[2].metrics,
+        impedance_principal_ohm_per_m=800000., quality_reasons=("gradient_crosscheck_failed",)))
+    result = pp.PostprocessResult(tuple(m.native for m in rows), tuple(rows), mode_policy="largest_two")
+    assert not result.quality_ok
+    rows[2] = replace(rows[2], metrics=replace(rows[2].metrics, quality_reasons=()))
+    result = replace(result, modes=tuple(rows))
+    assert result.quality_ok and result.objective_mode_numbers == [9, 7]
+    assert result.worst_impedance_ohm_per_m == 800000.

@@ -20,6 +20,48 @@ from workflows.rfgun_hom_target.storage import CampaignStore
 pytestmark = pytest.mark.no_cst
 
 
+@pytest.mark.parametrize("status", ["geometry_failed", "save_failed", "mesh", "solver_failed", "quality_failed"])
+def test_failure_preserves_valid_result_streaks_and_radius(config, store, status):
+    planner = CandidatePlanner(config, store.state)
+    store.state.update(radius=.25, improvements=1, no_improvement=3)
+    before = {k:store.state[k] for k in ("radius", "improvements", "no_improvement")}
+    for _ in range(8):
+        planner.observe(dict(status=status, objective=None), 1.)
+    assert {k:store.state[k] for k in before} == before
+    planner.observe(dict(status="valid", objective=1.1), 1.)
+    assert store.state["radius"] == .125
+    assert store.state["no_improvement"] == 0
+
+
+def test_coverage_uses_maximin_and_survives_resume(config, store, baseline, monkeypatch):
+    config = replace(config, search=replace(config.search, coverage_points=2))
+    store.state["records"] = [dict(id="old", parameters=baseline, status="valid",
+                                  objective=1., history_import=True)]
+    planner = CandidatePlanner(config, store.state)
+    monkeypatch.setattr(search.GaussianProcessRegressor, "fit", lambda *a, **k: pytest.fail("coverage must not fit GP"))
+    snapshot = copy.deepcopy(store.state)
+    candidate, source = planner.ask(baseline)
+    assert source == "coverage_maximin" and planner.geometry.feasible(candidate)
+    replay = CandidatePlanner(config, copy.deepcopy(snapshot))
+    assert replay.ask(baseline) == (candidate, source)
+    # Independent global draws with the same RNG and pool, bypass only argmax
+    # to expose all distances and verify the chosen candidate maximizes them.
+    distances = []
+    from scipy.spatial import distance
+    original = distance.cdist
+    def capture(pool, reference):
+        matrix = original(pool, reference)
+        distances.append((pool.copy(), matrix.min(axis=1)))
+        return matrix
+    monkeypatch.setattr(distance, "cdist", capture)
+    replay = CandidatePlanner(config, copy.deepcopy(snapshot))
+    replay.ask(baseline)
+    assert len(distances) == 1
+    pool, scores = distances[0]
+    selected = planner.space.normalize(np.array([candidate[n] for n in planner.space.names]))
+    np.testing.assert_allclose(selected, pool[np.argmax(scores)])
+
+
 @pytest.fixture
 def baseline():
     return dict(selfangle2=45., UpperHeight2=26., DownHeight2=4., Lin2=12.,
@@ -236,7 +278,7 @@ def test_real_gp_uses_normalized_successes_and_resume_reproduces_next_candidate(
     measured = [
         (dict(baseline), 250000.),
         ({**baseline, "selfangle2": 80., "Lin2": 18., "inner_r2": 10.}, 170000.),
-        ({**baseline, "selfangle2": 120., "inner_angle3": 95., "inner_r2": 9.}, 130000.),
+        ({**baseline, "selfangle2": 120., "inner_angle3": 85., "inner_r2": 9.}, 130000.),
     ]
     store.state["records"] = [
         dict(id=f"evaluation_{i:04d}", parameters=parameters, status="valid",

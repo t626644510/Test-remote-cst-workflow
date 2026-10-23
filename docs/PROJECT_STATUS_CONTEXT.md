@@ -1,5 +1,13 @@
 # RF-CEM 当前状态与上下文入口
 
+更新：2026-10-24 Git 分类整理。正式分支为 `workflow/rf-cem-literature-review`，
+已收录 A0 路线与当前文档。原 `codex/rf-cem-*` 阶段分支由归档标签保留；
+R5 独有实现未合入。全量 no-CST：811 passed、11 skipped；未运行 live CST。
+当前分支归属和共享基线见 [正式分支目录](WORKFLOW_BRANCHES.md)。
+整理前完整文档见 [RF 历史副本](history/RF_CONTEXT_BEFORE_GIT_REORG_20261024.md)，
+同期共享说明见 [共享状态副本](history/SHARED_CONTEXT_AT_GIT_REORG_20261024.md)。
+以下 2026-09-11 日期和旧提交号是技术状态的来源记录，不再作为当前开发分支入口。
+
 更新：2026-09-11。代码核对基线：`codex/rf-cem-acquisition-a0-landmark-coverage`，提交 `d17d95f`；六条文字经验的 Luna/max 对照已完成人审，用户同意进入框架搭建并要求先规划；首版优先从论文截面图取得轮廓，框架尚未实现。
 
 这是个人科研项目：先做能够回答问题的最小实验，再按实际需要完善。允许失败和证伪，不为文档、重复 hash 或阶段手续延迟实验。本文区分**代码事实、已有验证、当前判断和未实施建议**；代码、测试、原始证据及用户最新指令优先。

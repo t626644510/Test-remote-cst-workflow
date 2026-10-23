@@ -22,6 +22,7 @@ dependencies = [
 cad = ["cadquery==2.5.2"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0"]
 review = ["plotly==5.24.1"]
+trk-surfaces = ["vtk>=9.3,<10"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

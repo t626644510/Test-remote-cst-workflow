@@ -345,7 +345,9 @@ def test_global_pool_and_rng_resume(cfg,point):
     cfg=replace(cfg,search=replace(cfg.search,pool=32));st=state(cfg)
     model=Controller(cfg,st);p,_=model.propose();assert not Geometry(cfg).violations(p)
     saved=json.loads(json.dumps(st));a,_=model.propose();b,_=Controller(cfg,saved).propose();assert a==b
-    bad=replace(cfg,bounds={**cfg.bounds,'DownHeight1':(45.,50.),'UpperHeight1':(5.01,6.)})
+    released=replace(cfg,bounds={**cfg.bounds,'DownHeight1':(45.,49.),'UpperHeight1':(5.01,6.),'Lin1':(49.1,50.)})
+    assert len(Controller(released,state(released)).pool())==32
+    bad=replace(cfg,bounds={**cfg.bounds,'DownHeight1':(-50.,-45.),'UpperHeight1':(5.01,6.)})
     with pytest.raises(ValueError):Controller(bad,state(bad)).pool()
 
 def test_local_pool_samples_bounded_interval_without_boundary_pileup(cfg,monkeypatch):

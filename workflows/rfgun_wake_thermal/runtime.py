@@ -104,15 +104,25 @@ class CSTWorker:
                 raise EvaluationFailure('Interrupted solve has no saved success; no implicit repeat','interrupted')
             if path.exists():
                 raise EvaluationFailure('Interrupted preparation requires a new explicit attempt','interrupted')
-            copy_verified_project(Path(task['template']),directory/'project')
-            with self._project(path,directory,'prepare') as project:
-                if not project.update_parameters(mapping,use_full_rebuild=True):
-                    raise EvaluationFailure('Full geometry rebuild rejected','geometry_failed')
-                if not project.save(include_results=False):
-                    raise EvaluationFailure('Cannot save rebuilt candidate','save_failed')
+            source=task.get('prepared_source')
+            if source:
+                from .io import project_manifest
+                if source['identity']!=task['identity'] or project_manifest(Path(source['project']))!=source['files']:
+                    raise EvaluationFailure('Prepared recovery snapshot changed','identity_failed')
+                copy_verified_project(Path(source['project']),directory/'project')
+            else:
+                copy_verified_project(Path(task['template']),directory/'project')
+                with self._project(path,directory,'prepare') as project:
+                    if not project.update_parameters(mapping,use_full_rebuild=True):
+                        raise EvaluationFailure('Full geometry rebuild rejected','geometry_failed')
+                    if not project.save(include_results=False):
+                        raise EvaluationFailure('Cannot save rebuilt candidate','save_failed')
             actual=metadata(path)['parameters']
             if any(not math.isclose(actual[k],v,rel_tol=1e-10,abs_tol=1e-8) for k,v in mapping.items()):
                 raise EvaluationFailure('Rebuilt parameter mismatch','identity_failed')
+            if task.get('station_recovery'):
+                prepared,files=copy_verified_project(path,directory/'prepared')
+                atomic_json(directory/'prepared.json',dict(identity=task['identity'],name=prepared.name,files=files))
             with self._project(path,directory,'solve') as project:
                 # Commands below are recorded in these user templates / verified WF5.
                 unit=metadata(path)['general']['frequency']['unit']

@@ -133,11 +133,17 @@ class Campaign:
 
     def gated(self,c: dict,stage: str) -> bool:
         if stage=='axis':return False
+        if self.config.search.policy=='transverse_coverage':
+            from .policy import transverse_admitted
+            return stage in ('x','y') and not transverse_admitted(self.config,c)
         m=search_metrics(self.config,c)
         if not stage_below(self.config,c,'longitudinal'):return True
         return stage=='thermal' and not stage_below(self.config,c,'transverse')
 
     def select(self) -> tuple[dict,str,str|None]:
+        if self.config.search.policy=='transverse_coverage':
+            from .policy import select_action
+            return select_action(self)
         eligible=[];total=self.state['active_seconds']
         exposure=self.state['exploration_seconds'];fraction=self.config.search.exploration_fraction
         # Complete already-authorized numerical repairs before proposing another
@@ -189,7 +195,8 @@ class Campaign:
     def task(self,c: dict,stage: str) -> dict:
         identity=fingerprint(dict(contract=self.state['contract'],parameters=c['parameters'],ports=c['ports'],stage=stage))
         for job in self.state['jobs']:
-            if job['identity']==identity:
+            if job['identity']==identity or (job.get('inherited') and job['parameters']==c['parameters']
+                    and job['ports']==c['ports'] and job['stage']==stage):
                 raise ValueError('Stage already dispatched under this exact identity')
         folder=self.artifacts/'candidates'/c['id']/f"attempt_{len(self.state['jobs']):05d}"
         return dict(identity=identity,directory=str(folder),template=self.snapshot['templates'][stage],
@@ -252,6 +259,7 @@ class Campaign:
             for c in self.state['candidates']:
                 if not c['failed'] or c.get('failure',{}).get('category')!='postprocess_failed':continue
                 last=next(j for j in reversed(self.state['jobs']) if j['candidate']==c['id'])
+                if last.get('inherited'):continue
                 folder=Path(last['directory'])
                 if not (folder/'solved.json').exists():continue
                 check_recovery(folder)
@@ -275,6 +283,7 @@ class Campaign:
     def action(self,c: dict,stage: str,exploration: str | None):
         for drive in (self.store.root,self.artifacts):
             if shutil.disk_usage(drive).free<self.config.runtime.minimum_free_gib*2**30:raise RuntimeError('Disk free space below configured reserve')
+        self.store.tick()
         if not self.store.can_start(self.estimate(stage)):return False
         repairing=bool(c.get('repair_stage'))
         if repairing and c['repair_seconds']>=self.config.runtime.repair_timeout_s:
@@ -308,6 +317,13 @@ class Campaign:
             cost_basis='measured stages' if benchmark else 'provisional scheduling estimates; no candidate-count forecast',
             estimated_remaining_full_candidates=max(0,(self.config.search.hours*3600-self.state['active_seconds']))/sum(self.estimate(s) for s in STAGES) if benchmark else None,
             validity='Fixed 35 m wake reconstruction stability only; no unique modal inversion or thermal temperature prediction')
+        report['round']=dict(number=self.state.get('round_number',1),budget_hours=self.config.search.hours,
+            active_hours=self.state['active_seconds']/3600,overshoot_hours=max(0.,self.state['active_seconds']/3600-self.config.search.hours),
+            prior_active_hours=self.state.get('prior_active_seconds',0.)/3600,
+            external_active_hours=self.state.get('external_active_seconds',0.)/3600,
+            total_active_hours=(self.state.get('external_active_seconds',0.)+self.state.get('prior_active_seconds',0.)+self.state['active_seconds'])/3600,
+            completion_policy='finish current stage; manual authorization for next round')
+        report['search_policy']=self.config.search.policy
         report['observation_mode']=self.config.search.observation_mode
         if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
             ranked=[search_view(self.config,c) for c in self.state['candidates'] if all(k in search_metrics(self.config,c) for k in METRICS[:2])]
@@ -324,6 +340,8 @@ class Campaign:
                     complete=c['complete'],feasible=c['feasible'],failed=c['failed'],projects=';'.join(s.get('project','') for s in c['stages'].values())))
 
     def run(self,mode: str,diagnostic_stage: str | None=None):
+        if self.state.get('status')=='budget_exhausted':
+            raise ValueError('Round is closed; prepare a new round only after user audit')
         self.store.start_clock();self.state['status']='running';self.store.save()
         try:
             self.recover()
@@ -344,6 +362,8 @@ class Campaign:
             if mode=='baseline':self.state['status']='baseline_complete';return
             while True:
                 if (self.store.root/'STOP').exists():self.state['status']='paused';break
+                self.store.tick()
+                if not self.store.can_start(0.):self.state['status']='budget_exhausted';break
                 c,stage,explore=self.select()
                 if not self.action(c,stage,explore):self.state['status']='budget_exhausted';break
                 self.report()
@@ -352,4 +372,7 @@ class Campaign:
         except BaseException as exc:
             self.state['status']='needs_attention';self.state['error']=f'{type(exc).__name__}: {exc}';raise
         finally:
-            self.store.tick();self.store.save();self.report();self.store.close()
+            self.store.tick()
+            if self.state['status']=='budget_exhausted':
+                (self.store.root/'STOP').write_text('Round finished. Await user audit and explicit next-round authorization.\n',encoding='utf-8')
+            self.store.save();self.store.close();self.report()

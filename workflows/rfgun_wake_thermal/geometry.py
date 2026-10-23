@@ -17,7 +17,11 @@ class Geometry:
         if errors:return errors
         gap=self.config.search.bound_clearance_mm
         for i in (1,2):
-            if abs(p[f'DownHeight{i}'])>p[f'UpperHeight{i}']-gap:errors.append(f'antenna{i}: absolute height')
+            # Lengths in mm: negative penetration recesses the outer conductor
+            # inside the flange. Keep a nonzero flange segment; positive
+            # penetration is limited by Lin clearance, not flange depth.
+            if p[f'DownHeight{i}']<0 and -p[f'DownHeight{i}']>p[f'UpperHeight{i}']-gap:
+                errors.append(f'antenna{i}: recessed outer-conductor clearance')
             if p[f'Lin{i}']-p[f'DownHeight{i}']<gap:errors.append(f'antenna{i}: linear clearance')
         return errors
 

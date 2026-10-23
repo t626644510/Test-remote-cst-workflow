@@ -167,3 +167,42 @@ def test_saved_source_name_is_read_from_log(tmp_path):
     assert analyze(source,tmp_path/'analysis',frequency_mhz=1000)['source_name']=='Cathode source'
     with pytest.raises(ValueError,match='differ'):
         analyze(source,source/'surface_time',frequency_mhz=1000)
+
+
+@pytest.mark.parametrize('action',['export','scan'])
+def test_initialization_failure_closes_only_captured_session(tmp_path,monkeypatch,action):
+    import os
+    import cst_optimization.core as core
+    import cst_optimization.core.connection as connections
+    import cst_optimization.core.results as results
+    import cst_optimization.core.session_cleanup as cleanup
+    from workflows.trk_multipacting.export import export_saved
+    from workflows.trk_multipacting import trk_run
+    from workflows.trk_multipacting.model import Task
+    calls=[]
+    class Connection:
+        pid=os.getpid()
+        def __init__(self,*args,**kwargs):pass
+        def connect(self):pass
+        def set_quiet_mode(self,value):raise RuntimeError('quiet setup failed')
+    class Reader:
+        def __init__(self,*args,**kwargs):pass
+        def list_tree_items(self):return []
+        def invalidate_cache(self):pass
+    def close(connection,pid,created):
+        calls.append((pid,created));return {'closed':True}
+    monkeypatch.setattr(core,'init_cst_path',lambda _:None)
+    monkeypatch.setattr(connections,'CSTConnection',Connection)
+    monkeypatch.setattr(results,'ResultReader',Reader)
+    monkeypatch.setattr(cleanup,'close_owned_session',close)
+    monkeypatch.setattr(trk_run,'close_owned_session',close)
+    project=tmp_path/'saved.cst';project.write_text('saved')
+    raw=tmp_path/'saved/Result';raw.mkdir(parents=True)
+    (raw/'Model.log').write_text('Particle Tracking Solver successful.')
+    (raw/'trajectories.bix').write_bytes(b'trajectories')
+    monkeypatch.setattr(trk_run,'prepare',lambda *args:{'project':str(project)})
+    monkeypatch.setattr(trk_run,'tasks',lambda:[Task('particle1',0,0)])
+    with pytest.raises(RuntimeError,match='quiet setup failed'):
+        if action=='export':export_saved(project,tmp_path/'export','mock')
+        else:trk_run.run(tmp_path/'scan',project,cst_library='mock')
+    assert len(calls)==1 and calls[0][0]==os.getpid()

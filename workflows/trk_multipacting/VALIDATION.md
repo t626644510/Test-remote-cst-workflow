@@ -8,11 +8,11 @@ separate authorized live check; no-CST results do not claim live validation.
 ## Automated checks
 
 `python -m pytest -q -m "not cst_required" --tb=short`:
-**684 passed, 1 skipped**, 14 upstream matplotlib/pyparsing deprecation warnings.
+**686 passed, 1 skipped**, 14 upstream matplotlib/pyparsing deprecation warnings.
 The skipped test is inherited from the shared baseline; VTK tests ran with 9.6.2.
 `git diff --check` and standalone `run_workflow_8_1.py --help` passed.
 
-Tests cover complete/aborted-saved outcomes, native abort ownership, timeout,
+Tests cover complete/aborted-saved outcomes, native abort ownership and initialization-failure cleanup, timeout,
 resumption and STOP, mesh/cache invariants, source validation, advisory current
 and generation differences, no collisions, shorter-than-three-period records,
 variable terminal ambiguity, legacy input protection, dynamic source/report

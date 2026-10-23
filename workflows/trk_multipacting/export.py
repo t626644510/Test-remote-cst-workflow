@@ -107,10 +107,10 @@ def export_saved(project: Path, output: Path, library: str, *, surfaces: bool = 
     write_json(output/'missing_curves.json', missing)
     connection = CSTConnection(library, mode='new')
     connection.connect()
-    connection.set_quiet_mode(True)
     owner = (connection.pid, psutil.Process(connection.pid).create_time())
     opened = None
     try:
+        connection.set_quiet_mode(True)
         opened = connection.open_project(str(private))
         if opened.project.model3d.is_solver_running():
             raise RuntimeError('Private copy unexpectedly has a running solver')

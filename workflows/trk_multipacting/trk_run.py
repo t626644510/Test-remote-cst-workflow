@@ -263,8 +263,9 @@ def run(root: Path, template: Path, selected: list[str] | None = None, limit: in
         if queue and not (root/'STOP').exists():
             from cst_optimization.core.connection import CSTConnection
             connection = CSTConnection(cst_library, mode='new')
-            connection.connect(); connection.set_quiet_mode(True)
+            connection.connect()
             session = (connection.pid, psutil.Process(connection.pid).create_time())
+            connection.set_quiet_mode(True)
             write_json(root/'owner.json', dict(owner, cst_pid=session[0], cst_created=session[1]))
             project = connection.open_project(str(work))
             for task in queue:

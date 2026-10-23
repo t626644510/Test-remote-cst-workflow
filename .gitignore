@@ -62,3 +62,6 @@ wf3-campaign/
 
 # Source copies were inventoried/archived before excluding local artifacts.
 /artifacts/
+# Local rendered presentation and chart caches (sources are in docs).
+/PPT/
+/.chart-data-*/

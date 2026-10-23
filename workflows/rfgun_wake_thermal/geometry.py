@@ -11,13 +11,19 @@ class Geometry:
 
     def violations(self, p: Mapping[str,float]) -> list[str]:
         errors=[]
+        for name, value in self.config.fixed_parameters.items():
+            if p.get(name) != value: errors.append(f'{name}: fixed coordinate mismatch')
         for n in NAMES:
             v=p.get(n,float('nan'));lo,hi=self.config.bounds[n]
             if not math.isfinite(v) or not lo<=v<=hi:errors.append(f'{n}: outside [{lo},{hi}]')
         if errors:return errors
         gap=self.config.search.bound_clearance_mm
         for i in (1,2):
-            if abs(p[f'DownHeight{i}'])>p[f'UpperHeight{i}']-gap:errors.append(f'antenna{i}: absolute height')
+            # Lengths in mm: negative penetration recesses the outer conductor
+            # inside the flange. Keep a nonzero flange segment; positive
+            # penetration is limited by Lin clearance, not flange depth.
+            if p[f'DownHeight{i}']<0 and -p[f'DownHeight{i}']>p[f'UpperHeight{i}']-gap:
+                errors.append(f'antenna{i}: recessed outer-conductor clearance')
             if p[f'Lin{i}']-p[f'DownHeight{i}']<gap:errors.append(f'antenna{i}: linear clearance')
         return errors
 

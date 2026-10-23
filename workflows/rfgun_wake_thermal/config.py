@@ -74,7 +74,9 @@ class Reconstruction:
 @dataclass(frozen=True)
 class Search:
     observation_mode: str = 'qualified'
-    hours: float = 96.
+    hours: float = 48.
+    policy: str = 'legacy'
+    transverse_admission_ohm: float = 3000.
     exploration_fraction: float = .20
     initial_points: int = 12
     seed: int = 20261003
@@ -87,6 +89,8 @@ class Search:
     fixed_radius_mm: float = 25.
     native_relative_noise: float = .02
     history_relative_noise: float = .20
+    seed_points: tuple[dict[str, float], ...] = ()
+    neighborhood_half_widths: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -128,6 +132,15 @@ class Config:
     results: Results = field(default_factory=Results)
     bounds: dict[str, tuple[float, float]] = field(default_factory=lambda: DEFAULT_BOUNDS.copy())
     parameter_mapping: dict[str, str] = field(default_factory=lambda: {'Lin1':'Lin'})
+    fixed_parameters: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def active_names(self) -> tuple[str, ...]:
+        return tuple(n for n in NAMES if n not in self.fixed_parameters)
+
+    @property
+    def active_stages(self) -> tuple[str, ...]:
+        return ('axis', 'thermal') if self.search.policy == 'longitudinal_heat' else STAGES
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -147,7 +160,7 @@ class Config:
             elif annotation is str and not isinstance(value,str):raise ValueError(f'{name} must be text')
         for obj in (self.paths,self.physics,self.reconstruction,self.search,self.runtime,self.results,self):
             for name,annotation in get_type_hints(type(obj)).items():check(getattr(obj,name),annotation,name)
-        if set(self.paths.templates) != set(STAGES):
+        if set(self.paths.templates) != set(self.active_stages):
             raise ValueError('Exactly axis/x/y/thermal templates required')
         if set(self.bounds) != set(NAMES):
             raise ValueError('Exactly twelve physical coordinate bounds required')
@@ -166,6 +179,27 @@ class Config:
             raise ValueError('Confirmed beta=1 and nonzero source offset required')
         if not 0 < self.search.exploration_fraction < 1:
             raise ValueError('Exploration fraction must be between zero and one')
+        if self.search.policy not in ('legacy','transverse_coverage','longitudinal_heat'):
+            raise ValueError('Unknown search policy')
+        if self.search.policy=='transverse_coverage' and self.search.observation_mode!='reconstructed_peak_screening':
+            raise ValueError('Transverse coverage policy requires reconstructed peaks')
+        if self.search.policy == 'longitudinal_heat':
+            expected = dict(UpperHeight1=49.9, UpperHeight2=49.9, DownHeight1=-47., DownHeight2=-47.)
+            if self.fixed_parameters != expected or len(self.active_names) != 8:
+                raise ValueError('WF6.1 requires both UpperHeight=49.9 and DownHeight=-47 mm')
+            if self.search.observation_mode != 'reconstructed_peak_screening':
+                raise ValueError('WF6.1 requires reconstructed peaks')
+            if len(self.search.seed_points) != 2 or set(self.search.neighborhood_half_widths) != set(self.active_names):
+                raise ValueError('WF6.1 requires two complete seeds and eight neighborhood widths')
+            if any(not math.isfinite(v) or v <= 0 for v in self.search.neighborhood_half_widths.values()):
+                raise ValueError('Invalid WF6.1 neighborhood widths')
+            from .geometry import Geometry
+            if any(set(p) != set(NAMES) or Geometry(self).violations(p) for p in self.search.seed_points):
+                raise ValueError('WF6.1 seed violates physical/fixed coordinates')
+        elif self.fixed_parameters or self.search.seed_points or self.search.neighborhood_half_widths:
+            raise ValueError('Reduced coordinates require longitudinal_heat policy')
+        if self.search.transverse_admission_ohm < self.physics.longitudinal_limit:
+            raise ValueError('Exploration admission must not tighten final longitudinal limit')
         if self.search.observation_mode not in ('qualified','finite_tail_screening','reconstructed_peak_screening'):
             raise ValueError('Unknown search observation mode')
         if not 0 < self.search.native_relative_noise <= self.search.history_relative_noise < 1:

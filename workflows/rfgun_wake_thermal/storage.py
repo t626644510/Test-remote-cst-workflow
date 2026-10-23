@@ -87,7 +87,9 @@ class Store:
         self.save()
 
     def can_start(self,estimate: float) -> bool:
-        return self.state['active_seconds']+max(estimate,60.)+300.<self.config.search.hours*3600
+        # Admission deadline only: a running solve/postprocess is never cut at the cap.
+        # Actual overshoot remains charged to this round, never to a fresh round.
+        return self.state['active_seconds'] < self.config.search.hours*3600
 
     def reserve(self,candidate: dict,stage: str,task: dict,exploration: str | None) -> dict:
         if self.state['pending'] is not None:raise ValueError('An unresolved task already owns the worker')
@@ -141,7 +143,16 @@ def prune_native(config: Config,state: dict) -> list[str]:
     if not marker.exists() or json.loads(marker.read_text()).get('contract')!=state['contract']:
         raise ValueError('Artifact root ownership is not established')
     keep=retained_candidates(state['candidates'],config.runtime.retain_recent,config.runtime.retain_pareto)
-    if config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
+    if config.search.policy=='longitudinal_heat':
+        from .heat_policy import heat_rank,formal_longitudinal
+        from .screening import stage_below
+        complete=[c for c in state['candidates'] if c.get('complete') and all(k in c['metrics'] for k in ('power5','power6'))]
+        # Preserve several low-loss native projects for manual geometry review.
+        for group in ([c for c in complete if formal_longitudinal(config,c)],
+                      [c for c in complete if stage_below(config,c,'longitudinal')]):
+            keep.update(c['id'] for c in sorted(group,key=heat_rank)[:config.runtime.retain_pareto])
+        keep.update(c['id'] for c in state['candidates'] if c.get('source')=='wf61_seed')
+    elif config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
         from .screening import search_metrics,ranking_metrics
         ranked=[c for c in state['candidates'] if all(k in search_metrics(config,c) for k in ('longitudinal','transverse'))]
         def screen_order(c):
@@ -152,7 +163,7 @@ def prune_native(config: Config,state: dict) -> list[str]:
     keep.update(j['candidate'] for j in state['jobs'] if j['status']=='reserved')
     removed=[]
     for j in state['jobs']:
-        if j['candidate'] in keep or j['status']!='complete':continue
+        if j.get('inherited') or j['candidate'] in keep or j['status']!='complete':continue
         attempt=Path(j['directory']).resolve();target=(attempt/'project').resolve()
         if not target.is_relative_to(root) or target==root or target.name!='project':raise ValueError('Unsafe native retention target')
         if target.exists() and verify_evidence(attempt/'raw'):

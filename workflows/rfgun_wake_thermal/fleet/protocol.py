@@ -1,0 +1,139 @@
+"""Portable task identities, validated artifacts and machine-local locking."""
+from __future__ import annotations
+
+from contextlib import contextmanager
+from dataclasses import dataclass
+import json
+from importlib.metadata import version
+import os
+from pathlib import Path
+import re
+from typing import Any, Iterator
+import zipfile
+
+from ..io import atomic_json, digest, fingerprint, project_manifest
+
+
+def read_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@contextmanager
+def owner_lock(path: Path) -> Iterator[None]:
+    """Fail closed on an already-running worker; OS releases locks on exit."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as stream:
+        if stream.tell() == 0:
+            stream.write(b"0")
+            stream.flush()
+        stream.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
+
+
+def execution_identity(config: Any) -> dict[str, Any]:
+    """Exclude station paths, retain every scientific/search setting and source byte."""
+    repository = Path(__file__).resolve().parents[3]
+    paths = list((repository / "workflows/rfgun_wake_thermal").rglob("*.py"))
+    paths += list((repository / "src/cst_optimization").rglob("*.py"))
+    paths += [repository / "run_workflow_6_fleet.py", repository / "run_workflow_6.py"]
+    settings = config.as_dict()
+    settings.pop("paths")
+    library = Path(config.paths.cst_library_path)
+    value = dict(settings=settings, templates={stage:project_manifest(Path(path)) for stage,path in config.paths.templates.items()},
+                numerical_versions={name: version(name) for name in ("numpy", "scipy", "scikit-learn")},
+                cst_python={p.relative_to(library).as_posix(): digest(p) for p in sorted((library / "cst").rglob("*.py"))},
+                code={p.relative_to(repository).as_posix(): digest(p) for p in sorted(paths)})
+    return json.loads(json.dumps(value))
+
+
+def safe_id(value: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", value):
+        raise ValueError("Invalid task/node identity")
+    return value
+
+
+@dataclass(frozen=True)
+class Node:
+    """One machine and its local filesystem; never a shared SQLite directory."""
+    name: str
+    root: str
+    config: str
+    python: str
+    repository: str
+    ssh_config: str = ""
+    ssh_host: str = ""
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "Node":
+        if set(value) - set(cls.__dataclass_fields__):
+            raise ValueError("Unknown node settings")
+        node = cls(**value)
+        safe_id(node.name)
+        if any(not isinstance(v, str) or not v for v in
+               (node.root, node.config, node.python, node.repository)):
+            raise ValueError("Node paths must be nonempty strings")
+        if bool(node.ssh_config) != bool(node.ssh_host):
+            raise ValueError("Remote node needs both SSH config and host alias")
+        return node
+
+
+def pack_evidence(evaluation: Path, target: Path) -> str:
+    """Keep raw beam fields/energy and lifecycle proof; native 3D fields stay on node."""
+    temporary = target.with_suffix(".tmp")
+    with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(evaluation.rglob("*")):
+            if path.is_file() and not {"project","prepared"}.intersection(path.relative_to(evaluation).parts):
+                archive.write(path, path.relative_to(evaluation).as_posix())
+        for path in evaluation.glob("project/*/Result/*.log"):
+            if path.name in ("Model.log", "MCalc.log"):
+                archive.write(path, "CST_" + path.name)
+    os.replace(temporary, target)
+    return digest(target)
+
+
+def unpack_evidence(source: Path, target: Path, expected_sha256: str) -> None:
+    """Reject corruption and traversal before extracting any returned worker file."""
+    if digest(source) != expected_sha256:
+        raise ValueError("Worker artifact digest mismatch")
+    target = target.resolve()
+    with zipfile.ZipFile(source) as archive:
+        if sum(m.file_size for m in archive.infolist()) > 4*1024**3:
+            raise ValueError("Oversized evidence archive")
+        for member in archive.infolist():
+            name = member.filename.replace("\\", "/")
+            resolved = (target / name).resolve()
+            if ":" in name or name.startswith("/") or ".." in name.split("/") or target not in resolved.parents:
+                raise ValueError("Unsafe worker artifact member")
+            if (member.external_attr >> 16) & 0o170000 == 0o120000:
+                raise ValueError("Evidence symlink is forbidden")
+            if member.file_size > 512 * 1024 * 1024:
+                raise ValueError("Oversized evidence member")
+        archive.extractall(target)
+
+
+def publish_json(path: Path, value: Any) -> None:
+    """Existing task specifications and grants are immutable and idempotent."""
+    if path.exists():
+        if read_json(path) != value:
+            raise ValueError(f"Conflicting immutable message: {path.name}")
+    else:
+        atomic_json(path, value)
+
+
+def pack_station_evidence(selected: Path, job: Path, target: Path) -> str:
+    """Include failed-attempt numeric/lifecycle evidence; retain native files on node."""
+    pack_evidence(selected,target)
+    with zipfile.ZipFile(target,'a',zipfile.ZIP_DEFLATED) as archive:
+        for attempt in sorted(job.glob('attempt_*')):
+            if attempt==selected:continue
+            for path in sorted(attempt.rglob('*')):
+                relative=path.relative_to(attempt)
+                if path.is_file() and not {'project','prepared'}.intersection(relative.parts):
+                    archive.write(path,'station_attempts/'+attempt.name+'/'+relative.as_posix())
+    return digest(target)

@@ -8,7 +8,7 @@ from .geometry import Geometry
 from .io import atomic_json,copy_verified_project,digest,fingerprint,project_manifest
 from .runtime import metadata,effective_settings
 from .storage import Store,prune_native
-from .search import Controller,METRICS,axis_observed
+from .search import Controller,METRICS,axis_observed,make_controller
 from .repair import bad_ports,next_ports
 from .reconstruction import read_bundle,align_transverse,reconstruct,transverse_norm
 from .supervision import launch_worker,check_recovery
@@ -112,11 +112,14 @@ class Campaign:
     """Each selected action is a single owned CST stage, with durable budget ownership."""
     def __init__(self,config: Config,config_path: Path,contract: str,snapshot: dict,backend=launch_worker):
         self.config=config;self.config_path=config_path;self.snapshot=snapshot;self.backend=backend
-        self.store=Store(config,contract);self.state=self.store.state;self.controller=Controller(config,self.state)
+        self.store=Store(config,contract);self.state=self.store.state;self.controller=make_controller(config,self.state)
         self.artifacts=Path(config.paths.artifact_dir)
         if not self.state['candidates']:self.new_candidate(snapshot['baseline'],'baseline')
 
     def new_candidate(self,parameters: dict,source: str) -> dict:
+        if self.config.search.policy=='longitudinal_heat':
+            errors=Geometry(self.config).violations(parameters)
+            if errors:raise ValueError('; '.join(errors))
         key=fingerprint(parameters)
         if any(c['key']==key for c in self.state['candidates']):raise ValueError('Duplicate candidate rejected')
         c=dict(id=f"candidate_{len(self.state['candidates']):04d}",parameters=parameters,key=key,source=source,
@@ -129,15 +132,25 @@ class Campaign:
         return float(np.quantile(samples,.75)) if samples else (1800. if stage!='thermal' else 1200.)
 
     def next_stage(self,c: dict) -> str | None:
-        return next((s for s in STAGES if s not in c['stages']),None)
+        return next((s for s in self.config.active_stages if s not in c['stages']),None)
 
     def gated(self,c: dict,stage: str) -> bool:
         if stage=='axis':return False
+        if self.config.search.policy=='longitudinal_heat':return not stage_below(self.config,c,'longitudinal')
+        if self.config.search.policy=='transverse_coverage':
+            from .policy import transverse_admitted
+            return stage in ('x','y') and not transverse_admitted(self.config,c)
         m=search_metrics(self.config,c)
         if not stage_below(self.config,c,'longitudinal'):return True
         return stage=='thermal' and not stage_below(self.config,c,'transverse')
 
     def select(self) -> tuple[dict,str,str|None]:
+        if self.config.search.policy=='longitudinal_heat':
+            from .heat_policy import select_action
+            return select_action(self)
+        if self.config.search.policy=='transverse_coverage':
+            from .policy import select_action
+            return select_action(self)
         eligible=[];total=self.state['active_seconds']
         exposure=self.state['exploration_seconds'];fraction=self.config.search.exploration_fraction
         # Complete already-authorized numerical repairs before proposing another
@@ -189,7 +202,8 @@ class Campaign:
     def task(self,c: dict,stage: str) -> dict:
         identity=fingerprint(dict(contract=self.state['contract'],parameters=c['parameters'],ports=c['ports'],stage=stage))
         for job in self.state['jobs']:
-            if job['identity']==identity:
+            if job['identity']==identity or (job.get('inherited') and job['parameters']==c['parameters']
+                    and job['ports']==c['ports'] and job['stage']==stage):
                 raise ValueError('Stage already dispatched under this exact identity')
         folder=self.artifacts/'candidates'/c['id']/f"attempt_{len(self.state['jobs']):05d}"
         return dict(identity=identity,directory=str(folder),template=self.snapshot['templates'][stage],
@@ -226,8 +240,11 @@ class Campaign:
             analysis['details'][key]=dict(status='uncertain',reasons=[str(exc)])
             c['analysis_error']=str(exc)
         c.update(analysis)
-        c['complete']=all(s in c['stages'] for s in STAGES)
+        c['complete']=all(s in c['stages'] for s in self.config.active_stages)
         m=c['metrics'];c['feasible']=m.get('longitudinal',float('inf'))<=self.config.physics.longitudinal_limit and m.get('transverse',float('inf'))<=self.config.physics.transverse_limit
+        if self.config.search.policy=='longitudinal_heat':
+            from .heat_policy import formal_longitudinal
+            c['feasible']=bool(c['complete'] and formal_longitudinal(self.config,c) and all(k in m for k in ('power5','power6')))
         ranking=search_metrics(self.config,c)
         c['screening_metrics']=ranking if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening') else {}
         comparable_key='best_screening_comparable' if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening') else 'best_comparable'
@@ -238,6 +255,11 @@ class Campaign:
                 self.state[comparable_key]=dict(ranking)
                 self.state[comparable_key+'_uncertainty']=reconstruction_uncertainty(c)
                 self.state[comparable_key+'_ranking']=ranking_metrics(self.config,c)
+        if self.config.search.policy=='longitudinal_heat' and c['feasible']:
+            from .heat_policy import heat_rank
+            if not previous or heat_rank({'metrics':ranking})<heat_rank({'metrics':previous}):
+                self.state[comparable_key]=dict(ranking)
+                self.state[comparable_key+'_uncertainty']=reconstruction_uncertainty(c)
         self.state['rng']=self.controller.rng.bit_generator.state
         j['metrics']={k:v for k,v in m.items() if k not in old or old[k]!=v}
         j['applied']=True;self.store.save();self.store.mirror();LOG.info('%s %s returned: %s',c['id'],j['stage'],m)
@@ -252,6 +274,7 @@ class Campaign:
             for c in self.state['candidates']:
                 if not c['failed'] or c.get('failure',{}).get('category')!='postprocess_failed':continue
                 last=next(j for j in reversed(self.state['jobs']) if j['candidate']==c['id'])
+                if last.get('inherited'):continue
                 folder=Path(last['directory'])
                 if not (folder/'solved.json').exists():continue
                 check_recovery(folder)
@@ -275,6 +298,7 @@ class Campaign:
     def action(self,c: dict,stage: str,exploration: str | None):
         for drive in (self.store.root,self.artifacts):
             if shutil.disk_usage(drive).free<self.config.runtime.minimum_free_gib*2**30:raise RuntimeError('Disk free space below configured reserve')
+        self.store.tick()
         if not self.store.can_start(self.estimate(stage)):return False
         repairing=bool(c.get('repair_stage'))
         if repairing and c['repair_seconds']>=self.config.runtime.repair_timeout_s:
@@ -293,6 +317,9 @@ class Campaign:
         return True
 
     def report(self):
+        if self.config.search.policy=='longitudinal_heat':
+            from .heat_policy import report
+            return report(self)
         complete=[c for c in self.state['candidates'] if c['complete'] and len(c['metrics'])==4]
         feasible=[c for c in complete if c['feasible']]
         best=min(feasible,key=lambda c:(max(c['metrics']['power5'],c['metrics']['power6']),c['metrics']['power5']+c['metrics']['power6'])) if feasible else None
@@ -308,6 +335,13 @@ class Campaign:
             cost_basis='measured stages' if benchmark else 'provisional scheduling estimates; no candidate-count forecast',
             estimated_remaining_full_candidates=max(0,(self.config.search.hours*3600-self.state['active_seconds']))/sum(self.estimate(s) for s in STAGES) if benchmark else None,
             validity='Fixed 35 m wake reconstruction stability only; no unique modal inversion or thermal temperature prediction')
+        report['round']=dict(number=self.state.get('round_number',1),budget_hours=self.config.search.hours,
+            active_hours=self.state['active_seconds']/3600,overshoot_hours=max(0.,self.state['active_seconds']/3600-self.config.search.hours),
+            prior_active_hours=self.state.get('prior_active_seconds',0.)/3600,
+            external_active_hours=self.state.get('external_active_seconds',0.)/3600,
+            total_active_hours=(self.state.get('external_active_seconds',0.)+self.state.get('prior_active_seconds',0.)+self.state['active_seconds'])/3600,
+            completion_policy='finish current stage; manual authorization for next round')
+        report['search_policy']=self.config.search.policy
         report['observation_mode']=self.config.search.observation_mode
         if self.config.search.observation_mode in ('finite_tail_screening','reconstructed_peak_screening'):
             ranked=[search_view(self.config,c) for c in self.state['candidates'] if all(k in search_metrics(self.config,c) for k in METRICS[:2])]
@@ -324,6 +358,10 @@ class Campaign:
                     complete=c['complete'],feasible=c['feasible'],failed=c['failed'],projects=';'.join(s.get('project','') for s in c['stages'].values())))
 
     def run(self,mode: str,diagnostic_stage: str | None=None):
+        if self.config.search.policy=='longitudinal_heat':
+            raise ValueError('WF6.1 is prepared offline and run with the two-station fleet entry')
+        if self.state.get('status')=='budget_exhausted':
+            raise ValueError('Round is closed; prepare a new round only after user audit')
         self.store.start_clock();self.state['status']='running';self.store.save()
         try:
             self.recover()
@@ -344,6 +382,8 @@ class Campaign:
             if mode=='baseline':self.state['status']='baseline_complete';return
             while True:
                 if (self.store.root/'STOP').exists():self.state['status']='paused';break
+                self.store.tick()
+                if not self.store.can_start(0.):self.state['status']='budget_exhausted';break
                 c,stage,explore=self.select()
                 if not self.action(c,stage,explore):self.state['status']='budget_exhausted';break
                 self.report()
@@ -352,4 +392,7 @@ class Campaign:
         except BaseException as exc:
             self.state['status']='needs_attention';self.state['error']=f'{type(exc).__name__}: {exc}';raise
         finally:
-            self.store.tick();self.store.save();self.report();self.store.close()
+            self.store.tick()
+            if self.state['status']=='budget_exhausted':
+                (self.store.root/'STOP').write_text('Round finished. Await user audit and explicit next-round authorization.\n',encoding='utf-8')
+            self.store.save();self.store.close();self.report()

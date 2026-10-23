@@ -65,6 +65,14 @@ def ensure_sessions_inactive(evaluation_dir: Path, *, probe: Callable[[int], Pid
     record is insufficient, and the exact recorded PID is conservatively probed.
     """
     probe = probe or query_pid
+    # Fresh station-wide absence certificates close unknown-PID startup records.
+    # They never authorize termination; every exact session digest must match.
+    from .io import digest
+    certificate = Path(evaluation_dir)/'station_quiescence.json'
+    absence = {}
+    if certificate.exists():
+        try: absence = json.loads(certificate.read_text(encoding='utf-8'))
+        except (OSError, ValueError): pass
     for record_path in sorted(Path(evaluation_dir).glob("attempt_*/*_session.json")):
         try:
             session = json.loads(record_path.read_text(encoding="utf-8"))
@@ -72,6 +80,12 @@ def ensure_sessions_inactive(evaluation_dir: Path, *, probe: Callable[[int], Pid
                 raise ValueError("session must be an object")
         except Exception as exc:
             raise SessionRecoveryBlocked(f"Cannot read session record {record_path}: {exc}") from exc
+        relative = str(record_path.relative_to(evaluation_dir))
+        if (absence.get('kind') == 'read_only_global_absence'
+            and absence.get('processes') == []
+            and absence.get('session_hashes', {}).get(relative) == digest(record_path)
+            and absence.get('observed_at', 0) >= record_path.stat().st_mtime):
+            continue
         cleanup_path = record_path.with_name(record_path.name.replace("_session.json", "_cleanup.json"))
         cleanup = {}
         if cleanup_path.exists():

@@ -447,3 +447,8 @@ git clone C:\Users\lau\cst_ver3_strict_reorg_backup_20260710T121115\repository-a
 Canonical ???`workflow/6-rfgun-wake-thermal`?? main `dedc5fcabfa1bde0be49726d14488baea6f7cea0` ???
 ????`C:\Users\lau\.codex\worktrees\wf6-wake-thermal\cst_ver3`?
 ????????????????????? `run_workflow_6.py`???? `workflows/rfgun_wake_thermal/README.md`?
+
+
+## WF6.1 (2026-10-11)
+
+Canonical branch: workflow/6.1-longitudinal-heat. Isolated checkout: C:/Users/lau/cst_ver3/artifacts/wf61_20261011/code. Inherits the current WF6 two-station recovery implementation. See workflows/rfgun_wake_thermal/WF61.md. Prepare only; no campaign startup authorized.

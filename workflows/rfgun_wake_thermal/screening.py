@@ -30,6 +30,8 @@ def search_view(config,candidate:dict)->dict:
     metrics=search_metrics(config,candidate)
     uncertainty=reconstruction_uncertainty(candidate) if config.search.observation_mode=='reconstructed_peak_screening' else {}
     feasible=all(stage_below(config,candidate,k) for k in ('longitudinal','transverse'))
+    if config.search.policy=='longitudinal_heat':
+        feasible=stage_below(config,candidate,'longitudinal')
     return dict(candidate,metrics=metrics,metric_uncertainty=uncertainty,feasible=feasible)
 
 

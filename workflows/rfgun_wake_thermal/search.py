@@ -7,9 +7,16 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel,Matern,WhiteKernel
 from .config import Config,NAMES
 from .geometry import Geometry
-from .screening import search_view,ranking_metrics,reconstruction_uncertainty
+from .screening import search_view,ranking_metrics,reconstruction_uncertainty,stage_below
 
 METRICS=('longitudinal','transverse','power5','power6')
+
+
+def make_controller(config, state):
+    if config.search.policy == 'longitudinal_heat':
+        from .heat_policy import HeatController
+        return HeatController(config, state)
+    return Controller(config, state)
 
 
 def axis_observed(candidate:dict)->bool:
@@ -26,7 +33,8 @@ class Controller:
         self.config=config;self.state=state;self.geometry=Geometry(config)
         self.rng=np.random.default_rng(config.search.seed)
         if state.get('rng'):self.rng.bit_generator.state=state['rng']
-        self.lower=np.array([config.bounds[n][0] for n in NAMES]);self.width=np.array([config.bounds[n][1]-config.bounds[n][0] for n in NAMES])
+        self.names=config.active_names
+        self.lower=np.array([config.bounds[n][0] for n in self.names]);self.width=np.array([config.bounds[n][1]-config.bounds[n][0] for n in self.names])
         self.limits=np.array([config.physics.longitudinal_limit,config.physics.transverse_limit,*([config.physics.power_reference_w]*2)])
         self.models={}
 
@@ -62,8 +70,11 @@ class Controller:
         for c in self.candidates:add(c,False)
         return list(rows.values())
 
-    def encode(self,p):return (np.array([p[n] for n in NAMES])-self.lower)/self.width
-    def decode(self,x):return dict(zip(NAMES,map(float,self.lower+self.width*np.asarray(x))))
+    def encode(self,p):return (np.array([p[n] for n in self.names])-self.lower)/self.width
+    def decode(self,x):
+        p=dict(zip(self.names,map(float,self.lower+self.width*np.asarray(x))))
+        p.update(self.config.fixed_parameters)
+        return {n:p[n] for n in NAMES}
 
     def pool(self,center=None):
         result=[]
@@ -88,6 +99,7 @@ class Controller:
     def fit(self):
         self.models={}
         for k,limit in zip(METRICS,self.limits):
+            if self.config.search.policy=='longitudinal_heat' and k=='transverse':continue
             rows=self.training_rows(k)
             if len(rows)<self.config.search.gp_min_samples:continue
             x=np.array([self.encode(c['parameters']) for c,_,_,_ in rows]);ratio=np.array([v/limit for _,v,_,_ in rows]);y=np.log1p(ratio)
@@ -98,7 +110,7 @@ class Controller:
             scale=float(np.std(y));scale=scale if scale>1e-15 else 1.
             alpha=(uncertainty/scale)**2
             try:
-                kernel=ConstantKernel(1.,(.01,100.))*Matern(np.ones(12),(.03,5.),nu=2.5)+WhiteKernel(1e-5,(1e-8,.05))
+                kernel=ConstantKernel(1.,(.01,100.))*Matern(np.ones(len(self.names)),(.03,5.),nu=2.5)+WhiteKernel(1e-5,(1e-8,.05))
                 model=GaussianProcessRegressor(kernel=kernel,alpha=alpha,normalize_y=True,random_state=self.config.search.seed,n_restarts_optimizer=0)
                 with warnings.catch_warnings():warnings.simplefilter('ignore');model.fit(x,y)
                 self.models[k]=model
@@ -121,16 +133,28 @@ class Controller:
                 std=np.log1p(ratio*(1+rel))-np.log1p(ratio)
                 pred[k]=(np.full(len(x),np.log1p(ratio)),np.full(len(x),std))
         feasible=[c for c in self.candidates if c.get('feasible') and all(k in c['metrics'] for k in METRICS)]
+        if self.config.search.policy=='transverse_coverage':
+            feasible=[c for c in self.candidates if all(k in c['metrics'] for k in METRICS)
+                      and all(stage_below(self.config,c,k) for k in METRICS[:2])]
         probability=np.ones(len(x))
         for k in METRICS[:2]:
             mean,std=pred[k];probability*=ndtr((np.log(2.)-mean)/np.maximum(std,1e-9))
         if feasible:
             best=min(max(c['metrics']['power5'],c['metrics']['power6'])/self.limits[2] for c in feasible)
+            if self.config.search.policy=='transverse_coverage':best=max(1.,best)
             samples=[]
             for k in METRICS[2:]:
                 mean,std=pred[k];samples.append(np.expm1(np.clip(mean[None,:]+std[None,:]*self.rng.standard_normal((64,len(x))),-10,20)))
-            improvement=np.maximum(0,best-np.maximum(*samples)).mean(axis=0)
+            heat=np.maximum(*samples)
+            if self.config.search.policy=='transverse_coverage':heat=np.maximum(1.,heat)
+            improvement=np.maximum(0,best-heat).mean(axis=0)
             return (improvement+1e-4)*probability/max(cost,1.)
+        if self.config.search.policy=='transverse_coverage':
+            # Dimensionless log constraint violations saturate below the targets.
+            # Longitudinal retains higher importance (2:1); forced exploration
+            # is scheduled independently so unknown transverse regions survive.
+            v=[np.maximum(0.,pred[k][0]-.7*pred[k][1]-np.log(2.)) for k in METRICS[:2]]
+            return np.exp(-np.clip(2*v[0]+v[1],0,20))/max(cost,1.)
         # Lower confidence bound rewards both likely improvement and uncertainty.
         lower=np.maximum(*(pred[k][0]-.7*pred[k][1] for k in METRICS[:2]))
         return np.exp(-np.clip(lower,-10,20))/max(cost,1.)

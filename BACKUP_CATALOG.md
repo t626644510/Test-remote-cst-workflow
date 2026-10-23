@@ -1,3 +1,101 @@
+# 2026-10-24 Git 分类与 WF8.1 提级
+
+状态：本地整合与归档完成；下一步推送、逐 SHA 核验后退役临时分支。
+本分支仅维护恢复目录，不合并到 main 或 workflow。此前 2026-07-13 的完整记录保留在下方。
+
+## 正式归属
+
+main 严格共享核心；每个 workflow 只有一个正式分支。所有 workflow 共同基于 main，
+共享核心目录逐项比对一致；最后一次 docs/忽略规则同步未改变已测试代码 blob。
+WF6 收录 station-recovery 并保持 WF6.1 独立；WF8 保留 PIC，WF8.1 独立承载 TRK。
+RF-CEM 500 MHz 收录 provenance 修复；literature-review 收录 A0 与现有文档。
+R5 独有的 cc46d22 / 33dc8d0 **仅归档，未合入**。旧工作区与仿真结果均保留。
+
+| 正式分支 | 提交 | 完整 no-CST |
+|---|---|---|
+| `main` | `590705d6fac2dd4c3d5732bf1aa15e3bdffb2ba3` | 591 passed, 1 skipped |
+| `workflow/1-rfgun-sao` | `da2fb9f2e412096faa737782c16331c040cbb3cc` | 1098 passed, 1 skipped |
+| `workflow/2-rfgun-hom-antenna` | `b04f4f66a26ee5466886e07c4c415f1e3470e259` | 735 passed, 1 skipped |
+| `workflow/3-rfgun-recovery-tolerance` | `696884485d6afbec5d3f1478ef206ae4b1d41648` | 703 passed, 1 skipped |
+| `workflow/4-rfgun-hom-eigenmode` | `0ef029011331b4e5908ee1a8bf0ff2b96561c61d` | 626 passed, 2 skipped |
+| `workflow/5-rfgun-hom-target` | `a6aa03184efcd1b03851018fc2f154eb530da417` | 947 passed, 1 skipped |
+| `workflow/6-rfgun-wake-thermal` | `707ad2cd125a0f79bb22a4bbc80bf267e03f2913` | 795 passed, 1 skipped |
+| `workflow/6.1-longitudinal-heat` | `ad15616bb3dd2c16af1ae051a3911f7cfe80fca0` | 805 passed, 1 skipped |
+| `workflow/7-wakis-hom` | `186de311267ab228ead489cd206de855a34e7a9f` | 693 passed, 1 skipped |
+| `workflow/8-pic-multipacting` | `8c9a6a8bbf0521f287c2157e839ff7edddaf24fc` | 606 passed, 1 skipped |
+| `workflow/8.1-trk-multipacting` | `d6908a096ca543d251f8fe57624ef6fb8f57f323` | 684 passed, 1 skipped |
+| `workflow/rf-cem-500mhz` | `d7351cbf08c7aad177c56282ff7b713647b2edb1` | 617 passed, 1 skipped |
+| `workflow/rf-cem-literature-review` | `3d741857885540dd98ea8d785aeb9b25216dff45` | 811 passed, 11 skipped |
+
+WF8.1 使用 MP5、MP5-5、MP6-3 已导出数据回归；输入指纹不变。
+MP5-5 另用 VTK 从端点/STL 重建 688349 个事件，0 未解析，原生统计核对通过。
+未启动 CST 求解，未做 live export 验证。验证说明在 WF8.1 包的 VALIDATION.md。
+
+## 离线恢复
+
+本机备份目录：`C:/Users/lau/cst_ver3/.codex_tmp/git_reorg_20261024/`。
+`all-refs-before.bundle` 已通过 git bundle verify；SHA-256：
+`6022d1c935132e53ab9775726dc354fce1f095b94c300deafe959befca3ae294`。
+`backup_manifest.json`、逐工作区 staged/unstaged patch 与未跟踪源码 ZIP、
+`artifact-scripts.zip` 和 SHA 清单保留整理前来源；ZIP CRC 已全部通过。
+临时部署、接管和补丁脚本只在备份中保存，不是正式运行入口。
+另建 `all-refs-consolidated-before-retirement.bundle` 保存整合后、删除前的完整 refs。
+两份 bundle、仿真输入和报告均不提交 Git。
+
+恢复使用 `git switch -c recovery/<name> <archive-tag>^{}` 或在新目录 clone bundle；
+不要覆盖既有工作区和结果。WF5/WF8/RF-CEM 状态文档冲突均保留完整历史副本再合并。
+
+## 2026-10-24 归档标签
+
+pre-reorg 为原分支 HEAD；source 为收录未提交源码后的保存点；retired 为退役前最终 HEAD。
+
+| 归档标签 | Commit |
+|---|---|
+| `archive/snapshot/pre-reorg-20261024-archive--backup-catalog` | `40c56df2a8f6e8496e15968471849f451d4d0131` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-acquisition-a0-landmark-coverage` | `d17d95f08ba2ff705cf9dbe0d6219b1c409c7437` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-family-profile-v0` | `61534a896ef50052e0d645c421e99f7066231fe6` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r0b-workbench` | `f69bd8d58711c79ed73c2a90ed8476e79f616281` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r1-semantic-core` | `65d8d52350b9e536f3b2a0d30a0b18f24d447fdb` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r2-boundary-compiler` | `f6df4c5589cf3c952c177e02dc053c6b7970b4d5` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r3-family-induction` | `ceb1d9a9851cffeb91adc328c3f42c9209d3010b` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r4-observation-contract` | `6cd58604a63e4db81a7485d9a9939261178676f9` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-r5-rf-result-field` | `33dc8d00046e42306640bd8ecd8f69f7697249e9` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf-cem-td1-td3-workbench-desktop` | `efda2b51976c506d26aed7ff97c3c7d5e7ee45f5` |
+| `archive/snapshot/pre-reorg-20261024-codex--rf500-variant-index-provenance-fix` | `3cb928c750a6b76a6a20a786a2a1a0b209ac6ee9` |
+| `archive/snapshot/pre-reorg-20261024-codex--sls2-r149-closeout` | `f9c895d7332275d5f4762d59a165342e5772d970` |
+| `archive/snapshot/pre-reorg-20261024-main` | `dedc5fcabfa1bde0be49726d14488baea6f7cea0` |
+| `archive/snapshot/pre-reorg-20261024-workflow--1-rfgun-sao` | `63207ba5a992d44823a19b8b848a4f542e1f0b6a` |
+| `archive/snapshot/pre-reorg-20261024-workflow--2-rfgun-hom-antenna` | `6a6c99d484362ce02c08589d0b3bd0e2793ce9e0` |
+| `archive/snapshot/pre-reorg-20261024-workflow--3-rfgun-recovery-tolerance` | `5ba5e1f4a2c505dcdbf82eb55b45c7ca5c924430` |
+| `archive/snapshot/pre-reorg-20261024-workflow--4-rfgun-hom-eigenmode` | `7226c0fa01b3e913ca88a4272b22ad54846fc709` |
+| `archive/snapshot/pre-reorg-20261024-workflow--5-rfgun-hom-target` | `6e69c68f3fd402edc13b6cecf61f85e3362321a4` |
+| `archive/snapshot/pre-reorg-20261024-workflow--6-rfgun-wake-thermal` | `dc4cc40780cfdf6c4184ae92cfacc2412539105f` |
+| `archive/snapshot/pre-reorg-20261024-workflow--6.1-longitudinal-heat` | `dc4cc40780cfdf6c4184ae92cfacc2412539105f` |
+| `archive/snapshot/pre-reorg-20261024-workflow--7-wakis-hom` | `5e1bfd2e52a4ed12d10ca3ba179cd3d3eb4343c8` |
+| `archive/snapshot/pre-reorg-20261024-workflow--8-pic-multipacting` | `aa4bf9200240d96e8d65f4cd71daa98e4a784356` |
+| `archive/snapshot/pre-reorg-20261024-workflow--rf-cem-500mhz` | `af690d5d946406e2876679d62489574d4fa3807d` |
+| `archive/snapshot/pre-reorg-20261024-workflow--rf-cem-literature-review` | `c42c3df5cb45a2cdb87beaa88b558d286968a1e2` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-acquisition-a0-landmark-coverage` | `923470c965be040cb5287816c724d0b959cfec09` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-family-profile-v0` | `61534a896ef50052e0d645c421e99f7066231fe6` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r0b-workbench` | `f69bd8d58711c79ed73c2a90ed8476e79f616281` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r1-semantic-core` | `65d8d52350b9e536f3b2a0d30a0b18f24d447fdb` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r2-boundary-compiler` | `f6df4c5589cf3c952c177e02dc053c6b7970b4d5` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r3-family-induction` | `ceb1d9a9851cffeb91adc328c3f42c9209d3010b` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r4-observation-contract` | `6cd58604a63e4db81a7485d9a9939261178676f9` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-r5-rf-result-field` | `33dc8d00046e42306640bd8ecd8f69f7697249e9` |
+| `archive/snapshot/retired-20261024-codex--rf-cem-td1-td3-workbench-desktop` | `efda2b51976c506d26aed7ff97c3c7d5e7ee45f5` |
+| `archive/snapshot/retired-20261024-codex--rf500-variant-index-provenance-fix` | `3cb928c750a6b76a6a20a786a2a1a0b209ac6ee9` |
+| `archive/snapshot/retired-20261024-codex--sls2-r149-closeout` | `f9c895d7332275d5f4762d59a165342e5772d970` |
+| `archive/snapshot/retired-20261024-codex--workflow-git-reorg` | `590705d6fac2dd4c3d5732bf1aa15e3bdffb2ba3` |
+| `archive/snapshot/source-20261024-codex--rf-cem-acquisition-a0-landmark-coverage` | `a635ef99d38158b7d06b09dcbbe0e8a8dfbead58` |
+| `archive/snapshot/source-20261024-wf6-station-recovery` | `27138d6ccd084e20dadfca15144a7df9c732d87d` |
+| `archive/snapshot/source-20261024-workflow--5-rfgun-hom-target` | `49c09d2ed364fd6c115dbb37ab5f6ca0687aa1b6` |
+| `archive/snapshot/source-20261024-workflow--6-rfgun-wake-thermal` | `27091565c7bed265e09846df9a173e116e2df84f` |
+| `archive/snapshot/source-20261024-workflow--6.1-longitudinal-heat` | `774498d24e40f1ff1fc84047be6c38dfa67834c6` |
+| `archive/snapshot/source-20261024-workflow--7-wakis-hom` | `b7fa37255c8b4e60bddefea0a532ac123f44d33a` |
+
+---
+
 # Git 归档快照目录
 
 状态：`COMPLETE`（归档标签和目录分支已在远端验证；旧引用已安全退役）

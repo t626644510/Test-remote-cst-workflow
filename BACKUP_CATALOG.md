@@ -1,7 +1,18 @@
 # 2026-10-24 Git 分类与 WF8.1 提级
 
-状态：本地整合与归档完成；下一步推送、逐 SHA 核验后退役临时分支。
+状态：COMPLETE。正式分支、归档标签已推送并逐 SHA 核验；临时分支已退役。
 本分支仅维护恢复目录，不合并到 main 或 workflow。此前 2026-07-13 的完整记录保留在下方。
+
+## 最终核验
+
+- 本地与远端均为 14 条分支：main、12 条 workflow、archive/backup-catalog；SHA 逐项一致。
+- 42 个本次 annotated archive tags 的对象及 peeled commit 均与远端一致。
+- 9 个远端、12 个本地临时任务分支已退役，删除前后均核验其归档标签。
+- GitHub 默认分支原为 codex/rf-cem-td1-td3-workbench-desktop，现已改为 main。
+- 既有工作区全部保留；新增 WF8.1 工作区保留。本次新建的整理工作区已通过 Codex 归档。
+- 各正式工作区 tracked 文件干净，git diff --check、全 refs bundle verify 和 git fsck 通过。
+- 最终删除前备份另存 all-refs-final-before-retirement.bundle；本机 SHA 清单见 final_bundle.json。
+- WF8.1 最终 686 passed、1 skipped；RF-CEM 文档收口后复验 811 passed、11 skipped。
 
 ## 正式归属
 

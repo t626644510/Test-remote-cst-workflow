@@ -55,3 +55,6 @@ wf3-campaign/
 *.zip
 *.pdf
 *.docx
+
+# Source copies were inventoried/archived before excluding local artifacts.
+/artifacts/

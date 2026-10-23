@@ -1,0 +1,3 @@
+# Stable source bytes across platforms: provenance manifests hash raw files.
+*.py text eol=lf
+*.md text eol=lf

@@ -1,49 +1,38 @@
 # CST 自动化与优化项目总状态上下文
 
-更新时间：2026-07-10（严格 workflow 分支隔离重构后）
+更新时间：2026-10-24（Git 分类收口与 WF8.1 提级）
 
 本文是当前仓库的总入口，供人类维护者和后续 agent 快速恢复上下文。
 代码、测试、当前 Git diff 和分支本身优先于历史报告。除非用户明确要求，
 不要运行 CST、杀进程、删除锁、清理 campaign 或改写本地结果。
 
-## 1. 执行摘要
+## 1. 当前整理状态
 
-四个用户提供的目录原本不是四个独立仓库，而是同一 Git 仓库的多个
-worktree。2026-07-10 已按“严格隔离式 main”重构：
-
-- `main` 只保留共享核心、通用 CST history/STEP 工具、官方 CST 文档和
-  纯共享测试；不包含具体 workflow、入口、campaign 配置或 workflow-only
-  测试。
-- 每个具体工作流位于独立的 canonical `workflow/*` 分支，并从严格
-  `main` 建立。
-- WF2 已把收口后未提交的“未知纵向 HOM 频率窗口拟合”纳入正式分支，
-  同时重写收口状态和科学限制。
-- 本次重构只运行 no-CST 测试与 `compileall`，没有启动 live-CST。
-- 所有大改动前已创建本地归档、完整 Git bundle 和远端备份分支。
+共享核心在 main，各 workflow 使用唯一正式分支；完整登记见
+[Workflow 分支目录](WORKFLOW_BRANCHES.md)。2026-10-24 收录了各工作区源码，
+将 TRK 从 WF8 PIC 独立为 WF8.1，并归档阶段分支；R5 独有功能仅归档、未合入。
+本次仅运行 no-CST 测试和既有导出数据回归。下文各 workflow 的历史 campaign 数字
+保留作背景，不代表本次重跑或当前求解状态。
 
 ## 2. Canonical 分支与 worktree
 
-| 分支 | 当前 worktree | 责任边界 | no-CST 基线 |
-|---|---|---|---:|
-| `main` | `C:\Users\lau\cst_ver3` | 共享核心与通用工具 | 581 passed |
-| `workflow/1-rfgun-sao` | `C:\Users\lau\cst_ver3_wf1` | WF1 SAO、单/双 pass、分阶段与自适应搜索 | 1087 passed, 1 skipped |
-| `workflow/2-rfgun-hom-antenna` | `C:\Users\lau\cst_ver3_wf2_major_refactor` | WF2 双工程 HOM 天线优化、wake PSO | 724 passed, 1 skipped |
-| `workflow/3-rfgun-recovery-tolerance` | `C:\Users\lau\cst_ver3_wf3` | WF3 recovery 与 tolerance 工具链 | 692 passed, 1 skipped |
-| `workflow/4-rfgun-hom-eigenmode` | `C:\Users\lau\cst_ver3_HOMwork` | WF4 HOM 本征模批量 campaign | 615 passed, 2 skipped |
-| `workflow/rf-cem-500mhz` | `C:\Users\lau\cst_ver3_project` | RF-CEM 500 MHz 逆向参数化几何与优化 | 606 passed, 1 skipped |
+| 正式分支 | 内容 | 当前工作区 | no-CST 验证 |
+|---|---|---|---|
+| `main` | 共享核心、CST history / STEP 通用工具 | `C:/Users/lau/cst_ver3` | 591 passed, 1 skipped |
+| `workflow/1-rfgun-sao` | WF1 SAO | `C:/Users/lau/cst_ver3_wf1` | 1098 passed, 1 skipped |
+| `workflow/2-rfgun-hom-antenna` | WF2 HOM 天线 | `C:/Users/lau/cst_ver3_wf2_major_refactor` | 735 passed, 1 skipped |
+| `workflow/3-rfgun-recovery-tolerance` | WF3 recovery / tolerance | `C:/Users/lau/cst_ver3_wf3` | 703 passed, 1 skipped |
+| `workflow/4-rfgun-hom-eigenmode` | WF4 HOM eigenmode | `C:/Users/lau/cst_ver3_HOMwork` | 626 passed, 2 skipped |
+| `workflow/5-rfgun-hom-target` | WF5 HOM 目标与异步优化 | `C:/Users/lau/.codex/worktrees/wf5-hom-target/cst_ver3` | 947 passed, 1 skipped |
+| `workflow/6-rfgun-wake-thermal` | WF6 wake / thermal 与 station recovery | `C:/Users/lau/.codex/worktrees/wf6-wake-thermal/cst_ver3` | 795 passed, 1 skipped |
+| `workflow/6.1-longitudinal-heat` | WF6.1 纵向约束低损耗 | `C:/Users/lau/cst_ver3/artifacts/wf61_20261011/code` | 805 passed, 1 skipped |
+| `workflow/7-wakis-hom` | WF7 Wakis HOM | `C:/Users/lau/.codex/worktrees/wf7-wakis/cst_ver3` | 693 passed, 1 skipped |
+| `workflow/8-pic-multipacting` | WF8 PIC multipacting | `C:/Users/lau/.codex/worktrees/wf8-pic-multipacting/cst_ver3` | 606 passed, 1 skipped |
+| `workflow/8.1-trk-multipacting` | WF8.1 TRK multipacting / 后处理 | `C:/Users/lau/.codex/worktrees/wf81-trk-multipacting/cst_ver3` | 见 WF8.1 VALIDATION.md |
+| `workflow/rf-cem-500mhz` | RF-CEM 500 MHz 参数化优化 | `C:/Users/lau/cst_ver3_project` | 617 passed, 1 skipped |
+| `workflow/rf-cem-literature-review` | RF-CEM 文献 / 语义 / A0 审核工作台 | `C:/Users/lau/cst_ver3_rf_cem_review_gui` | 811 passed, 11 skipped |
 
-`codex/S01-known-mode-pso-closure` 是 WF2 的收口兼容 ref，应与
-`workflow/2-rfgun-hom-antenna` 指向同一状态。历史 phase/codex 分支不是
-开发基线；需要历史证据时使用第 12 节的备份。
-
-查询当前准确提交，不要从旧报告复制 hash：
-
-```powershell
-git fetch --prune origin
-git rev-parse main
-git rev-parse workflow/2-rfgun-hom-antenna
-git worktree list
-```
+分支 SHA 以 `git rev-parse <branch>` 为准；旧兼容 ref 及阶段分支不再作为开发入口。
 
 ## 3. 分支使用规则
 
@@ -156,7 +145,7 @@ CadQuery/OCP 在此 Windows 环境可能在解释器退出时触发 access viola
 ## 6. WF2：双工程 HOM 天线优化
 
 - 分支：`workflow/2-rfgun-hom-antenna`
-- 收口兼容 ref：`codex/S01-known-mode-pso-closure`
+- 历史收口兼容 ref 已退役；以正式 workflow 分支和归档标签为准
 - 根入口：`run_workflow_2.py`
 - 实际 runner：`workflows/rfgun_hom_antenna/run.py`
 - 唯一配置源：`workflows/rfgun_hom_antenna/config.yaml`

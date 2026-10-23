@@ -101,7 +101,17 @@ The 48-hour round counts active coordinator wall time, including preparation,
 GPU work, fitting and retries; paused idle time is excluded. At the cap or
 on `STOP`, the current logical stage drains and no new stage dispatches.
 Overrun is recorded. A subsequent round requires manual audit and start.
-There is no automatic deletion of projects, raw traces or permanent evidence.
+The default policy retains all evidence. An explicitly reviewed cooling
+revision may enable `compact_retention`: retain the baseline/pinned candidates,
+the best five longitudinal/port2/port3 envelope ranks and every unfinished
+candidate. After complete registered postprocessing, other candidates lose
+the named HDF5 time traces, prepared large arrays and disposable CST matrices.
+Signed numeric wakes, reconstruction arrays/windows/rejected fits, power
+analysis, parameter/geometry files, .cst archives, logs and manifests remain.
+Each retirement persists exact bytes/hashes and intent before unlinking.
+Monitoring validates the retained evidence and labels raw retirement explicitly;
+strict raw recovery continues to reject a compacted stage. It cannot be used
+to repeat raw-field/modal-power analysis without a new field calculation.
 
 CPU preparation is depth-one pipelined with the current GPU time stepping.
 The overlap follows this schedule (time flows to the right):
@@ -163,8 +173,9 @@ its own audit files.
 
 `state.json` is authoritative; `report.json` and `candidates.csv` are stage
 snapshots. A false qualification flag does not mean the field solver failed.
-Raw fields, signed wakes, rejected fits, local windows, uncertainty and
-per-stage manifests remain available. A complete field certificate requires
+Signed wakes, rejected fits, local windows, uncertainty and per-stage
+manifest records remain available. Raw fields remain for the protected
+portfolio; compact-policy candidates explicitly record their retirement. A complete field certificate requires
 all requested time steps; partial traces never become observations.
 
 The candidate-specific CFL bound concerns the lossless FIT operator.
@@ -178,3 +189,117 @@ installed CST 2026 documentation; the accepted local Wakis compact/copper/
 port and shared-wake power experiments; WF6 measured-tail consensus and
 partial-observation search. No old candidate's fitted poles or scalar FT
 objectives are carried into a new candidate.
+
+
+## Cooling-constrained same-physics continuation
+
+The 2026-10-16 reviewed revision searches DownHeight 160--180 mm and
+coax_r2 10.44--21.99 mm (coax_r1=5.43 mm plus a strict >5 mm clearance;
+0.01 mm sampling margin). The PortR2=PortR1+2 mm coverage constraint also
+remains. UpperHeight1/2=170 mm and DownHeight2=-30 mm are unchanged.
+Other RF settings, objective utility, stage admission and uncertainty rules
+are unchanged. Water-channel geometry and thermal-fluid validation are not
+created by these geometric restrictions.
+
+`history.create_cooling_revision` requires a drained, STOP-marked parent,
+validates the same source/fixed geometry/excitation/backend/reconstruction,
+and verifies immutable stage results and analysis manifests. It creates a
+separate paused revision with exactly the parent's spent seconds and 48 h cap.
+The initial candidate is parent 0038 with DownHeight changed to 160 mm:
+its observations are empty and it must be solved afresh. The source template
+is never edited. The CPU preparation applies the expanded reviewed seed.
+
+Same-physics historical coordinates remain at their original positions,
+including points outside the new acquisition domain. GP coordinates use
+the original physical bounds; historical relative noise has a 20% floor,
+combined with the existing uncertainty/absolute floors in log1p space.
+Current observations replace history per metric at duplicate coordinates.
+An unreliable current metric also blocks its older duplicate. Contradictory,
+incomplete and scale-unidentified results remain excluded. Different fixed
+geometry (e.g. geometry001, WF6/6.1) is not silently transferred.
+
+Historical values never count as native completed/feasible candidates or
+trust-radius successes. Only new-domain current points can become ordinary
+local centers; the reviewed 0038 seed is the fallback center without a fake
+trust reference. All acquired candidates satisfy the new constraints.
+No next round or revised campaign starts without explicit user authorization.
+
+## Reconstruction quality and acceptance, version 2
+
+`local-reconstructed-quality-v2` separates numerical quality from threshold
+acceptance. Each window is `consensus`, `bounded_sensitive`, or `unsupported`.
+The original full-fit/independent-holdout requirements remain: successful
+fits, relative L2 errors <=10%, correlation >=0.95, and local boundary-tail
+contributions <=5%. At least four valid clean fits spanning two starts and
+two ranks establish bounded support. Consensus additionally requires the
+existing 10% peak agreement. Disagreeing majority subsets are pooled in
+their entirety for bounded-sensitive windows; they are not selectively
+discarded. Sensitive intervals retain a >=25% uncertainty floor and their
+full across-fit range. Unsupported evidence never establishes a finite upper.
+
+`Observation.quality` is independent of the target threshold. `acceptance(T)`
+is evaluated separately: all window uppers must be <=T; sensitive window
+uppers must additionally be <=0.9T. Coverage, band-edge and contradictory
+measured-spectrum vetoes remain. Passing records distinguish
+`consensus_pass` and `envelope_pass`. These are engineering screening decisions
+from heuristic sensitivity envelopes, not calibrated probability or physical
+accuracy certificates. The old `qualified` field remains a conservative
+quality compatibility flag; it is no longer the only route to passing.
+Power checks, strict port2/3 <75 W, and X-only scope are unchanged.
+
+A bounded-sensitive RF observation receives no extra `ln(1.5)` GP noise
+floor only if EVERY sensitive window upper is strictly below the maximum
+consensus-window lower. The stored `non_dominant_sensitive` certificate
+includes both comparison values and the policy version. Relative noise,
+the 5%-of-objective-reference absolute floor and historical 20% relative
+floor all remain. Unknown/edge/contradictory cases never get this exemption.
+Passing alone does not waive GP noise, and an exempt high-impedance point
+can still fail the engineering target.
+
+`search_scale_lower` retains the pre-existing order-of-magnitude check for
+unbounded noisy trend observations. It is explicitly NOT a physical lower
+bound and cannot authorize acceptance, trust-radius progress or a quality
+exemption. Invalid-but-finite fits can still guide trends with the existing
+`ln(3)` noise floor when the scale ratio is <=4 and relative uncertainty <=3.
+This avoids discarding previously usable noisy data merely because the v2
+engineering bound correctly requires individually valid fit support.
+
+Use `python -m workflows.rfgun_wakis.quality_revision --config <config>
+--prepare <new-directory>` to verify saved stage/analysis/wake identities and
+write a preview without fitting new poles or running fields. `--adopt
+<new-directory>/index.json` requires paused STOP, drained lanes, a dead
+recorded coordinator and the writer lock. It retains original registered
+results and parent campaigns, saves versioned reconstruction summaries and
+a revised historical training bundle, then updates the current observations
+and reviewed code provenance. Result replay applies SHA-bound overlays;
+future history export preserves them. Budget, geometry, completed-stage
+keys, failure history and trust-radius records are not reset. The command
+does not remove STOP, activate the clock, start workers or compact files.
+
+## Minimal quality revision, version 3
+
+`local-reconstructed-quality-v3` retains the v2 fit tests and unsupported
+window/contradictory-evidence policy. An observed rise at the upper band edge
+is still saved as `band_edge_rising`. It no longer invalidates the band peak
+when its supported window upper lies strictly below a different consensus
+window lower. Missing edge curves and unsupported/dominant edges still block.
+This is an in-band comparison, not an extrapolation beyond 1462.735 MHz.
+
+CW watt observations retain the same fitted field values and 20% sensitivity
+floor. Time-window and plane spread widen the watt envelope continuously,
+without a 20%-to-100% rejection cliff. Missing windows, unresolved base-mode
+fits and nonpositive net planes stay unknown. TEM profile/reflection values
+remain diagnostics only: the objective is integrated net Poynting power,
+not the power of a prescribed ideal TEM mode. No new empirical tolerance is
+introduced; strict port upper <75 W and the existing GP noise floors remain.
+
+Missing/excluded center metrics and GP models use the per-metric median of
+eligible independent historical measurements. If unavailable, use current
+measurements, then the physical reference scale. Priors are never training
+observations or acceptance evidence. `Proposer.ranked_centers` exposes the
+same ordering used for proposals, without proposing or running a simulation.
+
+The existing offline revision tool now reassesses saved power-window JSON as
+well as RF fits and can supersede an older immutable revision. It verifies
+and records the original power evidence; it does not require raw HDF5,
+repeat a projection, change original results, or resume a paused campaign.

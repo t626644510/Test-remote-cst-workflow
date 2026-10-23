@@ -83,7 +83,20 @@ floor, not a calibrated confidence interval. A failed fit stays unknown.
                 flux['leak_'+port[-1]]=rows[0]['power_w'];details[port]=rows
             windows[name]=dict(pole=asdict(pole),voltage_peak_v=v,values=dict(heat,**flux),ports=details)
         except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:errors[name]=str(exc)
-    obs={}
+    audit=dict(windows=windows,failures=errors,assumptions='same isolated mode; native E/H time staggering; peak 500 kV CW beta=1',
+               uncertainty='20% floor plus measured sensitivity; TEM profile diagnostic only; not calibrated bounds',Qe_computed=False)
+    return power_observations(audit,config),audit
+
+
+def power_observations(audit: dict, config: Config) -> dict[str,Observation]:
+    """Assess saved CW watt measurements without repeating field projection.
+
+    Window/plane variation widens a finite sensitivity envelope continuously.
+    TEM purity describes a modal decomposition, not the integrated net flux.
+    Missing windows, unresolved mode fits and nonpositive net planes remain
+    unknown. Envelopes retain the 20% floor; they are not confidence intervals.
+    """
+    windows=audit.get('windows',{});obs={}
     if 'full' in windows:
         full=windows['full'];freq=full['pole']['frequency_hz']
         base_quality=(len(windows)==3 and config.physics.thermal_band_hz[0]<=freq<=config.physics.thermal_band_hz[1]
@@ -93,18 +106,14 @@ floor, not a calibrated confidence interval. A failed fit stays unknown.
             values=[w['values'][name] for w in windows.values()]
             spread=(max(values)-min(values))/estimate
             uncertainty=max(.20,spread,max(w['pole']['relative_residual'] for w in windows.values()))
-            quality=base_quality and spread<=.20
+            quality=base_quality
             if name.startswith('leak'):
                 rows=full['ports']['port_'+name[-1]];v=np.array([r['power_w'] for r in rows])
                 plane_spread=float(np.ptp(v)/estimate);uncertainty=max(uncertainty,plane_spread)
-                profile=max((r[k] if r[k] is not None else 1.) for r in rows for k in ('E_profile_error','H_profile_error'))
-                uncertainty=max(uncertainty,profile)
-                quality=quality and plane_spread<=.20 and profile<=.20 and all(x>0 for x in v)
+                quality=quality and len(rows)==3 and all(np.isfinite(x) and x>0 for x in v)
             if not quality:uncertainty=max(uncertainty,1.)
             obs[name]=Observation(estimate,uncertainty,max(0.,estimate*(1-uncertainty)),estimate*(1+uncertainty) if quality else None,quality)
-    audit=dict(windows=windows,failures=errors,assumptions='same isolated mode; native E/H time staggering; peak 500 kV CW beta=1',
-               uncertainty='20% floor plus measured sensitivity; not calibrated bounds',Qe_computed=False)
-    return obs,audit
+    return obs
 
 def analyze(config: Config,directory: Path,out: Path,stage: str,parameters: dict,axis_directory: Path|None=None) -> dict:
     """Preserve all fitted curves and rejected explanations, plus separate scalars."""

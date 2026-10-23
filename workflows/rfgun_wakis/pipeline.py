@@ -42,6 +42,7 @@ class PreparationPipeline:
         if data['active_seconds']>=c.store.cap or (c.root/'STOP').exists():return
         others=[(i,v) for i,v in enumerate(data['candidates']) if i!=current['candidate_index'] and v['status']=='axis_pending']
         if any(v.get('prepared') for _,v in others):return
+        if not others and data.get('dispatch_mode')=='queued_only':return
         if psutil.virtual_memory().available/2**30<c.config.runtime.prefetch_free_ram_gib:return
         c.check_provenance()
         index=others[0][0] if others else c.propose_candidate()

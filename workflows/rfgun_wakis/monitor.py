@@ -6,6 +6,7 @@ import argparse,time,shutil
 from .config import load_config
 from .io import read_json,atomic_json,digest,validate_manifest
 from .cst_prepare import ProcessIdentity
+from .retention import validate_retained_manifest
 
 def escalation(previous:dict,issue:str|None,progress:dict,now:float) -> dict:
     """Two separated diagnostics with the same fault AND no physical progress.
@@ -43,6 +44,15 @@ def inspect(config_path: Path) -> dict:
     if config.digest()!=state['contract']:issues.append('configuration_drift')
     if digest(config.paths.template)!=provenance['template_sha256']:issues.append('source_template_changed')
     if state.get('pipeline_error'):issues.append('preparation_pipeline_error')
+    from .quality_revision import load_revision
+    revision={}
+    try:
+        revision=load_revision(state)
+        for entry in revision.values():
+            if digest(entry['summary_path'])!=entry['summary_sha256']:raise ValueError('Revised summary changed')
+        history=state.get('history_bundle')
+        if history and digest(history['path'])!=history['sha256']:raise ValueError('Historical observations changed')
+    except (ValueError,OSError,KeyError):issues.append('observation_revision_mismatch')
     process_rows=[];pending=state.get('pending');phase_detail={}
     progress=dict(completed=list(state.get('completed_stage_keys',[])),preparations=len(state.get('preparations',[])),lanes={})
     for lane,job in (('foreground',pending),('prefetch',state.get('prefetch'))):
@@ -77,7 +87,7 @@ def inspect(config_path: Path) -> dict:
         result=read_json(path);field=Path(result['field_directory'])
         manifest_path=field/'raw_manifest.json'
         try:
-            validate_manifest(field,read_json(manifest_path))
+            retired=validate_retained_manifest(field,read_json(manifest_path))
             analyzed=[]
             for analysis_manifest in sorted(field.glob('analysis_*/manifest.json')):
                 analysis=analysis_manifest.parent
@@ -85,7 +95,7 @@ def inspect(config_path: Path) -> dict:
                 if analysis_result.get('raw_sha256')==result['raw_sha256'] and analysis_result.get('stage')==result['stage']:
                     validate_manifest(analysis,read_json(analysis_manifest));analyzed.append(str(analysis_manifest))
             if not analyzed:raise ValueError('Completed stage analysis manifest missing')
-            evidence.append(dict(job=item['key'],raw_manifest_verified=True,analysis_manifests=analyzed))
+            evidence.append(dict(job=item['key'],raw_manifest_verified=not retired,compact_evidence_verified=True,retired_files=retired,analysis_manifests=analyzed))
         except (ValueError,OSError):issues.append('raw_manifest_mismatch')
     previous=read_json(root/'monitor_state.json') if (root/'monitor_state.json').exists() else {}
     old={(p['pid'],p['created']):p for p in previous.get('processes',[])}
@@ -99,7 +109,8 @@ def inspect(config_path: Path) -> dict:
         processes=process_rows,phase_detail=phase_detail,host_free_gib=free_ram,disk_free_gib=disks,evidence=evidence,
         issue_key=issue,progress=progress,**decision,prefetch=state.get('prefetch'),
         user_action_required=False,action='handoff_to_source_debug' if decision['handoff_required'] else 'read_only_diagnostic',
-        candidates=len(state['candidates']),qualified_X_screening=sum(c.get('feasibility',{}).get('qualified_X_screening',False) for c in state['candidates']))
+        candidates=len(state['candidates']),observation_revision=state.get('observation_revision'),
+        reassessed_stages=len(revision),qualified_X_screening=sum(c.get('feasibility',{}).get('qualified_X_screening',False) for c in state['candidates']))
     name=time.strftime('monitor_%Y%m%dT%H%M%SZ.json',time.gmtime(now))
     atomic_json(root/'audits'/name,audit);atomic_json(root/'monitor_state.json',audit);return audit
 

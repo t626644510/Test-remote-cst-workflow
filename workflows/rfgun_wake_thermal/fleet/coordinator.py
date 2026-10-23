@@ -87,7 +87,9 @@ class FleetCampaign(Campaign):
         remaining_repair=self.config.runtime.repair_timeout_s-c['repair_seconds']
         if repairing and remaining_repair<=0:raise ValueError('Candidate repair clock exhausted; do not start another repair')
         task['timeout_s']=min(self.config.runtime.stage_timeout_s+self.config.runtime.postprocess_timeout_s+600,remaining_repair) if repairing else self.config.runtime.stage_timeout_s+self.config.runtime.postprocess_timeout_s+600
-        task.update(node=node,execution=self.execution,admit_before=now+min(90.,self.config.search.hours*3600-self.state['active_seconds']))
+        task.update(node=node,execution=self.execution,admit_before=now+min(90.,self.config.search.hours*3600-self.state['active_seconds']),
+            station_recovery=True,station_deadline=now+self.config.search.hours*3600-self.state['active_seconds'])
+        if repairing:task['repair_budget_s']=remaining_repair
         j=dict(task,candidate=c['id'],status='reserved',logical_key=key,exploration=exploration,
             reserved_at=now,elapsed_s=0.,directory=str(self.artifacts/'fleet_evidence'/job_id/'attempt_00000'),
             template=self.snapshot['templates'][stage],wire=task,repairing=c.get('repair_stage')==stage)
@@ -145,8 +147,17 @@ class FleetCampaign(Campaign):
         if result['status']=='complete':
             c['failed']=False
             super().receive(c,j,result);return
+        if result.get('category')=='recovery_deferred':
+            self.store.complete_job(j,result);c['failed']=False
+            c['recovery_deferred']=dict(job=j['id'],node=j['node'],reason=result['error'])
+            j['applied']=True;self.store.save();return
+        if j.get('wire',{}).get('station_recovery') and result.get('station_recovery_complete') is not True:
+            raise RuntimeError('Station recovery must finish before cross-station fallback')
         if result.get('category') in ('cleanup_failed','ownership_failed'):
             raise RuntimeError('Station safety failure must be diagnosed before fallback')
+        if result.get('repair_budget_exhausted'):
+            self.store.complete_job(j,result);c.update(failed=True,failure=dict(category='repair_time_exhausted',error=result.get('error','')))
+            j['applied']=True;self.store.save();return
         others=[x for x in self.state['jobs'] if x.get('logical_key')==j['logical_key']
             and x.get('node')!=j['node'] and x.get('status')=='failed' and not x.get('inherited')]
         if not others:
@@ -197,12 +208,19 @@ class FleetCampaign(Campaign):
     def run_fleet(self):
         if self.state['status']=='budget_exhausted':raise ValueError('Closed round requires user audit')
         self.store.start_clock();self.state['status']='running';self.store.save()
+        notified_stop=set()
         try:
             while True:
                 self.store.tick();self.poll()
                 stop=(self.store.root/'STOP').exists();exhausted=not self.store.can_start(0)
                 if stop or exhausted:
                     self.state['status']='draining'
+                    # Close physical retry admission while allowing the current solve to drain.
+                    for name,transport in self.transports.items():
+                        if name in notified_stop:continue
+                        try:transport.stop_when_idle();notified_stop.add(name)
+                        except (ConnectionError,TimeoutError,OSError,subprocess.TimeoutExpired):
+                            LOG.warning('Station %s STOP delivery uncertain; retry next poll',name)
                     if not self.state['pending_nodes']:
                         self.state['status']='budget_exhausted' if exhausted else 'paused';break
                 else:

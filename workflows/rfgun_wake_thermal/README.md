@@ -40,7 +40,10 @@ has selfangle, UpperHeight, DownHeight, Lin, projection and fork length. The
 projection is the double-bend displacement `P=2R(1-cos(theta))`, bounded
 5.43–19.57 mm, with fixed radius magnitude 25 mm. Antenna 1 stores negative
 radius and angle; `Lin1` maps to CST `Lin`. Negative DownHeight is supported:
-`abs(DownHeight) <= UpperHeight - 0.01` and `Lin - DownHeight >= 0.01`.
+For negative `DownHeight` only, `-DownHeight <= UpperHeight - 0.01`.
+Positive penetration has no flange-depth limit. Both signs require
+`Lin - DownHeight >= 0.01`. All these lengths and clearances are in mm;
+the exact zero-length outer-conductor endpoint remains excluded.
 The baseline is collapsed from the templates and rebuilt at the fixed radius.
 
 Axis/X/Y wakes must cover the same full 550–2047.8288539789505 MHz band,

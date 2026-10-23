@@ -64,12 +64,39 @@ def run_worker(config, config_path: Path, root: Path, node: str) -> None:
                 spec=read_json(selected); jobroot=root/'jobs'/safe_id(spec['id'])
                 folder=jobroot/'attempt_00000'; jobroot.mkdir(parents=True,exist_ok=True)
                 started=jobroot/'started.json'; now=time.time()
-                try:validate_task(spec,node,execution,now,started=started.exists())
+                grant_path=root/'recovery_grants'/(spec['id']+'.json')
+                grant=read_json(grant_path) if grant_path.exists() else None
+                expected_execution=execution
+                recovery_spec=dict(spec)
+                if grant:
+                    if grant['new_execution']!=execution or grant['original_task_sha256']!=fingerprint(spec):
+                        raise ValueError('Recovery migration grant mismatch')
+                    expected_execution=spec['execution']
+                    recovery_spec.update(station_recovery=True,station_deadline=grant['station_deadline'])
+                try:validate_task(spec,node,expected_execution,now,started=started.exists() or any(jobroot.glob("attempt_*/station_started.json")))
                 except TimeoutError:
                     publish_json(jobroot/'outcome.json',dict(id=spec['id'],identity=spec['identity'],node=node,
                         status='not_started',category='admission_expired',elapsed_s=0.,execution=execution))
                     continue
                 status.update(status='running',job=spec['id'],task=spec,stage_started=now)
+                if recovery_spec.get('station_recovery'):
+                    if fingerprint(execution_identity(config))!=execution:
+                        raise ValueError('Station execution changed before recovery')
+                    from .station_recovery import StationRecovery
+                    from .protocol import pack_station_evidence
+                    clock=WorkerClock(config,jobroot)
+                    runner=StationRecovery(config,config_path,root,recovery_spec,clock,launch_worker,
+                        on_attempt=lambda folder,tier:status.update(attempt_directory=str(folder),recovery_tier=tier))
+                    folder,result,history=runner.run()
+                    atomic_json(folder/'station_recovery_history.json',history)
+                    archive=jobroot/'evidence.zip';sha=pack_station_evidence(folder,jobroot,archive)
+                    outcome=dict(id=spec['id'],node=node,execution=spec['execution'],identity=spec['identity'],
+                        status=result['status'],result=result,elapsed_s=sum(x['elapsed_s'] for x in history),
+                        finished_at=time.time(),quiescent=True,evidence=f'jobs/{spec["id"]}/evidence.zip',
+                        sha256=sha,native_directory=str(folder),station_attempts=len(history))
+                    publish_json(jobroot/'outcome.json',outcome)
+                    status.update(status='idle',job=None,task=None)
+                    continue
                 task={k:spec[k] for k in ('id','identity','parameters','ports','stage')}
                 task.update(directory=str(folder),template=config.paths.templates[spec['stage']])
                 folder.mkdir(parents=True,exist_ok=True)

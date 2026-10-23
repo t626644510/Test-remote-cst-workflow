@@ -88,7 +88,7 @@ def pack_evidence(evaluation: Path, target: Path) -> str:
     temporary = target.with_suffix(".tmp")
     with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(evaluation.rglob("*")):
-            if path.is_file() and "project" not in path.relative_to(evaluation).parts:
+            if path.is_file() and not {"project","prepared"}.intersection(path.relative_to(evaluation).parts):
                 archive.write(path, path.relative_to(evaluation).as_posix())
         for path in evaluation.glob("project/*/Result/*.log"):
             if path.name in ("Model.log", "MCalc.log"):
@@ -124,3 +124,16 @@ def publish_json(path: Path, value: Any) -> None:
             raise ValueError(f"Conflicting immutable message: {path.name}")
     else:
         atomic_json(path, value)
+
+
+def pack_station_evidence(selected: Path, job: Path, target: Path) -> str:
+    """Include failed-attempt numeric/lifecycle evidence; retain native files on node."""
+    pack_evidence(selected,target)
+    with zipfile.ZipFile(target,'a',zipfile.ZIP_DEFLATED) as archive:
+        for attempt in sorted(job.glob('attempt_*')):
+            if attempt==selected:continue
+            for path in sorted(attempt.rglob('*')):
+                relative=path.relative_to(attempt)
+                if path.is_file() and not {'project','prepared'}.intersection(relative.parts):
+                    archive.write(path,'station_attempts/'+attempt.name+'/'+relative.as_posix())
+    return digest(target)

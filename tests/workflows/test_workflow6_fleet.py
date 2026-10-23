@@ -38,7 +38,7 @@ def fleet(tmp_path):
     f.store.last_tick=None;f.store.db.close()
 
 def failure(category='solver_failed',error='failure'):
-    return dict(status='failed',category=category,error=error)
+    return dict(status='failed',category=category,error=error,station_recovery_complete=True)
 
 def test_remote_failure_fifo_local_retry_and_only_then_terminal(fleet):
     c=fleet.state['candidates'][0]
@@ -166,7 +166,7 @@ def test_foreign_outcome_cannot_be_applied(fleet):
 def test_station_worker_claim_and_replay_never_repeat_solve(fleet,monkeypatch,tmp_path,restart):
     from workflows.rfgun_wake_thermal.fleet import worker as w
     c=fleet.state['candidates'][0];j=fleet.dispatch('remote',c,'axis',None)
-    root=tmp_path/'station';root.mkdir();spec=dict(j['wire'],execution=fingerprint({'test':1}))
+    root=tmp_path/'station';root.mkdir();spec=dict(j['wire'],execution=fingerprint({'test':1}));spec.pop('station_recovery')
     publish_json(root/'inbox'/f'{j["id"]}.json',spec)
     folder=root/'jobs'/j['id']/'attempt_00000'
     monkeypatch.setattr(w,'execution_identity',lambda config:{'test':1})
@@ -195,7 +195,7 @@ def test_station_worker_claim_and_replay_never_repeat_solve(fleet,monkeypatch,tm
 def test_station_unsafe_session_holds_task_for_diagnosis(fleet,monkeypatch,tmp_path):
     from workflows.rfgun_wake_thermal.fleet import worker as w
     c=fleet.state['candidates'][0];j=fleet.dispatch('remote',c,'axis',None)
-    root=tmp_path/'station';root.mkdir();spec=dict(j['wire'],execution=fingerprint({'test':1}))
+    root=tmp_path/'station';root.mkdir();spec=dict(j['wire'],execution=fingerprint({'test':1}));spec.pop('station_recovery')
     publish_json(root/'inbox'/f'{j["id"]}.json',spec)
     monkeypatch.setattr(w,'execution_identity',lambda config:{'test':1})
     monkeypatch.setattr(w,'process_birth',lambda pid:123)
@@ -249,3 +249,30 @@ def test_migration_preserves_round_cost_and_once_only(fleet,monkeypatch):
     before=fleet.store.file.read_bytes()
     result=r.migrate(fleet.config,fleet.config_path,list(fleet.nodes.values()),{'test':1})
     assert result['status']=='already_migrated' and before==fleet.store.file.read_bytes()
+
+
+def test_stop_reaches_stations_while_current_attempt_drains(fleet,monkeypatch):
+    import workflows.rfgun_wake_thermal.fleet.coordinator as mod
+    fleet.dispatch('remote',fleet.state['candidates'][0],'axis',None)
+    (fleet.store.root/'STOP').write_text('maintenance')
+    calls=[]
+    for name,transport in fleet.transports.items():
+        transport.stop_when_idle=lambda name=name:calls.append(name)
+    monkeypatch.setattr(fleet,'poll',lambda:None)
+    monkeypatch.setattr(fleet,'report',lambda:None)
+    def finish(_):
+        assert set(calls)=={'local','remote'}
+        assert fleet.state['pending_nodes']
+        fleet.state['pending_nodes'].clear()
+    monkeypatch.setattr(mod.time,'sleep',finish)
+    fleet.run_fleet()
+    assert fleet.state['status']=='paused'
+
+
+def test_native_prepared_snapshot_stays_on_station(tmp_path):
+    folder=tmp_path/'attempt';folder.mkdir()
+    (folder/'prepared').mkdir();(folder/'prepared'/'native.cst').write_bytes(b'native')
+    (folder/'raw').mkdir();(folder/'raw'/'curve.txt').write_text('numeric')
+    target=tmp_path/'evidence.zip';pack_evidence(folder,target)
+    with zipfile.ZipFile(target) as z:
+        assert z.namelist()==['raw/curve.txt']

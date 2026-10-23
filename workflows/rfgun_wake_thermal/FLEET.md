@@ -82,3 +82,28 @@ uncertainty as permission to repeat a solve. Both stations must be quiescent bef
 code/config migration. At closure report screening estimates separately from
 formal feasibility, missing/uncertain evidence, elapsed and machine hours, then
 pause the monitor pending user audit. Stay quiet otherwise.
+
+
+## Station-local recovery (WF2/WF3 adaptation)
+
+New fleet stages use one initial attempt, two reopen attempts and two clean
+rebuild attempts, with 5-second cooldowns. All attempts use new owned sessions;
+Tier1 same-connection retries remain disabled. Reopen uses a manifest-verified
+prepared geometry snapshot when available; otherwise preparation is retried.
+Clean rebuild starts from the immutable original template in a fresh attempt
+folder. Nothing deletes native results or global CST locks/processes.
+
+Saved numerical success always takes extraction-only priority (one durable
+retry). Unresolved extraction, physical identity mismatch, or a live/unknown
+session blocks instead of repeating a solve. Unknown-PID startup is released
+only after the original worker exits and a fresh read-only station-wide absence
+check proves no CST DE/solver/modeler remains; the certificate binds exact
+session-file hashes. Original cleanup errors remain intact.
+
+Only station recovery exhaustion enables another station's retry queue. Attempts
+are journaled before launch and replayed without resetting the ladder. Failed
+attempts are never GP observations. All failure evidence is archived with the
+selected result. Stop/deadline defers further attempts while admitted work drains;
+repair attempts share the existing cumulative 2-hour limit. Migration grants are
+scoped to one exact old task digest and the new execution hash, preserving an
+in-flight logical task without rewriting the original wire message.

@@ -23,7 +23,9 @@ workflow_6:
     offset_m: 0.002
   search:
     observation_mode: qualified # finite_tail_screening requires explicit review
-    hours: 96
+    hours: 48
+    policy: legacy # transverse_coverage requires reconstructed_peak_screening
+    transverse_admission_ohm: 3000 # X/Y admission only; final L limit remains 2000
     exploration_fraction: 0.20
     initial_points: 12
     pool: 2048

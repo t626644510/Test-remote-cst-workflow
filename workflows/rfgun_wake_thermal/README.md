@@ -114,10 +114,13 @@ exploration debt. Gates remain mandatory for final accepted designs.
 
 ## Runtime, recovery and data ownership
 
-Default budget is 96 hours of active coordinator/worker/reconstruction time.
-Paused downtime is excluded. Expensive tasks are reserved durably before launch;
-expected stage cost plus a five-minute finishing reserve prevents late dispatch.
-In-flight work finishes, subject to its watchdog limit. Count forecasts are
+Default budget is 48 hours of active coordinator/worker/reconstruction time per round.
+Paused downtime is excluded. The budget is a dispatch deadline: once reached, no
+new stage starts. The current solve and postprocessing finish normally; actual
+overrun is charged to the finishing round and never deducted from the next 48 hours.
+Independent fault/repair watchdogs still apply. At closure STOP is written and
+resuming that closed round is refused; subsequent rounds require user audit and
+explicit manual authorization. There is no automatic round loop or round-count cap. Count forecasts are
 reported only after all four baseline stage costs have been measured.
 
 The parent supervises an independent Python worker. Session UUID, PID and
@@ -276,3 +279,40 @@ revision, checkpoint and database observations record the new definition, and
 an explicit config/code/template fingerprint migration is required before resume.
 No CST replay is needed for this change. The sigma70 band and 35 m tail remain
 unchanged; uncovered high frequencies cannot be declared suppressed.
+
+
+## Transverse coverage policy and manual rounds
+
+`search.policy: transverse_coverage` requires `reconstructed_peak_screening`.
+The normal X/Y admission line is a finite, full-band, noncontradictory longitudinal
+upper envelope at or below `search.transverse_admission_ohm: 3000` ohm. Final
+targets remain 2000 ohm longitudinal and 150000 ohm/m transverse. Above-gate or
+unbounded cases retain 20% actual-time X/Y exploration, split by charged time
+between GP merit and coverage distance from transverse-observed points. Thermal
+time is excluded from this exploration ledger. Completion of Y has a small tie
+preference; remaining wake cost excludes previously completed stages and heat.
+
+Four GP models and their observation-quality/noise rules remain unchanged. Before
+both impedance screening envelopes pass their targets, acquisition uses saturated
+log-normalized constraint violations with longitudinal/transverse weights 2:1.
+Below-target longitudinal improvements supply no further reward. After both
+screening envelopes pass, acquisition uses heat improvement times joint impedance
+feasibility probability; the 150 W per-antenna soft target also saturates. Thermal
+evaluation is offered to the best five known wake combinations (configured by
+`retain_pareto`), independently of X/Y exploration. These are search heuristics;
+they do not establish formal physical feasibility or calibrated confidence bounds.
+
+For a reviewed transition, create a local config with separate new output/artifact
+directories, identical physics/templates/reconstruction, and `search.hours: 48`.
+Run `run_workflow_6.py --config <new.local.yaml> prepare-round --source <previous-output>`.
+This is offline preparation only: it verifies inherited raw/analysis manifests,
+clones observations and the applied stage journal, copies current analysis caches,
+creates a fresh zero clock and a cumulative ancestry ledger, and leaves STOP set.
+Old failures stay failed and inherited native results are excluded from retention.
+Changed physics, unresolved journals, reused storage, or altered templates are
+rejected. After the user authorizes starting, remove only the new round's STOP and
+use `resume` with that config. Never use `optimize` to erase/restart inherited state.
+
+Previously charged costs outside the source state may be carried once with
+`prepare-round --prior-external-seconds <audited-seconds>`; subsequent rounds
+inherit that separate ledger automatically and reject charging it again.

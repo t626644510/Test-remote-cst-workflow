@@ -48,7 +48,7 @@ class Campaign:
                     active_seconds=self.store.data['active_seconds'],pending=self.store.data['pending'],
                     prefetch=self.store.data.get('prefetch'),pipeline_error=self.store.data.get('pipeline_error')))
 
-    def initialize(self,baseline: dict):
+    def initialize(self,baseline: dict, *, reviewed_seed: dict | None = None):
         self.config.validate(live=True)
         if (self.root/'provenance.json').exists():raise RuntimeError('Round already initialized')
         errors=Geometry(self.config).violations(baseline)
@@ -56,16 +56,22 @@ class Campaign:
         if self.store.data['candidates'] or self.store.data['active_seconds']:raise RuntimeError('Nonempty round')
         from .cad import parameters
         saved=parameters(Path(self.config.paths.template));actual=Geometry.from_template(saved)
-        if any(abs(actual[k]-baseline[k])>1e-7 for k in actual):raise ValueError('Baseline differs from current source')
+        if any(abs(actual[k]-baseline[k])>1e-7 for k in actual) and reviewed_seed is None:
+            raise ValueError('Baseline differs from current source')
+        if self.config.cooling_clearance_mm and abs(saved['coax_r1']-self.config.coax_inner_radius_mm)>1e-9:
+            raise ValueError('Saved coax_r1 differs from reviewed cooling constraint')
+        if reviewed_seed is not None:
+            from .history import validate_seed
+            validate_seed(reviewed_seed,baseline,self.config)
         if any(abs(saved[k]-v)>1e-7 for k,v in self.config.fixed_parameters.items()):
             raise ValueError('Fixed geometry differs from saved source template')
         atomic_json(self.root/'config.snapshot.json',self.config.as_dict())
         source=Path(self.config.paths.template)
         atomic_json(self.root/'provenance.json',dict(template=str(source),template_sha256=digest(source),
                      code=code_manifest(),config_digest=self.config.digest(),initialized=time.time(),
-                     baseline=baseline,reference_results_used_for_training=False))
+                     baseline=baseline,reviewed_seed=reviewed_seed,reference_results_used_for_training=False))
         self.store.data['candidates']=[dict(id='candidate_0000',parameters=baseline,observations={},
-                    status='axis_pending',forced_transverse=True,proposal={'method':'current_template_baseline'})]
+                    status='axis_pending',forced_transverse=True,proposal={'method':'reviewed_seed' if reviewed_seed else 'current_template_baseline'})]
         self.store.save();self.report()
 
     def check_provenance(self):
@@ -73,6 +79,10 @@ class Campaign:
         if p['config_digest']!=self.config.digest() or digest(self.config.paths.template)!=p['template_sha256']:
             raise OwnershipError('Source/config changed; review and migration required')
         if p['code']!=code_manifest():raise OwnershipError('Code changed; explicit reviewed migration required')
+        history=self.store.data.get('history_bundle')
+        if history and digest(history['path'])!=history['sha256']:raise OwnershipError('Historical GP evidence changed')
+        from .quality_revision import load_revision
+        load_revision(self.store.data)
         for path in (self.root,self.bulk):
             if shutil.disk_usage(path).free<self.config.runtime.minimum_free_disk_gib*2**30:
                 raise RuntimeError('Insufficient disk space for next stage')
@@ -173,18 +183,24 @@ class Campaign:
 
     def apply_results(self):
         """Idempotent projection of immutable stage results, including crash replay."""
+        from .quality_revision import load_revision, revised_observations
+        revision=load_revision(self.store.data)
         for item in self.store.data.get('results',[]):
             path=Path(item['result_path'])
             if digest(path)!=item['result_sha256']:raise OwnershipError('Registered result changed')
             result=read_json(path);candidate=self.store.data['candidates'][result['candidate_index']]
             if result['parameters']!=candidate['parameters']:raise OwnershipError('Candidate result parameter mismatch')
-            candidate['observations'].update(result['observations'])
+            observations=revised_observations(item,result,revision)
+            for name in result['observations']:
+                if name not in observations:candidate['observations'].pop(name,None)
+            candidate['observations'].update(observations)
             candidate[result['stage']+'_directory']=result['field_directory']
         for candidate in self.store.data['candidates']:
             obs={k:Observation(**v) for k,v in candidate['observations'].items()}
             if candidate.get('x_directory'):candidate['status']='completed'
             elif candidate.get('axis_directory') and not candidate.get('failed_stage'):
-                candidate['status']='x_pending' if transverse_admission(obs.get('longitudinal'),self.config,
+                wants_x='x' in candidate.get('requested_stages',('axis','x'))
+                candidate['status']='x_pending' if wants_x and transverse_admission(obs.get('longitudinal'),self.config,
                                   forced=candidate['forced_transverse']) else 'axis_only'
             candidate['feasibility']=feasibility(obs,self.config)
             update_trust(self.store.data,candidate,self.config)
@@ -196,6 +212,13 @@ class Campaign:
             row=dict(id=c['id'],status=c['status'],**c['parameters'])
             for k,v in c['observations'].items():
                 row[k]=v['estimate'];row[k+'_qualified']=v['qualified'];row[k+'_upper']=v['upper']
+                obs=Observation(**v)
+                row[k+'_quality']=obs.quality or ('qualified' if obs.qualified else 'unqualified')
+                row[k+'_gp_quality_penalty_exempt']=obs.gp_quality_penalty_exempt
+                limits={'longitudinal':self.config.physics.longitudinal_limit,
+                        'transverse_x':self.config.physics.transverse_limit,
+                        'leak_2':self.config.physics.leakage_limit_w,'leak_3':self.config.physics.leakage_limit_w}
+                if k in limits:row[k+'_acceptance']=c.get('feasibility',{}).get('decisions',{}).get(k,obs.acceptance(limits[k]))
             rows.append(row)
         keys=list(dict.fromkeys(k for r in rows for k in r))
         temporary=self.root/'candidates.csv.tmp'
@@ -210,13 +233,17 @@ class Campaign:
     def propose_candidate(self):
         """Persist a proposal once, also when selected before current GPU results."""
         data=self.store.data
-        samples=[Sample(c['parameters'],{k:Observation(**v) for k,v in c['observations'].items()}) for c in data['candidates']]
+        if data.get('dispatch_mode')=='queued_only':
+            raise RuntimeError('Reviewed queue forbids automatic GP proposals')
+        from .history import load_samples
+        samples=load_samples(data.get('history_bundle'),self.config)
+        samples += [Sample(c['parameters'],{k:Observation(**v) for k,v in c['observations'].items()}) for c in data['candidates']]
         local_seconds=data['active_seconds']-data.get('search_active_offset',0.)
         forced=data['exploration_seconds']<self.config.search.exploration_fraction*max(1,local_seconds)
         index=len(data['candidates'])
         parameters,audit=Proposer(self.config).choose(samples,sequence=index,radius=data['radius'],explore=forced,
                     excluded=[c['parameters'] for c in data['candidates']],
-                    trust_generation=data.get('trust',{}).get('generation',0))
+                    trust_generation=data.get('trust',{}).get('generation',0),preferred_center=data.get('search_seed'))
         audit['observed_stage_keys']=list(data['completed_stage_keys'])
         data['candidates'].append(dict(id=f'candidate_{index:04}',parameters=parameters,observations={},
                          status='axis_pending',forced_transverse=forced,proposal=audit));self.store.save()
@@ -227,6 +254,7 @@ class Campaign:
         index=next((i for i,c in enumerate(data['candidates']) if c['status']=='x_pending'),None)
         if index is None:index=next((i for i,c in enumerate(data['candidates']) if c['status']=='axis_pending'),None)
         if index is None:
+            if data.get('dispatch_mode')=='queued_only':return None
             index=self.propose_candidate()
         candidate=data['candidates'][index];stage='x' if candidate['status']=='x_pending' else 'axis'
         return dict(key=candidate['id']+'_'+stage,candidate_index=index,stage=stage,
@@ -251,12 +279,19 @@ class Campaign:
                         if not self.store.may_dispatch:
                             self.pipeline.wait();break
                         self.check_provenance();next_job=self.next_job()
+                        if next_job is None:
+                            (self.root/'STOP').write_text('Reviewed queue completed; await user instruction.\n',encoding='utf-8')
+                            self.store.data['queue_finished_at']=time.time()
+                            self.store.drain('user');self.pipeline.wait();break
                         if self.pipeline.job and self.pipeline.job['candidate_index']==next_job['candidate_index']:
                             self.pipeline.wait();self.tick()
                             # Prefetch alone does not admit a GPU stage. STOP or
                             # budget expiry during this wait preserves the mesh.
                             if not self.store.may_dispatch:continue
                             next_job=self.next_job()
+                            # A final prefetch may fail while we wait. Re-enter
+                            # the queue-empty drain path instead of begin(None).
+                            if next_job is None:continue
                         self.store.begin(next_job)
                     job=dict(self.store.data['pending'])
                     try:self.execute_stage()
@@ -267,6 +302,9 @@ class Campaign:
                         if len(self.store.data['failures'])>=3:
                             recent=self.store.data['candidates'][-3:]
                             if all(c['status']=='failed' for c in recent):raise RuntimeError('Three consecutive candidate failures; stop dispatch')
+                    if self.config.compact_retention:
+                        from .retention import compact_campaign
+                        compact_campaign(self.config,self.store.data)
                     self.tick()
                 self.store.pause();self.report()
             except BaseException:

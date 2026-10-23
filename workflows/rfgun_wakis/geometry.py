@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 from typing import Mapping
 import numpy as np
-from .config import Config, NAMES
+from dataclasses import replace
+from .config import Config, NAMES, BOUNDS
 
 class Geometry:
     """Lengths mm, angles degrees; coaxr2 is the thick inner-conductor radius."""
@@ -27,7 +28,18 @@ class Geometry:
         if min(p['SPortR1']-p['SPortR2'],p['PortR1']-p['SPortR1'])<gap:errors.append('Radial modeling clearance')
         if self.config.port_outer_policy=='fixed' and p['PortR1']>=self.config.fixed_port_outer_mm-gap:
             errors.append('Fixed PortR2 wall clearance')
+        if self.config.cooling_clearance_mm and p['coaxr2'] <= self.config.coax_inner_radius_mm+self.config.cooling_clearance_mm:
+            errors.append('Cooling radius must exceed coax_r1 plus clearance (mm)')
         return errors
+
+    def training_violations(self,p: Mapping[str,float]) -> list[str]:
+        '''History can lie outside acquisition bounds, but within the same physical domain.'''
+        original=replace(self.config,bounds=BOUNDS.copy(),cooling_clearance_mm=0.)
+        return Geometry(original).violations(p)
+
+    def model_coordinates(self,p: Mapping[str,float]) -> np.ndarray:
+        '''Use invariant physical-domain scaling, not newly narrowed acquisition bounds.'''
+        return np.array([(p[n]-BOUNDS[n][0])/(BOUNDS[n][1]-BOUNDS[n][0]) for n in NAMES])
 
     def normalize(self,p: Mapping[str,float]) -> np.ndarray:
         return (np.array([p[n] for n in NAMES])-self.lo)/(self.hi-self.lo)

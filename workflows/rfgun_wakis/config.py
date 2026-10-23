@@ -128,13 +128,26 @@ class Config:
     port_outer_policy: str = 'follow_wall'
     port_wall_mm: float = 2.
     fixed_port_outer_mm: float = 31./3.
+    cooling_clearance_mm: float = 0.
+    coax_inner_radius_mm: float = 5.43
+    compact_retention: bool = False
+    retained_best_count: int = 5
+    retained_candidate_ids: tuple[str, ...] = ('candidate_0000',)
 
     @property
     def active_names(self) -> tuple[str, ...]:
         return NAMES
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        result=asdict(self)
+        # Preserve existing round digests for the unchanged, opt-out policy.
+        defaults=dict(cooling_clearance_mm=0.,coax_inner_radius_mm=5.43,
+                      compact_retention=False,retained_best_count=5,
+                      retained_candidate_ids=('candidate_0000',))
+        for key,value in defaults.items():
+            if result[key]==value or key=='retained_candidate_ids' and tuple(result[key])==value:
+                result.pop(key)
+        return result
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.as_dict(),sort_keys=True,allow_nan=False).encode()).hexdigest()
@@ -145,8 +158,16 @@ class Config:
             raise ValueError('WF7 requires exactly fifteen active coordinates')
         if self.fixed_parameters!=dict(UpperHeight1=170.,UpperHeight2=170.,DownHeight2=-30.):
             raise ValueError('Revised geometry fixes UpperHeight=170 mm and DownHeight2=-30 mm')
-        if tuple(self.bounds['DownHeight'])!=(50.,180.):
-            raise ValueError('DownHeight range must be 50 to 180 mm')
+        if not 50. <= self.bounds['DownHeight'][0] < self.bounds['DownHeight'][1] <= 180.:
+            raise ValueError('DownHeight search domain must lie inside 50 to 180 mm')
+        if (not math.isfinite(self.cooling_clearance_mm) or self.cooling_clearance_mm < 0
+                or self.coax_inner_radius_mm != 5.43 or self.retained_best_count < 1):
+            raise ValueError('Invalid reviewed cooling/retention policy')
+        if any(not n.startswith('candidate_') or not n[10:].isdigit() for n in self.retained_candidate_ids):
+            raise ValueError('Invalid raw-retention candidate id')
+        for n,(lo,hi) in self.bounds.items():
+            if lo < BOUNDS[n][0] or hi > BOUNDS[n][1]:
+                raise ValueError('Search domain must remain inside reviewed physical domain')
         for n,(lo,hi) in self.bounds.items():
             if not all(map(math.isfinite,(lo,hi))) or not lo<hi:
                 raise ValueError(f'Invalid bounds: {n}')

@@ -87,7 +87,9 @@ class Store:
         self.save()
 
     def can_start(self,estimate: float) -> bool:
-        return self.state['active_seconds']+max(estimate,60.)+300.<self.config.search.hours*3600
+        # Admission deadline only: a running solve/postprocess is never cut at the cap.
+        # Actual overshoot remains charged to this round, never to a fresh round.
+        return self.state['active_seconds'] < self.config.search.hours*3600
 
     def reserve(self,candidate: dict,stage: str,task: dict,exploration: str | None) -> dict:
         if self.state['pending'] is not None:raise ValueError('An unresolved task already owns the worker')
@@ -152,7 +154,7 @@ def prune_native(config: Config,state: dict) -> list[str]:
     keep.update(j['candidate'] for j in state['jobs'] if j['status']=='reserved')
     removed=[]
     for j in state['jobs']:
-        if j['candidate'] in keep or j['status']!='complete':continue
+        if j.get('inherited') or j['candidate'] in keep or j['status']!='complete':continue
         attempt=Path(j['directory']).resolve();target=(attempt/'project').resolve()
         if not target.is_relative_to(root) or target==root or target.name!='project':raise ValueError('Unsafe native retention target')
         if target.exists() and verify_evidence(attempt/'raw'):

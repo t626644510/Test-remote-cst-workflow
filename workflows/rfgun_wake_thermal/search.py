@@ -7,7 +7,7 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel,Matern,WhiteKernel
 from .config import Config,NAMES
 from .geometry import Geometry
-from .screening import search_view,ranking_metrics,reconstruction_uncertainty
+from .screening import search_view,ranking_metrics,reconstruction_uncertainty,stage_below
 
 METRICS=('longitudinal','transverse','power5','power6')
 
@@ -121,16 +121,28 @@ class Controller:
                 std=np.log1p(ratio*(1+rel))-np.log1p(ratio)
                 pred[k]=(np.full(len(x),np.log1p(ratio)),np.full(len(x),std))
         feasible=[c for c in self.candidates if c.get('feasible') and all(k in c['metrics'] for k in METRICS)]
+        if self.config.search.policy=='transverse_coverage':
+            feasible=[c for c in self.candidates if all(k in c['metrics'] for k in METRICS)
+                      and all(stage_below(self.config,c,k) for k in METRICS[:2])]
         probability=np.ones(len(x))
         for k in METRICS[:2]:
             mean,std=pred[k];probability*=ndtr((np.log(2.)-mean)/np.maximum(std,1e-9))
         if feasible:
             best=min(max(c['metrics']['power5'],c['metrics']['power6'])/self.limits[2] for c in feasible)
+            if self.config.search.policy=='transverse_coverage':best=max(1.,best)
             samples=[]
             for k in METRICS[2:]:
                 mean,std=pred[k];samples.append(np.expm1(np.clip(mean[None,:]+std[None,:]*self.rng.standard_normal((64,len(x))),-10,20)))
-            improvement=np.maximum(0,best-np.maximum(*samples)).mean(axis=0)
+            heat=np.maximum(*samples)
+            if self.config.search.policy=='transverse_coverage':heat=np.maximum(1.,heat)
+            improvement=np.maximum(0,best-heat).mean(axis=0)
             return (improvement+1e-4)*probability/max(cost,1.)
+        if self.config.search.policy=='transverse_coverage':
+            # Dimensionless log constraint violations saturate below the targets.
+            # Longitudinal retains higher importance (2:1); forced exploration
+            # is scheduled independently so unknown transverse regions survive.
+            v=[np.maximum(0.,pred[k][0]-.7*pred[k][1]-np.log(2.)) for k in METRICS[:2]]
+            return np.exp(-np.clip(2*v[0]+v[1],0,20))/max(cost,1.)
         # Lower confidence bound rewards both likely improvement and uncertainty.
         lower=np.maximum(*(pred[k][0]-.7*pred[k][1] for k in METRICS[:2]))
         return np.exp(-np.clip(lower,-10,20))/max(cost,1.)

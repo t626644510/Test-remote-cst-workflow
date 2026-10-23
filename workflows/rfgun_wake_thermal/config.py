@@ -74,7 +74,9 @@ class Reconstruction:
 @dataclass(frozen=True)
 class Search:
     observation_mode: str = 'qualified'
-    hours: float = 96.
+    hours: float = 48.
+    policy: str = 'legacy'
+    transverse_admission_ohm: float = 3000.
     exploration_fraction: float = .20
     initial_points: int = 12
     seed: int = 20261003
@@ -166,6 +168,12 @@ class Config:
             raise ValueError('Confirmed beta=1 and nonzero source offset required')
         if not 0 < self.search.exploration_fraction < 1:
             raise ValueError('Exploration fraction must be between zero and one')
+        if self.search.policy not in ('legacy','transverse_coverage'):
+            raise ValueError('Unknown search policy')
+        if self.search.policy=='transverse_coverage' and self.search.observation_mode!='reconstructed_peak_screening':
+            raise ValueError('Transverse coverage policy requires reconstructed peaks')
+        if self.search.transverse_admission_ohm < self.physics.longitudinal_limit:
+            raise ValueError('Exploration admission must not tighten final longitudinal limit')
         if self.search.observation_mode not in ('qualified','finite_tail_screening','reconstructed_peak_screening'):
             raise ValueError('Unknown search observation mode')
         if not 0 < self.search.native_relative_noise <= self.search.history_relative_noise < 1:

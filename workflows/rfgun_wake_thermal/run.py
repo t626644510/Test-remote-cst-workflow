@@ -11,6 +11,8 @@ def main(argv=None) -> int:
     parser.add_argument('--config',required=True,type=Path)
     sub=parser.add_subparsers(dest='command',required=True)
     sub.add_parser('validate');sub.add_parser('baseline');sub.add_parser('optimize')
+    prepare=sub.add_parser('prepare-round');prepare.add_argument('--source',type=Path,required=True)
+    prepare.add_argument('--prior-external-seconds',type=float,default=0.)
     resume=sub.add_parser('resume');resume.add_argument('--baseline-only',action='store_true')
     stage=sub.add_parser('stage');stage.add_argument('--stage',required=True,choices=STAGES)
     worker=sub.add_parser('worker');worker.add_argument('--task',type=Path,required=True)
@@ -21,6 +23,9 @@ def main(argv=None) -> int:
     tail.add_argument('--resume',action='store_true')
     offline=sub.add_parser('offline');offline.add_argument('--candidate',required=True);offline.add_argument('--destination',type=Path,required=True)
     args=parser.parse_args(argv);config=load_config(args.config)
+    if args.command=='prepare-round':
+        from .rounds import prepare_round
+        print(json.dumps(prepare_round(config,args.config,args.source,args.prior_external_seconds),indent=2));return 0
     if args.command=='verify-tail':
         from .tail_validation import run_validation
         result=run_validation(config,args.output,args.artifacts,args.length_m,args.resume)
